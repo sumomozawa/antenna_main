@@ -104,6 +104,11 @@
     border: 1px solid #cdd3da; border-radius: 3px;
     font-size: 12px; background: #fff; min-width: 0;
   }
+  /* アンテナ取付ガイドが自動入力した欄（別色で識別。手動変更すると通常色に戻る） */
+  .ag-filled {
+    background: #e3f2fd !important; border-color: #1565c0 !important;
+    box-shadow: inset 3px 0 0 0 #1565c0;
+  }
   .preset-buttons {
     display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 0;
   }
@@ -1066,10 +1071,27 @@
     body.list-print-mode .cal-cell { min-height: 0 !important; height: 100% !important; padding: 1px 2px !important; overflow: hidden; }
     body.list-print-mode .cal-cell .cal-day { font-size: 9px !important; }
     body.list-print-mode .cal-ev { font-size: 8px !important; line-height: 1.2 !important; padding: 0 2px !important; }
+    /* 通常のカレンダー印刷では「今後の予定」レポートは出さない（月グリッドのみ） */
+    body.list-print-mode .cal-upcoming { display: none !important; }
+
+    /* ⑤「今後の予定（先の工程）」レポート印刷：schedule-only 時は月グリッド等を隠し、レポートのみをA4縦で出力 */
+    body.list-print-mode.schedule-only .cost-detail-section,
+    body.list-print-mode.schedule-only .cal-panel,
+    body.list-print-mode.schedule-only .cal-toolbar { display: none !important; }
+    body.list-print-mode.schedule-only .cal-upcoming { display: block !important; border: none !important; padding: 0 !important; }
+    body.list-print-mode.schedule-only .cal-upcoming .cu-day { page-break-inside: avoid; }
+    body.list-print-mode.schedule-only .cal-upcoming .cu-head { font-size: 15px; }
+    body.list-print-mode.schedule-only .cal-upcoming .cu-day-head { color: #0d47a1 !important; border-bottom-color: #90caf9 !important; }
+    body.list-print-mode.schedule-only .cal-upcoming .cu-day-head.cu-sun { color: #c62828 !important; }
+    body.list-print-mode.schedule-only .cal-upcoming .cu-type.t-work { color: #0d47a1 !important; background: #e3f2fd !important; }
+    body.list-print-mode.schedule-only .cal-upcoming .cu-type.t-meet { color: #1b5e20 !important; background: #e8f5e9 !important; }
 
     /* 一覧印刷は名前付きページで横向きを固定（後段の通常印刷 @page A4 portrait に後勝ちで上書きされ縦向き→右切れになるのを防ぐ） */
     @page list-landscape { size: A4 landscape; margin: 8mm; }
     body.list-print-mode { page: list-landscape; }
+    /* レポート印刷はA4縦（横向き固定に後勝ちで上書き） */
+    @page schedule-portrait { size: A4 portrait; margin: 12mm; }
+    body.list-print-mode.schedule-only { page: schedule-portrait; }
   }
 
   /* ============================================================
@@ -2772,6 +2794,23 @@
   }
   .cal-quick-row #cal-quick-add:hover { background: #fbc02d; }
   .cal-quick-row .cal-quick-note { font-size: 10px; color: #7a6a30; }
+  /* --- 今後の予定（先の工程）レポート：カレンダーと同じ予定データから自動生成 --- */
+  .cal-upcoming { margin-top: 14px; background: #fff; border: 1px solid #cdd3da; border-radius: 4px; padding: 12px 16px; }
+  .cal-upcoming .cu-head { font-size: 15px; font-weight: 700; color: #1e3a5f; margin-bottom: 4px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .cal-upcoming .cu-sub { font-size: 11px; color: #667482; font-weight: 400; }
+  .cal-upcoming .cu-day { margin-top: 10px; }
+  .cal-upcoming .cu-day-head { font-size: 13px; font-weight: 700; color: #0d47a1; border-bottom: 2px solid #90caf9; padding-bottom: 2px; margin-bottom: 3px; }
+  .cal-upcoming .cu-day-head.cu-sun { color: #c62828; border-bottom-color: #ef9a9a; }
+  .cal-upcoming .cu-day-head.cu-sat { color: #1565c0; }
+  .cal-upcoming table.cu-list { width: 100%; border-collapse: collapse; }
+  .cal-upcoming table.cu-list td { padding: 4px 6px; border-bottom: 1px dotted #dde3ea; font-size: 12.5px; vertical-align: top; }
+  .cal-upcoming .cu-type { display: inline-block; font-size: 10px; padding: 1px 7px; border-radius: 8px; white-space: nowrap; }
+  .cal-upcoming .cu-type.t-work { background: #e3f2fd; color: #0d47a1; border: 1px solid #90caf9; }
+  .cal-upcoming .cu-type.t-meet { background: #e8f5e9; color: #1b5e20; border: 1px solid #a5d6a7; }
+  .cal-upcoming .cu-time { font-weight: 600; color: #33424f; white-space: nowrap; }
+  .cal-upcoming .cu-prov { color: #b05a00; font-weight: 700; }
+  .cal-upcoming tr.cu-done { opacity: .55; }
+  .cal-upcoming .cu-empty { color: #667482; padding: 6px 0; font-size: 12px; }
   /* メニューのサマリ（仮受付・今日の工事） */
   .menu-summary { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; }
   .menu-summary .ms-item {
@@ -3243,6 +3282,11 @@
             <span id="asbestos_judgement_view" style="flex:1;font-size:12px;">―</span>
           </div>
           <div class="field">
+            <label><span data-tip="判定が🟠みなし(LV3)の時、この額を「石綿みなし対応 諸経費」として内訳に自動計上し積算へ加算します。既定¥20,000（案件ごとに変更可）。25%諸経費(markup)の対象外＝ちょうどこの額が加算されます。LV1/LV2・🟢不要・⚪未入力の時は計上しません。">みなし諸経費</span></label>
+            <input type="number" id="asbestos_deemed_fee" value="20000" min="0" step="1000" style="width:120px;text-align:right;padding:2px 6px;border:1px solid #cdd3da;border-radius:3px;">
+            <span style="font-size:10px;color:#555;margin-left:6px;">自動計上</span>
+          </div>
+          <div class="field">
             <label>適用モード</label>
             <select id="asbestos_applicability_mode">
               <option value="auto" selected>自動判定</option>
@@ -3373,6 +3417,7 @@
         <summary class="section-head" style="cursor:pointer;">🗼 アンテナ取付ガイド（ここで組むと下の入力に自動で反映されます）</summary>
         <div class="section-body">
           <div id="ag-host-edit"></div>
+          <div style="font-size:10px;color:#1565c0;margin-top:6px;">🟦 <b>水色</b>の入力欄＝取付ガイドが自動入力した項目です（手動で変更すると通常色に戻ります）。</div>
         </div>
       </details>
 
@@ -3583,7 +3628,7 @@
             <label>ラインブースター</label>
             <select id="line_booster">
               <option value="no">なし</option>
-              <option value="yes">UB18L</option>
+              <option value="yes" selected>UB18L</option>
             </select>
           </div>
           <div class="field">
@@ -3591,7 +3636,7 @@
             <select id="hpf">
               <option value="no">なし</option>
               <option value="hpf_dtf">DTF-UPWS-FP-a</option>
-              <option value="hpf_std">HPF（標準）</option>
+              <option value="hpf_std" selected>HPF（標準）</option>
             </select>
           </div>
           <div class="field">
@@ -3831,6 +3876,7 @@
         <button id="btn-pos-reset" title="ドラッグで移動したノード位置・測定表の位置/拡大率をすべて初期状態に戻します">位置リセット</button>
         <button id="btn-add-text" title="図面内に赤文字を自由に追加します。追加後はドラッグで移動・クリックで編集（空欄にすると削除）できます" style="color:#d32f2f;font-weight:700;">＋赤文字</button>
         <button id="btn-ag-paste" disabled title="アンテナ取付ガイドの完成図を系統図上の任意の位置に貼り付けます（ドラッグで移動・右下角でリサイズ）">系統図に貼付</button>
+        <label style="font-size:11px;color:#555;cursor:pointer;white-space:nowrap;" title="オンにすると、系統図に貼り付けたアンテナ取付ガイドの完成図を工事調書にも載せます（オフ＝載せない）。既定＝載せる"><input type="checkbox" id="chk-ag-chosho" style="vertical-align:middle;margin-right:2px;">工事調書にも載せる</label>
         <span style="font-size:11px;color:#555;">※配線クリックで色切替／ノード・測定表はドラッグで移動／測定表は右下角で拡大縮小／「＋赤文字」で図面内に注記</span>
         <div class="legend">
           <span><i class="legend-line legend-new"></i>新規</span>
@@ -4804,7 +4850,8 @@ function getInputs() {
     tax_mode: document.querySelector("input[name=tax_mode]:checked").value,
     misc_fee: (document.querySelector("input[name=misc_fee]:checked") || {}).value || "include",
     outsource_fee_on: !!(document.getElementById("outsource_fee_on") || {}).checked,
-    outsource_fee_amount: Math.max(0, parseFloat((document.getElementById("outsource_fee_amount") || {}).value) || 0)
+    outsource_fee_amount: Math.max(0, parseFloat((document.getElementById("outsource_fee_amount") || {}).value) || 0),
+    asbestos: collectAsbestosState()   // 石綿みなし諸経費の自動計上に使用（buildBOM で参照）
   };
 }
 
@@ -5250,22 +5297,33 @@ function buildBOM(input, qtyOverridesOpt) {
   // ※ 屋外配線用の防水コネクタ(AP5CW等)は商品に付属するため別途計上不要
 
   // CATV撤去
+  // 物件モード中（物件を開いている）＋CATV住宅 の時は、CATV撤去一式を
+  // 「宅内調整・引込線撤去等」¥11,000（式）にまとめて計上する（ユーザー運用の物件基本工事）。
+  //   ・保安器撤去／引込線撤去（15mダミー相当）／ダミー抵抗／宅内CH調整 をこの1項目へ集約。
+  //   ・単独戸別（物件を開いていない）では従来どおり個別計上（下記 else ＋ 宅内CH調整の通常計上）。
+  //   ・系統図の撤去表示（保安器×・引込線バッジ・ダミー警告・FA中継）は input を直接参照するため本変更の影響なし。
+  const catvBundle = (typeof _currentProject !== "undefined" && !!_currentProject) && !!input.is_catv;
   if(input.is_catv){
-    if(input.remove_safety) add("remove_safety", 1);
-    if(input.remove_drop){
-      const dropLen = input.cable_drop_len > 0 ? input.cable_drop_len : 15;
-      add("remove_drop", dropLen, { note:"引込線撤去 長さ（1m=¥85）" });
-    }
-    // 引込線撤去先にダミー抵抗を取付
-    if(input.remove_drop && input.dummy_attached){
-      add("dummy_dr7m", 1, { note:"分岐分配器アウトにダミー抵抗差込" });
+    if(catvBundle){
+      add("adjust_drop", 1, { note:"物件一式：保安器撤去・引込線撤去・ダミー抵抗・宅内CH調整を含む（¥11,000）" });
+    } else {
+      if(input.remove_safety) add("remove_safety", 1);
+      if(input.remove_drop){
+        const dropLen = input.cable_drop_len > 0 ? input.cable_drop_len : 15;
+        add("remove_drop", dropLen, { note:"引込線撤去 長さ（1m=¥85）" });
+      }
+      // 引込線撤去先にダミー抵抗を取付
+      if(input.remove_drop && input.dummy_attached){
+        add("dummy_dr7m", 1, { note:"分岐分配器アウトにダミー抵抗差込" });
+      }
     }
   }
 
   // 労務・特殊
   if(input.high_work) add("high_work", 4, { note:"半日4時間（既定）、数量欄で調整可" });
-  if(input.indoor_adj){
+  if(input.indoor_adj && !catvBundle){
     // 宅内CH調整は一式固定価格（TV台数・BD接続に関係なく同額）
+    // 物件モードのCATV撤去束ね時は「宅内調整・引込線撤去等」¥11,000に含めるため別途計上しない。
     add("indoor_adjust", 1, { note:"宅内CH調整 一式（固定）" });
   }
   if(input.snow_guard) add("snow_guard", 1);
@@ -5304,6 +5362,24 @@ function buildBOM(input, qtyOverridesOpt) {
       note: "協力会社（日程調整・施工方法の打合せ等）",
       isOutsourceFee: true
     });
+  }
+
+  // 石綿みなし諸経費（判定が🟠みなしLV3の時のみ）: 内訳に計上し積算へ加算。
+  // 労務費区分でBOMに含める（＝基本工事プリセット集計・費用詳細にも反映）。
+  // ただし諸経費(overhead markup)の算定対象からは除外（calcTotals 側で isAsbestosFee を考慮）。
+  if(isAsbestosDeemed(input.asbestos)){
+    const asbAmt = asbestosDeemedFeeAmount(input.asbestos);
+    if(asbAmt > 0){
+      items.push({
+        id: "asbestos_deemed_fee", qty: 1, key: "asbestos_deemed_fee|",
+        name: "石綿みなし対応 諸経費", category: "misc", model: "-",
+        material_cost: 0, labor_cost: Math.round(asbAmt),
+        unit: "式", diagram_label: "",
+        new_or_existing: "new",
+        note: "石綿みなし判定（LV3）に伴う諸経費",
+        isAsbestosFee: true
+      });
+    }
   }
 
   return items;
@@ -5381,8 +5457,9 @@ function appendGuideBomRows(bom, guide){
 const AG_REFLECT_PATTERN_META = {
   pole:       { mountType:"support_post",     masts:["mastUp","mastLow"], sideBase:[],                  joint:["mastUp","mastLow"], antMainKey:"antTop", ant2ndKey:"antBot" },
   hafu:       { mountType:"side_base_hafu",   masts:["mastA","mastB"],    sideBase:["brkA","brkB"],     joint:null,                 antMainKey:"antA",   ant2ndKey:"antB"  },
+  hafu2:      { mountType:"side_base_hafu",   masts:["mastA"],            sideBase:["brkA"],            joint:null,                 antMainKey:"antTop", ant2ndKey:"antBot" },
   gaiheki:    { mountType:"side_base_wall",   masts:["mastA","mastB"],    sideBase:["brkA","brkB"],     joint:null,                 antMainKey:"antA",   ant2ndKey:"antB"  },
-  tatenarabi: { mountType:"side_base_double", masts:[],                  sideBase:["brkTop","brkBot"], joint:["mastUp","mastLow"], antMainKey:"antTop", ant2ndKey:"antBot" },
+  tatenarabi: { mountType:"side_base_double", masts:["mastUp","mastLow"], sideBase:["brkTop","brkBot"], joint:["mastUp","mastLow"], antMainKey:"antTop", ant2ndKey:"antBot" },
   yaneuma:    { mountType:"roof_base",        masts:["mastUp","mastLow"], sideBase:[],                  joint:["mastUp","mastLow"], antMainKey:"antTop", ant2ndKey:"antBot" }
 };
 const AG_REFLECT_ANTENNA_ID = { "U146":"antenna_u146", "U206":"antenna_u206", "LS206":"antenna_ls206", "LS56":"antenna_ls56" };
@@ -5407,7 +5484,17 @@ function deriveGuideCh46(guide){
   if(n === 1) return { ch46: "no", antenna46: "" };
   return { ch46: null, antenna46: null };
 }
+/* アンテナ取付ガイドが自動入力した欄の「別色マーク」管理。
+   reflectGuideToFields が値を入れた欄に AG_FILLED_CLASS を付与し、
+   手動変更（委譲changeリスナー）で外す。ガイド再反映のたびに作り直す。 */
+const AG_FILLED_CLASS = "ag-filled";
+let _agFilledIds = [];
+function clearGuideFieldMarks(){
+  _agFilledIds.forEach(id => { const el = document.getElementById(id); if(el) el.classList.remove(AG_FILLED_CLASS); });
+  _agFilledIds = [];
+}
 function reflectGuideToFields(guide){
+  clearGuideFieldMarks(); // 前回のガイド自動入力マークを一旦解除し、今回の反映で付け直す
   const norm = normalizeAntennaGuide(guide);
   const meta = norm.pattern ? AG_REFLECT_PATTERN_META[norm.pattern] : null;
   if(!meta) return;
@@ -5475,7 +5562,11 @@ function reflectGuideToFields(guide){
   // アンテナ取付ガイドとは無関係のため一切触らない。屋根馬の支線40mは
   // appendGuideBomRows側の「取付ガイド」由来の行として別途計上される（欄駆動とは別枠）。
 
-  changes.forEach(c => { c.el.value = c.val; });
+  changes.forEach(c => {
+    c.el.value = c.val;
+    // 値が入った欄だけ「ガイド自動入力」色を付ける（クリア＝空文字は付けない）
+    if(c.val !== ""){ c.el.classList.add(AG_FILLED_CLASS); _agFilledIds.push(c.fieldId); }
+  });
 }
 
 /* ============================================================
@@ -5518,15 +5609,17 @@ function cleanupGuidePrintPage(){
    合計
    ============================================================ */
 function calcTotals(bom, taxMode, miscFee){
-  let mat = 0, lab = 0, fee = 0;
+  let mat = 0, lab = 0, fee = 0, asbFee = 0;
   bom.forEach(it => {
     mat += it.material_cost * it.qty;
     lab += it.labor_cost * it.qty;
     // 協力会社諸経費は雑工事BOM項目（労務費区分）だが、諸経費(markup)の算定対象外
     if(it.isOutsourceFee) fee += (it.material_cost + it.labor_cost) * it.qty;
+    // 石綿みなし諸経費も労務費区分のBOM項目だが、諸経費(markup)の算定対象外
+    if(it.isAsbestosFee) asbFee += (it.material_cost + it.labor_cost) * it.qty;
   });
-  const sum = mat + lab;            // 協力会社諸経費を含む（labに計上）
-  const overheadBase = sum - fee;   // 諸経費は協力会社諸経費を除いた額に対して算定
+  const sum = mat + lab;                    // 協力会社諸経費・石綿みなし諸経費を含む（labに計上）
+  const overheadBase = sum - fee - asbFee;  // 諸経費は協力会社諸経費・石綿みなし諸経費を除いた額に対して算定
   // 諸経費 ＝「base＋諸経費」が ROUNDDOWN(base*1.25,-3)（1000円単位切捨て）になる額。
   // 旧式 ROUNDDOWN(base*1.25,-3) - ROUNDDOWN(base*1.25,0) + ROUNDDOWN(base*0.25,0) は base が整数の
   // 時のみ等価（整数では完全一致）。0.5m等の小数数量で base が非整数になると総合計が1円ズレるため、
@@ -5535,7 +5628,7 @@ function calcTotals(bom, taxMode, miscFee){
     : Math.floor(Math.floor(overheadBase) * 1.25 / 1000) * 1000 - overheadBase;
   const grand = sum + overhead;     // feeはsum(lab)に含まれるため二重計上しない
   const tax = taxMode === "incl" ? Math.round(grand * 0.1) : 0;
-  return { mat, lab, overhead, outsourceFee: fee, grand, tax, total: grand + tax, miscIncluded: miscFee !== "exclude" };
+  return { mat, lab, overhead, outsourceFee: fee, asbestosFee: asbFee, grand, tax, total: grand + tax, miscIncluded: miscFee !== "exclude" };
 }
 
 const yen = n => "¥" + Math.round(n).toLocaleString();
@@ -5862,6 +5955,10 @@ function renderTotals(){
   // 協力会社諸経費は雑工事の下にBOM計上され労務費合計に含む。内訳として明示（諸経費の対象外）
   if(t.outsourceFee > 0){
     html += '<div class="total-row" style="font-size:11px;color:#555;"><span>　└ うち協力会社諸経費</span><span>'+yen(t.outsourceFee)+'</span></div>';
+  }
+  // 石綿みなし諸経費（雑工事の下にBOM計上され労務費合計に含む。諸経費(markup)の対象外）
+  if(t.asbestosFee > 0){
+    html += '<div class="total-row" style="font-size:11px;color:#555;"><span>　└ うち石綿みなし諸経費</span><span>'+yen(t.asbestosFee)+'</span></div>';
   }
   if(t.miscIncluded){
     html += '<div class="total-row"><span>諸経費</span><span>'+yen(t.overhead)+'</span></div>';
@@ -9048,6 +9145,18 @@ function rebuild(){
       ]
     },
     {
+      id:'hafu2', label:'破風2段', viewBox:'0 0 400 560', structure:ROOF_545,
+      extraLabels:[],
+      note:'1個の架台・1本のマストに、2本のアンテナを段違いで取付ける構成です（マスト連結金物なし）。架台はSB系から選択、マストは架台に応じて自動で絞り込まれます。',
+      joint:null,
+      parts:[
+        {key:'mastA', kind:'mast', x:150, y1:65, y2:265, optionsMode:'fromBracket', companionKey:'brkA', def:'M182Z32', badge:{x:150,y:228}},
+        {key:'brkA', kind:'brk', cx:150, cy:258, optionsMode:'fixed', optionsFixed:SB_LIST, def:'SB3220'},
+        {key:'antTop', kind:'ant', cx:150, cy:95, optionsMode:'fixed', optionsFixed:ANT, def:'U206'},
+        {key:'antBot', kind:'ant', cx:150, cy:190, optionsMode:'fixed', optionsFixed:ANT, def:'U206'}
+      ]
+    },
+    {
       id:'gaiheki', label:'外壁', viewBox:'0 0 400 560', structure:ROOF_545,
       extraLabels:[{x:10,y:300,a:'start',text:'破風'},{x:150,y:530,a:'start',text:'外壁'}],
       note:'外壁面に架台を取付ける想定です。架台はSB系から選択、マストは架台に連動して絞り込まれます。',
@@ -9662,6 +9771,7 @@ function fixLegacyTvRooms(s){
 
 // プリセットデータをフォームに反映する共通関数
 function applyPresetData(p){
+  clearGuideFieldMarks(); // プリセット/新規適用でガイド欄が上書きされるため自動入力マークを解除（読込時は直後にreflectで付け直す）
   // 旧マスト/サイドベース/OFMU構成を新ペア構成へ変換してから反映
   Object.assign(p, migrateMountFields(p));
   for(const k in p){
@@ -10004,6 +10114,7 @@ function collectAsbestosState(){
     material:           v("asbestos_material")           || "siding",
     material_other:     v("asbestos_material_other"),
     applicability_mode: v("asbestos_applicability_mode") || "auto",
+    deemed_fee:         (function(){ const el = document.getElementById("asbestos_deemed_fee"); if(!el) return ASBESTOS_DEEMED_FEE_DEFAULT; const n = parseFloat(el.value); return Number.isFinite(n) ? Math.max(0, n) : ASBESTOS_DEEMED_FEE_DEFAULT; })(),
     // 担当者・元請情報（事業所プリセット対応）
     contractor_name:      v("asbestos_contractor_name"),
     contractor_addr:      v("asbestos_contractor_addr"),
@@ -10023,6 +10134,7 @@ function applyAsbestosState(a){
   setVal("asbestos_material",          a.material          || "siding");
   setVal("asbestos_material_other",    a.material_other    || "");
   setVal("asbestos_applicability_mode", a.applicability_mode || "auto");
+  setVal("asbestos_deemed_fee", (a.deemed_fee != null && a.deemed_fee !== "") ? a.deemed_fee : ASBESTOS_DEEMED_FEE_DEFAULT);
   // 担当者・元請情報
   setVal("asbestos_contractor_name",      a.contractor_name      || "");
   setVal("asbestos_contractor_addr",      a.contractor_addr      || "");
@@ -10133,6 +10245,23 @@ function resolveAsbestosApplicability(a){
   }
   if(!effective) return null; // 未入力は「未入力」状態
   return effective < ASBESTOS_CUTOFF;
+}
+/* 石綿みなし諸経費の既定額（案件で未指定の場合に使用） */
+const ASBESTOS_DEEMED_FEE_DEFAULT = 20000;
+/* 石綿「みなし(LV3)」に該当するか。
+   みなし適用(applied=true)かつ LV1/LV2 でない（=LV3/みなし扱い）時に true。
+   → 画面バッジ 🟠みなし / 🟠みなしLV3（asbestosStatusBadge の cat:"mnashi"）と一致。
+   LV1/LV2（要専門業者）・🟢不要・⚪未入力 は false。 */
+function isAsbestosDeemed(a){
+  if(!a) return false;
+  if(resolveAsbestosApplicability(a) !== true) return false;
+  if(a.level === "level1" || a.level === "level2") return false;
+  return true;
+}
+/* みなし諸経費の金額（案件の asbestos.deemed_fee。未指定/不正なら既定額）。 */
+function asbestosDeemedFeeAmount(a){
+  const n = a ? parseFloat(a.deemed_fee) : NaN;
+  return Number.isFinite(n) ? Math.max(0, n) : ASBESTOS_DEEMED_FEE_DEFAULT;
 }
 /* 入力パネルの判定ビュー更新 */
 function updateAsbestosJudgement(){
@@ -11222,6 +11351,7 @@ function applyStateData(s){
   if(agWidget && typeof agWidget.setState === "function") agWidget.setState(STATE.antennaGuide);
   // 保存データがガイドと食い違っている場合（例: 旧ch46="triple"のままガイドは2本等）の是正。
   // ガイドが有効な物件は、読込直後にガイド基準で再反映して整合を取る（未設定の物件は触らない）。
+  clearGuideFieldMarks(); // 別案件を開いた時に前案件のガイド自動入力マークを持ち越さない
   if(antennaGuideActive(STATE.antennaGuide)) reflectGuideToFields(STATE.antennaGuide);
   refreshEditorContractor(); // 施工会社セレクトを現在の戸別に同期
   rebuild();
@@ -11862,7 +11992,8 @@ function convertSavedToInput(d){
     tax_mode: d.tax_mode || "excl",
     misc_fee: d.misc_fee || "include",
     outsource_fee_on: d.outsource_fee_on === true || d.outsource_fee_on === "true" || d.outsource_fee_on === "yes" || d.outsource_fee_on === 1,
-    outsource_fee_amount: pf(d.outsource_fee_amount)
+    outsource_fee_amount: pf(d.outsource_fee_amount),
+    asbestos: d.asbestos || null   // 保存データの石綿情報（みなし諸経費の自動計上に使用）
   };
 }
 
@@ -14595,6 +14726,20 @@ function exportListToPdf(){
   setTimeout(() => window.print(), 100);
 }
 
+/* 「今後の予定（先の工程）」レポートだけをA4縦で印刷/PDF出力。
+   list-print-mode に schedule-only を足して月グリッド等を隠し、レポートのみを出す。 */
+function printUpcomingSchedule(){
+  if(_listMode !== "calendar") return;
+  document.body.classList.add("list-print-mode", "schedule-only");
+  const cleanup = () => {
+    document.body.classList.remove("list-print-mode", "schedule-only");
+    window.removeEventListener("afterprint", cleanup);
+  };
+  window.addEventListener("afterprint", cleanup);
+  setTimeout(cleanup, 60000);
+  setTimeout(() => printWithFilename("今後の予定_" + lgDateStrToday(0)), 120);
+}
+
 /* ============================================================
    工事調書（施工報告書）A4縦1ページ印刷
    ============================================================ */
@@ -14966,6 +15111,13 @@ function readPhotoFileToEntry(inp, idx){
   r.readAsDataURL(f);
 }
 
+/* 系統図に貼り付けたアンテナ取付ガイドの完成図を「工事調書」にも載せるか（グローバル設定・既定=載せる）。
+   ツールバーのチェックボックス(chk-ag-chosho)と連動。localStorageに保持。 */
+const AG_CHOSHO_KEY = "antenna_ag_show_in_chosho_v1";
+function agShowInChosho(){
+  try { return localStorage.getItem(AG_CHOSHO_KEY) !== "0"; } catch(_){ return true; }
+}
+
 function renderChosho(){
   const inp = STATE.input || getInputs();
   const mgmt = document.getElementById("chosho_mgmt_no").value.trim();
@@ -15020,8 +15172,8 @@ function renderChosho(){
     clone.setAttribute("preserveAspectRatio", "xMidYMid meet");
     // 測定表(g.meas-table)を除去
     clone.querySelectorAll(".meas-table").forEach(el => el.remove());
-    // アンテナ取付ガイドの貼付図(g.ag-pasted)を除去（工事調書には載せない方針）
-    clone.querySelectorAll(".ag-pasted").forEach(el => el.remove());
+    // アンテナ取付ガイドの貼付図(g.ag-pasted)：ツールバーの「工事調書にも載せる」設定で掲載可否を切替（既定=載せる）
+    if(!agShowInChosho()) clone.querySelectorAll(".ag-pasted").forEach(el => el.remove());
     host.appendChild(clone);
   }
 
@@ -18133,6 +18285,53 @@ function calMoveEvent(tk, type, newDate, newTime){
   }
   renderListTable();
 }
+/* 日付文字列 "2026-08-01" → "2026/08/01（金）"（曜日はローカル基準で算出） */
+function calFmtDateJP(ds){
+  const p = String(ds || "").split("-").map(Number);
+  if(p.length < 3 || !p[0]) return ds;
+  const w = "日月火水木金土"[new Date(p[0], p[1] - 1, p[2]).getDay()];
+  return p[0] + "/" + String(p[1]).padStart(2, "0") + "/" + String(p[2]).padStart(2, "0") + "（" + w + "）";
+}
+/* 「今後の予定（先の工程）」レポート。今日以降の工事・打合せ予定を日付ごとに新しい順で一覧。
+   カレンダーと同じ calBuildEvents から生成するため、予定を動かすと自動で追従する。 */
+function renderUpcomingSchedule(rows){
+  const todayS = lgDateStrToday(0);
+  const evs = calBuildEvents(rows)
+    .filter(ev => ev.date >= todayS)
+    .sort((a, b) => a.date.localeCompare(b.date)
+      || (a.type === b.type ? 0 : (a.type === "work" ? -1 : 1))
+      || String(a.time || "").padStart(5, "0").localeCompare(String(b.time || "").padStart(5, "0")));
+  const workN = evs.filter(e => e.type === "work").length;
+  const meetN = evs.filter(e => e.type === "meet").length;
+  let html = '<div class="cal-upcoming"><div class="cu-head">📋 今後の予定（先の工程）'
+    + '<span class="cu-sub">' + todayS.replace(/-/g, "/") + ' 現在 ／ 工事 ' + workN + ' 件・打合せ ' + meetN + ' 件</span></div>';
+  if(!evs.length){
+    return html + '<div class="cu-empty">今後の予定はありません（工事日・打合せ日を設定すると、ここに日付順＝近い日から表示されます）。</div></div>';
+  }
+  let curDate = null;
+  evs.forEach(ev => {
+    if(ev.date !== curDate){
+      if(curDate !== null) html += '</table></div>';
+      curDate = ev.date;
+      const p = ev.date.split("-").map(Number);
+      const dow = new Date(p[0], p[1] - 1, p[2]).getDay();
+      const dcls = dow === 0 ? " cu-sun" : (dow === 6 ? " cu-sat" : "");
+      html += '<div class="cu-day"><div class="cu-day-head' + dcls + '">' + calFmtDateJP(ev.date) + '</div><table class="cu-list">';
+    }
+    const d = ev.row.data || {};
+    const no = (d.chosho_mgmt_no || "").trim();
+    const nm = (d.chosho_cust_name || "").trim();
+    const addr = (d.chosho_cust_addr || "").trim();
+    html += '<tr class="' + (ev.done ? "cu-done" : "") + '">'
+      + '<td style="width:60px;"><span class="cu-type ' + (ev.type === "work" ? "t-work" : "t-meet") + '">' + (ev.type === "work" ? "工事" : "打合せ") + '</span></td>'
+      + '<td class="cu-time" style="width:48px;">' + escapeHtml(ev.time || "―") + '</td>'
+      + '<td>' + (ev.prov ? '<span class="cu-prov">仮 </span>' : '') + escapeHtml((no || "―") + (nm ? ("　" + nm) : "")) + (ev.done ? ' <span style="color:#2e7d32;">✔完了</span>' : '') + '</td>'
+      + '<td style="color:#667482;">' + escapeHtml(addr) + '</td>'
+      + '</tr>';
+  });
+  html += '</table></div></div>';
+  return html;
+}
 function renderListCalendarMode(rows, container){
   const today = new Date();
   if(_calY == null){ _calY = today.getFullYear(); _calM = today.getMonth(); }
@@ -18163,6 +18362,7 @@ function renderListCalendarMode(rows, container){
     + '<button data-cal-nav="ny" title="次の年">»</button>'
     + '<button data-cal-nav="today">今日</button>'
     + '<button data-cal-nav="ics" title="読み込み中の全予定（工事・打合せ）をGoogleカレンダー用ファイル(.ics)に書き出します" style="margin-left:10px;">📅 Googleカレンダーへ書き出す(.ics)</button>'
+    + '<button data-cal-nav="print" title="下の「今後の予定（先の工程）」を印刷/PDFで出力します。元請・お客様への共有用（正式提出書類ではありません）">📄 今後の予定を印刷</button>'
     + '<span class="cal-legend">'
     + '<span><span class="cal-chip-sample" style="background:#e3f2fd;border:1px solid #90caf9;"></span>工事予定</span>'
     + '<span><span class="cal-chip-sample" style="background:#e8f5e9;border:1px solid #a5d6a7;"></span>打合せ</span>'
@@ -18206,6 +18406,7 @@ function renderListCalendarMode(rows, container){
   }
   html += '</tbody></table></div>';
   html += '<div class="cal-panel" id="cal-panel">' + renderCalPanel(byDate) + '</div>';
+  html += renderUpcomingSchedule(rows);   // 今後の予定（先の工程）レポート＝カレンダーと同データで自動追従
   container.innerHTML = html;
   bindCalendarHandlers(container);
   _calHighlightKey = null; // 1回表示したら解除（次回の再描画で消える）
@@ -18315,6 +18516,7 @@ function bindCalendarHandlers(container){
       else if(k === "ny"){ _calY++; }
       else if(k === "today"){ const t = new Date(); _calY = t.getFullYear(); _calM = t.getMonth(); }
       else if(k === "ics"){ calExportICS(); return; }
+      else if(k === "print"){ printUpcomingSchedule(); return; }
       renderListTable();
       return;
     }
@@ -18931,6 +19133,11 @@ function init(){
       if(e.target.id === "asbestos_material") updateAsbestosMaterialOther();
       updateAsbestosJudgement();
     }
+    // ガイド自動入力欄を手動変更したら「ガイド自動入力」色を解除（通常色に戻す）
+    if(e.target && e.target.classList && e.target.classList.contains(AG_FILLED_CLASS)){
+      e.target.classList.remove(AG_FILLED_CLASS);
+      _agFilledIds = _agFilledIds.filter(id => id !== e.target.id);
+    }
     rebuild();
   });
   // 着工日の input イベントでも即時反映（date入力は change だけだと遅い場合あり）
@@ -19297,6 +19504,15 @@ function init(){
     rebuild();
   };
   updateAgPasteBtn();
+
+  // 「工事調書にも載せる」チェックボックス：状態復元＋変更でlocalStorageへ保存
+  const chkAgChosho = document.getElementById("chk-ag-chosho");
+  if(chkAgChosho){
+    chkAgChosho.checked = agShowInChosho();
+    chkAgChosho.addEventListener("change", () => {
+      try { localStorage.setItem(AG_CHOSHO_KEY, chkAgChosho.checked ? "1" : "0"); } catch(_){}
+    });
+  }
 
   // アンテナ取付ガイド ウィジェット初期化（操作のたびに既存欄へ自動反映してから再計算）
   {
