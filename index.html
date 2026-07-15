@@ -213,16 +213,35 @@
 
   /* 図面ツールバー */
   .diagram-toolbar {
-    display: flex; gap: 6px; padding: 6px 10px;
+    display: flex; flex-wrap: wrap; gap: 6px 8px; padding: 6px 10px;
     background: #fff; border-bottom: 1px solid #dfe3e8;
     align-items: center;
   }
   .diagram-toolbar button {
-    padding: 3px 10px; font-size: 12px;
+    padding: 4px 10px; font-size: 12px; line-height: 1.4;
     border: 1px solid #cdd3da; background: #fff;
-    border-radius: 3px; cursor: pointer;
+    border-radius: 4px; cursor: pointer;
+    /* アイコン＋短いラベルを常に1行で。潰れ・折返しを防ぐ */
+    white-space: nowrap; flex: 0 0 auto;
+    display: inline-flex; align-items: center; gap: 4px;
   }
   .diagram-toolbar button:hover { background: #eef2f6; }
+  /* 機能ごとのまとまり（ズーム／リセット／注記）を軽くグルーピング */
+  .diagram-toolbar .tb-group { display: inline-flex; align-items: center; gap: 6px; }
+  .diagram-toolbar .tb-sep {
+    align-self: stretch; width: 1px; background: #e3e7ec; margin: 2px 1px;
+  }
+  .diagram-toolbar .tb-red { color: #d32f2f; font-weight: 700; }
+  .diagram-toolbar .tb-check {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: 11px; color: #555; cursor: pointer; white-space: nowrap;
+  }
+  .diagram-toolbar .tb-help { color: #1565c0; }
+  /* 操作ヒントは既定で折りたたみ、ⓘで開閉（タッチでも読める） */
+  .diagram-toolbar .tb-hint {
+    flex: 1 1 100%; font-size: 11px; color: #555;
+    margin-top: 2px; padding-top: 5px; border-top: 1px dashed #e3e7ec;
+  }
   .diagram-toolbar .legend {
     display: flex; gap: 12px; margin-left: auto; font-size: 11px;
   }
@@ -3868,21 +3887,30 @@
     <!-- ============ 図面パネル ============ -->
     <section class="diagram-panel">
       <div class="diagram-toolbar">
-        <button id="btn-zoom-in">＋拡大</button>
-        <button id="btn-zoom-out">－縮小</button>
-        <button id="btn-zoom-reset">100%</button>
-        <span id="zoom-label" style="font-size:11px;color:#666;">100%</span>
-        <button id="btn-wire-reset" title="手動で変更した線色をすべて初期状態に戻します">線色リセット</button>
-        <button id="btn-pos-reset" title="ドラッグで移動したノード位置・測定表の位置/拡大率をすべて初期状態に戻します">位置リセット</button>
-        <button id="btn-add-text" title="図面内に赤文字を自由に追加します。追加後はドラッグで移動・クリックで編集（空欄にすると削除）できます" style="color:#d32f2f;font-weight:700;">＋赤文字</button>
-        <button id="btn-ag-paste" disabled title="アンテナ取付ガイドの完成図を系統図上の任意の位置に貼り付けます（ドラッグで移動・右下角でリサイズ）">系統図に貼付</button>
-        <label style="font-size:11px;color:#555;cursor:pointer;white-space:nowrap;" title="オンにすると、系統図に貼り付けたアンテナ取付ガイドの完成図を工事調書にも載せます（オフ＝載せない）。既定＝載せる"><input type="checkbox" id="chk-ag-chosho" style="vertical-align:middle;margin-right:2px;">工事調書にも載せる</label>
-        <span style="font-size:11px;color:#555;">※配線クリックで色切替／ノード・測定表はドラッグで移動／測定表は右下角で拡大縮小／「＋赤文字」で図面内に注記</span>
+        <div class="tb-group">
+          <button id="btn-zoom-in" title="拡大">🔍＋</button>
+          <button id="btn-zoom-out" title="縮小">🔍－</button>
+          <button id="btn-zoom-reset" title="100%表示に戻す">⟳100%</button>
+          <span id="zoom-label" style="font-size:11px;color:#666;">100%</span>
+        </div>
+        <span class="tb-sep"></span>
+        <div class="tb-group">
+          <button id="btn-wire-reset" title="線色リセット：手動で変更した線色をすべて初期状態に戻します">🎨線色</button>
+          <button id="btn-pos-reset" title="位置リセット：ドラッグで移動したノード位置・測定表の位置/拡大率をすべて初期状態に戻します">📍位置</button>
+        </div>
+        <span class="tb-sep"></span>
+        <div class="tb-group">
+          <button id="btn-add-text" class="tb-red" title="図面内に赤文字を自由に追加します。追加後はドラッグで移動・クリックで編集（空欄にすると削除）できます">✏️赤文字</button>
+          <button id="btn-ag-paste" disabled title="アンテナ取付ガイドの完成図を系統図上の任意の位置に貼り付けます（ドラッグで移動・右下角でリサイズ）">📌貼付</button>
+          <label class="tb-check" title="オンにすると、系統図に貼り付けたアンテナ取付ガイドの完成図を工事調書にも載せます（オフ＝載せない）。既定＝載せる"><input type="checkbox" id="chk-ag-chosho" style="vertical-align:middle;margin-right:2px;">調書に載せる</label>
+        </div>
+        <button id="btn-tb-help" class="tb-help" title="操作ヒントを表示 / 隠す" aria-expanded="false">ⓘヘルプ</button>
         <div class="legend">
           <span><i class="legend-line legend-new"></i>新規</span>
           <span><i class="legend-line legend-exist"></i>既存</span>
           <span style="color:#2e7d32;">● P = 電流通過端子</span>
         </div>
+        <div id="tb-hint" class="tb-hint" hidden>※配線クリックで色切替／ノード・測定表はドラッグで移動／測定表は右下角で拡大縮小／「✏️赤文字」で図面内に注記</div>
       </div>
       <div class="diagram-wrap">
         <div style="width:100%;">
@@ -8715,7 +8743,7 @@ function updateAgPasteBtn(){
   const active = antennaGuideActive(STATE.antennaGuide);
   btn.disabled = !active;
   const pl = STATE.agPlacement;
-  btn.textContent = (pl && pl.pasted) ? "貼付を解除" : "系統図に貼付";
+  btn.textContent = (pl && pl.pasted) ? "📌解除" : "📌貼付";
 }
 // STATE.agPlacement の w/h/x/y が未初期化(w<=0)の場合、現在のガイドのviewBox比率から既定値を設定
 function ensureAgPlacementDefaults(pl){
@@ -19504,6 +19532,17 @@ function init(){
     rebuild();
   };
   updateAgPasteBtn();
+
+  // ⓘヘルプ：操作ヒントの開閉（タッチ端末でも読めるようトグル式）
+  const btnTbHelp = document.getElementById("btn-tb-help");
+  const tbHint = document.getElementById("tb-hint");
+  if(btnTbHelp && tbHint){
+    btnTbHelp.onclick = () => {
+      const show = tbHint.hasAttribute("hidden");
+      if(show) tbHint.removeAttribute("hidden"); else tbHint.setAttribute("hidden","");
+      btnTbHelp.setAttribute("aria-expanded", show ? "true" : "false");
+    };
+  }
 
   // 「工事調書にも載せる」チェックボックス：状態復元＋変更でlocalStorageへ保存
   const chkAgChosho = document.getElementById("chk-ag-chosho");
