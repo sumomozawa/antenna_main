@@ -13175,10 +13175,40 @@ function renderListByFolderMode(rows, container){
   attachListRowHandlers(container, rows);
 }
 
+/* 物件モード中の高所作業車損料(high_work)：4時間まではデフォルトで基本工事に含む＝計上・表記しない。
+   超過分のみ「（4h超過分）」としてプラス計上する（ユーザー方針 2026-07-16）。
+   全体費用詳細（対市）・協力会社請求内訳（対下請）の両方に適用する。
+   単独戸別（物件を開いていない）では従来どおり全時間を計上。
+   実使用時間の入力は従来どおり積算エディタの数量欄（既定4h）＝エディタ表示・一覧金額は無変更で、
+   帳票側の集計時にだけ読み替える（諸経費除外 costDetailFilterBom と同じ層・同じ流儀）。 */
+const HIGH_WORK_INCLUDED_H = 4;
+function bukkenAdjustHighWork(agg){
+  if(!agg || !Array.isArray(agg.items)) return agg;
+  if(typeof _currentProject === "undefined" || !_currentProject) return agg;   // 物件モード外は無変換
+  if(!agg.items.some(it => it.id === "high_work")) return agg;                 // 対象なし＝そのまま（コピー不要）
+  const items = [];
+  agg.items.forEach(it => {
+    if(it.id !== "high_work"){ items.push(it); return; }
+    const excess = Math.max(0, it.qty - HIGH_WORK_INCLUDED_H);
+    if(excess <= 0) return;   // 4h以内＝基本工事に含む（行ごと出さない）
+    items.push(Object.assign({}, it, {
+      qty: excess,
+      mat: it.unitMat * excess,
+      lab: it.unitLab * excess,
+      name: it.name + "（4h超過分）",
+      note: (it.note ? it.note + "／" : "") + "4hまでは基本工事に含む"
+    }));
+  });
+  let matSum = 0, labSum = 0;
+  items.forEach(it => { matSum += it.mat; labSum += it.lab; });
+  return Object.assign({}, agg, { items, matSum, labSum });
+}
 /* 全体費用詳細専用：協力会社諸経費(outsource_fee)を集計から除外する（ユーザー方針 2026-07-16）。
    BOM本体・getRowBomAggregate のキャッシュは変更しない（協力会社請求内訳は諸経費を必要とするため）。
-   戸別・基本工事プリセットの両方に同じフィルタを通すので「基本＋追加＝戸別合計」の検算は保たれる。 */
+   戸別・基本工事プリセットの両方に同じフィルタを通すので「基本＋追加＝戸別合計」の検算は保たれる。
+   高所作業車損料の物件ルール（bukkenAdjustHighWork）もここで併せて通す。 */
 function costDetailFilterBom(agg){
+  agg = bukkenAdjustHighWork(agg);
   if(!agg || !Array.isArray(agg.items)) return agg;
   const items = agg.items.filter(it => it.id !== "outsource_fee");
   if(items.length === agg.items.length) return agg;   // 諸経費なし＝そのまま（コピー不要）
@@ -13614,7 +13644,8 @@ function fmtSubQty(q){
 function computeSubRow(row, idx){
   // 協力会社への請求は業者間の統一単価＝標準単価（DEFAULT_PARTS）で計算する。
   // 物件（内訳書）用の単価変更（色付き行）は対市の全体費用詳細にのみ反映し、ここには反映しない。
-  const bom = getRowBomAggregateStd(row);
+  // 高所作業車損料は物件モード中「4hまで基本工事に含む・超過分のみ計上」（bukkenAdjustHighWork）。
+  const bom = bukkenAdjustHighWork(getRowBomAggregateStd(row));
   if(!bom) return null;
   const takeoutKey = subCaseKey(row);
   // 協力会社諸経費（outsource_fee 行・労務費区分のため labSum に含まれている）
