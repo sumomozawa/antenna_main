@@ -4008,7 +4008,7 @@
       <button class="mode-tab active" data-list-mode="standard">📄 標準一覧</button>
       <button class="mode-tab" data-list-mode="by_folder">📁 工事別フォルダ</button>
       <button class="mode-tab" data-list-mode="cost_detail">💴 全体費用詳細</button>
-      <button class="mode-tab" data-list-mode="subcontractor" title="協力会社→元請けへの請求内訳（労務費＋協力会社諸経費＋持出材料）。全体費用詳細の数値には一切影響しません">🤝 協力会社請求内訳</button>
+      <button class="mode-tab" data-list-mode="subcontractor" title="協力会社→元請けへの請求内訳（労務費＋協力会社諸経費＋持出材料）。全体費用詳細の数値には一切影響しません。単価は標準単価（業者間の統一額）で計算し、物件用の単価変更（単価マスターの色付き行）は反映されません">🤝 協力会社請求内訳</button>
       <button class="mode-tab" data-list-mode="ledger" title="全戸別を1行ずつ一覧・セル直接編集（工事日程・打合せ・ビラ配布・完了・備考）。カレンダーと双方向連動">📒 受付台帳</button>
       <button class="mode-tab" data-list-mode="calendar" title="工事予定（青）と打合せ予定（緑）を月表示。受付台帳と双方向連動">📅 予定カレンダー</button>
       <button class="list-pdf-btn" id="btn-list-pdf" title="現在のモードの内容をPDF/印刷ダイアログで出力">🖨 PDF出力</button>
@@ -11911,6 +11911,62 @@ function getRowBomAggregate(row){
   return result;
 }
 
+/* ============================================================
+   標準単価BOM（協力会社請求内訳 専用）
+   ------------------------------------------------------------
+   ユーザー方針（2026-07-16）:
+   ・全体費用詳細 ＝ 請負業者 対 市。物件（内訳書）用に単価マスターを変更した項目
+     （単価エディタの色付き行＝DEFAULT_PARTSとの差分）を**適用する**（従来どおり現行PARTSで計算）。
+   ・協力会社請求内訳 ＝ 請負業者 対 下請け業者。業者間で統一金額を決めているため、
+     物件用の単価変更は反映せず**標準単価（DEFAULT_PARTS）で計算**する。
+   実装: 協力会社側だけ PARTS を標準に差し替えてBOMを組み直す。数量・構成・行キー
+   （持出材料チェックの lineKey）は通常BOMと同一で、単価だけが変わる。
+   ============================================================ */
+/* 標準単価スナップショット。DEFAULT_PARTS に無いユーザー追加部材（単価エディタの「＋行追加」）は
+   現行 PARTS の定義をそのまま残す（他に参照できる単価が存在しないため）。 */
+function stdPartsSnapshot(){
+  const std = JSON.parse(JSON.stringify(DEFAULT_PARTS));
+  for(const k in PARTS){ if(!std[k]) std[k] = JSON.parse(JSON.stringify(PARTS[k])); }
+  return std;
+}
+function buildBOMForDataStdParts(d, qtyOverrides){
+  const saved = PARTS;
+  PARTS = stdPartsSnapshot();   // buildBOM は PARTS を都度参照するため、同期的な差し替えで全行に効く
+  try { return buildBOMForData(d, qtyOverrides); }
+  finally { PARTS = saved; }
+}
+/* 標準単価でのBOM集計。キャッシュは「通常キャッシュ(_bomCache)のオブジェクト参照」を鍵にするため、
+   既存の10箇所ある `_bomCache = undefined` 無効化に一切手を入れずに自動で追従する。 */
+function getRowBomAggregateStd(row){
+  if(!row) return null;
+  const baseRef = getRowBomAggregate(row);   // 先に通常キャッシュを確定（この参照が無効化検知の鍵）
+  if(row._bomCacheStd && row._bomCacheStd.base === baseRef) return row._bomCacheStd.result;
+  let result = null;
+  if(baseRef){   // 通常が計算不可（暗号化等）なら標準単価版も不可
+    const d = row.data || {};
+    try {
+      const bom = buildBOMForDataStdParts(d, d.qty_overrides || {});
+      const items = bom.map(it => ({
+        id: it.id, key: it.key, model: it.model || "", name: it.name,
+        unit: it.unit || "", qty: it.qty,
+        unitMat: it.material_cost || 0, unitLab: it.labor_cost || 0,
+        mat: (it.material_cost || 0) * it.qty,
+        lab: (it.labor_cost || 0) * it.qty,
+        note: it.note || "",
+        cablePart: it.cablePart
+      }));
+      let matSum = 0, labSum = 0;
+      items.forEach(it => { matSum += it.mat; labSum += it.lab; });
+      result = { items, matSum, labSum };
+    } catch(err){
+      console.warn("標準単価BOM集計失敗:", row.file, err);
+      result = null;
+    }
+  }
+  row._bomCacheStd = { base: baseRef, result };
+  return result;
+}
+
 function openListView(){
   // エディタで編集中の戸別（図面・積算含む）を一覧の行データへ取り込んでから表示
   // （台帳⇄図面の双方向反映・物件自動保存に編集内容を反映させる）
@@ -13446,10 +13502,13 @@ function renderListCostDetailMode(rows, container){
      労務費 ＋ 協力会社諸経費 ＋ 持出材料 ＝ 合計
    元請けが材料搬入できず協力会社が自社在庫を持ち出した分を「持出材料」として
    管理番号ごとにチェックで計上する。
-   ◆ 全体費用詳細は一切変化させない：getRowBomAggregate() を読み取るのみ。
+   ◆ 全体費用詳細は一切変化させない：BOM集計を読み取るのみ。
      持出フラグは localStorage に保持し、戸別JSON / buildBOM / calcTotals には触れない。
    ◆ 協力会社諸経費(outsource_fee) は既に labSum(労務費) に含まれるため、
      表示用の労務費からは差し引いて二重計上を防ぐ。
+   ◆ 単価は標準単価（getRowBomAggregateStd＝DEFAULT_PARTS基準）で計算する（2026-07-16 ユーザー方針）。
+     物件（内訳書）用の単価変更（色付き行）は対市の全体費用詳細にのみ反映し、
+     対下請けの本モードには反映しない（業者間で統一金額を決めているため）。
    ============================================================ */
 const TAKEOUT_KEY = "antenna_takeout_v1";
 let _takeoutMap = (() => {
@@ -13553,7 +13612,9 @@ function fmtSubQty(q){
 
 /* 1戸分の請求内訳を算定（全体費用詳細は不変・読み取りのみ）。計算不可なら null。 */
 function computeSubRow(row, idx){
-  const bom = getRowBomAggregate(row);
+  // 協力会社への請求は業者間の統一単価＝標準単価（DEFAULT_PARTS）で計算する。
+  // 物件（内訳書）用の単価変更（色付き行）は対市の全体費用詳細にのみ反映し、ここには反映しない。
+  const bom = getRowBomAggregateStd(row);
   if(!bom) return null;
   const takeoutKey = subCaseKey(row);
   // 協力会社諸経費（outsource_fee 行・労務費区分のため labSum に含まれている）
