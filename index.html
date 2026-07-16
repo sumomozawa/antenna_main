@@ -4360,7 +4360,7 @@
       <div class="menu-sec-head">💴 諸経費（協力会社諸経費の既定額）</div>
       <div class="menu-proj-note">
         物件を開いている間、各戸別の積算は <b>「諸経費なし」＋「協力会社諸経費＝この額」</b> を既定にします（諸経費を協力会社諸経費としてまとめて計上する運用）。<br>
-        戸別側で金額を変えるとその戸別だけ個別の額になり（個別上書き）、変えていない戸別はこの額に揃います。<b>全体費用詳細・協力会社請求内訳・一覧の金額</b>にも反映されます。
+        戸別側で金額を変えるとその戸別だけ個別の額になり（個別上書き）、変えていない戸別はこの額に揃います。<b>協力会社請求内訳・一覧の金額</b>にも反映されます（全体費用詳細には協力会社諸経費は含まれません）。
       </div>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
         <span style="font-size:13px;color:#37474f;">1戸あたり</span>
@@ -9730,7 +9730,7 @@ const PRESETS = {
     cable_vvf_len:"5", cable_s5cfb_power:"5", cable_drop_len:"15",
     att_main:"no", att_46:"no", att_50:"no",
     box_consent:"no", use_ofmu:"no", ext_power_conn:"splitter_2",
-    // 協力会社諸経費（物件内固定の基本工事費。費用詳細の基本工事分に含める）
+    // 協力会社諸経費（物件内固定。協力会社請求内訳・一覧の金額に反映。全体費用詳細には含めない＝costDetailFilterBomで除外）
     outsource_fee_on:true, outsource_fee_amount:26000
   },
   // UHF+BS（BS対応増幅器使用で衛星MX不要）
@@ -11817,7 +11817,8 @@ function updateBasePresetStatus(){
     s.textContent = "未指定（費用詳細は全戸別を追加工事として集計）";
     s.style.color = "#888";
   } else {
-    const agg = getBasePresetBomAggregate();
+    // 費用詳細の「★基本工事」表と数字を一致させるため、諸経費除外後の品目数・合計を表示する
+    const agg = costDetailFilterBom(getBasePresetBomAggregate());
     if(!agg){
       s.textContent = "※ プリセットが見つかりません";
       s.style.color = "#c62828";
@@ -13118,11 +13119,23 @@ function renderListByFolderMode(rows, container){
   attachListRowHandlers(container, rows);
 }
 
+/* 全体費用詳細専用：協力会社諸経費(outsource_fee)を集計から除外する（ユーザー方針 2026-07-16）。
+   BOM本体・getRowBomAggregate のキャッシュは変更しない（協力会社請求内訳は諸経費を必要とするため）。
+   戸別・基本工事プリセットの両方に同じフィルタを通すので「基本＋追加＝戸別合計」の検算は保たれる。 */
+function costDetailFilterBom(agg){
+  if(!agg || !Array.isArray(agg.items)) return agg;
+  const items = agg.items.filter(it => it.id !== "outsource_fee");
+  if(items.length === agg.items.length) return agg;   // 諸経費なし＝そのまま（コピー不要）
+  let matSum = 0, labSum = 0;
+  items.forEach(it => { matSum += it.mat; labSum += it.lab; });
+  return Object.assign({}, agg, { items, matSum, labSum });
+}
 function renderListCostDetailMode(rows, container){
   // 基本工事分 = プリセット内容（ケーブル含む全項目）を固定計上 → 全戸別で完全同額。
   // 追加工事分 = 戸別実使用 − プリセット の差分（±・ケーブルも通常項目として差分計上）。
   // → 基本工事分（固定） + 追加工事分 = 戸別合計 が常に成立する。
-  const baseAgg = getBasePresetBomAggregate();
+  // ※ 協力会社諸経費は全体費用詳細には項目・金額とも含めない（costDetailFilterBom）
+  const baseAgg = costDetailFilterBom(getBasePresetBomAggregate());
   const presetQtyById = {};
   const presetInfoById = {};
   if(baseAgg){
@@ -13146,7 +13159,7 @@ function renderListCostDetailMode(rows, container){
   let naCount = 0;
 
   rows.forEach(r => {
-    const bom = getRowBomAggregate(r);
+    const bom = costDetailFilterBom(getRowBomAggregate(r));   // 諸経費除外（キャッシュは無変更）
     if(!bom){ naCount++; return; }
     // 戸別内の同ID項目を合算（ケーブルも通常項目として集約）
     const caseQtyById = {};
@@ -13251,7 +13264,7 @@ function renderListCostDetailMode(rows, container){
 
   // 戸別ごとの一覧（上部）
   html += '<div class="cost-detail-section">'
-    + '<h3>戸別ごとの金額一覧 <span style="font-size:11px;color:#555;font-weight:normal;">(' + perRowList.length + ' 件・諸経費抜・税抜)</span>';
+    + '<h3>戸別ごとの金額一覧 <span style="font-size:11px;color:#555;font-weight:normal;">(' + perRowList.length + ' 件・諸経費/協力会社諸経費 含まず・税抜)</span>';
   if(hasPreset){
     html += ' <span style="font-size:11px;color:#1565c0;font-weight:normal;margin-left:8px;">★ 基本工事プリセット: ' + escapeHtml(baseAgg.label) + '</span>';
   }
@@ -13319,10 +13332,9 @@ function renderListCostDetailMode(rows, container){
       const fixedQty = it.qty * N;
       const matTotal = it.unitMat * fixedQty;
       const labTotal = it.unitLab * fixedQty;
-      // 基本工事では協力会社諸経費は「諸経費」と表示
-      const dispName = it.id === "outsource_fee" ? "諸経費" : it.name;
+      // 協力会社諸経費(outsource_fee)は costDetailFilterBom で除外済み＝ここには来ない
       html += '<tr>'
-        + '<td>' + escapeHtml(dispName) + '</td>'
+        + '<td>' + escapeHtml(it.name) + '</td>'
         + '<td class="num">' + fmtQty(it.qty) + '</td>'
         + '<td class="num">' + fmtQty(fixedQty) + '</td>'
         + '<td>' + escapeHtml(it.unit) + '</td>'
@@ -13355,7 +13367,7 @@ function renderListCostDetailMode(rows, container){
     ? "増減工事 型式別 詳細合計（プリセット想定との差分 ±）"
     : "増減工事 型式別 詳細合計";
   html += '<div class="cost-detail-section">'
-    + '<h3>' + escapeHtml(addTitle) + ' <span style="font-size:11px;color:#555;font-weight:normal;">(' + perRowList.length + ' 件・諸経費抜・税抜)</span></h3>';
+    + '<h3>' + escapeHtml(addTitle) + ' <span style="font-size:11px;color:#555;font-weight:normal;">(' + perRowList.length + ' 件・諸経費/協力会社諸経費 含まず・税抜)</span></h3>';
   if(hasPreset){
     html += '<div style="font-size:11px;color:#555;margin-bottom:6px;">'
       + '<span style="color:#c62828;font-weight:600;">+ 赤字 = プリセット想定より多く使用（追加）</span> ／ '
