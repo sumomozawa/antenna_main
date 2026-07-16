@@ -2750,6 +2750,12 @@
   .cal-toolbar button:hover { background: #eef2f6; }
   .cal-toolbar .cal-legend { margin-left: auto; font-size: 11px; color: #555; display: flex; gap: 12px; align-items: center; }
   .cal-legend .cal-chip-sample { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 3px; vertical-align: -1px; }
+  /* 施工会社の色分け凡例：自前の行として折り返し表示（会社数が多くても崩れない） */
+  .cal-toolbar .cal-legend.cal-legend-ctr { margin-left: 0; flex-basis: 100%; flex-wrap: wrap; gap: 4px 14px;
+    border-top: 1px dashed #cdd3da; padding-top: 5px; margin-top: 3px; }
+  .cal-legend-ctr .cal-legend-ctr-lbl { font-weight: 700; color: #1e3a5f; }
+  .cal-legend .cal-chip-ctr { width: 13px; height: 11px; border-radius: 2px; border: 1px solid rgba(0,0,0,.15); }
+  .cal-legend .cal-chip-none { background: #fff; border: 1px dashed #9aa5b1; }
   table.cal-table { width: 100%; border-collapse: collapse; table-layout: fixed; background: #fff; }
   table.cal-table th { border: 1px solid #cdd3da; background: #eef2f6; color: #1e3a5f; font-size: 12px; padding: 4px 0; }
   table.cal-table th.cal-sun { color: #c62828; }
@@ -2792,6 +2798,10 @@
   .cal-panel .cal-ev-type { display: inline-block; font-size: 10px; padding: 0 6px; border-radius: 8px; margin-right: 4px; }
   .cal-panel .cal-ev-type.t-work { background: #e3f2fd; color: #0d47a1; border: 1px solid #90caf9; }
   .cal-panel .cal-ev-type.t-meet { background: #e8f5e9; color: #1b5e20; border: 1px solid #a5d6a7; }
+  /* 施工会社タグ（日パネル・詳細・今後の予定で共用。左に会社色の帯） */
+  .cal-ctr-tag { display: inline-block; max-width: 100%; padding: 0 5px; background: #f4f6f8; border: 1px solid #dde3ea;
+    border-radius: 3px; font-size: 11px; color: #33414f; vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cal-ctr-tag.cal-ctr-none { color: #90a0b0; border-style: dashed; background: transparent; }
   .cal-panel button {
     background: #fff; border: 1px solid #90a0b0; color: #33424f;
     padding: 2px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; margin-right: 4px;
@@ -14209,6 +14219,112 @@ function renderSubFullPrint(opts, data){
      列ごとに 数量・金額 を並べる。N件ずつページ分割。
    - 値は computeSubRow と同一（読み取りのみ・再計算なし）。
    ============================================================ */
+/* ------------------------------------------------------------
+   マトリクス印刷の列幅を「実際に出力する文字列」から算出する（桁切れの構造的排除）
+   旧実装は nameW/upW/qtyW を mm 決め打ち＋金額列は幅無指定（残余任せ）だったため、
+   table-layout:fixed + overflow:hidden + white-space:nowrap の組合せで、
+   入りきらない数値が警告なく無言で切り捨てられていた。
+   （総合計は 13mm の単価列に mx-total の 1.06em＋太字で描かれるため最も太く、
+     7桁＝¥1,000,000 から欠け始める。金額列は per が増えるほど痩せる。）
+   ここでは canvas で文字幅を実測し、全数値が収まる pt・列幅・1ページ戸数を解く。
+   数値の丸め・書式（fmtN / fmtSubQty）は一切変えない。
+   ------------------------------------------------------------ */
+const MX_PAD_MM    = 2.0;   // CSS: padding 0.7mm 1mm ＝ 左右で 2mm
+const MX_BORDER_MM = 0.35;  // CSS: border 0.4px(≒0.106mm)。border-collapse＋印刷DPIの丸めで
+                            //   実測は片側 0.15mm 程度まで太るため安全側に。border幅を変えたら要見直し
+const MX_SAFE_MM   = 0.4;   // 実測誤差（ヒンティング／tnum差／フォント置換）の安全マージン
+const MX_NAME_MIN  = 24;    // 作業項目列の下限mm（到達しない想定の最終フォールバック専用）
+let _mxCtx = null, _mxFont = "";
+const _mxEmCache = { n: Object.create(null), b: Object.create(null) };
+function mxFontFamily(){
+  if(!_mxFont){
+    const host = document.getElementById("sub-fullprint");   // display:none でも getComputedStyle は取れる
+    _mxFont = (host && getComputedStyle(host).fontFamily) || '"Yu Gothic UI","Meiryo","Hiragino Sans",sans-serif';
+  }
+  return _mxFont;
+}
+/* 文字列の幅を em 単位（フォントサイズ非依存）で返す。同じ文字列は1回だけ実測してキャッシュ */
+function mxTextEm(text, bold){
+  const s = String(text == null ? "" : text);
+  if(!s) return 0;
+  const bank = bold ? _mxEmCache.b : _mxEmCache.n;
+  if(bank[s] !== undefined) return bank[s];
+  if(_mxCtx === null){
+    try { _mxCtx = document.createElement("canvas").getContext("2d") || false; } catch(e){ _mxCtx = false; }
+  }
+  if(!_mxCtx){
+    // 保険：canvas が使えない環境。全角=1.0em / 半角=0.6em で見積る
+    // （実測では数字≒0.5em なので過大評価＝列が広くなる側＝切れない側に倒れる）
+    let em = 0;
+    for(let i = 0; i < s.length; i++) em += (s.charCodeAt(i) < 0x2000) ? 0.6 : 1.0;
+    return (bank[s] = em);
+  }
+  _mxCtx.font = (bold ? "700 " : "400 ") + "100px " + mxFontFamily();
+  // td.num は tabular-nums＝全数字が同一送り幅。canvas は tnum を再現しないので
+  // 「最も広い数字の幅」で全数字を数える（等幅数字の見積り＝安全側）。
+  // カンマ等の記号は tnum の影響を受けないためそのまま実測する。
+  let dw = 0;
+  for(let d = 0; d < 10; d++){ const w = _mxCtx.measureText(String(d)).width; if(w > dw) dw = w; }
+  let px = 0;
+  for(let i = 0; i < s.length; i++){
+    const ch = s.charAt(i);
+    px += (ch >= "0" && ch <= "9") ? dw : _mxCtx.measureText(ch).width;
+  }
+  return (bank[s] = px / 100);
+}
+function mxMaxEm(texts, bold){
+  let em = 0;
+  for(let i = 0; i < texts.length; i++){ const e = mxTextEm(texts[i], bold); if(e > em) em = e; }
+  return em;
+}
+/* 列の外形幅(mm) = 文字幅 + padding + border + 安全マージン。1pt = 25.4/72 mm */
+function mxColMm(em, pt){ return em * pt * 25.4 / 72 + MX_PAD_MM + MX_BORDER_MM + MX_SAFE_MM; }
+/* 紙面content幅(mm)。doSubFullPrint の @page margin 12mm 前提（変えたらここも直す）。
+   印刷ダイアログで余白を変更された場合は、列を % で出力しているため全体が比例縮小する
+   だけで紙外へは落ちない（幅を mm 固定にすると紙外へ落ちる＝旧コードの安全弁を維持） */
+function mxPageContentMm(paper, orient){
+  const shortMm = (paper === "A3") ? 297 : 210, longMm = (paper === "A3") ? 420 : 297;
+  return ((orient === "landscape") ? longMm : shortMm) - 24;
+}
+const mxBasePt   = per => (per <= 6 ? 8 : per <= 10 ? 7.2 : per <= 14 ? 6.4 : 5.8);   // 従来値
+const mxBaseName = per => (per <= 10 ? 38 : 33);                                      // 従来値
+/* per/pt を仮定して列幅を解く。紙幅に収まらなければ null */
+function mxTryWidths(em, per, pt, nameW, pageW){
+  const hPt = pt * 0.92;   // CSS: 列見出し行(mx-colh)は .92em
+  const tPt = pt * 1.06;   // CSS: 合計行(mx-total)は 1.06em＋太字
+  // 単価列＝各行の単価・「―」・総合計・見出し「単価」（mx-lbl で太字）
+  const upW  = Math.max(mxColMm(em.up, pt), mxColMm(em.upTotal, tPt), mxColMm(em.hUnit, hPt));
+  // 見出し「数量」「金額」も1行で収まる幅を下限にする（従来の qtyW=9mm は1行に収まる幅だった＝
+  // これが無いと数量列が痩せて見出しの1グリフすら入らず切れる）
+  const qtyW = Math.max(mxColMm(em.qty, pt), mxColMm(em.hQty, hPt));
+  const amtW = Math.max(mxColMm(em.amt, pt), mxColMm(em.hAmt, hPt));
+  // colspan=2 のセル（労務費計／持出材料計／戸別合計）は 数量+金額 の2列に収める
+  const spanW = Math.max(mxColMm(em.span, pt), mxColMm(em.spanTotal, tPt));
+  const pairW = Math.max(qtyW + amtW, spanW);
+  if(nameW + upW + per * pairW > pageW) return null;
+  return { per: per, pt: pt, nameW: nameW, upW: upW, qtyW: qtyW, pairW: pairW, pageW: pageW };
+}
+/* 紙・向き・希望戸数から、全数値が切れずに収まるレイアウトを決める。
+   ・pt はその指定で従来使われていた値より小さくしない＝文字は現行以上に読める
+   ・作業項目列(nameW)は従来値のまま＝折返し量・行高も現行どおり（縦方向の回帰を作らない）
+   ・以上を満たしたまま戸数は指定を最大限守る→収まらない時だけ1つずつ減らす
+     （ページが増えるだけで情報損失ゼロ）。同じ per の中では最大の pt を選ぶ */
+function mxAutoLayout(em, perWant, paper, orient){
+  const pageW = mxPageContentMm(paper, orient);
+  const ptMin = mxBasePt(perWant);
+  for(let per = Math.max(1, perWant); per >= 1; per--){
+    const nameW = mxBaseName(per);
+    for(let pt = mxBasePt(per); pt >= ptMin - 1e-9; pt = Math.round((pt - 0.2) * 10) / 10){
+      const lay = mxTryWidths(em, per, pt, nameW, pageW);
+      if(lay) return lay;
+    }
+  }
+  // 到達しない想定（per=1 なら A4縦186mmに大きく余る）。万一到達しても列は % 出力なので
+  // 紙外へは落ちず、全体が比例縮小するだけ
+  const lay = mxTryWidths(em, 1, ptMin, MX_NAME_MIN, Infinity);
+  lay.pageW = pageW;
+  return lay;
+}
 function renderSubMatrixPrint(opts, data){
   const esc = escapeHtml;
   const fmtN = v => Math.round(v).toLocaleString("ja-JP");
@@ -14252,12 +14368,33 @@ function renderSubMatrixPrint(opts, data){
   const anyDate = data.some(sr => sr.date);
   const anyStatus = data.some(sr => sr.status && sr.status !== "unconfirmed");
 
-  // 1ページの戸数・寸法
-  const per = Math.max(1, parseInt(opts.mxPer, 10) || 6);
-  const pt = per <= 6 ? 8 : per <= 10 ? 7.2 : per <= 14 ? 6.4 : 5.8;
-  const nameW = per <= 10 ? 38 : 33;
-  const upW = per <= 10 ? 13 : 11;
-  const qtyW = per <= 6 ? 9 : per <= 10 ? 8 : 6.5;
+  // 1ページの戸数・寸法：出力する実文字列を実測して決める（mm決め打ちを廃止＝桁切れを構造的に排除）
+  const perWant = Math.max(1, parseInt(opts.mxPer, 10) || 6);
+  const upTexts = ["―"], qtyTexts = [], amtTexts = ["0"], spanTexts = [], spanTotalTexts = [];
+  laborKeys.forEach(lk => upTexts.push(fmtN(lk.unitPrice)));                 // 各行の単価
+  matKeys.forEach(mk => upTexts.push(fmtN(mk.unitPrice)));
+  caseVals.forEach(cv => {
+    Object.keys(cv.lv).forEach(k => { qtyTexts.push(fmtSubQty(cv.lv[k].qty)); amtTexts.push(fmtN(cv.lv[k].amt)); });
+    Object.keys(cv.mv).forEach(k => { qtyTexts.push(fmtSubQty(cv.mv[k].qty)); amtTexts.push(fmtN(cv.mv[k].amt)); });
+  });
+  data.forEach(sr => {
+    amtTexts.push(fmtN(sr.fee));                                             // 協力会社諸経費の金額
+    spanTexts.push(fmtN(sr.laborSum), fmtN(sr.takeout));                     // 労務費計／持出材料計（colspan=2・太字）
+    spanTotalTexts.push(fmtN(sr.total));                                     // 戸別合計（colspan=2・太字1.06em）
+  });
+  const mxEm = {
+    up:        mxMaxEm(upTexts, false),
+    upTotal:   mxTextEm(fmtN(gTotal), true),                                 // 合計行の総合計（見本準拠で単価列に置く）
+    qty:       mxMaxEm(qtyTexts, false),
+    amt:       mxMaxEm(amtTexts, false),
+    span:      mxMaxEm(spanTexts, true),
+    spanTotal: mxMaxEm(spanTotalTexts, true),
+    hUnit:     mxTextEm("単価", true),                                       // 列見出し（mx-lbl で太字）
+    hQty:      mxTextEm("数量", false),
+    hAmt:      mxTextEm("金額", false)
+  };
+  const lay = mxAutoLayout(mxEm, perWant, opts.paper, opts.orient);
+  const per = lay.per, pt = lay.pt, nameW = lay.nameW, upW = lay.upW, qtyW = lay.qtyW, pairW = lay.pairW;
 
   const dispDate = opts.date ? opts.date.replace(/-/g, "/") : "";
   let html = '';
@@ -14269,6 +14406,7 @@ function renderSubMatrixPrint(opts, data){
     + '<div class="sfp-rh-right">協力会社請求内訳（明細）'
     + (opts.vendor ? '<br>協力会社： ' + esc(opts.vendor) : '')
     + (dispDate ? '<br>作成日： ' + esc(dispDate) : '')
+    + (per !== perWant ? '<br>1ページ ' + per + ' 件（指定の ' + perWant + ' 件では金額が用紙幅に収まらないため自動調整）' : '')
     + '</div></div>';
   html += '<div class="sfp-content">';
   html += '<div class="sfp-title">協力会社請求内訳　明細</div>';
@@ -14312,10 +14450,20 @@ function renderSubMatrixPrint(opts, data){
         + (dispDate ? '　／　' + esc(dispDate) : '') + '</span>'
         + '</div>';
     }
+    // 列幅：実測レイアウト(lay)を「表幅に対する %」で出力する。
+    //  - CSS の width:100% は残す＝表は必ず印刷可能幅に一致し、印刷ダイアログで余白を
+    //    変更されても列が紙外へ落ちない（% は表幅に追随して比例縮小するだけ）。旧コードの
+    //    「金額<col>を無指定にして残余を吸わせる」安全弁と同じ性質を、正しい配分で維持する。
+    //  - 端数ページは実列数(nCols)で割り付けるため、どのページも合計がちょうど100%になる。
+    //    複数ページ時は pad により nCols === per なのでページ間の桁位置は完全に揃う。
+    const nCols = chunk.length + pad;
+    const slack = Math.max(0, (lay.pageW - nameW - upW - nCols * pairW) / nCols);
+    const amtW  = pairW - qtyW + slack;   // 余りは金額列へ配分（見本どおり金額列が最も広い）
+    const wSum  = nameW + upW + nCols * (qtyW + amtW);
+    const pct   = w => (w / wSum * 100).toFixed(3) + '%';
     html += '<table class="sfp-mx" style="font-size:' + pt + 'pt;">';
-    // 列幅
-    html += '<colgroup><col style="width:' + nameW + 'mm"><col style="width:' + upW + 'mm">';
-    for(let k = 0; k < chunk.length + pad; k++){ html += '<col style="width:' + qtyW + 'mm"><col>'; }
+    html += '<colgroup><col style="width:' + pct(nameW) + '"><col style="width:' + pct(upW) + '">';
+    for(let k = 0; k < nCols; k++){ html += '<col style="width:' + pct(qtyW) + '"><col style="width:' + pct(amtW) + '">'; }
     html += '</colgroup>';
     // ヘッダー（管理番号／施工日／お客様名 ＋ 列見出し）
     html += '<thead>';
@@ -16110,6 +16258,22 @@ function contractorShortLabels(list){
     while(len < 4 && stripped.some((o, j) => j !== i && o.slice(0, len) === s.slice(0, len))) len++;
     return s.slice(0, len) || "？";
   });
+}
+/* カレンダーの施工会社色分け用パレット（背景が淡色チップの上に載る濃色の帯）。
+   施工業者マスターの登録順で安定した色を割り当て、マスター外の名前は名前ハッシュで安定色にする。 */
+const CAL_CTR_COLORS = ["#1565c0", "#c62828", "#2e7d32", "#6a1b9a", "#e65100", "#00838f",
+  "#ad1457", "#3949ab", "#558b2f", "#5d4037", "#0277bd", "#8d6e63"];
+function calContractorColor(name){
+  name = String(name || "").trim();
+  if(!name) return "";
+  const list = getContractorList();
+  let idx = list.indexOf(name);
+  if(idx < 0){   // マスター外（過去の会社名など）は名前ハッシュで安定色
+    let h = 0;
+    for(let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
+    idx = Math.abs(h);
+  }
+  return CAL_CTR_COLORS[idx % CAL_CTR_COLORS.length];
 }
 /* 受付台帳の施工会社セル：未割当は業者の「頭文字チップ」を並べて一発選択（ホバーで正式名）、
    割当済みは会社名チップのみ表示（クリックで再びチップ一覧を開いて変更・解除できる）。
@@ -18292,10 +18456,12 @@ function calEvLabel(ev){
 }
 function calEvTitle(ev){
   const d = ev.row.data || {};
-  if(ev.prov) return "仮受付（電話メモ・台帳で清書待ち）\n" + (d.chosho_mgmt_no || "―");
+  const cc = getContractor(ev.tk);
+  const cLine = cc ? "\n施工： " + cc : "";
+  if(ev.prov) return "仮受付（電話メモ・台帳で清書待ち）\n" + (d.chosho_mgmt_no || "―") + cLine;
   return (ev.type === "work" ? "工事予定" : "打合せ") + (ev.done ? "（完了）" : "")
     + "\n" + (d.chosho_mgmt_no || "―") + " " + (d.chosho_cust_name || "")
-    + (d.chosho_cust_addr ? "\n" + d.chosho_cust_addr : "");
+    + (d.chosho_cust_addr ? "\n" + d.chosho_cust_addr : "") + cLine;
 }
 /* 予定の日付を移動（D&D・日付変更で共用）。工事は4件枠を警告 */
 function calMoveEvent(tk, type, newDate, newTime){
@@ -18350,10 +18516,14 @@ function renderUpcomingSchedule(rows){
     const no = (d.chosho_mgmt_no || "").trim();
     const nm = (d.chosho_cust_name || "").trim();
     const addr = (d.chosho_cust_addr || "").trim();
+    const cc = getContractor(ev.tk);
     html += '<tr class="' + (ev.done ? "cu-done" : "") + '">'
       + '<td style="width:60px;"><span class="cu-type ' + (ev.type === "work" ? "t-work" : "t-meet") + '">' + (ev.type === "work" ? "工事" : "打合せ") + '</span></td>'
       + '<td class="cu-time" style="width:48px;">' + escapeHtml(ev.time || "―") + '</td>'
       + '<td>' + (ev.prov ? '<span class="cu-prov">仮 </span>' : '') + escapeHtml((no || "―") + (nm ? ("　" + nm) : "")) + (ev.done ? ' <span style="color:#2e7d32;">✔完了</span>' : '') + '</td>'
+      + '<td class="cu-ctr" style="width:130px;">' + (cc
+          ? '<span class="cal-ctr-tag" style="border-left:4px solid ' + calContractorColor(cc) + ';">' + escapeHtml(cc) + '</span>'
+          : '') + '</td>'
       + '<td style="color:#667482;">' + escapeHtml(addr) + '</td>'
       + '</tr>';
   });
@@ -18370,6 +18540,19 @@ function renderListCalendarMode(rows, container){
   const padT = t => String(t || "").padStart(5, "0"); // "9:00"→"09:00"（時刻順を正しく）
   Object.keys(byDate).forEach(k => byDate[k].sort((a, b) =>
     (a.type === b.type ? 0 : (a.type === "work" ? -1 : 1)) || padT(a.time).localeCompare(padT(b.time))));
+
+  // 凡例用：この月ではなく「読み込み中の全予定」に出てくる施工会社を、業者マスターの登録順で集める。
+  // （月を移動しても凡例の色が動かないよう、表示中の月ではなく全 evs を基準にする）
+  const ctrOrder = getContractorList();
+  const ctrSeen = {}; let ctrHasUnassigned = false;
+  evs.forEach(ev => {
+    const c = getContractor(ev.tk);
+    if(c) ctrSeen[c] = 1; else ctrHasUnassigned = true;
+  });
+  const ctrInView = Object.keys(ctrSeen).sort((a, b) => {
+    const ia = ctrOrder.indexOf(a), ib = ctrOrder.indexOf(b);
+    return (ia < 0 ? 1e9 : ia) - (ib < 0 ? 1e9 : ib) || a.localeCompare(b, "ja");
+  });
 
   // 月グリッド構築（日曜始まり）
   const first = new Date(_calY, _calM, 1);
@@ -18396,7 +18579,16 @@ function renderListCalendarMode(rows, container){
     + '<span><span class="cal-chip-sample" style="background:#e8f5e9;border:1px solid #a5d6a7;"></span>打合せ</span>'
     + '<span><span class="cal-chip-sample" style="background:#fff3e0;border:1px solid #ffcc80;"></span>満枠（' + CAL_MAX_PER_DAY + '件）</span>'
     + '<span>予定はドラッグ＆ドロップで日付変更できます</span>'
-    + '</span></div>';
+    + '</span>'
+    + (ctrInView.length || ctrHasUnassigned
+        ? '<span class="cal-legend cal-legend-ctr"><span class="cal-legend-ctr-lbl">施工会社：</span>'
+          + ctrInView.map(c => '<span title="施工会社：' + escapeHtml(c) + '">'
+              + '<span class="cal-chip-sample cal-chip-ctr" style="background:' + calContractorColor(c) + ';"></span>'
+              + escapeHtml(c) + '</span>').join("")
+          + (ctrHasUnassigned ? '<span title="施工会社が割り当てられていない予定"><span class="cal-chip-sample cal-chip-ctr cal-chip-none"></span>未割当</span>' : '')
+          + '</span>'
+        : '')
+    + '</div>';
 
   html += '<div class="cost-detail-section"><table class="cal-table"><thead><tr>';
   ["日", "月", "火", "水", "木", "金", "土"].forEach((w, i) => {
@@ -18425,7 +18617,9 @@ function renderListCalendarMode(rows, container){
         if(ev.prov) cls.push("cal-prov");
         if(ev.done) cls.push("cal-done");
         if(_calHighlightKey && ev.tk === _calHighlightKey) cls.push("cal-hl");
-        html += '<span class="' + cls.join(" ") + '" draggable="true" data-tk="' + escapeHtml(ev.tk) + '" data-evtype="' + ev.type + '" title="' + escapeHtml(calEvTitle(ev)) + '">'
+        const cc = calContractorColor(getContractor(ev.tk));   // 施工会社の色帯（未割当は無し）
+        const stripe = cc ? ' style="border-left:4px solid ' + cc + ';padding-left:4px;"' : '';
+        html += '<span class="' + cls.join(" ") + '"' + stripe + ' draggable="true" data-tk="' + escapeHtml(ev.tk) + '" data-evtype="' + ev.type + '" title="' + escapeHtml(calEvTitle(ev)) + '">'
           + (ev.prov ? '<b class="cal-prov-mark">仮</b>' : '') + escapeHtml(calEvLabel(ev)) + '</span>';
       });
       html += '</div></td>';
@@ -18460,11 +18654,16 @@ function renderCalPanel(byDate){
       html += '<table class="cal-day-list">';
       evs.forEach(ev => {
         const d = ev.row.data || {};
+        const cc = getContractor(ev.tk);
+        const ccChip = cc
+          ? '<span class="cal-ctr-tag" style="border-left:4px solid ' + calContractorColor(cc) + ';">' + escapeHtml(cc) + '</span>'
+          : '<span class="cal-ctr-tag cal-ctr-none">未割当</span>';
         html += '<tr>'
           + '<td style="width:70px;"><span class="cal-ev-type ' + (ev.type === "work" ? "t-work" : "t-meet") + '">' + (ev.type === "work" ? "工事" : "打合せ") + '</span></td>'
           + '<td style="width:52px;">' + escapeHtml(ev.time || "―") + '</td>'
           + '<td>' + (ev.prov ? '<span class="lg-prov-badge">仮</span>' : '') + escapeHtml((d.chosho_mgmt_no || "―") + "　" + (d.chosho_cust_name || "")) + (ev.done ? ' <span style="color:#2e7d32;">✔完了</span>' : '') + '</td>'
-          + '<td style="width:180px;text-align:right;"><button data-cal-ev-open="' + escapeHtml(ev.tk) + '" data-evtype="' + ev.type + '">詳細</button></td>'
+          + '<td style="width:150px;">' + ccChip + '</td>'
+          + '<td style="width:70px;text-align:right;"><button data-cal-ev-open="' + escapeHtml(ev.tk) + '" data-evtype="' + ev.type + '">詳細</button></td>'
           + '</tr>';
       });
       html += '</table>';
@@ -18503,7 +18702,11 @@ function renderCalPanel(byDate){
     + (d.chosho_status === "completed" ? ' <span style="color:#2e7d32;font-size:12px;">✔ 工事完了</span>' : '')
     + (isProv ? ' <span style="color:#5d4037;font-size:11px;background:#fff8d6;padding:1px 6px;border-radius:3px;">電話メモ・台帳で清書待ち</span>' : '')
     + '</div>';
+  const detCtr = getContractor(tk);
   html += '<div style="line-height:1.8;margin-bottom:8px;">'
+    + '施工会社： ' + (detCtr
+        ? '<span class="cal-ctr-tag" style="border-left:4px solid ' + calContractorColor(detCtr) + ';">' + escapeHtml(detCtr) + '</span>'
+        : '<span class="cal-ctr-tag cal-ctr-none">未割当</span>') + '<br>'
     + '住所： ' + escapeHtml(d.chosho_cust_addr || "―") + '<br>'
     + '電話： ' + escapeHtml(d.chosho_cust_tel || "―") + '<br>'
     + '備考： ' + escapeHtml(lg.note || "―")
@@ -20278,6 +20481,148 @@ window.addEventListener("DOMContentLoaded", init);
     return { w: DEFAULT_W, h: DEFAULT_H };
   }
 
+  /* ---------- G2b: 内容の外接矩形（縮小マップ／全体表示 専用） ----------
+     worldBounds() は「紙（＝下地の大きさ）」。paintRes(→ensurePaintCanvas) の canvas 全消去、
+     既定サイズ(defaultTextSize/defaultPinR ほか)、印刷が依存するため絶対に変更しない。
+     こちらは「実際に描かれている物の広がり」＝ 負の原点もあり得る。保存しない純粋な導出値。
+     依存方向は mapContentBounds → worldBounds の一方向のみ（worldBounds 側に内容参照を足すと
+     即座に無限再帰になるので厳禁）。 */
+  var MAP_CB_LIMIT = 1e6;   // これを超える座標は壊れデータとみなし無視（異常値でSCALE_MINに張り付くのを防ぐ）
+  var MAP_CB_FREEZE = { objdrag: 1, vtxdrag: 1, marqdrag: 1, txresize: 1 };  // ドラッグ中は凍結
+  var _mapCb = null, _mapCbFor = null;
+
+  // 実効文字幅（全角1.0em想定。半角主体だと過大＝安全側に外れる）
+  function mapCbTextW(s, size){ return Math.max(1, String(s == null ? "" : s).length) * size; }
+
+  function mapCbCompute(){
+    var wb = worldBounds();
+    var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    // 比較ベース（marqBBoxOf と同じ流儀）。NaN は全比較が false になり静かに無視される。
+    // Math.min/max は NaN/Infinity を伝播させ translate(NaN) でミニマップごと消えるので使わない。
+    function acc(x, y){
+      if(!(x > -MAP_CB_LIMIT && x < MAP_CB_LIMIT)) return;
+      if(!(y > -MAP_CB_LIMIT && y < MAP_CB_LIMIT)) return;
+      if(x < x0) x0 = x;  if(x > x1) x1 = x;
+      if(y < y0) y0 = y;  if(y > y1) y1 = y;
+    }
+    // アンカー(cx,cy)基準の矩形[-l..r]x[-t..b]を deg 回転して4隅を積む（点オブジェクトの実描画範囲用）
+    function accBox(cx, cy, l, t, r, b, deg){
+      var a = (deg || 0) * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+      var q = [[-l, -t], [r, -t], [r, b], [-l, b]];
+      for(var i = 0; i < 4; i++){
+        var px = q[i][0], py = q[i][1];
+        acc(cx + px * c - py * s, cy + px * s + py * c);
+      }
+    }
+    if(current && current.layers){
+      ["road", "boundary", "chome", "building"].forEach(function(key){
+        var L = current.layers[key];
+        // 非表示レイヤーは除外（renderMini の可視判定と揃える。隠した図形で引くのは誤り）
+        if(!L || L.visible === false || !Array.isArray(L.objects)) return;
+        L.objects.forEach(function(o){
+          var pts = o && o.points; if(!Array.isArray(pts)) return;
+          for(var i = 0; i < pts.length; i++){ var p = pts[i]; if(p) acc(p[0], p[1]); }
+        });
+      });
+      var ll = current.layers.label;
+      if(ll && ll.visible !== false && Array.isArray(ll.objects)){
+        ll.objects.forEach(function(o){
+          if(!o || typeof o.x !== "number" || typeof o.y !== "number") return;
+          var k = o.kind;
+          if(k === "text"){
+            // (x,y)=ベースライン左端 ＋ rotate(angle, x, y)。角度を無視すると縦方向を数十倍取り違える
+            var s = o.size || defaultTextSize();
+            accBox(o.x, o.y, s * 0.15, s * 1.1, mapCbTextW(o.text, s), s * 0.35, o.angle);
+          } else if(k === "pin"){
+            // 円 r ＋ 右側ラベル（x+r*1.4 から font-size r*2）
+            var r = defaultPinR(), lab = String(o.label || o.banchi || "").trim();
+            accBox(o.x, o.y, r * 1.3, r * 1.3,
+                   lab ? (r * 1.4 + mapCbTextW(lab, r * 2)) : r * 1.3, r * 1.6, 0);
+          } else if(k === "azimuth"){
+            // 基点から方位角へ len、その先 len*0.14 に font-size len*0.14 の中央揃えラベル
+            var a2 = (o.angle || 0) * Math.PI / 180, len = o.len || defaultTextSize() * 8;
+            var ex = o.x + Math.sin(a2) * len, ey = o.y - Math.cos(a2) * len, tsz = len * 0.14;
+            var tr = tsz * 1.2 + mapCbTextW(o.label || ("受信方向 " + Math.round(o.angle || 0) + "°"), tsz) * 0.5;
+            acc(o.x, o.y);
+            accBox(ex, ey, tr, tr, tr, tr, 0);
+          } else if(k === "north"){
+            var ns = o.size || defaultTextSize() * 4;
+            accBox(o.x, o.y, ns * 0.25, ns * 0.6, ns * 0.25, ns * 0.95, 0);
+          } else if(k === "legend"){
+            // (x,y)=左上、boxW=u*9 / boxH=u*1.7*5+u*1.2=u*9.7（左上へは伸びない）
+            var u = o.size || defaultTextSize();
+            accBox(o.x, o.y, 0, 0, u * 9, u * 9.7, 0);
+          } else if(k === "signal"){
+            // (x,y)=中心。r=S*0.5、longSide=r*7.6=S*3.8 / shortSide=r*2.9=S*1.45（半分ずつ）
+            var S = o.size || 24, hl = S * 1.9, hs = S * 0.725;
+            var hw = (o.orient === "h") ? hl : hs, hh = (o.orient === "h") ? hs : hl;
+            accBox(o.x, o.y, hw, hh, hw, hh, 0);
+          } else {
+            acc(o.x, o.y);
+          }
+        });
+      }
+    }
+    if(!(x0 <= x1) || !(y0 <= y1)) return { x: 0, y: 0, w: wb.w, h: wb.h };   // 有効な内容ゼロ → 従来挙動
+
+    // 「紙」が実在する（下地 or ペイントがある）ときだけ必ず内包する。
+    //  → paint 領域(0,0)-(wb.w,wb.h)（worldToCanvasPx にオフセットが無いので構造上ここにしか存在できない）
+    //    と白シート矩形が必ず窓に入り、従来より窓が狭くなることが原理的に無くなる。
+    //  → 下地もペイントも無い場合の worldBounds() は DEFAULT_W/H のフォールバック＝「幻の紙」なので
+    //    内包しない（内包すると、遠方だけに描いた地図で窓の大半が空白になる）。
+    var paperReal = (bgImages().length > 0) || !!(current && current.paint);
+    var outside = (x0 < 0) || (y0 < 0) || (x1 > wb.w) || (y1 > wb.h);
+    if(paperReal){
+      if(x0 > 0) x0 = 0;       if(y0 > 0) y0 = 0;
+      if(x1 < wb.w) x1 = wb.w; if(y1 < wb.h) y1 = wb.h;
+    }
+    // 余白は「紙をはみ出している時」だけ付ける。
+    // ＝ 紙に収まっている通常の地図では戻り値が worldBounds() と完全一致し、現状と1pxも変わらない。
+    if(outside || !paperReal){
+      var m = Math.max(8, Math.max(x1 - x0, y1 - y0) * 0.02);
+      x0 -= m; y0 -= m; x1 += m; y1 += m;
+    }
+    var r2 = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+    if(!isFinite(r2.x) || !isFinite(r2.y) || !isFinite(r2.w) || !isFinite(r2.h) || r2.w <= 0 || r2.h <= 0){
+      return { x: 0, y: 0, w: wb.w, h: wb.h };   // 最終防衛：従来挙動へフォールバック
+    }
+    return r2;
+  }
+
+  // ドラッグ中は凍結する。性能目的ではなく「掴んで外へ引くと毎フレーム bounds が伸びて
+  // ミニマップ全体が縮みながら揺れ、掴んだ図形が止まって見える」自己振動の防止。
+  // gesture 名をキーにするので、別ジェスチャへ凍結値が漏れることが無い。
+  function mapContentBounds(){
+    var g = (MAP_CB_FREEZE[gesture] === 1) ? gesture : null;
+    if(g && _mapCbFor === g && _mapCb) return _mapCb;
+    var b = mapCbCompute();
+    _mapCb = g ? b : null; _mapCbFor = g;
+    return b;
+  }
+
+  // 凸多角形を矩形でクリップ（Sutherland-Hodgman）。表示範囲枠をミニ窓に収めるため。
+  // 旧クランプ（＝幅0で枠が消滅）の置き換え。
+  function miniClipPoly(poly, cx0, cy0, cx1, cy1){
+    function clipEdge(pts, inside, isect){
+      var out = [], n = pts.length;
+      for(var i = 0; i < n; i++){
+        var a = pts[(i + n - 1) % n], b = pts[i], ain = inside(a), bin = inside(b);
+        if(bin){ if(!ain) out.push(isect(a, b)); out.push(b); }
+        else if(ain) out.push(isect(a, b));
+      }
+      return out;
+    }
+    // isect は ain !== bin のときだけ呼ばれる＝分母が 0 になることは無い
+    function ix(a, b, X){ return [X, a[1] + (b[1] - a[1]) * ((X - a[0]) / (b[0] - a[0]))]; }
+    function iy(a, b, Y){ return [a[0] + (b[0] - a[0]) * ((Y - a[1]) / (b[1] - a[1])), Y]; }
+    var p = poly;
+    p = clipEdge(p, function(q){ return q[0] >= cx0; }, function(a, b){ return ix(a, b, cx0); }); if(!p.length) return p;
+    p = clipEdge(p, function(q){ return q[0] <= cx1; }, function(a, b){ return ix(a, b, cx1); }); if(!p.length) return p;
+    p = clipEdge(p, function(q){ return q[1] >= cy0; }, function(a, b){ return iy(a, b, cy0); }); if(!p.length) return p;
+    p = clipEdge(p, function(q){ return q[1] <= cy1; }, function(a, b){ return iy(a, b, cy1); });
+    return p;
+  }
+
   /* ---------- ステージ（SVG）生成 ---------- */
   function buildStageIfNeeded(){
     if(stage) return;
@@ -20319,7 +20664,7 @@ window.addEventListener("DOMContentLoaded", init);
       +         '<g id="map-mini-bg"></g>'
       +         '<g id="map-mini-objs"></g>'
       +       '</g>'
-      +       '<rect id="map-mini-vp" x="0" y="0" width="0" height="0"/>'
+      +       '<polygon id="map-mini-vp" points=""/>'
       +     '</svg>'
       +   '</div>'
       + '</div>';
@@ -20362,14 +20707,14 @@ window.addEventListener("DOMContentLoaded", init);
   function fitView(){
     if(!stage) return;
     view.rot = 0;   // 全体表示は北固定にリセット（rot=0時は無変化）
-    var b = worldBounds();
+    var b = mapContentBounds();   // 「紙」ではなく「描いたもの全体」に合わせる（ミニマップと同一の根本原因）
     var rect = stage.getBoundingClientRect();
     if(!rect.width || !rect.height) return;
     var pad = 40;
     var s = clampScale(Math.min((rect.width - pad * 2) / b.w, (rect.height - pad * 2) / b.h));
     view.scale = s;
-    view.tx = (rect.width - b.w * s) / 2;
-    view.ty = (rect.height - b.h * s) / 2;
+    view.tx = (rect.width - b.w * s) / 2 - b.x * s;
+    view.ty = (rect.height - b.h * s) / 2 - b.y * s;
     applyTransform();
   }
   // レイアウト未確定（オーバーレイ表示直後など stage が 0×0）の場合に備え、
@@ -20702,7 +21047,7 @@ window.addEventListener("DOMContentLoaded", init);
     } else if(gesture === "vtxdrag"){
       gesture = null; _dragMoved = false; renderObjects(); renderSelectionOverlay(); flushSave();
     } else if(gesture === "objdrag"){
-      gesture = null; _dragMoved = false; objDragOrig = null; flushSave();
+      gesture = null; _dragMoved = false; objDragOrig = null; renderMini(); flushSave();
     } else if(gesture === "objpend"){
       gesture = null; // 移動しなかった＝単なる選択（pointerdownで選択済み）
     } else if(gesture === "paint"){
@@ -20716,7 +21061,7 @@ window.addEventListener("DOMContentLoaded", init);
       gesture = null;
       var moved = _bgDrag && _bgDrag.moved;
       _bgDrag = null;
-      if(moved){ renderBg(); renderBgOverlay(); renderBgControls(); layoutSheetRect(); flushSave(); }
+      if(moved){ renderBg(); renderBgOverlay(); renderBgControls(); layoutSheetRect(); renderMini(); flushSave(); }
       else { renderBgOverlay(); renderBgControls(); }   // 移動なし＝選択のみ
     } else if(gesture === "bgcropdrag"){
       gesture = null; _bgCropDrag = null; renderBgOverlay();   // 確定はバナーの「確定」ボタン（モードは維持）
@@ -20733,7 +21078,7 @@ window.addEventListener("DOMContentLoaded", init);
       finishMarquee();
     } else if(gesture === "marqdrag"){
       gesture = null; _marqDragOrig = null; _marqBBox = marqBBoxOf(_marqSel);
-      renderMarqueeOverlay(); flushSave();
+      renderMarqueeOverlay(); renderMini(); flushSave();
     }
     if(pointers.size === 0) removeDocListeners();
     updateCursor();
@@ -20872,12 +21217,17 @@ window.addEventListener("DOMContentLoaded", init);
   /* ---------- 再描画（F0：背景=F1 / オブジェクト=F2以降のため土台のみ） ---------- */
   /* ---------- G2: 縮小マップ（ミニマップ） ---------- */
   function computeMiniFit(){
-    var b = worldBounds();
+    var b = mapContentBounds();   // 「紙」ではなく「描いたものの広がり」に合わせる
     var innerW = MINI_PANEL_W - MINI_PAD * 2, innerH = MINI_BODY_H - MINI_PAD * 2;
     var k = Math.min(innerW / b.w, innerH / b.h);
     if(!isFinite(k) || k <= 0) k = 0.01;
     var ox = MINI_PAD + (innerW - b.w * k) / 2, oy = MINI_PAD + (innerH - b.h * k) / 2;
-    return { k: k, ox: ox, oy: oy, w: b.w, h: b.h };
+    // ox/oy の意味は従来どおり「ワールド原点(0,0)の viewBox 上の位置」。b.x/b.y を差し引くことで
+    // 負の原点に対応しつつ、renderMini の transform と miniRecenterFromClient の逆写像を無改造で温存する。
+    ox -= b.x * k; oy -= b.y * k;
+    if(!isFinite(ox)) ox = MINI_PAD;
+    if(!isFinite(oy)) oy = MINI_PAD;
+    return { k: k, ox: ox, oy: oy, x: b.x, y: b.y, w: b.w, h: b.h };
   }
   function miniThin(points, cap){
     var n = points.length; if(n <= cap) return points;
@@ -20912,7 +21262,10 @@ window.addEventListener("DOMContentLoaded", init);
     var fit = computeMiniFit(); _miniFit = fit;
     cg.setAttribute("transform", "translate(" + fit.ox + "," + fit.oy + ") scale(" + fit.k + ")");
     var sheet = el("map-mini-sheet");
-    if(sheet){ sheet.setAttribute("width", fit.w); sheet.setAttribute("height", fit.h); }
+    // 白シート矩形は「紙」＝ worldBounds のまま（layoutSheetRect と一致させる）。
+    // fit.w/fit.h は内容寸法に変わったので使ってはいけない。x/y=0 は markup のままでよい
+    // （sheet は map-mini-content の内側＝ ox/oy がワールド原点に一致するため）。
+    if(sheet){ var wbm = worldBounds(); sheet.setAttribute("width", wbm.w); sheet.setAttribute("height", wbm.h); }
     miniBgSync();
     var objG = el("map-mini-objs"); if(!objG) return;
     var html = "";
@@ -20953,13 +21306,30 @@ window.addEventListener("DOMContentLoaded", init);
     var fit = _miniFit || computeMiniFit();
     var rect = ((panState || pinchState) && _stageRect) ? _stageRect : stage.getBoundingClientRect();
     if(!rect.width || !rect.height) return;
-    var wx0 = -view.tx / view.scale, wy0 = -view.ty / view.scale;
-    var ww = rect.width / view.scale, wh = rect.height / view.scale;
-    var minX = fit.ox, minY = fit.oy, maxX = fit.ox + fit.w * fit.k, maxY = fit.oy + fit.h * fit.k;
-    var x1 = Math.max(minX, fit.ox + wx0 * fit.k), y1 = Math.max(minY, fit.oy + wy0 * fit.k);
-    var x2 = Math.min(maxX, fit.ox + (wx0 + ww) * fit.k), y2 = Math.min(maxY, fit.oy + (wy0 + wh) * fit.k);
-    vp.setAttribute("x", x1); vp.setAttribute("y", y1);
-    vp.setAttribute("width", Math.max(0, x2 - x1)); vp.setAttribute("height", Math.max(0, y2 - y1));
+    // ミニマップ内容は北固定（transform に rotate を含めない）ので、表示範囲は「傾いた四角」が正解。
+    // screenToWorld と同じ R(-rot) を必ず通す（旧実装はこれが抜けていて回転時に枠が飛んでいた）。
+    var t = -(view.rot || 0) * Math.PI / 180, c = Math.cos(t), s = Math.sin(t);
+    var pts = [[0, 0], [rect.width, 0], [rect.width, rect.height], [0, rect.height]].map(function(p){
+      var sx = (p[0] - view.tx) / view.scale, sy = (p[1] - view.ty) / view.scale;
+      var wx = sx * c - sy * s, wy = sx * s + sy * c;
+      return [fit.ox + wx * fit.k, fit.oy + wy * fit.k];   // ワールド → viewBox（ox は原点位置なので加算のみ）
+    });
+    for(var i = 0; i < 4; i++){ if(!isFinite(pts[i][0]) || !isFinite(pts[i][1])){ vp.setAttribute("points", ""); return; } }
+    // 拡大しすぎて枠が点に潰れる場合は重心まわりに膨らませる（相似変換なので回転・形状は保つ）
+    var bx0 = pts[0][0], bx1 = pts[0][0], by0 = pts[0][1], by1 = pts[0][1];
+    pts.forEach(function(p){ if(p[0] < bx0) bx0 = p[0]; if(p[0] > bx1) bx1 = p[0]; if(p[1] < by0) by0 = p[1]; if(p[1] > by1) by1 = p[1]; });
+    var MINVP = 7, mw = bx1 - bx0, mh = by1 - by0;
+    var g = Math.max(1, MINVP / Math.max(mw, 1e-6), MINVP / Math.max(mh, 1e-6));
+    if(g > 1 && isFinite(g)){
+      var gx = (bx0 + bx1) / 2, gy = (by0 + by1) / 2;
+      pts = pts.map(function(p){ return [gx + (p[0] - gx) * g, gy + (p[1] - gy) * g]; });
+    }
+    // ミニ窓でクリップ。単にクランプを廃止すると「全体表示で枠が窓を包み込み、4辺とも窓外＝
+    // 線が1本も描かれず fill でパネルが青一色」になる。クリップなら内容全体を見ている時は
+    // パネル外周に枠が出る＝意味的にも正しい。
+    pts = miniClipPoly(pts, 0.7, 0.7, MINI_PANEL_W - 0.7, MINI_BODY_H - 0.7);
+    vp.setAttribute("points", (pts.length < 3) ? ""
+      : pts.map(function(p){ return p[0].toFixed(2) + "," + p[1].toFixed(2); }).join(" "));
   }
   function miniRecenterFromClient(cx, cy){
     var svg = el("map-mini-svg"); if(!svg) return;
@@ -20967,7 +21337,8 @@ window.addEventListener("DOMContentLoaded", init);
     var r = svg.getBoundingClientRect(); if(!r.width || !r.height) return;
     var mx = (cx - r.left) * (MINI_PANEL_W / r.width), my = (cy - r.top) * (MINI_BODY_H / r.height);
     var wx = (mx - fit.ox) / fit.k, wy = (my - fit.oy) / fit.k;
-    wx = Math.max(0, Math.min(fit.w, wx)); wy = Math.max(0, Math.min(fit.h, wy));
+    wx = Math.max(fit.x, Math.min(fit.x + fit.w, wx));
+    wy = Math.max(fit.y, Math.min(fit.y + fit.h, wy));
     centerOnWorld(wx, wy);
   }
   function setMiniCollapsed(v){
@@ -23937,6 +24308,10 @@ window.addEventListener("DOMContentLoaded", init);
     var visW, visH, cx, cy, rect = stage && stage.getBoundingClientRect();
     if(rect && rect.width && rect.height){
       visW = rect.width / view.scale; visH = rect.height / view.scale;
+      // 既定枠は「紙」を超えない（fitView が内容基準で大きく引いた直後でも妥当な初期枠にする）。
+      // 下の else 枝が visW=b.w としているのと同じ意味づけ。
+      if(visW > b.w) visW = b.w;
+      if(visH > b.h) visH = b.h;
       var c = screenToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2); cx = c.x; cy = c.y;
     } else { visW = b.w; visH = b.h; cx = b.w / 2; cy = b.h / 2; }
     var w = visW * 0.8, h = w / asp;
