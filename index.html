@@ -9790,6 +9790,10 @@ function loadUserPresets(){
 }
 function saveUserPresets(p){
   localStorage.setItem(USER_PRESET_KEY, JSON.stringify(p));
+  // 全体費用詳細の「★基本工事プリセット」ドロップダウンを即時同期。
+  // （従来は起動時と物件切替時にしか作り直されず、積算エディタでプリセットを
+  //   保存/上書き/削除しても一覧側の選択肢が古いまま＝「読み込めない」原因だった）
+  try { if(typeof populateBasePresetSelector === "function") populateBasePresetSelector(); } catch(_){}
 }
 
 /* 旧バグ互換: 2026-07-03 以前の保存データ/プリセットは tv_rooms が部屋名・分配・壁端子の
@@ -9967,6 +9971,11 @@ function renderPresetButtons(){
         delete up[name];
         saveUserPresets(up);
         renderPresetButtons();
+        // 削除したのが全体費用詳細の基本工事プリセットだった場合は「（なし）」へ戻す
+        // （残すと選択欄と集計が「見つからないキー」を指したまま食い違う）
+        if(typeof _baseJobPresetKey !== "undefined" && _baseJobPresetKey === name && typeof setBaseJobPreset === "function"){
+          setBaseJobPreset("");
+        }
       }
     });
   });
