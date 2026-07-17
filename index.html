@@ -3349,9 +3349,16 @@
             <span id="asbestos_judgement_view" style="flex:1;font-size:12px;">―</span>
           </div>
           <div class="field">
-            <label><span data-tip="判定が🟠みなし(LV3)の時、この額を「石綿みなし対応 諸経費」として内訳に自動計上し積算へ加算します。既定¥20,000（案件ごとに変更可）。25%諸経費(markup)の対象外＝ちょうどこの額が加算されます。LV1/LV2・🟢不要・⚪未入力の時は計上しません。">みなし諸経費</span></label>
+            <label><span data-tip="判定が🟠みなし(LV3)の時、この額を「石綿みなし対応 諸経費」として内訳に自動計上し積算へ加算します。既定¥20,000（案件ごとに変更可）。25%諸経費(markup)の対象外＝ちょうどこの額が加算されます。LV1/LV2・🟢不要・⚪未入力の時は計上しません。非発じん工法チェックON時も計上しません。">みなし諸経費</span></label>
             <input type="number" id="asbestos_deemed_fee" value="20000" min="0" step="1000" style="width:120px;text-align:right;padding:2px 6px;border:1px solid #cdd3da;border-radius:3px;">
             <span style="font-size:10px;color:#555;margin-left:6px;">自動計上</span>
+          </div>
+          <div class="field" style="margin-top:-2px;">
+            <label></label>
+            <label style="flex:1;font-size:11px;color:#555;">
+              <input type="checkbox" id="asbestos_no_dust_method" style="vertical-align:middle;">
+              <span data-tip="みなし該当のまま、電動工具・穿孔を使わない手締め等の非発じん工法で施工する戸別。みなし判定（事前調査の事実）は変えずに、石綿みなし諸経費の自動計上だけを止め、バッジ・調書・一覧集計で区別表示します。">非発じん工法で施工（穿孔・切断なし＝石綿諸経費 計上なし）</span>
+            </label>
           </div>
           <div class="field">
             <label>適用モード</label>
@@ -5443,10 +5450,10 @@ function buildBOM(input, qtyOverridesOpt) {
     });
   }
 
-  // 石綿みなし諸経費（判定が🟠みなしLV3の時のみ）: 内訳に計上し積算へ加算。
+  // 石綿みなし諸経費（判定が🟠みなしLV3、かつ非発じん工法でない時のみ）: 内訳に計上し積算へ加算。
   // 労務費区分でBOMに含める（＝基本工事プリセット集計・費用詳細にも反映）。
   // ただし諸経費(overhead markup)の算定対象からは除外（calcTotals 側で isAsbestosFee を考慮）。
-  if(isAsbestosDeemed(input.asbestos)){
+  if(asbestosFeeApplies(input.asbestos)){
     const asbAmt = asbestosDeemedFeeAmount(input.asbestos);
     if(asbAmt > 0){
       items.push({
@@ -10299,6 +10306,7 @@ function collectAsbestosState(){
     material:           v("asbestos_material")           || "siding",
     material_other:     v("asbestos_material_other"),
     applicability_mode: v("asbestos_applicability_mode") || "auto",
+    no_dust_method:     c("asbestos_no_dust_method"),
     deemed_fee:         (function(){ const el = document.getElementById("asbestos_deemed_fee"); if(!el) return ASBESTOS_DEEMED_FEE_DEFAULT; const n = parseFloat(el.value); return Number.isFinite(n) ? Math.max(0, n) : ASBESTOS_DEEMED_FEE_DEFAULT; })(),
     // 担当者・元請情報（事業所プリセット対応）
     contractor_name:      v("asbestos_contractor_name"),
@@ -10329,6 +10337,8 @@ function applyAsbestosState(a){
   setVal("asbestos_investigator_license", a.investigator_license || "");
   const cb = document.getElementById("asbestos_date_unknown");
   if(cb) cb.checked = !!a.date_unknown;
+  const cbNd = document.getElementById("asbestos_no_dust_method");
+  if(cbNd) cbNd.checked = !!a.no_dust_method;   // 旧データ（フィールド無し）は false＝従来挙動
   // 担当者欄が全て空なら事業所プリセットから流入（新規/旧データへの救済）
   const personEmpty = !a.contractor_name && !a.contractor_addr && !a.contractor_tel
     && !a.supervisor_name && !a.investigator_name && !a.investigator_license;
@@ -10433,15 +10443,23 @@ function resolveAsbestosApplicability(a){
 }
 /* 石綿みなし諸経費の既定額（案件で未指定の場合に使用） */
 const ASBESTOS_DEEMED_FEE_DEFAULT = 20000;
-/* 石綿「みなし(LV3)」に該当するか。
+/* 石綿「みなし(LV3)」に該当するか（事前調査の事実判定）。
    みなし適用(applied=true)かつ LV1/LV2 でない（=LV3/みなし扱い）時に true。
-   → 画面バッジ 🟠みなし / 🟠みなしLV3（asbestosStatusBadge の cat:"mnashi"）と一致。
+   → 画面バッジの cat:"mnashi"（🟠計上あり）＋ cat:"nodust"（🟡非発じん・計上なし）の合計と一致。
+   費用計上の可否は asbestosFeeApplies() が別途判定（非発じん工法は計上しない）。
    LV1/LV2（要専門業者）・🟢不要・⚪未入力 は false。 */
 function isAsbestosDeemed(a){
   if(!a) return false;
   if(resolveAsbestosApplicability(a) !== true) return false;
   if(a.level === "level1" || a.level === "level2") return false;
   return true;
+}
+/* 石綿みなし諸経費を「計上するか」（費用専用の判定）。
+   みなし該当(isAsbestosDeemed=true)でも、非発じん工法(no_dust_method=電動工具・穿孔なしの手締め等)の
+   戸別は石綿を発じんさせないため計上しない。
+   ※みなし該当という事前調査の事実（resolveAsbestosApplicability / バッジ）は変えない。 */
+function asbestosFeeApplies(a){
+  return isAsbestosDeemed(a) && !(a && a.no_dust_method);
 }
 /* みなし諸経費の金額（案件の asbestos.deemed_fee。未指定/不正なら既定額）。 */
 function asbestosDeemedFeeAmount(a){
@@ -10470,6 +10488,10 @@ function updateAsbestosJudgement(){
     const lvl = a.level === "level1" ? "LV1" : "LV2";
     html = '<span class="asb-badge" style="background:#c62828;">⚠ 要専門業者（' + lvl + '）</span>'
          + ' <span style="font-size:10px;color:#c62828;">別途届出必要</span>';
+  } else if(a.no_dust_method){
+    html = '<span class="asb-badge" style="background:#b8860b;">🟡 みなし（非発じん工法）</span>'
+         + ' <span style="font-size:10px;color:#555;">みなし該当・石綿諸経費 計上なし'
+         + (a.date_unknown ? '（着工日不明）' : '') + '</span>' + derivedNote;
   } else if(a.date_unknown){
     html = '<span class="asb-badge" style="background:#fb8c00;">🟠 みなし?</span>'
          + ' <span style="font-size:10px;color:#555;">着工日不明でみなし扱い</span>';
@@ -10478,6 +10500,12 @@ function updateAsbestosJudgement(){
          + ' <span style="font-size:10px;color:#555;">2006/9/1以前</span>' + derivedNote;
   }
   view.innerHTML = html;
+  // 非発じん工法チェックON時は「みなし諸経費」入力を淡色化（計上されないことの視覚表示）
+  const feeEl = document.getElementById("asbestos_deemed_fee");
+  if(feeEl){
+    feeEl.style.opacity = a.no_dust_method ? "0.45" : "";
+    feeEl.title = a.no_dust_method ? "非発じん工法のため計上されません" : "";
+  }
 }
 function updateAsbestosMaterialOther(){
   const sel = document.getElementById("asbestos_material");
@@ -10578,6 +10606,12 @@ function asbestosStatusBadge(row){
     ? (a.material_other || "その他")
     : (ASBESTOS_MATERIAL_LABEL[a.material] || "");
   const srcLabel = ASBESTOS_DATE_SOURCE_LABEL[a.date_source] || "";
+  if(a.no_dust_method){
+    return { label: a.date_unknown ? "🟡 みなし?(非発じん)" : "🟡 みなし(非発じん)",
+             color:"#b8860b",
+             title:"みなし該当・非発じん工法で施工（石綿諸経費 計上なし） / 建材: " + matLabel + " / 確認: " + srcLabel,
+             cat:"nodust" };
+  }
   if(a.date_unknown){
     return { label:"🟠 みなし?", color:"#fb8c00",
              title:"着工日不明でみなし扱い / 建材: " + matLabel + " / 確認: " + srcLabel,
@@ -10588,7 +10622,7 @@ function asbestosStatusBadge(row){
            cat:"mnashi" };
 }
 function aggregateAsbestos(list){
-  const s = { mnashi:0, noneed:0, blank:0, l12:0, locked:0 };
+  const s = { mnashi:0, nodust:0, noneed:0, blank:0, l12:0, locked:0 };
   (list||[]).forEach(r => {
     const b = asbestosStatusBadge(r);
     if(s[b.cat] === undefined) s[b.cat] = 0;
@@ -10598,7 +10632,12 @@ function aggregateAsbestos(list){
 }
 function formatAsbestosSummary(s){
   const parts = [];
-  if(s.mnashi) parts.push('みなし ' + s.mnashi);
+  if(s.nodust){
+    // 非発じん戸別がある時は「みなし該当総数（🟠計上あり＋🟡非発じん）」を単一の数字で示す
+    //（労基署のみなし一覧との突合用。非発じんゼロの間は従来表示のまま＝既存帳票不変）
+    parts.push('みなし計 ' + ((s.mnashi || 0) + s.nodust)
+      + '（計上あり ' + (s.mnashi || 0) + ' ・ 非発じん ' + s.nodust + '）');
+  } else if(s.mnashi) parts.push('みなし ' + s.mnashi);
   if(s.noneed) parts.push('不要 ' + s.noneed);
   if(s.blank)  parts.push('未入力 ' + s.blank);
   if(s.locked) parts.push('🔐 ' + s.locked);
@@ -13200,7 +13239,7 @@ function renderListByFolderMode(rows, container){
   const folderNames = Object.keys(groups).sort();
   let html = renderSelectedFolderBanner();
   let grandTotal = 0;
-  const grandAsb = { mnashi:0, noneed:0, blank:0, l12:0, locked:0 };
+  const grandAsb = { mnashi:0, nodust:0, noneed:0, blank:0, l12:0, locked:0 };
   folderNames.forEach(folder => {
     const list = groups[folder];
     let folderSum = 0;
@@ -13291,6 +13330,9 @@ function renderListByFolderMode(rows, container){
     if(folderAsb.mnashi){
       folderHeadBadge += ' <span class="asb-badge" style="background:#fb8c00;" title="みなし適用">🟠 みなし ' + folderAsb.mnashi + '</span>';
     }
+    if(folderAsb.nodust){
+      folderHeadBadge += ' <span class="asb-badge" style="background:#b8860b;" title="みなし該当・非発じん工法（石綿諸経費 計上なし）。みなし該当総数は 🟠＋🟡">🟡 非発じん ' + folderAsb.nodust + '</span>';
+    }
     html += '<div class="folder-group">'
       + '<div class="folder-group-head">'
         + '<span>📁 ' + escapeHtml(folder || "(ルート)") + '</span>'
@@ -13307,6 +13349,9 @@ function renderListByFolderMode(rows, container){
   }
   if(grandAsb.mnashi){
     grandAsbBadge += ' <span class="asb-badge" style="background:#fb8c00;">🟠 みなし ' + grandAsb.mnashi + '</span>';
+  }
+  if(grandAsb.nodust){
+    grandAsbBadge += ' <span class="asb-badge" style="background:#b8860b;" title="みなし該当・非発じん工法（石綿諸経費 計上なし）。みなし該当総数は 🟠＋🟡">🟡 非発じん ' + grandAsb.nodust + '</span>';
   }
   html += '<div class="folder-group">'
     + '<div class="folder-group-head" style="background:#2e5488;">'
@@ -15736,6 +15781,8 @@ function renderChoshoAsbestos(){
   } else if(a.level === "level1" || a.level === "level2"){
     const lvl = a.level === "level1" ? "LV1" : "LV2";
     badge = '<span class="asb-chosho-badge" style="background:#c62828;">⚠ 要専門業者（' + lvl + '）</span>';
+  } else if(a.no_dust_method){
+    badge = '<span class="asb-chosho-badge" style="background:#b8860b;">🟡 みなし該当（非発じん工法で施工）</span>';
   } else if(a.date_unknown){
     badge = '<span class="asb-chosho-badge" style="background:#fb8c00;">🟠 みなし適用（着工日不明）</span>';
   } else {
@@ -15751,6 +15798,12 @@ function renderChoshoAsbestos(){
   if(applied){
     leftRows.push(['建材レベル', escapeHtml(levelLabel)]);
     leftRows.push(['対象建材', escapeHtml(matLabel)]);
+    // 非発じん工法の戸別のみ「施工方法」行を印字（チェック無し＝既存戸別の調書は従来どおり不変）
+    if(a.no_dust_method){
+      const lv12nd = (a.level === "level1" || a.level === "level2");
+      leftRows.push(['施工方法', '非発じん工法（電動工具・穿孔なし）'
+        + (lv12nd ? '' : '／石綿みなし諸経費 計上なし')]);
+    }
   }
   if(basis){
     leftRows.push(['判定根拠', escapeHtml(basis)]);
@@ -19623,7 +19676,7 @@ function init(){
     rebuild();
   });
   // 着工日の input イベントでも即時反映（date入力は change だけだと遅い場合あり）
-  ["asbestos_construction_date","asbestos_date_unknown","asbestos_registration_date"].forEach(id => {
+  ["asbestos_construction_date","asbestos_date_unknown","asbestos_registration_date","asbestos_no_dust_method"].forEach(id => {
     const el = document.getElementById(id);
     if(el) el.addEventListener("input", () => { updateAsbestosJudgement(); if(typeof projAutoSaveEdit === "function") projAutoSaveEdit(); }); // 着工日入力も物件へ自動保存
   });
