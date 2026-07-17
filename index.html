@@ -1917,6 +1917,19 @@
     #parts-print * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     #parts-print tr { break-inside: avoid; page-break-inside: avoid; }
   }
+  /* 変更行を1行だけ標準単価へ戻すボタン（色付き行にのみ表示） */
+  table.parts-editor .parts-revert-btn {
+    background: #fff;
+    color: #ef6c00;
+    border: 1px solid #ef6c00;
+    border-radius: 3px;
+    padding: 1px 6px;
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+    margin-right: 2px;
+  }
+  table.parts-editor .parts-revert-btn:hover { background: #fff1d6; }
   table.parts-editor .parts-del-btn {
     background: #fff;
     color: #d32f2f;
@@ -7957,7 +7970,7 @@ function renderPartsEditor(){
     + '<th style="width:60px">単位</th>'
     + '<th style="width:90px">材料費(円)</th>'
     + '<th style="width:90px">労務費(円)</th>'
-    + '<th style="width:40px"></th>'
+    + '<th style="width:64px"></th>'
     + '</tr></thead><tbody>';
   catOrder.forEach(cat => {
     if(!grouped[cat]) return;
@@ -7979,7 +7992,9 @@ function renderPartsEditor(){
         + '<td><input type="text" data-parts="' + escapeHtml(id) + '" data-field="unit" value="' + escapeHtml(p.unit || "") + '"></td>'
         + '<td><input type="number" class="parts-num" data-parts="' + escapeHtml(id) + '" data-field="material_cost" value="' + (p.material_cost || 0) + '" min="0" step="1"></td>'
         + '<td><input type="number" class="parts-num" data-parts="' + escapeHtml(id) + '" data-field="labor_cost" value="' + (p.labor_cost || 0) + '" min="0" step="1"></td>'
-        + '<td style="text-align:center;"><button class="parts-del-btn" data-parts-del="' + escapeHtml(id) + '" title="この項目を削除">×</button></td>'
+        + '<td style="text-align:center;white-space:nowrap;">'
+        + (changed && DEFAULT_PARTS[id] ? '<button class="parts-revert-btn" data-parts-revert="' + escapeHtml(id) + '" title="この行だけ標準単価（変更前の値）に戻す">↺</button>' : '')
+        + '<button class="parts-del-btn" data-parts-del="' + escapeHtml(id) + '" title="この項目を削除">×</button></td>'
         + '</tr>';
     });
   });
@@ -8012,6 +8027,23 @@ function renderPartsEditor(){
   });
 
   // 削除ボタン
+  // ↺ 1行だけ標準単価へ戻す（色付き＝変更行にのみ表示。品名・型番・単位・図面表記も標準値へ）
+  tbl.querySelectorAll("[data-parts-revert]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.partsRevert;
+      const def = DEFAULT_PARTS[id], p = PARTS[id];
+      if(!def || !p) return;
+      const fmt = n => (n || 0).toLocaleString("ja-JP");
+      if(!confirm("「" + (p.name || id) + "」をこの1行だけ標準単価（変更前の値）に戻しますか？\n\n"
+        + "　材料費： " + fmt(p.material_cost) + " 円 → " + fmt(def.material_cost) + " 円\n"
+        + "　労務費： " + fmt(p.labor_cost) + " 円 → " + fmt(def.labor_cost) + " 円\n\n"
+        + "（品名・型番・単位・図面表記を変えていた場合も標準に戻ります。\n"
+        + "　確定するには、このあと「💾 保存」を押してください）")) return;
+      PARTS[id] = JSON.parse(JSON.stringify(def));
+      markPartsDirty();
+      renderPartsEditor();   // 行の色・値・↺ボタンを再描画（絞り込みは維持される）
+    });
+  });
   tbl.querySelectorAll("[data-parts-del]").forEach(btn => {
     btn.addEventListener("click", e => {
       const id = btn.dataset.partsDel;
