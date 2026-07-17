@@ -3209,6 +3209,21 @@
     }
     #ag-print-svg svg { max-width: 150mm; max-height: 150mm; display: block; margin: 0 auto; }
   }
+  /* index.html固有：物件モード時の「印刷/PDF」内訳ページ（材料費なし・協力会社請求内訳と同値）。
+     画面では常に非表示。印刷時、body.bukken-case-print が付いた時だけ積算書ページと差し替わる。
+     表内フォント/パディングは既存 table.estimate 印刷圧縮＋base を継承（ここで再指定しない）。 */
+  #bukken-print-page { display: none; }
+  @media print {
+    /* body.mobile-layout .estimate-panel{display:block !important} に勝つ（複合セレクタで特異度↑＋後方定義） */
+    body.bukken-case-print .estimate-panel,
+    body.mobile-layout.bukken-case-print .estimate-panel { display: none !important; }
+    body.bukken-case-print #bukken-print-page {
+      display: block !important;
+      page-break-before: always;
+    }
+    /* 合計ボックスのみ全幅ページ用に右寄せの小箱へ */
+    body.bukken-case-print #bukken-print-body .total-area { max-width: 90mm; margin-left: auto; }
+  }
 </style>
 </head>
 <body>
@@ -4018,6 +4033,14 @@
         <thead><tr><th>区分</th><th>型番</th><th>数量</th><th>単位</th></tr></thead>
         <tbody></tbody>
       </table>
+    </section>
+    <!-- ============ 物件モード 戸別印刷 内訳ページ（画面では常に非表示・bukken-case-print 印刷時のみ表示） ============ -->
+    <section id="bukken-print-page">
+      <div class="print-header">
+        <h2>アンテナ工事 内訳書（労務・持出材料）</h2>
+        <div class="meta" id="print-meta-bukken"></div>
+      </div>
+      <div id="bukken-print-body"></div>
     </section>
   </main>
 </div>
@@ -5689,6 +5712,89 @@ function prepareGuidePrintPage(){
 function cleanupGuidePrintPage(){
   const panel = document.getElementById("ag-print-page");
   if(panel) panel.classList.remove("has-guide");
+}
+
+/* ============================================================
+   物件モード時の「印刷 / PDF」：積算書(材料込み)を協力会社請求内訳と同じ数値
+   （標準単価の労務費＋協力会社諸経費＋持出材料）の内訳ページへ差し替える。
+   ・computeSubRow（→getRowBomAggregateStd・bukkenAdjustHighWork・_takeoutMap）を読み取り共有
+     ＝「協力会社請求内訳」画面・明細PDFと必ず同値。材料費・型番・対市単価・税は一切出さない。
+   ・物件モードOFF（_currentProject なし）では何もしない＝従来印刷のまま。
+   ============================================================ */
+function renderBukkenCasePrint(sr){
+  const esc = escapeHtml;
+  let html = '<table class="estimate"><thead><tr>'
+    + '<th style="width:52%">項目</th><th style="width:16%">数量</th>'
+    + '<th style="width:16%">単価</th><th style="width:16%">金額</th></tr></thead><tbody>';
+  html += '<tr class="category-head"><td colspan="4">■ 労務費の内訳</td></tr>';
+  if(sr.laborItems.length){
+    sr.laborItems.forEach(it => {
+      html += '<tr><td>' + esc(it.name) + '</td><td class="right">' + fmtSubQty(it.qty) + ' ' + esc(it.unit) + '</td>'
+        + '<td class="right">' + yen(it.unitLab) + '</td><td class="right">' + yen(it.lab) + '</td></tr>';
+    });
+    html += '<tr><td colspan="3" class="right"><b>労務費 計</b></td><td class="right"><b>' + yen(sr.laborSum) + '</b></td></tr>';
+  } else {
+    html += '<tr><td colspan="4">労務費の明細はありません</td></tr>';
+  }
+  if(sr.fee > 0){
+    html += '<tr class="category-head"><td colspan="4">■ 協力会社諸経費</td></tr>';
+    html += '<tr><td>協力会社諸経費（日程調整・打合せ等）</td><td class="right">1 式</td>'
+      + '<td class="right">' + yen(sr.fee) + '</td><td class="right">' + yen(sr.fee) + '</td></tr>';
+  }
+  html += '<tr class="category-head"><td colspan="4">■ 持出材料（協力会社立替分）</td></tr>';
+  const checked = sr.materials.filter(m => m.checked);
+  if(checked.length){
+    checked.forEach(m => {
+      html += '<tr><td>' + esc(m.name) + '</td><td class="right">' + fmtSubQty(m.qty) + ' ' + esc(m.unit) + '</td>'
+        + '<td class="right">' + yen(m.unitMat) + '</td><td class="right">' + yen(m.mat) + '</td></tr>';
+    });
+    html += '<tr><td colspan="3" class="right"><b>持出材料 計</b></td><td class="right"><b>' + yen(sr.takeout) + '</b></td></tr>';
+  } else {
+    html += '<tr><td colspan="4">持出材料：なし</td></tr>';
+  }
+  html += '</tbody></table>';
+  html += '<div class="total-area">'
+    + '<div class="total-row"><span>労務費</span><span>' + yen(sr.pureLab) + '</span></div>'
+    + '<div class="total-row"><span>協力会社諸経費</span><span>' + yen(sr.fee) + '</span></div>'
+    + '<div class="total-row"><span>持出材料</span><span>' + yen(sr.takeout) + '</span></div>'
+    + '<div class="total-row grand"><span>合計</span><span>' + yen(sr.total) + '</span></div>'
+    + '</div>';
+  return html;
+}
+/* 印刷前の前置。戻り値: true=内訳差し替え / false=従来印刷 / "abort"=印刷中止 */
+function prepareBukkenPrintPage(){
+  cleanupBukkenPrintPage(); // 残留保険（前回の afterprint 不発時）
+  if(typeof _currentProject === "undefined" || !_currentProject) return false; // 物件モードOFF＝従来どおり
+  // エディタの最新内容を一覧行データへ反映（保存・一覧へ戻る時と同じ既存同期処理）
+  try { syncEditorToRowData(); } catch(_){}
+  const row = (typeof _editingRow !== "undefined" && _editingRow && _listRows.indexOf(_editingRow) >= 0) ? _editingRow : null;
+  let sr = null;
+  try { sr = row ? computeSubRow(row, 0) : null; } catch(e){ console.warn("[物件印刷] 内訳計算失敗:", e); }
+  if(!sr){
+    return confirm("この戸別は協力会社内訳を計算できません（一覧から開いていない・増幅器未選択 等）。\n\nOK＝通常の積算書（材料費あり）で印刷\nキャンセル＝印刷を中止")
+      ? false : "abort";
+  }
+  const host = document.getElementById("bukken-print-body");
+  const meta = document.getElementById("print-meta-bukken");
+  if(!host || !meta) return false;
+  host.innerHTML = renderBukkenCasePrint(sr);
+  // メタ：材料込みの「総合計」は出さない。系統図/取付図ページのメタも金額なしへ一時差し替え。
+  const today = new Date();
+  const dateStr = today.getFullYear() + "/" + String(today.getMonth()+1).padStart(2,"0") + "/" + String(today.getDate()).padStart(2,"0");
+  meta.textContent = "作成日：" + dateStr + "　／　管理番号：" + (sr.mgmtNo || "―")
+    + "　／　合計（労務＋諸経費＋持出材料）：" + yen(sr.total);
+  const noAmt = "作成日：" + dateStr + "　／　管理番号：" + (sr.mgmtNo || "―");
+  const m1 = document.getElementById("print-meta-diagram");
+  const m3 = document.getElementById("print-meta-guide");
+  if(m1) m1.textContent = noAmt;
+  if(m3) m3.textContent = noAmt;
+  document.body.classList.add("bukken-case-print");
+  return true;
+}
+function cleanupBukkenPrintPage(){
+  if(!document.body.classList.contains("bukken-case-print")) return;
+  document.body.classList.remove("bukken-case-print");
+  try { renderTotals(); } catch(_){} // print-meta-diagram/estimate/guide を通常表記へ復元
 }
 
 /* ============================================================
@@ -15263,7 +15369,37 @@ function removePhotoEntry(idx){
    - dataURI の原本バイトをそのまま書き込む＝無劣化（再圧縮しない）。
    - PC の Chrome/Edge（File System Access API）専用。
    ============================================================ */
-let _lastPhotoExportDir = null; // セッション中は親フォルダを記憶
+let _lastPhotoExportDir = null; // 書き出し先の親フォルダ（メモリキャッシュ・実体はIndexedDBへ永続化）
+const PHOTO_EXPORT_DIR_KEY = "photoExportDir"; // projHandle系(fileHandlesストア)の固定キー（物件非依存）
+/* 前回の書き出し先フォルダハンドルを取得（メモリ → IndexedDB）。無ければ null。
+   FileSystemDirectoryHandle は structured clone 可能＝IndexedDB に保存できる（projHandlePut/Get を流用）。 */
+async function _photoExportLastDir(){
+  if(_lastPhotoExportDir) return _lastPhotoExportDir;
+  try { _lastPhotoExportDir = await projHandleGet(PHOTO_EXPORT_DIR_KEY); } catch(_){}
+  return _lastPhotoExportDir;
+}
+/* 書き出し先の親フォルダを毎回ピッカーで選ぶ。
+   ・startIn: 前回ハンドル（IndexedDB永続）＝前回の場所から開く
+   ・id: ブラウザ自身の「このid用の最終使用フォルダ」記憶も併用（Chromium・idの記憶が優先）
+   ・startIn のハンドルが無効（フォルダ削除・ドライブ切断等で TypeError）なら startIn なしで再試行
+   ・ピッカーで選択されて返るハンドルは自動的に readwrite granted＝query/requestPermission 不要
+   戻り値: ハンドル / null（キャンセル・失敗。失敗時は内部で alert 済み）。 */
+async function _pickPhotoExportDir(){
+  const last = await _photoExportLastDir();
+  const opts = { mode: "readwrite", id: "photoExport" };
+  if(last) opts.startIn = last;
+  let parent = null;
+  try {
+    parent = await window.showDirectoryPicker(opts);
+  } catch(err){
+    if(err && err.name === "AbortError") return null;
+    try { parent = await window.showDirectoryPicker({ mode: "readwrite", id: "photoExport" }); }
+    catch(e2){ if(e2 && e2.name === "AbortError") return null; console.warn(e2); alert("フォルダを開けませんでした。"); return null; }
+  }
+  _lastPhotoExportDir = parent;
+  try { projHandlePut(PHOTO_EXPORT_DIR_KEY, parent); } catch(_){}
+  return parent;
+}
 function _dataUriToBytes(uri){
   const comma = String(uri || "").indexOf(",");
   if(comma < 0) return null;
@@ -15301,26 +15437,14 @@ async function exportPhotosToFolder(){
     return;
   }
   const mgmtNo = _sanitizeName((document.getElementById("chosho_mgmt_no") || {}).value) || "戸別";
-  // 親フォルダ（工事フォルダ等）を指定 or 前回を流用
-  let parent = _lastPhotoExportDir;
-  if(parent){
-    try{
-      let p = await parent.queryPermission({ mode:"readwrite" });
-      if(p !== "granted") p = await parent.requestPermission({ mode:"readwrite" });
-      if(p !== "granted") parent = null;
-    }catch(_){ parent = null; }
-  }
-  if(!parent){
-    try{
-      parent = await window.showDirectoryPicker({ mode:"readwrite" });
-      _lastPhotoExportDir = parent;
-    }catch(err){ if(err && err.name === "AbortError") return; console.warn(err); alert("フォルダを開けませんでした。"); return; }
-  }
+  // 親フォルダ（工事フォルダ等）を毎回ピッカーで選ぶ（前回の場所から開く）
+  const parent = await _pickPhotoExportDir();
+  if(!parent) return;
   const r = await _writeCasePhotos(parent, mgmtNo, photos);
   const msg = "📁 管理番号フォルダ『" + mgmtNo + "』へ写真を書き出しました。\n\n"
     + "・書き出し: " + r.written + " 枚（無劣化・原本のまま）\n"
     + (r.failed ? ("・失敗: " + r.failed + " 枚\n") : "")
-    + "\n次回以降は同じ親フォルダが記憶され、許可1クリックで書き出せます。";
+    + "\n次回は前回と同じ場所からフォルダ選択が開きます。";
   alert(msg);
   if(typeof toast === "function") toast("写真 " + r.written + " 枚を『" + mgmtNo + "』へ書き出しました");
 }
@@ -15398,22 +15522,10 @@ async function bulkExportPhotosToFolders(){
     alert("戸別がありません。物件を開くか、フォルダ/ファイルを読み込んでください。");
     return;
   }
-  // 書き出し先の親フォルダ（工事フォルダ等）を指定 or 前回を流用
-  let parent = _lastPhotoExportDir;
-  if(parent){
-    try{
-      let p = await parent.queryPermission({ mode:"readwrite" });
-      if(p !== "granted") p = await parent.requestPermission({ mode:"readwrite" });
-      if(p !== "granted") parent = null;
-    }catch(_){ parent = null; }
-  }
-  if(!parent){
-    if(!confirm("この物件（一覧）の全戸別の写真を、これから選ぶフォルダの中に「管理番号」フォルダを作って一括書き出しします。\n\n通常はこの物件の『工事フォルダ』を選んでください（管理番号.json と並んで管理番号フォルダが作られます）。\n\nフォルダを選びますか？")) return;
-    try{
-      parent = await window.showDirectoryPicker({ mode:"readwrite" });
-      _lastPhotoExportDir = parent;
-    }catch(err){ if(err && err.name === "AbortError") return; console.warn(err); alert("フォルダを開けませんでした。"); return; }
-  }
+  // 書き出し先の親フォルダ（工事フォルダ等）を毎回ピッカーで選ぶ（前回の場所から開く）
+  if(!confirm("この物件（一覧）の全戸別の写真を、これから選ぶフォルダの中に「管理番号」フォルダを作って一括書き出しします。\n\n通常はこの物件の『工事フォルダ』を選んでください（管理番号.json と並んで管理番号フォルダが作られます）。\n\nフォルダを選びますか？")) return;
+  const parent = await _pickPhotoExportDir();
+  if(!parent) return;
   // 暗号化戸別の写真復号に使う候補パスワード（記憶中のもの）
   const pwCandidates = [];
   if(typeof _sessionPassword !== "undefined" && _sessionPassword) pwCandidates.push(_sessionPassword);
@@ -16087,6 +16199,7 @@ let _rtRefs = null;           // { presRef, locksRef, bumpRef, base }
 let _rtHbTimer = null;        // 心拍タイマ
 let _rtConnected = false;     // RTDB 接続状態（.info/connected）
 let _rtPresence = {};         // 購読中の presence マップ（clientId -> {name,lastSeen,editing,...}）
+let _rtPresenceLoaded = false; // presence 初回スナップショット受信済みか（亡霊ロック判定の誤爆防止）
 let _rtLocks = {};            // 購読中の locks マップ（sanitizedKey -> {clientId,name,key,...}）
 let _rtMyLockKey = null;      // 自端末が保持中の caseKey（原文・未sanitize）
 let _rtCaseReadOnly = false;  // 他端末が編集中の戸別を閲覧のみで開いている
@@ -17498,7 +17611,23 @@ async function ensureRealtime(){
 }
 function rtWatchConnected(){
   if(!_rtDb) return;
-  try { _rtDb.ref(".info/connected").on("value", s => { _rtConnected = !!(s && s.val()); rtUpdatePresenceUI(); }); } catch(_){}
+  try { _rtDb.ref(".info/connected").on("value", s => {
+    const was = _rtConnected;
+    _rtConnected = !!(s && s.val());
+    // 再接続（false→true）：サーバ側では onDisconnect が発火済みで presence/ロックが消えている。
+    // onDisconnect は一度発火すると消える仕様のため、フルデータ再作成＋onDisconnect再登録（re-arm）する。
+    // ※初回接続時は _rtRefs 未設定（JOIN前）でこのブロックはスキップ。JOIN後の初回trueで走っても
+    //   同一データの set＝冪等で無害。再claimは transaction が他端末の生存ロックを尊重する。
+    if(_rtConnected && !was && _rtRefs){
+      const TS = firebase.database.ServerValue.TIMESTAMP;
+      try {
+        _rtRefs.presRef.set({ name: rtDeviceNameOrDefault(), ua: rtShortUA(), openedAt: TS, lastSeen: TS, editing: (_rtMyLockKey || null) });
+        _rtRefs.presRef.onDisconnect().remove();
+      } catch(_){}
+      if(_rtMyLockKey){ try { rtClaimKey(_rtMyLockKey); } catch(_){} }
+    }
+    rtUpdatePresenceUI();
+  }); } catch(_){}
 }
 
 /* ---- チャンネル JOIN / LEAVE ---- */
@@ -17519,7 +17648,7 @@ function rtJoinForCurrentProject(force){
     presRef.set({ name: rtDeviceNameOrDefault(), ua: rtShortUA(), openedAt: TS, lastSeen: TS, editing: (_rtMyLockKey || null) });
     presRef.onDisconnect().remove();
   } catch(_){}
-  try { db.ref(base + "/presence").on("value", snap => { _rtPresence = snap.val() || {}; rtUpdatePresenceUI(); }); } catch(_){}
+  try { db.ref(base + "/presence").on("value", snap => { _rtPresence = snap.val() || {}; _rtPresenceLoaded = true; rtUpdatePresenceUI(); rtRefreshLockUI(); }); } catch(_){}
   try { locksRef.on("value", snap => { _rtLocks = snap.val() || {}; rtRefreshLockUI(); }); } catch(_){}
   try { bumpRef.on("value", snap => { rtOnBump(snap.val()); }); } catch(_){}
   rtStartHeartbeat();
@@ -17535,7 +17664,7 @@ function rtLeave(){
     try { _rtRefs.presRef.remove(); } catch(_){}
   }
   try { rtReleaseMyLock(); } catch(_){}
-  _rtRefs = null; _rtJoinedId = null; _rtPresence = {}; _rtLocks = {};
+  _rtRefs = null; _rtJoinedId = null; _rtPresence = {}; _rtLocks = {}; _rtPresenceLoaded = false;
   _rtRemoteBump = null;
   rtSetCaseReadOnlyUI(false);
   rtHideBump();
@@ -17547,8 +17676,31 @@ function rtStartHeartbeat(){
   _rtHbTimer = setInterval(() => {
     if(!_rtEnabled || !_rtRefs) return;
     const TS = firebase.database.ServerValue.TIMESTAMP;
-    try { _rtRefs.presRef.update({ lastSeen: TS, editing: (_rtMyLockKey || null) }); } catch(_){}
-    if(_rtMyLockKey){ try { _rtDb.ref(_rtRefs.base + "/locks/" + rtSafeKey(_rtMyLockKey)).update({ lastSeen: TS }); } catch(_){} }
+    // presence: サーバ側で消えていたら update せずフルデータで作り直す。
+    // update() は存在しないノードも新規作成してしまい {lastSeen} だけの亡霊ノードが生まれるため。
+    if(_rtPresence && _rtPresence[_clientId]){
+      try { _rtRefs.presRef.update({ lastSeen: TS, editing: (_rtMyLockKey || null) }); } catch(_){}
+    } else {
+      try {
+        _rtRefs.presRef.set({ name: rtDeviceNameOrDefault(), ua: rtShortUA(), openedAt: TS, lastSeen: TS, editing: (_rtMyLockKey || null) });
+        _rtRefs.presRef.onDisconnect().remove();
+      } catch(_){}
+    }
+    // ロック: 自分所有のノードが健在の時だけ lastSeen 更新。消えていたら再claim（フルデータ＋onDisconnect再登録）。
+    // 他端末に取られていた場合は rtClaimKey の transaction が中止し閲覧のみへ移行（正しい挙動）。
+    if(_rtMyLockKey){
+      const sk = rtSafeKey(_rtMyLockKey);
+      const cur = _rtLocks && _rtLocks[sk];
+      if(cur && cur.clientId === _clientId){
+        try { _rtDb.ref(_rtRefs.base + "/locks/" + sk).update({ lastSeen: TS }); } catch(_){}
+      } else {
+        try { rtClaimKey(_rtMyLockKey); } catch(_){}
+      }
+    }
+    // TTL失効した帯の自動消灯（イベントが来なくても最長25秒で再評価）＋亡霊ロックの掃除
+    try { rtRefreshLockUI(); } catch(_){}
+    try { rtUpdatePresenceUI(); } catch(_){}
+    try { rtCleanupOrphanLocks(); } catch(_){}
   }, 25000);
 }
 function rtStopHeartbeat(){ if(_rtHbTimer){ clearInterval(_rtHbTimer); _rtHbTimer = null; } }
@@ -17604,6 +17756,40 @@ function rtMigrateLock(oldKey, newKey){
   rtReleaseMyLock();
   rtClaimKey(newKey);
 }
+/* ロックノードが「壊れている／持ち主不在」か（亡霊ロック判定）。
+   ・clientId 欠落 ＝ 旧版の心拍 update({lastSeen}) が作った部分ノード（正規の rtClaimKey は必ず clientId/name を書く）
+   ・持ち主 clientId の presence が不在/失効 ＝ 端末はもう居ない
+   presence 初回スナップショット受信前は「不在」判定をしない（JOIN直後に locks が presence より先に届く競合の誤爆防止）。 */
+function rtLockOrphan(l){
+  if(!l) return true;
+  if(!l.clientId) return true;
+  if(!_rtPresenceLoaded) return false;
+  const p = _rtPresence && _rtPresence[l.clientId];
+  if(!p) return true;
+  const ls = (typeof p.lastSeen === "number") ? p.lastSeen : 0;
+  return (Date.now() - ls) >= RT_LOCK_TTL_MS;
+}
+/* 亡霊ロックの自動掃除：「ロック自身の lastSeen が TTL 失効」かつ「持ち主不在(rtLockOrphan)」の時のみ
+   CAS(transaction) で削除する二段構え。生存中のロックは（表示上無視しても）削除しない。
+   transaction 内で生き返り（再claim・心拍復活）を再確認するため、本物の他端末ロックを消す競合は起きない。 */
+function rtCleanupOrphanLocks(){
+  if(!_rtEnabled || !_rtRefs || !_rtPresenceLoaded) return;
+  Object.keys(_rtLocks || {}).forEach(sk => {
+    const l = _rtLocks[sk]; if(!l) return;
+    if(l.clientId === _clientId) return;      // 自分のロックは rtReleaseMyLock 系で管理
+    if(rtLockLive(l)) return;                 // 生存中は消さない（表示側で無視するだけ）
+    if(!rtLockOrphan(l)) return;              // 持ち主presenceが生きていれば消さない
+    try {
+      _rtDb.ref(_rtRefs.base + "/locks/" + sk).transaction(cur => {
+        if(!cur) return;                                        // 既に無い→何もしない
+        if(cur.clientId === _clientId) return;                  // 自分の新ロックになっていたら触らない
+        const ls = (typeof cur.lastSeen === "number") ? cur.lastSeen : 0;
+        if((Date.now() - ls) < RT_LOCK_TTL_MS) return;          // 生き返っていたら中止
+        return null;                                            // 失効した亡霊のみ削除
+      });
+    } catch(_){}
+  });
+}
 /* 他端末が編集中の戸別（生存ロック・自分以外）の一覧 [{key,name}] */
 function rtOtherLocks(){
   const out = [];
@@ -17611,6 +17797,7 @@ function rtOtherLocks(){
     const l = _rtLocks[sk]; if(!l) return;
     if(l.clientId === _clientId) return;
     if(!rtLockLive(l)) return;
+    if(rtLockOrphan(l)) return; // 亡霊ロック（clientId欠落/持ち主presence不在）は表示しない
     out.push({ key: l.key || sk, name: l.name || "他の端末" });
   });
   return out;
@@ -17620,7 +17807,7 @@ function rtRowLockedByOther(row){
   if(!_rtEnabled || !row) return null;
   const sk = rtSafeKey(subCaseKey(row));
   const l = _rtLocks && _rtLocks[sk];
-  if(l && l.clientId !== _clientId && rtLockLive(l)) return l;
+  if(l && l.clientId !== _clientId && rtLockLive(l) && !rtLockOrphan(l)) return l;
   return null;
 }
 
@@ -19948,7 +20135,11 @@ function init(){
   document.getElementById("btn-base-preset-use-current").onclick = saveCurrentAsBasePreset;
   document.getElementById("btn-print").onclick = () => {
     prepareGuidePrintPage();
-    printWithFilename(buildPrintFilename("図面_積算"), cleanupGuidePrintPage);
+    // 物件モード時は積算書(材料込み)を協力会社内訳（材料費なし）へ差し替え（OFF時は従来どおり）
+    const bk = prepareBukkenPrintPage();
+    if(bk === "abort"){ cleanupGuidePrintPage(); return; }
+    printWithFilename(buildPrintFilename(bk ? "図面_内訳" : "図面_積算"),
+      () => { cleanupGuidePrintPage(); cleanupBukkenPrintPage(); });
   };
   document.getElementById("btn-print-chosho").onclick = printChosho;
   { const _ba = document.getElementById("btn-print-chosho-all"); if(_ba) _ba.onclick = printAllChosho; }
