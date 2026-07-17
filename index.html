@@ -3124,6 +3124,9 @@
   .map-zen-row { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #5a6675; margin-top: 4px; }
   .map-zen-row input[type="range"] { flex: 1 1 auto; }
   .map-zen-row input[type="number"] { width: 64px; font-family: inherit; }
+  .map-zen-cal-guide { margin-top: 5px; padding: 6px 8px; background: #f6effa; border: 1px solid #d9c4e8; border-left: 3px solid #7b1fa2; border-radius: 4px; font-size: 10.5px; color: #4a2a5e; line-height: 1.65; }
+  .map-zen-cal-guide b { color: #6a1b9a; }
+  .map-zen-cal-guide .map-zen-cal-guide-tip { display: block; margin-top: 3px; color: #7a6a86; font-size: 10px; }
 
   /* ===== リアルタイム連携（接続台数・ロック・更新通知）===== */
   .rt-ind { font-size: 12px; color: #fff; background: rgba(0,0,0,.18); padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
@@ -22740,10 +22743,10 @@ window.addEventListener("DOMContentLoaded", init);
   function zenCalMsg(){
     if(!_zenCal) return "";
     return [
-      "🎯 基準点① 画像上の目印（交差点・建物角など）をクリック",
-      "🎯 基準点① その目印の【地図上の正しい位置】をクリック",
-      "🎯 基準点② 画像上の別の目印をクリック",
-      "🎯 基準点② その目印の【地図上の正しい位置】をクリック"
+      "🎯 1/4：まず【参照地図（画像）】の目印（交差点・建物角など）をクリック",
+      "🎯 2/4：次に、その点を重ねたい【地図】の同じ場所をクリック",
+      "🎯 3/4：もう1組。【参照地図（画像）】の別の目印をクリック",
+      "🎯 4/4：最後に、その点を重ねたい【地図】の同じ場所をクリック"
     ][_zenCal.stage] || "";
   }
   function zenCalBanner(msg){
@@ -22820,9 +22823,16 @@ window.addEventListener("DOMContentLoaded", init);
           + '<div class="map-zen-row">不透明度 <input type="range" class="map-zen-op" data-zen="' + esc(u.id) + '" min="0.1" max="1" step="0.05" value="' + zenOpacity(u) + '"><span>' + op + '%</span></div>'
           + '<div class="map-zen-row">回転 <input type="number" class="map-zen-rot" data-zen="' + esc(u.id) + '" step="0.5" value="' + (Math.round((u.rot || 0) * 10) / 10) + '">°</div>'
           + '<button type="button" class="map-side-btn map-zen-align" data-zen="' + esc(u.id) + '" style="background:#7b1fa2;border-color:#5e1680;margin-top:4px;">🎯 2点で地図に合わせる</button>'
+          + '<div class="map-zen-cal-guide">🎯 <b>2点合わせの手順</b>（画像→地図の順で2組）<br>'
+          + '① 参照地図（画像）の目印（交差点・角など）をクリック<br>'
+          + '② その点を<b>置きたい地図上の位置</b>をクリック<br>'
+          + '③ 参照地図（画像）の<b>別の</b>目印をクリック<br>'
+          + '④ その点を置きたい地図上の位置をクリック<br>'
+          + '<span class="map-zen-cal-guide-tip">※ ①③は「動かす画像」側、②④は「合わせ先の地図」側。①と②は同じ実在地点を選びます。押している間ルーペで微調整できます。</span>'
+          + '</div>'
           + '</div>';
       }).join("") + '</div>';
-      html += '<div class="map-side-note">トレース下書き専用です。<b>印刷・PDF・出力画像には載りません</b>（共有ファイルには保存されます）。ペン／マウスでドラッグ＝移動。🎯ボタンで「画像の目印→地図の同じ場所」を2組クリックすると位置・縮尺・回転が自動で揃います。</div>';
+      html += '<div class="map-side-note">トレース下書き専用です。<b>印刷・PDF・出力画像には載りません</b>（共有ファイルには保存されます）。ペン／マウスでドラッグ＝移動。🎯ボタンで「画像の目印→地図の同じ場所」を2組クリックすると位置・縮尺・回転が自動で揃います。<br><b>💡 道路・建物などベクターを選ぶ／描くときは、上のツールを「✋ 選択/移動」に切り替えてください。</b>参照地図（画像）はこの「🗾 参照地図下地」ツールのときだけ動きます（＝このツール中はクリックが画像に吸われます）。「✋ 選択/移動」ではベクターだけが選択対象になり、画像は掴まれません。</div>';
     } else {
       html += '<div class="map-side-note">参照地図等の地図画像（スクショ）を読み込み、地理院地図に重ねてトレースします。ステージへドラッグ＆ドロップ／Ctrl+V 貼り付けでも追加できます。<b>出力には載りません。</b></div>';
     }
