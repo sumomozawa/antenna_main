@@ -1892,6 +1892,31 @@
     padding: 0 3px;
     vertical-align: middle;
   }
+  /* ===== 単価マスター印刷ビュー（#parts-print / body.parts-print-mode） ===== */
+  #parts-print { display: none; color: #000; }
+  #parts-print .pp-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 8mm; border-bottom: 1.5px solid #000; padding-bottom: 2mm; margin-bottom: 3mm; }
+  #parts-print .pp-title { font-size: 15pt; font-weight: 700; }
+  #parts-print .pp-meta { font-size: 9pt; text-align: right; line-height: 1.5; }
+  #parts-print .pp-legend { font-size: 8.5pt; color: #333; margin-bottom: 2mm; }
+  #parts-print .pp-legend .pp-chip { display: inline-block; width: 11px; height: 10px; background: #fff1d6; border: 1px solid #ef6c00; border-radius: 2px; margin-right: 3px; vertical-align: -1px; }
+  #parts-print table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 9pt; border: 1.2px solid #000; }
+  #parts-print thead { display: table-header-group; }
+  #parts-print th, #parts-print td { border: 0.4px solid #888; padding: 1mm 1.6mm; overflow: hidden; }
+  #parts-print thead th { background: #eef1f5; border-bottom: 1px solid #000; font-weight: 700; text-align: center; }
+  #parts-print td.num { text-align: right; font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; white-space: nowrap; }
+  #parts-print td.pp-c { text-align: center; }
+  #parts-print tr.pp-cat td { background: #e6e6e6; font-weight: 700; border-top: 1px solid #000; border-bottom: 1px solid #000; }
+  #parts-print tr.pp-changed td { background: #fff1d6; }
+  #parts-print tr.pp-changed td:first-child { border-left: 3px solid #ef6c00; }
+  #parts-print td.pp-std { font-size: 7.5pt; color: #8a5a00; white-space: nowrap; }
+  #parts-print .pp-foot { font-size: 8.5pt; color: #333; margin-top: 2mm; text-align: right; }
+  @media print {
+    body.parts-print-mode > *:not(#parts-print) { display: none !important; }
+    body.parts-print-mode #parts-print { display: block !important; }
+    body.parts-print-mode { background: #fff; }
+    #parts-print * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    #parts-print tr { break-inside: avoid; page-break-inside: avoid; }
+  }
   table.parts-editor .parts-del-btn {
     background: #fff;
     color: #d32f2f;
@@ -4135,6 +4160,7 @@
       <button id="parts-tsv-export" style="background:#fff;border:1px solid #2e5488;color:#2e5488;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;" title="Excelで編集可能なTSV形式で書出">📤 TSV書出</button>
       <button id="parts-tsv-paste" style="background:#fff;border:1px solid #2e5488;color:#2e5488;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;" title="Excelなどからコピーした表を貼付けて一括登録">📋 TSV貼付</button>
       <button id="parts-reset" style="background:#fff;border:1px solid #d32f2f;color:#d32f2f;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">↺ 初期化</button>
+      <button id="parts-print-btn" style="background:#1e3a5f;color:#fff;border:1px solid #16314f;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;" title="単価一覧をA4縦で印刷/PDF出力（絞り込み中はその内容だけを印刷）">🖨 印刷</button>
       <input type="text" id="parts-search" placeholder="絞り込み (品名/型番/カテゴリ)" style="flex:1;min-width:180px;padding:4px 8px;border:1px solid #cdd3da;border-radius:3px;font-size:12px;">
       <span id="parts-dirty-indicator" style="font-size:11px;color:#d32f2f;display:none;">● 未保存の変更あり</span>
     </div>
@@ -4299,6 +4325,8 @@
 </div>
 <!-- 📑 全件・明細PDF 印刷ビュー（印刷時のみ表示・doSubFullPrint で生成） -->
 <div id="sub-fullprint" aria-hidden="true"></div>
+<!-- 🔧 単価マスター印刷ビュー（印刷時のみ表示・printPartsMaster で生成） -->
+<div id="parts-print" aria-hidden="true"></div>
 
 <!-- ============ 🏠 メニュー画面（物件ホーム） ============ -->
 <div class="menu-view" id="menu-view">
@@ -7820,6 +7848,84 @@ const PARTS_STORAGE_KEY = "antenna_parts_master_override";
 function openPartsModal(){
   renderPartsEditor();
   document.getElementById("parts-modal").classList.add("open");
+}
+/* 単価マスターをA4縦できれいに印刷/PDF出力する。
+   ・並び/絞り込みは編集画面と同一（renderPartsEditor と同じ catOrder・検索語を尊重）
+   ・標準単価(DEFAULT_PARTS)から変更した行（色付き行）は同じ薄黄で強調し、標準単価を併記
+   ・列幅は%指定＋table幅100%（用紙外へ落ちない。協力会社明細PDFと同じ流儀） */
+function printPartsMaster(){
+  const keyword = ((document.getElementById("parts-search") || {}).value || "").trim().toLowerCase();
+  const catOrder = ["antenna","mast","mount","support","cable","filter","booster","amplifier","splitter","mixer","terminal","connector","indoor","misc","removal"];
+  const grouped = {};
+  let total = 0, changedN = 0;
+  for(const id in PARTS){
+    const p = PARTS[id];
+    if(keyword){
+      const bag = [id, p.name, p.model, p.category, CATEGORY_LABEL[p.category]]
+        .map(v => String(v || "").toLowerCase()).join(" ");
+      if(bag.indexOf(keyword) < 0) continue;
+    }
+    const cat = p.category || "misc";
+    (grouped[cat] = grouped[cat] || []).push({ id, p });
+    total++;
+  }
+  if(total === 0){ alert("印刷対象がありません（絞り込みを見直してください）"); return; }
+  const fmt = n => (Math.round(n || 0)).toLocaleString("ja-JP");
+  const projName = (typeof _currentProject !== "undefined" && _currentProject) ? (_currentProject.name || "") : "";
+  const today = new Date();
+  const dateS = today.getFullYear() + "/" + (today.getMonth() + 1) + "/" + today.getDate();
+
+  let html = '<div class="pp-head">'
+    + '<div class="pp-title">単価マスター（部材・労務単価一覧）</div>'
+    + '<div class="pp-meta">'
+    + (projName ? '物件： ' + escapeHtml(projName) + '（この物件用の単価）<br>' : '通常（全物件共通）の単価<br>')
+    + '出力日： ' + dateS
+    + (keyword ? '<br>絞り込み： ' + escapeHtml(keyword) : '')
+    + '</div></div>';
+  html += '<div class="pp-legend"><span class="pp-chip"></span>色付きの行＝標準単価から変更した項目（右端に変更前の標準単価を併記）</div>';
+  html += '<table><colgroup>'
+    + '<col style="width:34%"><col style="width:15%"><col style="width:7%">'
+    + '<col style="width:11%"><col style="width:11%"><col style="width:11%"><col style="width:11%">'
+    + '</colgroup><thead><tr>'
+    + '<th>品名</th><th>型番</th><th>単位</th><th>材料費(円)</th><th>労務費(円)</th><th>材＋労 計(円)</th><th>標準単価(材/労)</th>'
+    + '</tr></thead><tbody>';
+  catOrder.forEach(cat => {
+    if(!grouped[cat]) return;
+    html += '<tr class="pp-cat"><td colspan="7">■ ' + escapeHtml(CATEGORY_LABEL[cat] || cat) + '</td></tr>';
+    grouped[cat].forEach(({ id, p }) => {
+      const def = DEFAULT_PARTS[id];
+      const changed = !!def && (
+        def.material_cost !== p.material_cost || def.labor_cost !== p.labor_cost ||
+        def.name !== p.name || def.model !== p.model || def.unit !== p.unit);
+      const isNew = !def;   // ユーザー追加部材（標準単価が存在しない）
+      if(changed) changedN++;
+      html += '<tr' + (changed ? ' class="pp-changed"' : '') + '>'
+        + '<td>' + escapeHtml(p.name || "") + '</td>'
+        + '<td>' + escapeHtml(p.model || "") + '</td>'
+        + '<td class="pp-c">' + escapeHtml(p.unit || "") + '</td>'
+        + '<td class="num">' + fmt(p.material_cost) + '</td>'
+        + '<td class="num">' + fmt(p.labor_cost) + '</td>'
+        + '<td class="num">' + fmt((p.material_cost || 0) + (p.labor_cost || 0)) + '</td>'
+        + '<td class="pp-std num">' + (changed ? (fmt(def.material_cost) + '／' + fmt(def.labor_cost)) : (isNew ? '（追加部材）' : '')) + '</td>'
+        + '</tr>';
+    });
+  });
+  html += '</tbody></table>';
+  html += '<div class="pp-foot">全 ' + total + ' 品目（うち標準単価から変更 ' + changedN + ' 品目）</div>';
+  document.getElementById("parts-print").innerHTML = html;
+
+  // @page（A4縦）を注入し、印刷後は必ず除去（残すと他の印刷の用紙設定に波及するため）
+  let ps = document.getElementById("parts-page-style");
+  if(!ps){ ps = document.createElement("style"); ps.id = "parts-page-style"; document.head.appendChild(ps); }
+  ps.textContent = "@page { size: A4 portrait; margin: 12mm; }";
+  document.body.classList.add("parts-print-mode");
+  const ymd = today.getFullYear() + String(today.getMonth() + 1).padStart(2, "0") + String(today.getDate()).padStart(2, "0");
+  const fname = "単価マスター" + (projName ? "_" + sanitizePrintFilename(projName) : "") + "_" + ymd;
+  printWithFilename(fname, () => {
+    document.body.classList.remove("parts-print-mode");
+    const s = document.getElementById("parts-page-style");
+    if(s) s.remove();
+  });
 }
 function closePartsModal(){
   document.getElementById("parts-modal").classList.remove("open");
@@ -19655,6 +19761,7 @@ function init(){
   document.getElementById("parts-tsv-apply").onclick = importPartsTsv;
   document.getElementById("parts-tsv-fill-current").onclick = fillTsvTemplateWithCurrent;
   document.getElementById("parts-reset").onclick = resetPartsMaster;
+  document.getElementById("parts-print-btn").onclick = printPartsMaster;
   document.getElementById("parts-search").addEventListener("input", renderPartsEditor);
   document.getElementById("parts-modal").addEventListener("click", e => {
     if(e.target.id === "parts-modal") closePartsModal();
