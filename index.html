@@ -2747,6 +2747,7 @@
     margin-left: 4px; vertical-align: 1px; white-space: nowrap;
   }
   table.ledger-table .lg-dwg-ind { float: right; font-size: 11px; color: #667482; cursor: default; }
+  table.ledger-table .lg-map-ind { float: right; font-size: 11px; color: #c8d0d8; margin-right: 4px; cursor: default; }
   table.ledger-table select.lg-st-sel {
     width: 100%; padding: 1px 2px; border: 1px solid #cdd3da; border-radius: 2px;
     font-size: 11px; font-family: inherit; background: #fff; cursor: pointer;
@@ -13145,7 +13146,32 @@ function mgmtNoCellHtml(d, dupSet){
     + escapeHtml(d.chosho_mgmt_no || "―") + (isDup ? ' ⚠' : '') + '</td>';
 }
 
+/* ---------- 受付台帳：地図に登録（建物リンク）済みかの判定 ----------
+   地図データ(mapSheets)は地図を開くまでメモリに載らないため、保存済み(IndexedDB)から
+   建物にリンク済みの管理番号を非同期採取してキャッシュし、台帳の🗺️インジケータに使う。 */
+let _mapLinkedSet = {};      // 管理番号 -> true（地図の建物にリンク済み）
+let _mapLinkedBusy = false;
+function refreshMapLinkedSet(){
+  if(_mapLinkedBusy) return;
+  if(typeof window.__mapLinkedMgmtSet !== "function") return;
+  _mapLinkedBusy = true;
+  window.__mapLinkedMgmtSet().then(function(set){
+    set = set || {};
+    const before = Object.keys(_mapLinkedSet).sort().join("");
+    const after  = Object.keys(set).sort().join("");
+    _mapLinkedSet = set;
+    // 内容が変わった時だけ台帳を再描画。再描画→refresh再入は busy=true で抑止し、確定後に解放する。
+    if(before !== after && _listMode === "ledger"){ try { renderListTable(); } catch(_){} }
+    _mapLinkedBusy = false;
+  }, function(){ _mapLinkedBusy = false; });
+}
+function isMapRegistered(mgmt){
+  const m = String(mgmt || "").trim();
+  return !!(m && _mapLinkedSet[m]);
+}
+
 function renderListTable(){
+  if(_listMode === "ledger"){ try { refreshMapLinkedSet(); } catch(_){} }
   const tbl = document.getElementById("list-table");
   const custom = document.getElementById("list-content-custom");
   const status = document.getElementById("list-status");
@@ -17304,6 +17330,7 @@ async function applyProject(p, opts){
   if(!(opts && opts._merge) && p.maps && typeof window.mapRestoreFromSnapshot === "function"){
     try { await window.mapRestoreFromSnapshot(p.id, p.maps); } catch(e){ console.warn("[map] applyProject restore failed", e); }
     _mapsSnapCache = undefined; _mapsSnapCachePid = null; // 復元後は次回保存で採取し直す
+    try { refreshMapLinkedSet(); } catch(_){}             // 地図復元後、受付台帳の🗺️登録済みを更新
   }
   // リアルタイム：この物件のチャンネルへ参加（別物件切替時は旧チャンネルを離脱してから）
   try { if(_currentProject) rtJoinForCurrentProject(); } catch(_){}
@@ -18686,10 +18713,12 @@ function renderListLedgerMode(rows, container){
     } else {
       html += '<td class="lg-c">' + (isDone ? "完了" : (isProv ? "仮受付" : "受付済")) + ' 🔒</td>';
     }
-    // 管理番号（図面有無アイコン付き）
+    // 管理番号（図面有無アイコン＋地図登録アイコン付き）
+    const mapReg = isMapRegistered(d.chosho_mgmt_no);
     html += '<td>' + tCell("mgmt", d.chosho_mgmt_no)
       + (isProv ? '<span class="lg-prov-badge">仮</span>' : '')
-      + '<span class="lg-dwg-ind" title="' + (lgHasDrawing(r) ? "図面・積算データあり" : "図面未作成（📐ボタンで台帳の情報を流し込んで新規作成）") + '">' + (lgHasDrawing(r) ? "📄" : "－") + '</span></td>'
+      + '<span class="lg-dwg-ind" title="' + (lgHasDrawing(r) ? "図面・積算データあり" : "図面未作成（📐ボタンで台帳の情報を流し込んで新規作成）") + '">' + (lgHasDrawing(r) ? "📄" : "－") + '</span>'
+      + '<span class="lg-map-ind" title="' + (mapReg ? "地図に登録済み（建物にこの管理番号をリンク済み）" : "地図に未登録（地図で建物にこの管理番号をリンクすると🗺️になります）") + '">' + (mapReg ? "🗺️" : "－") + '</span></td>'
       + '<td>' + tCell("name", d.chosho_cust_name) + '</td>'
       + '<td class="lg-c lg-ctr-cell">' + lgContractorCellHtml(r, false) + '</td>'
       + '<td>' + tCell("addr", d.chosho_cust_addr) + '</td>'
@@ -24655,27 +24684,26 @@ window.addEventListener("DOMContentLoaded", init);
     var rows = (typeof _listRows !== "undefined" && _listRows) ? _listRows : [];
     if(!rows.length){ host.innerHTML = '<div class="map-side-note">戸別一覧が未読込です。メニュー＞戸別一覧（読込・積算）で読み込むと候補が出ます。</div>'; return; }
     var qq = String(q || "").trim().toLowerCase();
+    // 既に他の建物へリンク済み（配置済）の管理番号は候補から除外＝一度選んだ番号は出さない（被り防止）。
+    // 残った未配置の管理番号は件数で打ち切らず全件表示する。
     var matched = rows.filter(function(r){
       if(!r || !r.data) return false;
-      if(!qq) return true;
       var d = r.data;
+      var mg = (d.chosho_mgmt_no || "").trim();
+      if(mg && isMgmtDupOnMap(mg, b)) return false;   // 配置済みは候補から外す
+      if(!qq) return true;
       return (((d.chosho_mgmt_no || "") + " " + (d.chosho_cust_name || "") + " " + (d.chosho_cust_addr || "")).toLowerCase()).indexOf(qq) >= 0;
-    }).slice(0, 40);
-    if(!matched.length){ host.innerHTML = '<div class="map-side-note">該当なし</div>'; return; }
+    });
+    if(!matched.length){ host.innerHTML = '<div class="map-side-note">' + (qq ? "該当なし" : "未配置の管理番号がありません（全件リンク済み）") + '</div>'; return; }
     host.innerHTML = matched.map(function(r){
       var d = r.data; var mg = (d.chosho_mgmt_no || "").trim();
-      // 既に他の建物へ配置済みの管理番号には“被り”バッジを出す（割り当て前に気づけるように）
-      var dup = mg && isMgmtDupOnMap(mg, b);
-      var badge = dup ? ' <span style="color:#c62828;font-weight:700;" title="この管理番号は既に他の建物へ割り当て済みです（重複）">⚠配置済</span>' : '';
-      return '<button type="button" class="map-link-item" data-mg="' + esc(mg) + '"><b>' + esc(mg || "(管理番号なし)") + '</b>' + badge + ' ' + esc(d.chosho_cust_name || "") + '<br><span>' + esc(d.chosho_cust_addr || "") + '</span></button>';
+      return '<button type="button" class="map-link-item" data-mg="' + esc(mg) + '"><b>' + esc(mg || "(管理番号なし)") + '</b> ' + esc(d.chosho_cust_name || "") + '<br><span>' + esc(d.chosho_cust_addr || "") + '</span></button>';
     }).join("");
     host.querySelectorAll(".map-link-item").forEach(function(btn){
       btn.addEventListener("click", function(){
         var mg = btn.getAttribute("data-mg");
         if(!mg){ toast("この戸別には管理番号がないためリンクできません。"); return; }
-        var dups = buildingsWithMgmt(mg, b);   // 割り当て前に“被り”を確認（意図的な場合もあるのでブロックしない）
         b.linkMgmtNo = mg; renderObjects(); renderSelectionOverlay(); scheduleSave(); renderDetailLink(b);
-        if(dups.length){ toast("⚠ 管理番号「" + mg + "」は他の建物にも割り当て済みです（" + dups.length + "件・重複）。意図的でなければご確認ください。"); }
       });
     });
   }
@@ -24754,7 +24782,7 @@ window.addEventListener("DOMContentLoaded", init);
       if(!r || !r.data) return false;
       var d = r.data;
       return (((d.chosho_mgmt_no || "") + " " + (d.chosho_cust_name || "") + " " + (d.chosho_cust_addr || "")).toLowerCase()).indexOf(qq) >= 0;
-    }).slice(0, 30);
+    });   // 打ち切りなし＝該当する管理番号は全件表示（300件規模でも欠けない。枠はスクロール表示）
     if(!matched.length){ host.innerHTML = '<div class="map-side-note">該当なし</div>'; return; }
     host.innerHTML = matched.map(function(r){
       var d = r.data; var mg = (d.chosho_mgmt_no || "").trim();
@@ -25426,8 +25454,28 @@ window.addEventListener("DOMContentLoaded", init);
     if(typeof openMenuView === "function") openMenuView();
   }
 
+  // 受付台帳「地図登録済み」表示用：この物件で建物にリンク済みの管理番号を保存済みシートから採取して集合(obj)で返す。
+  // 地図未オープンでも参照できるよう、メモリ(sheets)ではなく IndexedDB の保存済みシートを読む。
+  function mapLinkedMgmtSet(){
+    var p = curProj();
+    var q = p ? sheetByProject(p.id) : sheetLocal();
+    return q.then(function(list){
+      var set = {};
+      (list || []).forEach(function(s){
+        var bl = s && s.layers && s.layers.building;
+        if(!bl || !Array.isArray(bl.objects)) return;
+        bl.objects.forEach(function(o){
+          var mg = o && String(o.linkMgmtNo || "").trim();
+          if(mg) set[mg] = true;
+        });
+      });
+      return set;
+    }, function(){ return {}; });
+  }
+
   window.openMapView = openMapView;
   window.closeMapView = closeMapView;
+  window.__mapLinkedMgmtSet = mapLinkedMgmtSet;   // 受付台帳の🗺️登録済み判定に使用
   window.mapCollectForExport = mapCollectForExport;     // 物件エクスポートに地図を内包
   window.mapRestoreFromSnapshot = mapRestoreFromSnapshot; // 物件インポートで地図を復元
 })();
