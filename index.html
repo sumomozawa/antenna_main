@@ -21386,17 +21386,22 @@ window.addEventListener("DOMContentLoaded", init);
         } else {
           if(!zenIsSel(zh)) zenSetSel(zenSameGroup(zh));   // 未選択の画像を掴んだら（グループなら全員）選択
           _zenSel = zh;                                    // 掴んだ1枚をプライマリに（アンカー十字/2点合わせ対象）
-          // 選択中の未ロック画像を「まとめて移動」対象としてアンカー座標を控える
-          var origs = {}, cnt = 0;
-          zenNormSel().forEach(function(id){ var uu = zenById(id); if(uu && !uu.locked){ origs[id] = { x: uu.anchorWorld.x, y: uu.anchorWorld.y }; cnt++; } });
-          if(cnt){
-            _zenDrag = { sx: e.clientX, sy: e.clientY, origs: origs, moved: false };
-            gesture = "zendrag"; capturePointer(e.pointerId);
+          var grabbed = zenById(zh);
+          if(grabbed && !grabbed.locked){                  // 掴んだ画像自身がロックなら移動しない（単一画像と同じ挙動）
+            // 選択中の未ロック画像を「まとめて移動」対象としてアンカー座標を控える（ロックはその場に残す）
+            var origs = {}, cnt = 0;
+            zenNormSel().forEach(function(id){ var uu = zenById(id); if(uu && !uu.locked){ origs[id] = { x: uu.anchorWorld.x, y: uu.anchorWorld.y }; cnt++; } });
+            if(cnt){
+              _zenDrag = { sx: e.clientX, sy: e.clientY, origs: origs, moved: false };
+              gesture = "zendrag"; capturePointer(e.pointerId);
+            }
           }
           renderZenrinOverlay(); renderZenrinPanel();
         }
       } else {
-        zenSetSel([]); renderZenrinOverlay(); renderZenrinPanel();
+        // 修飾キーなしの空クリックのみ選択解除（Shift/Ctrl＋クリックの近接ミスで多選択を消さない）
+        if(!(e.shiftKey || e.ctrlKey || e.metaKey)) zenSetSel([]);
+        renderZenrinOverlay(); renderZenrinPanel();
         gesture = "pan"; beginPan(e.pointerId); capturePointer(e.pointerId);
       }
       updateCursor();
@@ -22740,6 +22745,7 @@ window.addEventListener("DOMContentLoaded", init);
     pushUndo();
     var gid = "zgrp_" + mapUid();
     ids.forEach(function(id){ var u = zenById(id); if(u) u.groupId = gid; });
+    zenPruneGroups();   // 既存グループの一部だけを取り込んだ場合に1枚だけ残るグループを解消
     renderZenrinOverlay(); renderZenrinPanel(); flushSave();
     toast(ids.length + "枚をグループ化しました。どれか1枚を掴むとまとめて動きます。");
   }
@@ -22839,9 +22845,9 @@ window.addEventListener("DOMContentLoaded", init);
     if(idx < 0) return;
     var key = imgs[idx].blobKey;
     imgs.splice(idx, 1);
-    if(_zenSel === id){ _zenSel = null; }
     _zenDrag = null;
     _zenSelIds = (_zenSelIds || []).filter(function(x){ return x !== id; });
+    if(_zenSel === id){ _zenSel = _zenSelIds.length ? _zenSelIds[_zenSelIds.length - 1] : null; }   // プライマリを削除したら残りの1枚へ引き継ぐ
     if(_zenCal && _zenCal.id === id){ _zenCal = null; zenCalBanner(""); }
     if(!imgs.length) current.zenrin = null;
     else zenPruneGroups();   // 残ったグループが1枚だけになったら自動解除
@@ -22853,10 +22859,10 @@ window.addEventListener("DOMContentLoaded", init);
   function startZenCal(id){
     var u = zenById(id); if(!u){ return; }
     if(u.locked){ toast("ロック中です。先にロックを外してください。"); return; }
-    _zenSel = id; if(tool !== "zenrin") setTool("zenrin");
+    zenSetSel([id]); if(tool !== "zenrin") setTool("zenrin");   // 2点合わせは単一画像対象＝選択も1枚に絞る（多選択を継ぎ足さない）
     _zenCal = { id: id, stage: 0 };
     zenCalBanner(zenCalMsg());
-    renderZenrinOverlay();
+    renderZenrinOverlay(); renderZenrinPanel();
   }
   function zenCalMsg(){
     if(!_zenCal) return "";
@@ -22991,7 +22997,7 @@ window.addEventListener("DOMContentLoaded", init);
       var acc = /Android/i.test(navigator.userAgent || "") ? "*/*" : "image/*";
       pickFile({ accept: acc, multiple: true }, function(files){ onZenFiles(files); });
     });
-    on("map-zen-selall", "click", function(){ zenSetSel(zenList().map(function(u){ return u.id; })); renderZenrinOverlay(); renderZenrinPanel(); });
+    on("map-zen-selall", "click", function(){ zenSetSel(zenList().filter(function(u){ return u.visible !== false; }).map(function(u){ return u.id; })); renderZenrinOverlay(); renderZenrinPanel(); });   // 「表示中」の名の通り非表示は除外
     on("map-zen-selnone", "click", function(){ zenSetSel([]); renderZenrinOverlay(); renderZenrinPanel(); });
     on("map-zen-group", "click", function(){ zenGroupSelected(); });
     on("map-zen-ungroup", "click", function(){ zenUngroupSelected(); });
@@ -25520,6 +25526,9 @@ window.addEventListener("DOMContentLoaded", init);
                 opacity: (typeof zm.opacity === "number" ? zm.opacity : 0.55), visible: zm.visible !== false, locked: !!zm.locked });
             } catch(e){ console.warn("[map] restore zenrin failed", e); }
           }
+          // 復元中に片割れが欠落してメンバー1枚になったグループを解消（zenPruneGroupsはcurrent対象のため配列に直接適用）
+          var _zgc = {}; zRestore.forEach(function(z){ if(z.groupId) _zgc[z.groupId] = (_zgc[z.groupId] || 0) + 1; });
+          zRestore.forEach(function(z){ if(z.groupId && _zgc[z.groupId] < 2) z.groupId = null; });
           if(zRestore.length) zen = { images: zRestore };
         }
         // 手描き道路ペイントの復元（dataUri→Blob→mappaint_）
