@@ -2996,9 +2996,11 @@
   .map-side-btn.active { background: #1e3a5f; border-color: #16314f; }
   .map-bg-list { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
   .map-bg-item {
-    display: flex; align-items: center; gap: 4px; font-size: 11px; color: #33414f;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 11px; color: #33414f;
     background: #fff; border: 1px solid #cdd3da; border-radius: 4px; padding: 4px 6px; cursor: pointer;
   }
+  /* アイコン群は1つの帯にまとめ、幅が足りなければ折り返す（右へはみ出さない） */
+  .map-bg-item .map-bg-item-btns { display: flex; flex-wrap: wrap; gap: 4px; flex: 1 1 100%; }
   .map-bg-item:hover { background: #eef2f6; }
   .map-bg-item.sel { background: #e6f0fb; border-color: #1e88e5; }
   .map-bg-item .map-bg-item-name { font-weight: 600; white-space: nowrap; }
@@ -21998,7 +22000,9 @@ window.addEventListener("DOMContentLoaded", init);
       miniBgSync();
       return;
     }
-    if(rect) rect.setAttribute("fill", "#ffffff"); // 半透明下地の下は白紙
+    // 半透明で下絵をなぞる時だけ下を白紙にする（方眼が透けないように）。不透明(100%)のときは
+    // 白紙にせず方眼のまま＝白い紙が下地の移動に追従して見える現象を防ぐ。
+    if(rect) rect.setAttribute("fill", bgOpacity() < 1 ? "#ffffff" : "url(#map-grid-pat)");
     grp.style.opacity = bgOpacity();
     grp.innerHTML = imgs.map(function(im){
       var W = bgImgW(im), H = bgImgH(im), clipDef = "", clipAttr = "";
@@ -22036,6 +22040,7 @@ window.addEventListener("DOMContentLoaded", init);
         return '<div class="map-bg-item' + (im.id === _bgSel ? " sel" : "") + '" data-img="' + esc(im.id) + '">'
           + '<span class="map-bg-item-name">下地' + (i + 1) + '</span>'
           + '<span class="map-bg-item-dim">' + Math.round(bgImgW(im)) + '×' + Math.round(bgImgH(im)) + '</span>'
+          + '<div class="map-bg-item-btns">'
           + '<button type="button" class="map-bg-mini-btn" data-act="front" data-img="' + esc(im.id) + '" title="前面へ"' + (i === imgs.length - 1 ? " disabled" : "") + '>▲</button>'
           + '<button type="button" class="map-bg-mini-btn" data-act="back" data-img="' + esc(im.id) + '" title="背面へ"' + (i === 0 ? " disabled" : "") + '>▼</button>'
           + '<button type="button" class="map-bg-mini-btn" data-act="smaller" data-img="' + esc(im.id) + '" title="縮小">－</button>'
@@ -22044,6 +22049,7 @@ window.addEventListener("DOMContentLoaded", init);
           + '<button type="button" class="map-bg-mini-btn" data-act="crop" data-img="' + esc(im.id) + '" title="トリミング（表示範囲を切り出す）">✂</button>'
           + (im.crop ? '<button type="button" class="map-bg-mini-btn" data-act="uncrop" data-img="' + esc(im.id) + '" title="トリミング解除">⟲</button>' : '')
           + '<button type="button" class="map-bg-mini-btn" data-act="del" data-img="' + esc(im.id) + '" title="この下地を外す">🗑</button>'
+          + '</div>'
           + '</div>'
           + ((_bgCrop && _bgCrop.imgId === im.id)
               ? '<div class="map-bg-crop-actions">'
@@ -22073,6 +22079,7 @@ window.addEventListener("DOMContentLoaded", init);
         var g = el("map-bg-group"); if(g) g.style.opacity = v;
         var mg = el("map-mini-bg"); if(mg) mg.style.opacity = v;
         var s = el("map-bg-op-val"); if(s) s.textContent = Math.round(v * 100) + "%";
+        var sr = el("map-sheet-rect"); if(sr && bgImages().length) sr.setAttribute("fill", v < 1 ? "#ffffff" : "url(#map-grid-pat)");   // 不透明時は白紙にしない
         scheduleSave();
       });
       on("map-bg-edit-toggle", "click", function(){ setTool(tool === "bgedit" ? "pan" : "bgedit"); });
