@@ -22123,7 +22123,7 @@ window.addEventListener("DOMContentLoaded", init);
         + '<span class="map-zen-selinfo">選択 ' + bgSelN + '枚</span>'
         + '<button type="button" id="map-bg-selall" title="すべての下地を選択">全選択</button>'
         + '<button type="button" id="map-bg-selnone" title="選択を解除"' + (bgSelN ? "" : " disabled") + '>選択解除</button>'
-        + '<button type="button" class="map-zen-group-btn" id="map-bg-group" title="選んだ2枚以上を1グループに。以後どれか1枚を掴むとまとめて動きます"' + (bgSelN >= 2 ? "" : " disabled") + '>🔗 グループ化</button>'
+        + '<button type="button" class="map-zen-group-btn" id="map-bg-groupbtn" title="選んだ2枚以上を1グループに。以後どれか1枚を掴むとまとめて動きます"' + (bgSelN >= 2 ? "" : " disabled") + '>🔗 グループ化</button>'
         + '<button type="button" id="map-bg-ungroup" title="選択に含まれるグループを解除"' + (bgCanUngroup ? "" : " disabled") + '>🔓 解除</button>'
         + '</div>';
       var bgorder = bgGroupOrder();
@@ -22223,7 +22223,7 @@ window.addEventListener("DOMContentLoaded", init);
       });
       on("map-bg-selall", "click", function(){ bgSetSel(bgImages().map(function(m){ return m.id; })); renderBgOverlay(); renderBgControls(); });
       on("map-bg-selnone", "click", function(){ bgSetSel([]); renderBgOverlay(); renderBgControls(); });
-      on("map-bg-group", "click", function(){ bgGroupSelected(); });
+      on("map-bg-groupbtn", "click", function(){ bgGroupSelected(); });
       on("map-bg-ungroup", "click", function(){ bgUngroupSelected(); });
       host.querySelectorAll(".map-bg-pick").forEach(function(c){
         c.addEventListener("click", function(e){ e.stopPropagation(); });   // 行クリックへ伝播させない
