@@ -3010,6 +3010,19 @@
   .map-bg-item .map-bg-mini-btn:hover { background: #e3e8ee; }
   .map-bg-item .map-bg-cal-btn { border-color: #b39ddb; background: #f3ecfb; }
   .map-bg-item .map-bg-cal-btn:hover { background: #e9ddf7; }
+  /* トリミング中にパネル側へ出す確定/解除/取消（上部の帯を探さなくて済むように） */
+  .map-bg-crop-actions {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+    background: #1e3a5f; color: #fff; border-radius: 4px; padding: 6px 8px; font-size: 11px; margin-top: 2px;
+  }
+  .map-bg-crop-actions .map-bg-crop-msg { flex: 1 1 100%; }
+  .map-bg-crop-actions button {
+    font-family: inherit; font-size: 12px; padding: 4px 12px; border-radius: 3px; cursor: pointer;
+    border: 1px solid #3a6ba8; background: #2e5488; color: #fff;
+  }
+  .map-bg-crop-actions button:hover { background: #3a6ba8; }
+  .map-bg-crop-actions .map-bg-crop-do { background: #ff9800; border-color: #e08600; color: #1e2b3a; font-weight: 700; }
+  .map-bg-crop-actions .map-bg-crop-do:hover { background: #ffa726; }
 
   .map-draw-bar {
     position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
@@ -22031,7 +22044,15 @@ window.addEventListener("DOMContentLoaded", init);
           + '<button type="button" class="map-bg-mini-btn" data-act="crop" data-img="' + esc(im.id) + '" title="トリミング（表示範囲を切り出す）">✂</button>'
           + (im.crop ? '<button type="button" class="map-bg-mini-btn" data-act="uncrop" data-img="' + esc(im.id) + '" title="トリミング解除">⟲</button>' : '')
           + '<button type="button" class="map-bg-mini-btn" data-act="del" data-img="' + esc(im.id) + '" title="この下地を外す">🗑</button>'
-          + '</div>';
+          + '</div>'
+          + ((_bgCrop && _bgCrop.imgId === im.id)
+              ? '<div class="map-bg-crop-actions">'
+                + '<span class="map-bg-crop-msg">✂ トリミング中：枠を調整して</span>'
+                + '<button type="button" class="map-bg-crop-do" data-act="cropok" data-img="' + esc(im.id) + '">確定</button>'
+                + (im.crop ? '<button type="button" data-act="cropoff" data-img="' + esc(im.id) + '">解除</button>' : '')
+                + '<button type="button" data-act="cropcancel" data-img="' + esc(im.id) + '">取消</button>'
+                + '</div>'
+              : '');
       }).join("") + '</div>';
       html += '<button type="button" class="map-side-btn" id="map-bg-clear" style="background:#9aa7b4;border-color:#7e8c99;margin-top:6px;">✕ 下地を全て外す</button>';
       html += '<div class="map-side-note">「🖼 下地を調整」中は、ステージで下地をドラッグ＝移動／四隅のハンドルをドラッグ＝拡大縮小。一覧の ＋／－ でも拡大縮小できます。複数枚を並べて1枚の地図に仕立てられます。<br><b>🎯 2点合わせ</b>＝「この下地の目印→重ねたい位置」を2組合わせると、<b>縮尺と位置が自動で揃います（回転なし＝北は上のまま）</b>。押している間ルーペが出て超微調整できます。<br><b>✂ トリミング</b>＝表示範囲を切り出します（配置・2点合わせには影響しません）。</div>';
@@ -22081,6 +22102,21 @@ window.addEventListener("DOMContentLoaded", init);
           _bgSel = id;
           scaleBgImage(im, act === "bigger" ? 1.1 : (1 / 1.1));
           renderBg(); renderBgOverlay(); layoutSheetRect(); renderBgControls(); flushSave();
+        });
+      });
+      host.querySelectorAll(".map-bg-crop-actions button").forEach(function(b){
+        b.addEventListener("click", function(e){
+          e.stopPropagation();
+          var id = b.getAttribute("data-img"), act = b.getAttribute("data-act");
+          if(act === "cropok"){ commitBgCrop(); return; }             // トリミング確定（パネルからも押せる）
+          if(act === "cropcancel"){ cancelBgCrop(); return; }
+          if(act === "cropoff"){                                       // 既存トリミングを解除
+            var uim = bgImageById(id);
+            if(uim) uim.crop = null;
+            _bgCrop = null; _bgCropDrag = null; bgCalBanner("");
+            renderBg(); renderBgOverlay(); renderBgControls(); flushSave();
+            return;
+          }
         });
       });
       host.querySelectorAll(".map-bg-item").forEach(function(row){
@@ -22380,7 +22416,7 @@ window.addEventListener("DOMContentLoaded", init);
     _bgCrop = { imgId: id, rect: im.crop ? copyRect(im.crop) : { px: 0, py: 0, pw: nW, ph: nH } };
     _bgCropDrag = null;
     bgCropBanner();
-    renderBgOverlay();
+    renderBgOverlay(); renderBgControls();   // パネル側にも「確定／解除／取消」を出す（上部の帯を探さなくて済むように）
     toast("枠の四辺・四隅ハンドルをドラッグして表示範囲を決め、「確定」を押します。");
   }
   function bgCropBanner(){
@@ -22400,7 +22436,7 @@ window.addEventListener("DOMContentLoaded", init);
     });
     var c = el("map-bg-crop-cancel"); if(c) c.addEventListener("click", cancelBgCrop);
   }
-  function cancelBgCrop(){ _bgCrop = null; _bgCropDrag = null; bgCalBanner(""); renderBgOverlay(); }
+  function cancelBgCrop(){ _bgCrop = null; _bgCropDrag = null; bgCalBanner(""); renderBgOverlay(); renderBgControls(); }
   function commitBgCrop(){
     if(!_bgCrop) return;
     var im = bgImageById(_bgCrop.imgId);
