@@ -3125,6 +3125,16 @@
   .map-zen-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
   .map-zen-item { border: 1px solid #cdd3da; border-radius: 5px; padding: 6px; background: #fafbfc; }
   .map-zen-item.sel { border-color: #7b1fa2; box-shadow: 0 0 0 1px #7b1fa2 inset; }
+  .map-zen-item.sel.primary { box-shadow: 0 0 0 2px #7b1fa2 inset; }
+  .map-zen-grouptools { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 6px 0 2px; font-size: 11px; }
+  .map-zen-grouptools .map-zen-selinfo { color: #5a6675; margin-right: auto; }
+  .map-zen-grouptools button { font-family: inherit; font-size: 11px; padding: 2px 8px; border: 1px solid #90a0b0; background: #fff; color: #33424f; border-radius: 4px; cursor: pointer; }
+  .map-zen-grouptools button:hover:not(:disabled) { background: #eef2f6; }
+  .map-zen-grouptools button:disabled { opacity: .45; cursor: default; }
+  .map-zen-grouptools .map-zen-group-btn { background: #1565c0; border-color: #0d47a1; color: #fff; }
+  .map-zen-grouptools .map-zen-group-btn:hover:not(:disabled) { background: #1976d2; }
+  .map-zen-pick { width: 15px; height: 15px; cursor: pointer; flex: 0 0 auto; margin: 0; }
+  .map-zen-gtag { display: inline-block; color: #fff; font-size: 10px; font-weight: 700; padding: 0 6px; border-radius: 8px; line-height: 1.55; flex: 0 0 auto; }
   .map-zen-item-top { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #33414f; }
   .map-zen-name { flex: 1 1 auto; font-weight: 600; }
   .map-zen-item-top label { display: inline-flex; align-items: center; gap: 2px; cursor: pointer; }
@@ -20807,8 +20817,9 @@ window.addEventListener("DOMContentLoaded", init);
   var _bgUrls = {};         // blobKey -> ObjectURL（複数下地・参照地図下地に対応）
   var _bgSel = null;        // 「下地調整」ツールで選択中の下地画像ID
   var _bgDrag = null;       // 下地の移動／リサイズ中の状態
-  var _zenSel = null;       // 参照地図下地：選択中の画像ID
-  var _zenDrag = null;      // 参照地図下地：移動中の状態 { sx, sy, ax, ay, moved }
+  var _zenSel = null;       // 参照地図下地：選択中の画像ID（プライマリ＝アンカー十字/2点合わせ対象）
+  var _zenSelIds = [];      // 参照地図下地：複数選択中の画像ID配列（グループ＝まとめて移動の対象）
+  var _zenDrag = null;      // 参照地図下地：移動中の状態 { sx, sy, moved, origs:{id:{x,y}} }（複数まとめて移動）
   var _zenCal = null;       // 参照地図下地：2点合わせ中の状態 { id, stage:0..3, img1, world1, img2 }
   var _bgCal = null;        // 下地（bg.images）：2点合わせ中の状態 { imgId, stage:0..3, img1, world1, img2 }（回転なし＝角度固定）
   var _bgCalDrag = null;    // 下地2点合わせ：ルーペで微調整中 { sx, sy, w0:{x,y}, p:{x,y} }
@@ -21368,15 +21379,24 @@ window.addEventListener("DOMContentLoaded", init);
       if(_zenCal){ zenCalClick(down.world); gesture = null; updateCursor(); return; }
       var zh = zenHitAt(e.clientX, e.clientY);
       if(zh){
-        _zenSel = zh;
-        var zu = zenById(zh);
-        if(zu && !zu.locked){
-          _zenDrag = { sx: e.clientX, sy: e.clientY, ax: zu.anchorWorld.x, ay: zu.anchorWorld.y, moved: false };
-          gesture = "zendrag"; capturePointer(e.pointerId);
+        if(e.shiftKey || e.ctrlKey || e.metaKey){
+          // 追加/解除トグル（掴んで移動はしない）
+          zenToggleGroupSel(zh); gesture = null;
+          renderZenrinOverlay(); renderZenrinPanel();
+        } else {
+          if(!zenIsSel(zh)) zenSetSel(zenSameGroup(zh));   // 未選択の画像を掴んだら（グループなら全員）選択
+          _zenSel = zh;                                    // 掴んだ1枚をプライマリに（アンカー十字/2点合わせ対象）
+          // 選択中の未ロック画像を「まとめて移動」対象としてアンカー座標を控える
+          var origs = {}, cnt = 0;
+          zenNormSel().forEach(function(id){ var uu = zenById(id); if(uu && !uu.locked){ origs[id] = { x: uu.anchorWorld.x, y: uu.anchorWorld.y }; cnt++; } });
+          if(cnt){
+            _zenDrag = { sx: e.clientX, sy: e.clientY, origs: origs, moved: false };
+            gesture = "zendrag"; capturePointer(e.pointerId);
+          }
+          renderZenrinOverlay(); renderZenrinPanel();
         }
-        renderZenrinOverlay(); renderZenrinPanel();
       } else {
-        _zenSel = null; renderZenrinOverlay(); renderZenrinPanel();
+        zenSetSel([]); renderZenrinOverlay(); renderZenrinPanel();
         gesture = "pan"; beginPan(e.pointerId); capturePointer(e.pointerId);
       }
       updateCursor();
@@ -21487,13 +21507,16 @@ window.addEventListener("DOMContentLoaded", init);
       e.preventDefault(); return;
     }
     if(gesture === "zendrag" && _zenDrag){
-      var zu2 = zenById(_zenSel);
-      if(zu2 && !zu2.locked){
-        if(!_zenDrag.moved) pushUndo();
+      var zorigs = _zenDrag.origs || {}, zids = Object.keys(zorigs);
+      if(zids.length){
+        if(!_zenDrag.moved){ pushUndo(); _zenDrag.moved = true; }
         var zd = screenDeltaToWorld(e.clientX - _zenDrag.sx, e.clientY - _zenDrag.sy);
-        zu2.anchorWorld.x = _zenDrag.ax + zd.x; zu2.anchorWorld.y = _zenDrag.ay + zd.y;
-        _zenDrag.moved = true;
-        zenApplyGeom(zu2); renderZenrinOverlay();
+        zids.forEach(function(id){
+          var uu = zenById(id); if(!uu || uu.locked) return;   // ロックは移動しない
+          uu.anchorWorld.x = zorigs[id].x + zd.x; uu.anchorWorld.y = zorigs[id].y + zd.y;
+          zenApplyGeom(uu);
+        });
+        renderZenrinOverlay();
       }
       e.preventDefault(); return;
     }
@@ -22673,6 +22696,63 @@ window.addEventListener("DOMContentLoaded", init);
   function zenList(){ return (current && current.zenrin && Array.isArray(current.zenrin.images)) ? current.zenrin.images : []; }
   function zenById(id){ var a = zenList(); for(var i = 0; i < a.length; i++){ if(a[i].id === id) return a[i]; } return null; }
   function zenOpacity(u){ return (u && typeof u.opacity === "number") ? u.opacity : 0.55; }
+  /* ---------- 参照地図画像：複数選択・グループ化（同じ groupId＝1グループ。1枚掴めばまとめて移動） ---------- */
+  var ZEN_GROUP_COLORS = ["#1565c0", "#c62828", "#2e7d32", "#e65100", "#6a1b9a", "#00838f", "#ad1457", "#455a64"];
+  function zenSameGroup(id){          // id と同じグループの全ID（未グループなら [id]）
+    var u = zenById(id); if(!u) return [];
+    if(!u.groupId) return [id];
+    return zenList().filter(function(z){ return z.groupId && z.groupId === u.groupId; }).map(function(z){ return z.id; });
+  }
+  function zenNormSel(){              // 存在しないID（削除/Undo後）を選択から除去して返す
+    _zenSelIds = (_zenSelIds || []).filter(function(id){ return !!zenById(id); });
+    if(_zenSel && !zenById(_zenSel)) _zenSel = null;
+    if(_zenSel && _zenSelIds.indexOf(_zenSel) < 0) _zenSelIds.push(_zenSel);
+    return _zenSelIds;
+  }
+  function zenIsSel(id){ return zenNormSel().indexOf(id) >= 0; }
+  function zenSetSel(ids){            // 選択を置き換え（重複/欠番を除去、最後をプライマリに）
+    var seen = {}, out = [];
+    (ids || []).forEach(function(id){ if(zenById(id) && !seen[id]){ seen[id] = 1; out.push(id); } });
+    _zenSelIds = out; _zenSel = out.length ? out[out.length - 1] : null;
+  }
+  function zenToggleGroupSel(id){     // id のグループを選択に追加/解除（チェックボックス・Shiftクリック用）
+    var mem = zenSameGroup(id); if(!mem.length) return;
+    var cur = zenNormSel().slice();
+    if(mem.every(zenIsSel)){ cur = cur.filter(function(x){ return mem.indexOf(x) < 0; }); }
+    else { mem.forEach(function(x){ if(cur.indexOf(x) < 0) cur.push(x); }); }
+    zenSetSel(cur);
+  }
+  function zenGroupOrder(){           // 表示用：groupId → { idx, color }（リスト出現順で連番・色を割当）
+    var map = {}, n = 0;
+    zenList().forEach(function(u){
+      if(u.groupId && !(u.groupId in map)){ map[u.groupId] = { idx: n + 1, color: ZEN_GROUP_COLORS[n % ZEN_GROUP_COLORS.length] }; n++; }
+    });
+    return map;
+  }
+  function zenPruneGroups(){          // メンバーが1枚以下になったグループは解除（グループの意味がないため）
+    var count = {};
+    zenList().forEach(function(u){ if(u.groupId) count[u.groupId] = (count[u.groupId] || 0) + 1; });
+    zenList().forEach(function(u){ if(u.groupId && count[u.groupId] < 2) u.groupId = null; });
+  }
+  function zenGroupSelected(){        // 選択中（2枚以上）を1グループにまとめる
+    var ids = zenNormSel();
+    if(ids.length < 2){ toast("2枚以上の参照地図画像を選んでからグループ化してください。"); return; }
+    pushUndo();
+    var gid = "zgrp_" + mapUid();
+    ids.forEach(function(id){ var u = zenById(id); if(u) u.groupId = gid; });
+    renderZenrinOverlay(); renderZenrinPanel(); flushSave();
+    toast(ids.length + "枚をグループ化しました。どれか1枚を掴むとまとめて動きます。");
+  }
+  function zenUngroupSelected(){      // 選択中のグループを解除
+    var ids = zenNormSel();
+    var has = ids.some(function(id){ var u = zenById(id); return !!(u && u.groupId); });
+    if(!has){ toast("グループ化されている画像が選ばれていません。"); return; }
+    pushUndo();
+    ids.forEach(function(id){ var u = zenById(id); if(u) u.groupId = null; });
+    zenPruneGroups();
+    renderZenrinOverlay(); renderZenrinPanel(); flushSave();
+    toast("グループを解除しました。");
+  }
   function zenImgToWorld(u, ix, iy){
     var dx = (ix - u.anchorImg.x) * u.scale, dy = (iy - u.anchorImg.y) * u.scale;
     var r = (u.rot || 0) * Math.PI / 180, cs = Math.cos(r), sn = Math.sin(r);
@@ -22735,7 +22815,7 @@ window.addEventListener("DOMContentLoaded", init);
       var u = { id: "zen_" + mapUid(), blobKey: key, dataUri: null, natW: w, natH: h, scale: sc, rot: 0,
         anchorImg: { x: w / 2, y: h / 2 }, anchorWorld: { x: ctr.x, y: ctr.y }, opacity: 0.55, visible: true, locked: false };
       current.zenrin.images.push(u);
-      _zenSel = u.id;
+      _zenSel = u.id; _zenSelIds = [u.id];
       if(tool !== "zenrin") setTool("zenrin");
       renderZenrin(); renderZenrinOverlay(); renderZenrinPanel(); flushSave();
     });
@@ -22759,9 +22839,12 @@ window.addEventListener("DOMContentLoaded", init);
     if(idx < 0) return;
     var key = imgs[idx].blobKey;
     imgs.splice(idx, 1);
-    if(_zenSel === id){ _zenSel = null; _zenDrag = null; }
+    if(_zenSel === id){ _zenSel = null; }
+    _zenDrag = null;
+    _zenSelIds = (_zenSelIds || []).filter(function(x){ return x !== id; });
     if(_zenCal && _zenCal.id === id){ _zenCal = null; zenCalBanner(""); }
     if(!imgs.length) current.zenrin = null;
+    else zenPruneGroups();   // 残ったグループが1枚だけになったら自動解除
     if(key) blobDelete(key);
     pruneBgUrls();
     renderZenrin(); renderZenrinOverlay(); renderZenrinPanel(); flushSave();
@@ -22822,14 +22905,30 @@ window.addEventListener("DOMContentLoaded", init);
     var g = el("map-zenrin-overlay"); if(!g) return;
     if(tool !== "zenrin"){ g.innerHTML = ""; return; }
     var html = "", sw = 2 / view.scale, cr = 7 / view.scale;
-    var u = zenById(_zenSel);
-    if(u){
+    // 選択中の各画像に破線ボックス。複数（グループ含む）なら外接枠も描いて「まとめて動く範囲」を明示。
+    var selIds = zenNormSel(), minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity, nsel = 0;
+    selIds.forEach(function(id){
+      var u = zenById(id); if(!u) return;
       var ux0 = u.anchorWorld.x - u.anchorImg.x * u.scale, uy0 = u.anchorWorld.y - u.anchorImg.y * u.scale;
       var w = (u.natW || 0) * u.scale, h = (u.natH || 0) * u.scale;
       html += '<g transform="rotate(' + (u.rot || 0) + ' ' + u.anchorWorld.x + ' ' + u.anchorWorld.y + ')">'
         + '<rect x="' + ux0 + '" y="' + uy0 + '" width="' + w + '" height="' + h + '" fill="none" stroke="#7b1fa2" stroke-width="' + sw + '" stroke-dasharray="' + (6 / view.scale) + ' ' + (4 / view.scale) + '"/></g>';
-      html += '<line x1="' + (u.anchorWorld.x - cr) + '" y1="' + u.anchorWorld.y + '" x2="' + (u.anchorWorld.x + cr) + '" y2="' + u.anchorWorld.y + '" stroke="#7b1fa2" stroke-width="' + sw + '"/>'
-        + '<line x1="' + u.anchorWorld.x + '" y1="' + (u.anchorWorld.y - cr) + '" x2="' + u.anchorWorld.x + '" y2="' + (u.anchorWorld.y + cr) + '" stroke="#7b1fa2" stroke-width="' + sw + '"/>';
+      [[0, 0], [u.natW || 0, 0], [u.natW || 0, u.natH || 0], [0, u.natH || 0]].forEach(function(c){
+        var p = zenImgToWorld(u, c[0], c[1]);
+        if(p.x < minx) minx = p.x; if(p.y < miny) miny = p.y; if(p.x > maxx) maxx = p.x; if(p.y > maxy) maxy = p.y;
+      });
+      nsel++;
+    });
+    if(nsel > 1 && isFinite(minx)){
+      var pad = 6 / view.scale;
+      html += '<rect x="' + (minx - pad) + '" y="' + (miny - pad) + '" width="' + (maxx - minx + pad * 2) + '" height="' + (maxy - miny + pad * 2)
+        + '" fill="none" stroke="#1565c0" stroke-width="' + sw + '" stroke-dasharray="' + (2 / view.scale) + ' ' + (3 / view.scale) + '"/>';
+    }
+    // アンカー十字はプライマリ選択のみ（2点合わせの基準点が分かるように）
+    var pu = zenById(_zenSel);
+    if(pu){
+      html += '<line x1="' + (pu.anchorWorld.x - cr) + '" y1="' + pu.anchorWorld.y + '" x2="' + (pu.anchorWorld.x + cr) + '" y2="' + pu.anchorWorld.y + '" stroke="#7b1fa2" stroke-width="' + sw + '"/>'
+        + '<line x1="' + pu.anchorWorld.x + '" y1="' + (pu.anchorWorld.y - cr) + '" x2="' + pu.anchorWorld.x + '" y2="' + (pu.anchorWorld.y + cr) + '" stroke="#7b1fa2" stroke-width="' + sw + '"/>';
     }
     if(_zenCal){
       var uu = zenById(_zenCal.id), r = 7 / view.scale;
@@ -22847,11 +22946,26 @@ window.addEventListener("DOMContentLoaded", init);
     var list = zenList();
     var html = '<button type="button" class="map-side-btn" id="map-zen-load">📎 参照地図画像を読み込み（複数可）</button>';
     if(list.length){
+      var selN = zenNormSel().length;
+      var canGroup = selN >= 2;
+      var canUngroup = zenNormSel().some(function(id){ var uu = zenById(id); return !!(uu && uu.groupId); });
+      html += '<div class="map-zen-grouptools">'
+        + '<span class="map-zen-selinfo">選択 ' + selN + '枚</span>'
+        + '<button type="button" id="map-zen-selall" title="表示中の参照地図画像をすべて選択">全選択</button>'
+        + '<button type="button" id="map-zen-selnone" title="選択を解除"' + (selN ? "" : " disabled") + '>選択解除</button>'
+        + '<button type="button" class="map-zen-group-btn" id="map-zen-group" title="選んだ2枚以上を1グループに。以後どれか1枚を掴むとまとめて動きます"' + (canGroup ? "" : " disabled") + '>🔗 グループ化</button>'
+        + '<button type="button" id="map-zen-ungroup" title="選択に含まれるグループを解除"' + (canUngroup ? "" : " disabled") + '>🔓 解除</button>'
+        + '</div>';
+      var gorder = zenGroupOrder();
       html += '<div class="map-zen-list">' + list.map(function(u, i){
         var op = Math.round(zenOpacity(u) * 100);
-        var sel = (u.id === _zenSel);
-        return '<div class="map-zen-item' + (sel ? " sel" : "") + '" data-zen="' + esc(u.id) + '">'
-          + '<div class="map-zen-item-top"><span class="map-zen-name">参照地図' + (i + 1) + '</span>'
+        var sel = zenIsSel(u.id);
+        var gi = u.groupId ? gorder[u.groupId] : null;
+        var gtag = gi ? '<span class="map-zen-gtag" style="background:' + gi.color + ';" title="グループ' + gi.idx + '（まとめて移動）">G' + gi.idx + '</span>' : '';
+        return '<div class="map-zen-item' + (sel ? " sel" : "") + (u.id === _zenSel ? " primary" : "") + '" data-zen="' + esc(u.id) + '">'
+          + '<div class="map-zen-item-top">'
+          + '<input type="checkbox" class="map-zen-pick" data-zen="' + esc(u.id) + '"' + (sel ? " checked" : "") + ' title="選択（まとめて移動・グループ化の対象）">'
+          + '<span class="map-zen-name">参照地図' + (i + 1) + '</span>' + gtag
           + '<label title="表示/非表示"><input type="checkbox" class="map-zen-vis" data-zen="' + esc(u.id) + '"' + (u.visible === false ? "" : " checked") + '>👁</label>'
           + '<label title="ロック（移動禁止）"><input type="checkbox" class="map-zen-lock" data-zen="' + esc(u.id) + '"' + (u.locked ? " checked" : "") + '>🔒</label>'
           + '<button type="button" class="map-bg-mini-btn map-zen-del" data-zen="' + esc(u.id) + '" title="この下地を外す">🗑</button></div>'
@@ -22867,7 +22981,7 @@ window.addEventListener("DOMContentLoaded", init);
           + '</div>'
           + '</div>';
       }).join("") + '</div>';
-      html += '<div class="map-side-note">トレース下書き専用です。<b>印刷・PDF・出力画像には載りません</b>（共有ファイルには保存されます）。ペン／マウスでドラッグ＝移動。🎯ボタンで「画像の目印→地図の同じ場所」を2組クリックすると位置・縮尺・回転が自動で揃います。<br><b>💡 道路・建物などベクターを選ぶ／描くときは、上のツールを「✋ 選択/移動」に切り替えてください。</b>参照地図（画像）はこの「🗾 参照地図下地」ツールのときだけ動きます（＝このツール中はクリックが画像に吸われます）。「✋ 選択/移動」ではベクターだけが選択対象になり、画像は掴まれません。</div>';
+      html += '<div class="map-side-note">トレース下書き専用です。<b>印刷・PDF・出力画像には載りません</b>（共有ファイルには保存されます）。ペン／マウスでドラッグ＝移動。<b>複数まとめて動かす</b>には、各行の☑で選ぶ（または画像をShift/Ctrl＋クリック）→「🔗 グループ化」。以後はグループのどれか1枚を掴むと全員まとめて動きます（🔓解除で戻せます）。🎯ボタンで「画像の目印→地図の同じ場所」を2組クリックすると位置・縮尺・回転が自動で揃います。<br><b>💡 道路・建物などベクターを選ぶ／描くときは、上のツールを「✋ 選択/移動」に切り替えてください。</b>参照地図（画像）はこの「🗾 参照地図下地」ツールのときだけ動きます（＝このツール中はクリックが画像に吸われます）。「✋ 選択/移動」ではベクターだけが選択対象になり、画像は掴まれません。</div>';
     } else {
       html += '<div class="map-side-note">参照地図等の地図画像（スクショ）を読み込み、地理院地図に重ねてトレースします。ステージへドラッグ＆ドロップ／Ctrl+V 貼り付けでも追加できます。<b>出力には載りません。</b></div>';
     }
@@ -22877,8 +22991,17 @@ window.addEventListener("DOMContentLoaded", init);
       var acc = /Android/i.test(navigator.userAgent || "") ? "*/*" : "image/*";
       pickFile({ accept: acc, multiple: true }, function(files){ onZenFiles(files); });
     });
+    on("map-zen-selall", "click", function(){ zenSetSel(zenList().map(function(u){ return u.id; })); renderZenrinOverlay(); renderZenrinPanel(); });
+    on("map-zen-selnone", "click", function(){ zenSetSel([]); renderZenrinOverlay(); renderZenrinPanel(); });
+    on("map-zen-group", "click", function(){ zenGroupSelected(); });
+    on("map-zen-ungroup", "click", function(){ zenUngroupSelected(); });
     host.querySelectorAll(".map-zen-item").forEach(function(row){
-      row.addEventListener("click", function(){ if(tool !== "zenrin") setTool("zenrin"); _zenSel = row.getAttribute("data-zen"); renderZenrinOverlay(); renderZenrinPanel(); });
+      // 行クリック：その画像（グループなら全員）を選択。プライマリは掴んだ1枚。
+      row.addEventListener("click", function(){ if(tool !== "zenrin") setTool("zenrin"); var id = row.getAttribute("data-zen"); zenSetSel(zenSameGroup(id)); _zenSel = id; renderZenrinOverlay(); renderZenrinPanel(); });
+    });
+    host.querySelectorAll(".map-zen-pick").forEach(function(c){
+      c.addEventListener("click", function(e){ e.stopPropagation(); });   // 行クリックへ伝播させない
+      c.addEventListener("change", function(e){ e.stopPropagation(); if(tool !== "zenrin") setTool("zenrin"); zenToggleGroupSel(c.getAttribute("data-zen")); renderZenrinOverlay(); renderZenrinPanel(); });
     });
     host.querySelectorAll(".map-zen-vis").forEach(function(c){
       c.addEventListener("change", function(e){ e.stopPropagation(); var u = zenById(c.getAttribute("data-zen")); if(!u) return; u.visible = c.checked; renderZenrin(); flushSave(); });
@@ -23649,7 +23772,7 @@ window.addEventListener("DOMContentLoaded", init);
     mapSnapTarget = null;
     _paintLoadedFor = null; _painting = false;
     _bgSel = null; _bgDrag = null; _bgCal = null; _bgCalDrag = null; _bgCrop = null; _bgCropDrag = null; loupeHide(); bgCalBanner("");
-    _zenSel = null; _zenDrag = null; _zenCal = null; zenCalBanner("");
+    _zenSel = null; _zenSelIds = []; _zenDrag = null; _zenCal = null; zenCalBanner("");
     _txAngleCal = null; _txResize = null; if(typeof txAngleBanner === "function") txAngleBanner("");
     revokeBgUrls();                   // 旧シートの下地ObjectURLを破棄（新シートはrenderBg/renderZenrinで再生成）
     undoStack = []; redoStack = [];   // 履歴はシート単位
@@ -23756,7 +23879,7 @@ window.addEventListener("DOMContentLoaded", init);
       if(leavingBgEdit){ _bgSel = null; _bgDrag = null; _bgCal = null; _bgCalDrag = null; _bgCrop = null; _bgCropDrag = null; loupeHide(); bgCalBanner(""); }
       renderBgOverlay(); renderBgControls();
     }
-    if(leavingZen){ _zenSel = null; _zenDrag = null; _zenCal = null; zenCalBanner(""); }
+    if(leavingZen){ _zenSel = null; _zenSelIds = []; _zenDrag = null; _zenCal = null; zenCalBanner(""); }
     if(leavingZen || t === "zenrin"){ renderZenrinOverlay(); renderZenrinPanel(); }
     if(leavingVec){ _vecRect = null; renderVecRectOverlay(); }
     if(leavingMarq){ clearMarquee(); _marqLastRect = null; hideMarqBar(); }   // 範囲選択ツールを離れたら選択枠/選択をクリア
@@ -23786,6 +23909,7 @@ window.addEventListener("DOMContentLoaded", init);
     current.layers = snap.layers;
     current.zenrin = snap.zenrin || null;
     if(_zenSel && !zenById(_zenSel)){ _zenSel = null; _zenDrag = null; }
+    _zenSelIds = (_zenSelIds || []).filter(function(x){ return !!zenById(x); });   // Undo/Redoで消えた選択を除去
     if(_zenCal && !zenById(_zenCal.id)){ _zenCal = null; if(typeof zenCalBanner === "function") zenCalBanner(""); }
     renderLayers(); renderObjects(); applyLayerVisibility(); updateEmptyHint();
     renderZenrin(); renderZenrinOverlay(); renderZenrinPanel();
@@ -25320,7 +25444,7 @@ window.addEventListener("DOMContentLoaded", init);
               var zdurl = await blobToDataUri(zblob);
               var zsmall = (typeof makeThumbDataUri === "function") ? await makeThumbDataUri(zdurl, 2500, 0.8) : zdurl;
               zImgs.push({ dataUri: zsmall, natW: zi.natW, natH: zi.natH, scale: zi.scale, rot: zi.rot || 0,
-                anchorImg: zi.anchorImg, anchorWorld: zi.anchorWorld,
+                anchorImg: zi.anchorImg, anchorWorld: zi.anchorWorld, groupId: zi.groupId || null,
                 opacity: (typeof zi.opacity === "number" ? zi.opacity : 0.55), visible: zi.visible !== false, locked: !!zi.locked });
             }
           } catch(e){ console.warn("[map] export zenrin failed", e); }
@@ -25392,7 +25516,7 @@ window.addEventListener("DOMContentLoaded", init);
               var zk = "mapzen_" + mapUid();
               await blobPut(zk, zb);
               zRestore.push({ id: "zen_" + mapUid(), blobKey: zk, dataUri: null, natW: zm.natW, natH: zm.natH,
-                scale: zm.scale, rot: zm.rot || 0, anchorImg: zm.anchorImg, anchorWorld: zm.anchorWorld,
+                scale: zm.scale, rot: zm.rot || 0, anchorImg: zm.anchorImg, anchorWorld: zm.anchorWorld, groupId: zm.groupId || null,
                 opacity: (typeof zm.opacity === "number" ? zm.opacity : 0.55), visible: zm.visible !== false, locked: !!zm.locked });
             } catch(e){ console.warn("[map] restore zenrin failed", e); }
           }
