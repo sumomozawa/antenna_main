@@ -3003,6 +3003,8 @@
   .map-bg-item .map-bg-item-btns { display: flex; flex-wrap: wrap; gap: 4px; flex: 1 1 100%; }
   .map-bg-item:hover { background: #eef2f6; }
   .map-bg-item.sel { background: #e6f0fb; border-color: #1e88e5; }
+  .map-bg-item.sel.primary { box-shadow: 0 0 0 1px #1e88e5 inset; }
+  .map-bg-item .map-bg-pick { flex: 0 0 auto; width: 15px; height: 15px; cursor: pointer; margin: 0; }
   .map-bg-item .map-bg-item-name { font-weight: 600; white-space: nowrap; }
   .map-bg-item .map-bg-item-dim { flex: 1 1 auto; color: #667482; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .map-bg-item .map-bg-mini-btn {
@@ -20830,8 +20832,9 @@ window.addEventListener("DOMContentLoaded", init);
   var _docBound = false, _bound = false;
   var _saveTimer = null;
   var _bgUrls = {};         // blobKey -> ObjectURL（複数下地・参照地図下地に対応）
-  var _bgSel = null;        // 「下地調整」ツールで選択中の下地画像ID
-  var _bgDrag = null;       // 下地の移動／リサイズ中の状態
+  var _bgSel = null;        // 「下地調整」ツールで選択中の下地画像ID（プライマリ＝ハンドル/2点合わせ対象）
+  var _bgSelIds = [];       // 下地：複数選択中の画像ID配列（グループ＝まとめて移動の対象）
+  var _bgDrag = null;       // 下地の移動／リサイズ中の状態（moveは origs:{id:{x,y}} で複数まとめて移動）
   var _zenSel = null;       // 参照地図下地：選択中の画像ID（プライマリ＝アンカー十字/2点合わせ対象）
   var _zenSelIds = [];      // 参照地図下地：複数選択中の画像ID配列（グループ＝まとめて移動の対象）
   var _zenDrag = null;      // 参照地図下地：移動中の状態 { sx, sy, moved, origs:{id:{x,y}} }（複数まとめて移動）
@@ -20992,6 +20995,61 @@ window.addEventListener("DOMContentLoaded", init);
   function bgImgW(im){ return (typeof im.w === "number" ? im.w : im.natW) || 0; }
   function bgImgH(im){ return (typeof im.h === "number" ? im.h : im.natH) || 0; }
   function bgImageById(id){ var a = bgImages(); for(var i = 0; i < a.length; i++){ if(a[i].id === id) return a[i]; } return null; }
+  /* ---------- 下地画像：複数選択・グループ化（同じ groupId＝1グループ。1枚掴めばまとめて移動） ---------- */
+  function bgSameGroup(id){          // id と同じグループの全ID（未グループなら [id]）
+    var im = bgImageById(id); if(!im) return [];
+    if(!im.groupId) return [id];
+    return bgImages().filter(function(z){ return z.groupId && z.groupId === im.groupId; }).map(function(z){ return z.id; });
+  }
+  function bgNormSel(){              // 存在しないID（削除後）を選択から除去して返す
+    _bgSelIds = (_bgSelIds || []).filter(function(id){ return !!bgImageById(id); });
+    if(_bgSel && !bgImageById(_bgSel)) _bgSel = null;
+    if(_bgSel && _bgSelIds.indexOf(_bgSel) < 0) _bgSelIds.push(_bgSel);
+    return _bgSelIds;
+  }
+  function bgIsSel(id){ return bgNormSel().indexOf(id) >= 0; }
+  function bgSetSel(ids){            // 選択を置き換え（重複/欠番を除去、最後をプライマリに）
+    var seen = {}, out = [];
+    (ids || []).forEach(function(id){ if(bgImageById(id) && !seen[id]){ seen[id] = 1; out.push(id); } });
+    _bgSelIds = out; _bgSel = out.length ? out[out.length - 1] : null;
+  }
+  function bgToggleGroupSel(id){     // id のグループを選択に追加/解除（チェックボックス・Shiftクリック用）
+    var mem = bgSameGroup(id); if(!mem.length) return;
+    var cur = bgNormSel().slice();
+    if(mem.every(bgIsSel)){ cur = cur.filter(function(x){ return mem.indexOf(x) < 0; }); }
+    else { mem.forEach(function(x){ if(cur.indexOf(x) < 0) cur.push(x); }); }
+    bgSetSel(cur);
+  }
+  function bgGroupOrder(){           // 表示用：groupId → { idx, color }（リスト出現順で連番・色を割当）
+    var map = {}, n = 0;
+    bgImages().forEach(function(im){
+      if(im.groupId && !(im.groupId in map)){ map[im.groupId] = { idx: n + 1, color: ZEN_GROUP_COLORS[n % ZEN_GROUP_COLORS.length] }; n++; }
+    });
+    return map;
+  }
+  function bgPruneGroups(){          // メンバーが1枚以下になったグループは解除（グループの意味がないため）
+    var count = {};
+    bgImages().forEach(function(im){ if(im.groupId) count[im.groupId] = (count[im.groupId] || 0) + 1; });
+    bgImages().forEach(function(im){ if(im.groupId && count[im.groupId] < 2) im.groupId = null; });
+  }
+  function bgGroupSelected(){        // 選択中（2枚以上）を1グループにまとめる（下地はUndo対象外）
+    var ids = bgNormSel();
+    if(ids.length < 2){ toast("2枚以上の下地を選んでからグループ化してください。"); return; }
+    var gid = "bgrp_" + mapUid();
+    ids.forEach(function(id){ var im = bgImageById(id); if(im) im.groupId = gid; });
+    bgPruneGroups();   // 既存グループの一部だけを取り込んだ場合に1枚残りグループを解消
+    renderBgOverlay(); renderBgControls(); flushSave();
+    toast(ids.length + "枚をグループ化しました。どれか1枚を掴むとまとめて動きます。");
+  }
+  function bgUngroupSelected(){      // 選択中のグループを解除
+    var ids = bgNormSel();
+    var has = ids.some(function(id){ var im = bgImageById(id); return !!(im && im.groupId); });
+    if(!has){ toast("グループ化されている下地が選ばれていません。"); return; }
+    ids.forEach(function(id){ var im = bgImageById(id); if(im) im.groupId = null; });
+    bgPruneGroups();
+    renderBgOverlay(); renderBgControls(); flushSave();
+    toast("グループを解除しました。");
+  }
   // 下地画像の「画像ピクセル座標」⇔「ワールド座標」変換（現在の配置 x/y/w/h に基づく・回転なし）
   function bgWorldToImg(im, wx, wy){
     var w = bgImgW(im) || 1, h = bgImgH(im) || 1, nW = im.natW || w, nH = im.natH || h;
@@ -21373,16 +21431,33 @@ window.addEventListener("DOMContentLoaded", init);
       // 下地調整：下地本体ドラッグ＝移動／四隅ハンドル＝拡大縮小。空きはパン。（2本指は上でピンチ）
       var bh = bgHitAt(e.clientX, e.clientY);
       if(bh){
-        _bgSel = bh.imgId;
-        var bim = bgImageById(_bgSel);
-        if(bim){
-          _bgDrag = { mode: bh.mode, corner: bh.corner, sx: e.clientX, sy: e.clientY,
-            ox: bim.x || 0, oy: bim.y || 0, ow: bgImgW(bim), oh: bgImgH(bim), moved: false };
+        if(bh.mode === "move" && (e.shiftKey || e.ctrlKey || e.metaKey)){
+          // 追加/解除トグル（掴んで移動はしない）
+          bgToggleGroupSel(bh.imgId); gesture = null;
+          renderBgOverlay(); renderBgControls();
+        } else if(bh.mode === "resize"){
+          // リサイズは掴んだ1枚だけ（グループでは一緒に動かさない）
+          _bgSel = bh.imgId;
+          var rim = bgImageById(_bgSel);
+          if(rim){
+            _bgDrag = { mode: "resize", corner: bh.corner, sx: e.clientX, sy: e.clientY,
+              ox: rim.x || 0, oy: rim.y || 0, ow: bgImgW(rim), oh: bgImgH(rim), moved: false };
+            gesture = "bgdrag"; capturePointer(e.pointerId);
+          }
+          renderBgOverlay(); renderBgControls();
+        } else {
+          // 移動：掴んだ画像（グループなら全員）を選択し、まとめて移動
+          if(!bgIsSel(bh.imgId)) bgSetSel(bgSameGroup(bh.imgId));
+          _bgSel = bh.imgId;   // 掴んだ1枚をプライマリに（四隅ハンドル/2点合わせ対象）
+          var origs = {}; bgNormSel().forEach(function(id){ var m = bgImageById(id); if(m) origs[id] = { x: m.x || 0, y: m.y || 0 }; });
+          _bgDrag = { mode: "move", origs: origs, sx: e.clientX, sy: e.clientY, moved: false };
           gesture = "bgdrag"; capturePointer(e.pointerId);
+          renderBgOverlay(); renderBgControls();
         }
-        renderBgOverlay(); renderBgControls();
       } else {
-        _bgSel = null; _bgDrag = null;
+        // 修飾キーなしの空クリックのみ選択解除（Shift/Ctrl＋クリックの近接ミスで多選択を消さない）
+        if(!(e.shiftKey || e.ctrlKey || e.metaKey)) bgSetSel([]);
+        _bgDrag = null;
         renderBgOverlay(); renderBgControls();
         gesture = "pan"; beginPan(e.pointerId); capturePointer(e.pointerId);
       }
@@ -21513,16 +21588,22 @@ window.addEventListener("DOMContentLoaded", init);
       renderBgOverlay(); e.preventDefault(); return;
     }
     if(gesture === "bgdrag" && _bgDrag){
-      var bim2 = bgImageById(_bgSel);
-      if(bim2){
-        if(_bgDrag.mode === "move"){
-          var d = screenDeltaToWorld(e.clientX - _bgDrag.sx, e.clientY - _bgDrag.sy);
-          bim2.x = _bgDrag.ox + d.x; bim2.y = _bgDrag.oy + d.y;
-        } else {
-          resizeBgCorner(bim2, _bgDrag, screenToWorld(e.clientX, e.clientY));
-        }
+      if(_bgDrag.mode === "move"){
+        var d = screenDeltaToWorld(e.clientX - _bgDrag.sx, e.clientY - _bgDrag.sy);
+        var borigs = _bgDrag.origs || {};
+        Object.keys(borigs).forEach(function(id){
+          var m = bgImageById(id); if(!m) return;
+          m.x = borigs[id].x + d.x; m.y = borigs[id].y + d.y; applyBgGeom(m);
+        });
         _bgDrag.moved = true;
-        applyBgGeom(bim2); renderBgOverlay(); layoutSheetRect(); updateMiniViewport();
+        renderBgOverlay(); layoutSheetRect(); updateMiniViewport();
+      } else {
+        var bim2 = bgImageById(_bgSel);
+        if(bim2){
+          resizeBgCorner(bim2, _bgDrag, screenToWorld(e.clientX, e.clientY));
+          _bgDrag.moved = true;
+          applyBgGeom(bim2); renderBgOverlay(); layoutSheetRect(); updateMiniViewport();
+        }
       }
       e.preventDefault(); return;
     }
@@ -22036,9 +22117,23 @@ window.addEventListener("DOMContentLoaded", init);
     if(imgs.length){
       html += '<div class="map-bg-opacity-row">不透明度 <input type="range" id="map-bg-opacity" min="0" max="1" step="0.05" value="' + op + '"><span id="map-bg-op-val">' + Math.round(op * 100) + '%</span></div>';
       html += '<button type="button" class="map-side-btn' + (editing ? " active" : "") + '" id="map-bg-edit-toggle" style="margin-top:6px;' + (editing ? "background:#1e3a5f;border-color:#16314f;" : "") + '">🖼 下地を調整（移動・拡大縮小）' + (editing ? "（ON）" : "") + '</button>';
+      var bgSelN = bgNormSel().length;
+      var bgCanUngroup = bgNormSel().some(function(id){ var m = bgImageById(id); return !!(m && m.groupId); });
+      html += '<div class="map-zen-grouptools">'
+        + '<span class="map-zen-selinfo">選択 ' + bgSelN + '枚</span>'
+        + '<button type="button" id="map-bg-selall" title="すべての下地を選択">全選択</button>'
+        + '<button type="button" id="map-bg-selnone" title="選択を解除"' + (bgSelN ? "" : " disabled") + '>選択解除</button>'
+        + '<button type="button" class="map-zen-group-btn" id="map-bg-group" title="選んだ2枚以上を1グループに。以後どれか1枚を掴むとまとめて動きます"' + (bgSelN >= 2 ? "" : " disabled") + '>🔗 グループ化</button>'
+        + '<button type="button" id="map-bg-ungroup" title="選択に含まれるグループを解除"' + (bgCanUngroup ? "" : " disabled") + '>🔓 解除</button>'
+        + '</div>';
+      var bgorder = bgGroupOrder();
       html += '<div class="map-bg-list">' + imgs.map(function(im, i){
-        return '<div class="map-bg-item' + (im.id === _bgSel ? " sel" : "") + '" data-img="' + esc(im.id) + '">'
-          + '<span class="map-bg-item-name">下地' + (i + 1) + '</span>'
+        var bsel = bgIsSel(im.id);
+        var bgi = im.groupId ? bgorder[im.groupId] : null;
+        var bgtag = bgi ? '<span class="map-zen-gtag" style="background:' + bgi.color + ';" title="グループ' + bgi.idx + '（まとめて移動）">G' + bgi.idx + '</span>' : '';
+        return '<div class="map-bg-item' + (bsel ? " sel" : "") + (im.id === _bgSel ? " primary" : "") + '" data-img="' + esc(im.id) + '">'
+          + '<input type="checkbox" class="map-bg-pick" data-img="' + esc(im.id) + '"' + (bsel ? " checked" : "") + ' title="選択（まとめて移動・グループ化の対象）">'
+          + '<span class="map-bg-item-name">下地' + (i + 1) + '</span>' + bgtag
           + '<span class="map-bg-item-dim">' + Math.round(bgImgW(im)) + '×' + Math.round(bgImgH(im)) + '</span>'
           + '<div class="map-bg-item-btns">'
           + '<button type="button" class="map-bg-mini-btn" data-act="front" data-img="' + esc(im.id) + '" title="前面へ"' + (i === imgs.length - 1 ? " disabled" : "") + '>▲</button>'
@@ -22061,7 +22156,7 @@ window.addEventListener("DOMContentLoaded", init);
               : '');
       }).join("") + '</div>';
       html += '<button type="button" class="map-side-btn" id="map-bg-clear" style="background:#9aa7b4;border-color:#7e8c99;margin-top:6px;">✕ 下地を全て外す</button>';
-      html += '<div class="map-side-note">「🖼 下地を調整」中は、ステージで下地をドラッグ＝移動／四隅のハンドルをドラッグ＝拡大縮小。一覧の ＋／－ でも拡大縮小できます。複数枚を並べて1枚の地図に仕立てられます。<br><b>🎯 2点合わせ</b>＝「この下地の目印→重ねたい位置」を2組合わせると、<b>縮尺と位置が自動で揃います（回転なし＝北は上のまま）</b>。押している間ルーペが出て超微調整できます。<br><b>✂ トリミング</b>＝表示範囲を切り出します（配置・2点合わせには影響しません）。</div>';
+      html += '<div class="map-side-note">「🖼 下地を調整」中は、ステージで下地をドラッグ＝移動／四隅のハンドルをドラッグ＝拡大縮小。一覧の ＋／－ でも拡大縮小できます。複数枚を並べて1枚の地図に仕立てられます。<br><b>複数まとめて動かす</b>には、各行の☑で選ぶ（または下地をShift/Ctrl＋クリック）→「🔗 グループ化」。以後はグループのどれか1枚を掴むと全員まとめて動きます（🔓解除で戻せます）。<br><b>🎯 2点合わせ</b>＝「この下地の目印→重ねたい位置」を2組合わせると、<b>縮尺と位置が自動で揃います（回転なし＝北は上のまま）</b>。押している間ルーペが出て超微調整できます。<br><b>✂ トリミング</b>＝表示範囲を切り出します（配置・2点合わせには影響しません）。</div>';
     } else {
       html += '<div class="map-side-note">参照地図等を JPG / PNG（またはPDF）で読み込み、上をトレースします。複数ファイルを選ぶとまとめて読み込めます。PDFの読込時のみネット接続が必要です（オフライン環境では JPG / PNG に変換してください）。</div>';
     }
@@ -22106,7 +22201,7 @@ window.addEventListener("DOMContentLoaded", init);
           }
           var im = bgImageById(id); if(!im) return;
           if(tool !== "bgedit") setTool("bgedit");
-          _bgSel = id;
+          bgSetSel([id]);
           scaleBgImage(im, act === "bigger" ? 1.1 : (1 / 1.1));
           renderBg(); renderBgOverlay(); layoutSheetRect(); renderBgControls(); flushSave();
         });
@@ -22126,12 +22221,21 @@ window.addEventListener("DOMContentLoaded", init);
           }
         });
       });
+      on("map-bg-selall", "click", function(){ bgSetSel(bgImages().map(function(m){ return m.id; })); renderBgOverlay(); renderBgControls(); });
+      on("map-bg-selnone", "click", function(){ bgSetSel([]); renderBgOverlay(); renderBgControls(); });
+      on("map-bg-group", "click", function(){ bgGroupSelected(); });
+      on("map-bg-ungroup", "click", function(){ bgUngroupSelected(); });
+      host.querySelectorAll(".map-bg-pick").forEach(function(c){
+        c.addEventListener("click", function(e){ e.stopPropagation(); });   // 行クリックへ伝播させない
+        c.addEventListener("change", function(e){ e.stopPropagation(); if(tool !== "bgedit") setTool("bgedit"); bgToggleGroupSel(c.getAttribute("data-img")); renderBgOverlay(); renderBgControls(); });
+      });
       host.querySelectorAll(".map-bg-item").forEach(function(row){
         row.addEventListener("click", function(){
           if(tool !== "bgedit") setTool("bgedit");
-          _bgSel = row.getAttribute("data-img");
+          var id = row.getAttribute("data-img");
+          bgSetSel(bgSameGroup(id)); _bgSel = id;   // 行クリック：その下地（グループなら全員）を選択、掴んだ1枚がプライマリ
           renderBgOverlay(); renderBgControls();
-          var im = bgImageById(_bgSel); if(im){ var b = worldBounds(); centerOnWorld((im.x || 0) + bgImgW(im) / 2, (im.y || 0) + bgImgH(im) / 2); }
+          var im = bgImageById(_bgSel); if(im){ centerOnWorld((im.x || 0) + bgImgW(im) / 2, (im.y || 0) + bgImgH(im) / 2); }
         });
       });
     }
@@ -22196,10 +22300,13 @@ window.addEventListener("DOMContentLoaded", init);
     if(idx < 0) return;
     var key = imgs[idx].blobKey;
     imgs.splice(idx, 1);
-    if(_bgSel === id) _bgSel = null;
+    _bgDrag = null;
+    _bgSelIds = (_bgSelIds || []).filter(function(x){ return x !== id; });
+    if(_bgSel === id){ _bgSel = _bgSelIds.length ? _bgSelIds[_bgSelIds.length - 1] : null; }   // プライマリを削除したら残りの1枚へ引き継ぐ
     if(_bgCal && _bgCal.imgId === id){ _bgCal = null; _bgCalDrag = null; loupeHide(); bgCalBanner(""); }
     if(_bgCrop && _bgCrop.imgId === id){ _bgCrop = null; _bgCropDrag = null; bgCalBanner(""); }
     if(!imgs.length) current.bg = null;
+    else bgPruneGroups();   // 残ったグループが1枚だけになったら自動解除
     if(key) blobDelete(key);
     pruneBgUrls();
     renderBgControls(); renderBgOverlay();
@@ -22273,15 +22380,31 @@ window.addEventListener("DOMContentLoaded", init);
     var g = el("map-bg-overlay"); if(!g) return;
     if(_bgCal){ g.innerHTML = bgCalMarksHtml(); return; }   // 2点合わせ中は目印リングを表示（四隅ハンドルは出さない）
     if(_bgCrop){ g.innerHTML = bgCropOverlayHtml(); return; }   // トリミング中は切り出し枠とハンドルを表示
-    if(tool !== "bgedit" || !_bgSel){ g.innerHTML = ""; return; }
-    var im = bgImageById(_bgSel); if(!im){ g.innerHTML = ""; return; }
-    var x = im.x || 0, y = im.y || 0, w = bgImgW(im), h = bgImgH(im);
-    var sw = 2 / view.scale, hr = 7 / view.scale;
-    var html = '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="rgba(30,136,229,0.06)" stroke="#1e88e5" stroke-width="' + sw + '" stroke-dasharray="' + (6 / view.scale) + ' ' + (4 / view.scale) + '"/>';
-    var corners = [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
-    html += corners.map(function(c){
-      return '<rect x="' + (c[0] - hr) + '" y="' + (c[1] - hr) + '" width="' + (hr * 2) + '" height="' + (hr * 2) + '" fill="#fff" stroke="#1e88e5" stroke-width="' + sw + '"/>';
-    }).join("");
+    if(tool !== "bgedit"){ g.innerHTML = ""; return; }
+    var selIds = bgNormSel(); if(!selIds.length){ g.innerHTML = ""; return; }
+    var sw = 2 / view.scale, hr = 7 / view.scale, html = "";
+    // 選択中の各下地に破線ボックス。複数（グループ含む）なら外接枠も描いて「まとめて動く範囲」を明示。
+    var minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity, nsel = 0;
+    selIds.forEach(function(id){
+      var im = bgImageById(id); if(!im) return;
+      var x = im.x || 0, y = im.y || 0, w = bgImgW(im), h = bgImgH(im);
+      html += '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="rgba(30,136,229,0.06)" stroke="#1e88e5" stroke-width="' + sw + '" stroke-dasharray="' + (6 / view.scale) + ' ' + (4 / view.scale) + '"/>';
+      if(x < minx) minx = x; if(y < miny) miny = y; if(x + w > maxx) maxx = x + w; if(y + h > maxy) maxy = y + h;
+      nsel++;
+    });
+    if(nsel > 1 && isFinite(minx)){
+      var pad = 6 / view.scale;
+      html += '<rect x="' + (minx - pad) + '" y="' + (miny - pad) + '" width="' + (maxx - minx + pad * 2) + '" height="' + (maxy - miny + pad * 2)
+        + '" fill="none" stroke="#0d47a1" stroke-width="' + sw + '" stroke-dasharray="' + (2 / view.scale) + ' ' + (3 / view.scale) + '"/>';
+    }
+    // 四隅のリサイズハンドルはプライマリ選択のみに表示
+    var pim = bgImageById(_bgSel);
+    if(pim){
+      var px = pim.x || 0, py = pim.y || 0, pw = bgImgW(pim), ph = bgImgH(pim);
+      [[px, py], [px + pw, py], [px + pw, py + ph], [px, py + ph]].forEach(function(c){
+        html += '<rect x="' + (c[0] - hr) + '" y="' + (c[1] - hr) + '" width="' + (hr * 2) + '" height="' + (hr * 2) + '" fill="#fff" stroke="#1e88e5" stroke-width="' + sw + '"/>';
+      });
+    }
     g.innerHTML = html;
   }
 
@@ -22294,7 +22417,7 @@ window.addEventListener("DOMContentLoaded", init);
     var im = bgImageById(id); if(!im) return;
     if(_bgCrop) cancelBgCrop();   // トリミングと排他
     if(tool !== "bgedit") setTool("bgedit");
-    _bgSel = id;
+    bgSetSel([id]);   // 2点合わせは単一画像対象＝選択も1枚に絞る
     _bgCal = { imgId: id, stage: 0 };
     _bgCalDrag = null;
     ensureLoupe();
@@ -22418,7 +22541,7 @@ window.addEventListener("DOMContentLoaded", init);
     var im = bgImageById(id); if(!im) return;
     if(_bgCal) cancelBgCal();   // 2点合わせと排他
     if(tool !== "bgedit") setTool("bgedit");
-    _bgSel = id;
+    bgSetSel([id]);   // トリミングは単一画像対象＝選択も1枚に絞る
     var nW = im.natW || bgImgW(im), nH = im.natH || bgImgH(im);
     _bgCrop = { imgId: id, rect: im.crop ? copyRect(im.crop) : { px: 0, py: 0, pw: nW, ph: nH } };
     _bgCropDrag = null;
@@ -23820,7 +23943,7 @@ window.addEventListener("DOMContentLoaded", init);
     if(typeof clearMarquee === "function") clearMarquee();   // 範囲選択は別シートへ持ち越さない
     mapSnapTarget = null;
     _paintLoadedFor = null; _painting = false;
-    _bgSel = null; _bgDrag = null; _bgCal = null; _bgCalDrag = null; _bgCrop = null; _bgCropDrag = null; loupeHide(); bgCalBanner("");
+    _bgSel = null; _bgSelIds = []; _bgDrag = null; _bgCal = null; _bgCalDrag = null; _bgCrop = null; _bgCropDrag = null; loupeHide(); bgCalBanner("");
     _zenSel = null; _zenSelIds = []; _zenDrag = null; _zenCal = null; zenCalBanner("");
     _txAngleCal = null; _txResize = null; if(typeof txAngleBanner === "function") txAngleBanner("");
     revokeBgUrls();                   // 旧シートの下地ObjectURLを破棄（新シートはrenderBg/renderZenrinで再生成）
@@ -23925,7 +24048,7 @@ window.addEventListener("DOMContentLoaded", init);
     var sbVec = el("map-gsi-vec-rect"); if(sbVec) sbVec.classList.toggle("active", t === "vecrect");  // サイドバーの入口ボタンにも押下状態（タッチ端末で反応が分かるように）
     if(t === "bgedit" || t === "zenrin"){ clearSelection(); }   // オブジェクト選択は解除（下地操作に専念）
     if(leavingBgEdit || t === "bgedit"){
-      if(leavingBgEdit){ _bgSel = null; _bgDrag = null; _bgCal = null; _bgCalDrag = null; _bgCrop = null; _bgCropDrag = null; loupeHide(); bgCalBanner(""); }
+      if(leavingBgEdit){ _bgSel = null; _bgSelIds = []; _bgDrag = null; _bgCal = null; _bgCalDrag = null; _bgCrop = null; _bgCropDrag = null; loupeHide(); bgCalBanner(""); }
       renderBgOverlay(); renderBgControls();
     }
     if(leavingZen){ _zenSel = null; _zenSelIds = []; _zenDrag = null; _zenCal = null; zenCalBanner(""); }
@@ -25475,7 +25598,7 @@ window.addEventListener("DOMContentLoaded", init);
               var durl = await blobToDataUri(blob);
               var small = (typeof makeThumbDataUri === "function") ? await makeThumbDataUri(durl, 3000, 0.8) : durl;
               outImgs.push({ dataUri: small, natW: ri.natW, natH: ri.natH, x: ri.x || 0, y: ri.y || 0,
-                w: (typeof ri.w === "number" ? ri.w : ri.natW), h: (typeof ri.h === "number" ? ri.h : ri.natH), gsi: ri.gsi || null, crop: ri.crop || null });
+                w: (typeof ri.w === "number" ? ri.w : ri.natW), h: (typeof ri.h === "number" ? ri.h : ri.natH), gsi: ri.gsi || null, crop: ri.crop || null, groupId: ri.groupId || null });
             }
           } catch(e){ console.warn("[map] export bg failed", e); }
         }
@@ -25548,9 +25671,12 @@ window.addEventListener("DOMContentLoaded", init);
               var key = "mapbg_" + mapUid();
               await blobPut(key, blob);
               outImgs.push({ id: "bgimg_" + mapUid(), blobKey: key, dataUri: null, natW: mi.natW, natH: mi.natH,
-                x: mi.x || 0, y: mi.y || 0, w: (typeof mi.w === "number" ? mi.w : mi.natW), h: (typeof mi.h === "number" ? mi.h : mi.natH), gsi: mi.gsi || null, crop: mi.crop || null });
+                x: mi.x || 0, y: mi.y || 0, w: (typeof mi.w === "number" ? mi.w : mi.natW), h: (typeof mi.h === "number" ? mi.h : mi.natH), gsi: mi.gsi || null, crop: mi.crop || null, groupId: mi.groupId || null });
             } catch(e){ console.warn("[map] restore bg failed", e); }
           }
+          // 復元中に片割れが欠落してメンバー1枚になったグループを解消
+          var _bggc = {}; outImgs.forEach(function(z){ if(z.groupId) _bggc[z.groupId] = (_bggc[z.groupId] || 0) + 1; });
+          outImgs.forEach(function(z){ if(z.groupId && _bggc[z.groupId] < 2) z.groupId = null; });
           if(outImgs.length) bg = { kind: "imageset", opacity: (m.bg && typeof m.bg.opacity === "number" ? m.bg.opacity : 0.85), images: outImgs };
         }
         // 参照地図手動下地の復元（dataUri→Blob）
