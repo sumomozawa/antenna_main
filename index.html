@@ -1059,16 +1059,18 @@
     body.list-print-mode .ledger-table thead th:nth-child(2) { width: 5%; }   /* 状態 */
     body.list-print-mode .ledger-table thead th:nth-child(3) { width: 8%; }   /* 管理番号 */
     body.list-print-mode .ledger-table thead th:nth-child(4) { width: 9%; }   /* 名前 */
-    body.list-print-mode .ledger-table thead th:nth-child(5) { width: 9%; }   /* 施工会社 */
+    body.list-print-mode .ledger-table thead th:nth-child(5) { width: 12%; }  /* 施工会社（住所と同じ幅に拡大＝会社名の折返しを防ぐ） */
     body.list-print-mode .ledger-table thead th:nth-child(6) { width: 12%; }  /* 住所 */
     body.list-print-mode .ledger-table thead th:nth-child(7) { width: 9%; }   /* 電話番号 */
-    body.list-print-mode .ledger-table thead th:nth-child(8) { width: 13%; }  /* 工事日程予定 */
-    body.list-print-mode .ledger-table thead th:nth-child(9) { width: 11%; }  /* 打合せ予定 */
+    body.list-print-mode .ledger-table thead th:nth-child(8) { width: 11%; }  /* 工事日程予定（施工会社拡大分を捻出） */
+    body.list-print-mode .ledger-table thead th:nth-child(9) { width: 10%; }  /* 打合せ予定（施工会社拡大分を捻出） */
     body.list-print-mode .ledger-table thead th:nth-child(10) { width: 3%; }  /* ビラ */
     body.list-print-mode .ledger-table thead th:nth-child(11) { width: 3%; }  /* 完了 */
     body.list-print-mode .ledger-table thead th:nth-child(12) { width: 3%; }  /* 承諾書 */
     body.list-print-mode .ledger-table thead th:nth-child(13) { width: 3%; }  /* 完了書 */
     body.list-print-mode .ledger-table thead th:nth-child(14) { width: 12%; } /* 備考（開く列の分を吸収して拡大） */
+    /* 管理番号セルの「地図登録」アイコン(🗺️/－)は印刷では不要 → 非表示 */
+    body.list-print-mode .ledger-table .lg-map-ind { display: none !important; }
     /* 施工会社セレクトは印刷ではプレーンテキスト表示 */
     /* 施工会社：割当済みの会社名はプレーン文字で印刷、未割当のチップ群・未登録表示は印刷に出さない */
     body.list-print-mode .ledger-table .lg-ctr-cur {
