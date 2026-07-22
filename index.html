@@ -21291,6 +21291,11 @@ window.addEventListener("DOMContentLoaded", init);
   var MAX_BG_EDGE = 6000;                    // 超高解像度下地は表示前にこの長辺へ縮小（メモリ対策・§12）
   var LAYER_KEYS = ["road", "boundary", "building", "chome", "label"];
   var LAYER_LABELS = { road: "道路", boundary: "境界", building: "建物", chome: "丁目境界", label: "ラベル" };
+  // 番号（管理番号）をリンク済み＝図面に番号が載る建物の既定色。ほかの緑の建物と一目で区別できるオレンジ。
+  // 個別に色指定した建物（o.fill / o.stroke）はその指定を優先する。
+  var LINKED_BLD_FILL   = "rgba(230,81,0,0.18)";   // 薄いオレンジの塗り
+  var LINKED_BLD_STROKE = "#e65100";                // オレンジの枠線
+  var LINKED_BLD_MINI   = "rgba(230,81,0,0.30)";   // 縮小マップ用（やや濃いめ）
   var DRAW_TOOLS = { road: 1, boundary: 1, building: 1, chome: 1, text: 1, pin: 1, signal: 1 };  // 作図系ツール
   var _txPlaceType = "generic";   // テキスト配置時の種類（generic/addr/bldg）・ツール切替をまたいで保持
   var CLICK_THRESH = 5;     // クリック/タップ判定の許容移動量（クライアントpx）
@@ -22452,8 +22457,12 @@ window.addEventListener("DOMContentLoaded", init);
       var bcol = bl.color || "#2e7d32";
       (bl.objects || []).forEach(function(o){
         if(!o.points || o.points.length < 2) return;
-        html += '<polygon points="' + miniPtsStr(miniThin(o.points, 60)) + '" fill="rgba(46,125,50,0.22)" stroke="'
-          + esc(o.stroke || bcol) + '" stroke-width="1" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>';
+        // 番号が載る建物は縮小マップでもオレンジで区別（本図と同じ判定）。
+        var linked = !!o.linkMgmtNo;
+        var mfill = o.fill || (linked ? LINKED_BLD_MINI : "rgba(46,125,50,0.22)");
+        var mstroke = o.stroke || (linked ? LINKED_BLD_STROKE : bcol);
+        html += '<polygon points="' + miniPtsStr(miniThin(o.points, 60)) + '" fill="' + esc(mfill) + '" stroke="'
+          + esc(mstroke) + '" stroke-width="1" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>';
       });
     }
     var ll = current.layers.label;
@@ -24791,10 +24800,11 @@ window.addEventListener("DOMContentLoaded", init);
     var g = el("map-layer-building"); if(!g || !current) return;
     var L = current.layers.building; var col = L.color || "#2e7d32";
     g.innerHTML = (L.objects || []).map(function(o){
-      var stroke = o.stroke || col;
-      var pts = o.points.map(function(p){ return p[0] + "," + p[1]; }).join(" ");
       var linked = !!o.linkMgmtNo;
-      var fill = o.fill || "rgba(46,125,50,0.16)";
+      // 番号が載る（管理番号リンク済み）建物は既定でオレンジ、それ以外は緑。個別色指定があればそれを優先。
+      var stroke = o.stroke || (linked ? LINKED_BLD_STROKE : col);
+      var pts = o.points.map(function(p){ return p[0] + "," + p[1]; }).join(" ");
+      var fill = o.fill || (linked ? LINKED_BLD_FILL : "rgba(46,125,50,0.16)");
       var focus = (o.id === _focusBuildingId) ? ' class="map-bld-focus"' : "";
       var poly = '<polygon' + focus + ' data-obj-id="' + esc(o.id) + '" data-layer="building" points="' + pts + '" fill="' + esc(fill) + '" stroke="' + esc(stroke) + '" stroke-width="' + (linked ? 2.4 : 1.6) + '" stroke-dasharray="' + (linked ? "0" : "5 3") + '" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>';
       // 戸別にリンク（登録）済みの建物は、中心に管理番号の下3桁を表示（白フチ付き・印刷にも出る）
@@ -25040,6 +25050,7 @@ window.addEventListener("DOMContentLoaded", init);
           ["#8e24aa", "境界", true],
           ["#e53935", "丁目境界", "chome"],
           ["#2e7d32", "建物", false],
+          [LINKED_BLD_STROKE, "番号付き建物", false],
           ["#d81b60", "受信方向", false]
         ];
         var pad = u2 * 0.6, lineW = u2 * 2.2, rowH = u2 * 1.7, boxW = u2 * 9, boxH = rowH * rows.length + pad * 2;
