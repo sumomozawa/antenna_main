@@ -1057,8 +1057,8 @@
     body.list-print-mode .ledger-table thead th:nth-child(1),
     body.list-print-mode .ledger-table tbody td:nth-child(1) { display: none !important; }
     body.list-print-mode .ledger-table thead th:nth-child(2) { width: 5%; }   /* 状態 */
-    body.list-print-mode .ledger-table thead th:nth-child(3) { width: 8%; }   /* 管理番号 */
-    body.list-print-mode .ledger-table thead th:nth-child(4) { width: 9%; }   /* 名前 */
+    body.list-print-mode .ledger-table thead th:nth-child(3) { width: 10%; }  /* 管理番号（番号の改行防止のため拡大） */
+    body.list-print-mode .ledger-table thead th:nth-child(4) { width: 8%; }   /* 名前 */
     body.list-print-mode .ledger-table thead th:nth-child(5) { width: 12%; }  /* 施工会社（住所と同じ幅に拡大＝会社名の折返しを防ぐ） */
     body.list-print-mode .ledger-table thead th:nth-child(6) { width: 12%; }  /* 住所 */
     body.list-print-mode .ledger-table thead th:nth-child(7) { width: 9%; }   /* 電話番号 */
@@ -1068,9 +1068,15 @@
     body.list-print-mode .ledger-table thead th:nth-child(11) { width: 3%; }  /* 完了 */
     body.list-print-mode .ledger-table thead th:nth-child(12) { width: 3%; }  /* 承諾書 */
     body.list-print-mode .ledger-table thead th:nth-child(13) { width: 3%; }  /* 完了書 */
-    body.list-print-mode .ledger-table thead th:nth-child(14) { width: 12%; } /* 備考（開く列の分を吸収して拡大） */
+    body.list-print-mode .ledger-table thead th:nth-child(14) { width: 11%; } /* 備考（開く列の分を吸収して拡大） */
     /* 管理番号セルの「地図登録」アイコン(🗺️/－)は印刷では不要 → 非表示 */
     body.list-print-mode .ledger-table .lg-map-ind { display: none !important; }
+    /* 管理番号は途中改行させない（PDF/印刷で数字が折れて読みづらいのを防ぐ）。
+       セル全体のword-break:anywhereを、管理番号の番号スパンだけ打ち消す。 */
+    body.list-print-mode .ledger-table tbody td:nth-child(3) .lg-edit,
+    body.list-print-mode .ledger-table tbody td:nth-child(3) .lg-lock {
+      white-space: nowrap; word-break: keep-all; overflow-wrap: normal;
+    }
     /* 施工会社セレクトは印刷ではプレーンテキスト表示 */
     /* 施工会社：割当済みの会社名はプレーン文字で印刷、未割当のチップ群・未登録表示は印刷に出さない */
     body.list-print-mode .ledger-table .lg-ctr-cur {
@@ -2980,6 +2986,13 @@
   .map-side-btn:hover:not(:disabled) { background: #3a6ba8; }
   .map-side-btn:disabled { opacity: .4; cursor: default; }
   .map-side-note { font-size: 10px; color: #667482; line-height: 1.5; margin-top: 5px; }
+  /* 建物の色分け：施工会社別モードの凡例（会社名→色） */
+  .map-ctr-legend { display: none; margin-top: 7px; }
+  .map-ctr-legend.on { display: block; }
+  .map-ctr-legend .mcl-row { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #33404d; padding: 1.5px 0; }
+  .map-ctr-legend .mcl-sw { width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(0,0,0,0.28); flex: 0 0 auto; }
+  .map-ctr-legend .mcl-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .map-ctr-legend .mcl-none { color: #8a95a1; font-size: 10px; }
   .map-tx-preset-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
   .map-tx-preset-btn { padding: 4px 8px; font-size: 11px; border: 1px solid #cdd3da; border-radius: 4px; background: #fff; cursor: pointer; }
   .map-color-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 8px; }
@@ -4596,6 +4609,15 @@
       <div class="map-side-sec">
         <div class="map-side-head">レイヤー</div>
         <div id="map-layers"></div>
+      </div>
+      <div class="map-side-sec">
+        <div class="map-side-head">建物の色分け</div>
+        <div class="map-gsi-seg" id="map-bld-colormode" title="番号を付けた建物の塗り分け方法を切り替えます">
+          <button type="button" data-cmode="link" class="active">番号色</button>
+          <button type="button" data-cmode="contractor">施工会社別</button>
+        </div>
+        <div class="map-side-note" id="map-bld-cmode-note">番号を付けた建物をオレンジ、その他を緑で表示します。</div>
+        <div id="map-ctr-legend" class="map-ctr-legend"></div>
       </div>
       <div class="map-side-sec">
         <div class="map-side-head">下地</div>
@@ -21324,6 +21346,9 @@ window.addEventListener("DOMContentLoaded", init);
   var _marqFilter = "all";  // 範囲選択で対象にするレイヤー: all|building|road|boundary|label
   var _marqLastRect = null; // 直近に囲った範囲（フィルタ変更で選択し直すため）{x0,y0,x1,y1}
   var _vecImportMode = "both"; // ベクター化で取り込む対象: both|building|road
+  // 建物の塗り分けモード: "link"=番号色（番号ありオレンジ/なし緑・既定）／"contractor"=施工会社別
+  var _bldColorMode = "link";
+  try { var _bcm = localStorage.getItem("antenna_map_bld_colormode"); if(_bcm === "contractor" || _bcm === "link") _bldColorMode = _bcm; } catch(_){}
 
   var sheets = [];          // 現在の文脈（物件 or 端末ローカル）のMapSheet配列
   var current = null;       // 現在開いているMapSheet
@@ -22456,15 +22481,12 @@ window.addEventListener("DOMContentLoaded", init);
     });
     var bl = current.layers.building;
     if(bl && bl.visible !== false){
-      var bcol = bl.color || "#2e7d32";
       (bl.objects || []).forEach(function(o){
         if(!o.points || o.points.length < 2) return;
-        // 番号が載る建物は縮小マップでもオレンジで区別（本図と同じ判定）。
-        var linked = !!o.linkMgmtNo;
-        var mfill = o.fill || (linked ? LINKED_BLD_MINI : "rgba(46,125,50,0.22)");
-        var mstroke = o.stroke || (linked ? LINKED_BLD_STROKE : bcol);
-        html += '<polygon points="' + miniPtsStr(miniThin(o.points, 60)) + '" fill="' + esc(mfill) + '" stroke="'
-          + esc(mstroke) + '" stroke-width="1" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>';
+        // 縮小マップも本図と同じ色分け判定（番号色 or 施工会社別）。
+        var bc = bldColors(o);
+        html += '<polygon points="' + miniPtsStr(miniThin(o.points, 60)) + '" fill="' + esc(bc.miniFill) + '" stroke="'
+          + esc(bc.stroke) + '" stroke-width="1" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>';
       });
     }
     var ll = current.layers.label;
@@ -24798,15 +24820,42 @@ window.addEventListener("DOMContentLoaded", init);
   }
   // 管理番号の「下三桁」＝数字だけ抜き出した末尾3桁（例 2026-0420-01→"001" / 2026-0420-123→"123"）
   function mgmtLast3(s){ var d = String(s == null ? "" : s).replace(/[^0-9]/g, ""); return d.slice(-3); }
+  // #rrggbb → rgba(r,g,b,a)。不正値は緑にフォールバック。
+  function hexToRgba(hex, a){
+    var m = /^#?([0-9a-fA-F]{6})$/.exec(String(hex == null ? "" : hex));
+    if(!m) return "rgba(46,125,50," + a + ")";
+    var n = parseInt(m[1], 16);
+    return "rgba(" + ((n >> 16) & 255) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + a + ")";
+  }
+  // 建物 o の塗り/枠色を現在の色分けモードで決定。個別色(o.fill/o.stroke)は常に最優先。
+  // 返り値: { fill(本図用), miniFill(縮小マップ用・やや濃い), stroke, linked }
+  function bldColors(o){
+    var linked = !!o.linkMgmtNo;
+    var fill, miniFill, stroke;
+    if(_bldColorMode === "contractor" && linked){
+      // 番号→戸別→施工会社 の色（施工業者マスターの登録順で安定した色）。
+      var nm = "", cc = "";
+      try { if(typeof getContractor === "function") nm = getContractor("m:" + o.linkMgmtNo); } catch(_){}
+      try { if(nm && typeof calContractorColor === "function") cc = calContractorColor(nm); } catch(_){}
+      if(cc){ fill = hexToRgba(cc, 0.20); miniFill = hexToRgba(cc, 0.34); stroke = cc; }
+      else { fill = "rgba(120,130,140,0.16)"; miniFill = "rgba(120,130,140,0.30)"; stroke = "#78828c"; } // 番号あり・施工会社未割当＝グレー
+    } else if(linked){
+      fill = LINKED_BLD_FILL; miniFill = LINKED_BLD_MINI; stroke = LINKED_BLD_STROKE;
+    } else {
+      fill = "rgba(46,125,50,0.16)"; miniFill = "rgba(46,125,50,0.22)";
+      stroke = (current.layers.building && current.layers.building.color) || "#2e7d32";
+    }
+    return { fill: o.fill || fill, miniFill: o.fill || miniFill, stroke: o.stroke || stroke, linked: linked };
+  }
   function renderBuildingLayer(){
     var g = el("map-layer-building"); if(!g || !current) return;
-    var L = current.layers.building; var col = L.color || "#2e7d32";
+    var L = current.layers.building;
     g.innerHTML = (L.objects || []).map(function(o){
-      var linked = !!o.linkMgmtNo;
-      // 番号が載る（管理番号リンク済み）建物は既定でオレンジ、それ以外は緑。個別色指定があればそれを優先。
-      var stroke = o.stroke || (linked ? LINKED_BLD_STROKE : col);
+      var bc = bldColors(o);
+      var linked = bc.linked;
+      var stroke = bc.stroke;
       var pts = o.points.map(function(p){ return p[0] + "," + p[1]; }).join(" ");
-      var fill = o.fill || (linked ? LINKED_BLD_FILL : "rgba(46,125,50,0.16)");
+      var fill = bc.fill;
       var focus = (o.id === _focusBuildingId) ? ' class="map-bld-focus"' : "";
       var poly = '<polygon' + focus + ' data-obj-id="' + esc(o.id) + '" data-layer="building" points="' + pts + '" fill="' + esc(fill) + '" stroke="' + esc(stroke) + '" stroke-width="' + (linked ? 2.4 : 1.6) + '" stroke-dasharray="' + (linked ? "0" : "5 3") + '" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>';
       // 戸別にリンク（登録）済みの建物は、中心に管理番号の下3桁を表示（白フチ付き・印刷にも出る）
@@ -24822,6 +24871,40 @@ window.addEventListener("DOMContentLoaded", init);
       }
       return poly + lab;
     }).join("");
+  }
+  // 建物の色分けモードのUI（セグメント選択・説明文・施工会社凡例）を現在状態に合わせて更新
+  function applyBldColorModeUI(){
+    var seg = el("map-bld-colormode");
+    if(seg){
+      var btn = seg.querySelector('button[data-cmode="' + _bldColorMode + '"]');
+      if(btn) segActivate(seg, btn);
+    }
+    var note = el("map-bld-cmode-note");
+    if(note){
+      note.textContent = (_bldColorMode === "contractor")
+        ? "番号を付けた建物を施工会社ごとの色で表示します（未割当はグレー・番号なしは緑）。"
+        : "番号を付けた建物をオレンジ、その他を緑で表示します。";
+    }
+    renderCtrLegend();
+  }
+  // 施工会社別モード時の凡例（会社名→色）。施工業者マスターから生成。それ以外のモードでは非表示。
+  function renderCtrLegend(){
+    var box = el("map-ctr-legend"); if(!box) return;
+    if(_bldColorMode !== "contractor"){ box.classList.remove("on"); box.innerHTML = ""; return; }
+    var list = [];
+    try { if(typeof getContractorList === "function") list = getContractorList() || []; } catch(_){ list = []; }
+    var rows = list.map(function(nm){
+      var cc = "";
+      try { if(typeof calContractorColor === "function") cc = calContractorColor(nm); } catch(_){}
+      return '<div class="mcl-row"><span class="mcl-sw" style="background:' + esc(hexToRgba(cc || "#78828c", 0.20)) + ';border-color:' + esc(cc || "#78828c") + ';"></span><span class="mcl-name" title="' + esc(nm) + '">' + esc(nm) + '</span></div>';
+    });
+    rows.push('<div class="mcl-row"><span class="mcl-sw" style="background:rgba(120,130,140,0.16);border-color:#78828c;"></span><span class="mcl-name mcl-none">未割当（番号あり）</span></div>');
+    if(!list.length){
+      box.innerHTML = '<div class="mcl-none">施工業者が未登録です。メニュー画面の「🏢 施工業者」で登録すると、ここに会社ごとの色が並びます。</div>' + rows[rows.length - 1];
+    } else {
+      box.innerHTML = rows.join("");
+    }
+    box.classList.add("on");
   }
   function renderDrawingOverlay(){
     var g = el("map-overlay-edit"); if(!g) return;
@@ -26011,6 +26094,15 @@ window.addEventListener("DOMContentLoaded", init);
     if(gzoom) gzoom.addEventListener("click", function(e){ var b = e.target.closest("button"); if(!b) return; _gsiZoom = parseInt(b.dataset.z, 10) || 17; segActivate(gzoom, b); });
     var vmode = el("map-vec-mode");
     if(vmode) vmode.addEventListener("click", function(e){ var b = e.target.closest("button"); if(!b) return; _vecImportMode = b.dataset.vec || "both"; segActivate(vmode, b); });
+    var cmode = el("map-bld-colormode");
+    if(cmode) cmode.addEventListener("click", function(e){
+      var b = e.target.closest("button[data-cmode]"); if(!b) return;
+      _bldColorMode = (b.dataset.cmode === "contractor") ? "contractor" : "link";
+      try { localStorage.setItem("antenna_map_bld_colormode", _bldColorMode); } catch(_){}
+      applyBldColorModeUI();
+      renderObjects();   // 本図＋縮小マップを新しい色で再描画
+    });
+    applyBldColorModeUI();   // 起動時の初期状態（保存済みモード）を反映
     var stageWrap = el("map-stage-wrap");
     if(stageWrap){
       // ステージへの画像ドロップ＝参照地図下地として追加（既存のwindow dropによる物件読込を奪わないようstopPropagation）
@@ -26267,6 +26359,7 @@ window.addEventListener("DOMContentLoaded", init);
       } else {
         openSheet(sheets[0] || null);
       }
+      applyBldColorModeUI();   // 施工会社別モードの凡例を最新の施工業者一覧で更新
     }).catch(function(err){
       console.warn("[map] open failed", err);
       alert("地図の初期化に失敗しました。ページを再読み込みしてからお試しください。\n" + (err && err.message ? err.message : ""));
