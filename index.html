@@ -4547,6 +4547,7 @@
     <button type="button" id="map-delete-sheet" class="map-hbtn" title="このシートを削除">🗑 削除</button>
     <span class="map-cur-proj" id="map-cur-proj"></span>
     <button type="button" id="map-attach" class="map-hbtn" style="display:none;background:#1b7a3d;border-color:#145c2e;" title="この端末ローカル地図を、開いている物件に紐付けます">📎 物件に紐付け</button>
+    <button type="button" id="map-goto-ledger" class="map-hbtn" style="background:#1e3a5f;border-color:#16314f;" title="受付台帳（戸別一覧）を開きます">📋 受付台帳</button>
     <button type="button" id="map-close" class="map-hbtn map-close-btn" title="地図を閉じてメニューへ">✕ 閉じる</button>
   </header>
   <div class="map-main">
@@ -25571,9 +25572,11 @@ window.addEventListener("DOMContentLoaded", init);
         + dupWarn
         + '<button type="button" class="map-side-btn" id="map-bld-photos">📷 写真を見る</button>'
         + (row ? '<button type="button" class="map-side-btn" id="map-bld-open" style="margin-top:6px;background:#1b7a3d;border-color:#145c2e;">📂 この戸別を開く（積算・図面）</button>' : '')
+        + (row ? '<button type="button" class="map-side-btn" id="map-bld-ledger" style="margin-top:6px;background:#1e3a5f;border-color:#16314f;">📋 受付台帳で開く</button>' : '')
         + '<button type="button" class="map-side-btn" id="map-bld-unlink" style="margin-top:6px;background:#9aa7b4;border-color:#7e8c99;">🔗 リンク解除</button>';
       on("map-bld-photos", "click", function(){ showBuildingPhotos(b); });
       if(row) on("map-bld-open", "click", function(){ openLinkedCase(row); });
+      if(row) on("map-bld-ledger", "click", function(){ gotoLedgerFromMap(b.linkMgmtNo); });
       on("map-bld-unlink", "click", function(){ b.linkMgmtNo = null; renderObjects(); renderSelectionOverlay(); scheduleSave(); renderDetailLink(b); });
     } else {
       host.innerHTML =
@@ -26060,6 +26063,7 @@ window.addEventListener("DOMContentLoaded", init);
   function bindOnce(){
     if(_bound) return; _bound = true;
     on("map-close", "click", closeMapView);
+    on("map-goto-ledger", "click", function(){ gotoLedgerFromMap(); });
     on("map-new-sheet", "click", onNewSheet);
     on("map-rename-sheet", "click", onRenameSheet);
     on("map-delete-sheet", "click", onDeleteSheet);
@@ -26365,7 +26369,8 @@ window.addEventListener("DOMContentLoaded", init);
       alert("地図の初期化に失敗しました。ページを再読み込みしてからお試しください。\n" + (err && err.message ? err.message : ""));
     });
   }
-  function closeMapView(){
+  // 地図オーバーレイの後片付け（作図確定・保存・下地URL解放・オーバーレイを閉じる）。遷移先は呼び出し側が指定。
+  function mapTeardown(){
     if(drawing) confirmDraw();
     _vecRect = null; renderVecRectOverlay();
     flushSave();
@@ -26373,7 +26378,24 @@ window.addEventListener("DOMContentLoaded", init);
     if(stage) stage.classList.remove("zooming");
     revokeBgUrls();
     document.body.classList.remove("map-open");
+  }
+  function closeMapView(){
+    mapTeardown();
     if(typeof openMenuView === "function") openMenuView();
+  }
+  // 地図 → 受付台帳（戸別一覧のレジャーモード）。highlightMgmtNo を渡すとその行へジャンプ＆ハイライト。
+  function gotoLedgerFromMap(highlightMgmtNo){
+    mapTeardown();
+    var key = String(highlightMgmtNo == null ? "" : highlightMgmtNo).trim();
+    try { if(key) _ledgerHighlightKey = "m:" + key; } catch(_){}
+    try {
+      if(typeof openListView === "function") openListView();
+      if(typeof setListMode === "function") setListMode("ledger");
+      else if(typeof openMenuView === "function") openMenuView();
+    } catch(e){
+      console.warn("[map] goto ledger failed", e);
+      if(typeof openMenuView === "function") openMenuView();
+    }
   }
 
   // 受付台帳「地図登録済み」表示用：この物件で建物にリンク済みの管理番号を保存済みシートから採取して集合(obj)で返す。
