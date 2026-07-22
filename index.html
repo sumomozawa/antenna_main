@@ -4097,6 +4097,7 @@
       <button id="btn-list-bulk-reenc" title="選択した複数ファイルを一括で別パスワード／別方式に再暗号化して上書き保存" style="background:#e65100;">🔄 一括再暗号化</button>
       <button id="btn-list-bulk-plain" title="暗号化ファイル(.hyb/.enc)を一括で復号し、暗号化なしの平文(.json)として保存し直す（個人情報が平文になります）" style="background:#546e7a;">📄 一括平文化</button>
       <button id="btn-list-bulk-photos" title="この物件（一覧）の全戸別の写真を、指定フォルダ内に「管理番号」フォルダを整然と作って無劣化で一括書き出し。スマホ現場入力で撮った写真の取り出しに使用。" style="background:#00695c;">📸 写真を一括書き出し</button>
+      <button id="btn-genba-import" title="スマホ現場入力(genba)が書き出した「管理番号.json」を、開いている物件の同じ管理番号の戸別へ取り込みます。顧客情報は台帳を優先し、アンテナ・部材・測定・写真・配線は現場を採用。料金・石綿・図面レイアウトはPCを保持。取込前にプレビューで確認できます。" style="background:#1565c0;">📥 現場JSN取込</button>
       <span id="list-pw-indicator" style="display:none;color:#fff;font-size:11px;padding:2px 8px;border-radius:3px;background:#2e7d32;" title="クリックで記憶パスワードを消去"></span>
       <button id="btn-list-clear-pw" title="記憶しているパスワードをメモリから消去" style="background:#c62828;">🗝 パスワードクリア</button>
       <button id="btn-list-clear">クリア</button>
@@ -4693,6 +4694,52 @@
       <button id="lg-merge-ledger" title="ファイルの積算・図面データを使いつつ、名前・住所など台帳に記入済みの値を優先（台帳が空欄の項目のみ読み込み値）" style="background:#1e3a5f;color:#fff;border:1px solid #16314f;padding:6px 14px;border-radius:3px;cursor:pointer;font-size:12px;">📒 台帳を優先</button>
       <button id="lg-merge-file" title="読み込んだファイルの値で台帳行を置き換える" style="background:#2e5488;color:#fff;border:1px solid #1e3a5f;padding:6px 14px;border-radius:3px;cursor:pointer;font-size:12px;">📁 読み込み値で上書き</button>
       <button id="lg-merge-skip" title="このファイルは読み込まず、台帳の行をそのまま残す" style="background:#666;color:#fff;border:1px solid #444;padding:6px 14px;border-radius:3px;cursor:pointer;font-size:12px;">この件はスキップ</button>
+    </div>
+  </div>
+</div>
+
+<!-- 📥 現場入力(genba)戸別JSON 取込プレビュー -->
+<style>
+#genba-import-modal .gi-sec{border:1px solid #e0e4e8;border-radius:5px;margin:8px 0;overflow:hidden}
+#genba-import-modal .gi-sec-h{background:#f2f5f8;padding:5px 9px;font-weight:600;font-size:12px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+#genba-import-modal .gi-sec-b{padding:8px 9px}
+#genba-import-modal table.gi-diff{width:100%;border-collapse:collapse;font-size:11.5px}
+#genba-import-modal table.gi-diff th,#genba-import-modal table.gi-diff td{border:1px solid #e3e7eb;padding:3px 6px;text-align:left;vertical-align:top}
+#genba-import-modal table.gi-diff th{background:#fafbfc;font-weight:600;width:96px;white-space:nowrap}
+#genba-import-modal .gi-diff-row.chg td{background:#fff8e1}
+#genba-import-modal .gi-take{color:#1565c0;font-weight:600}
+#genba-import-modal .gi-keep{color:#2e7d32;font-weight:600}
+#genba-import-modal .gi-protect{background:#f5f5f5;color:#777;border:1px dashed #ccc;border-radius:5px;padding:7px 9px;font-size:11px;margin:8px 0;line-height:1.6}
+#genba-import-modal .gi-photos{display:flex;flex-wrap:wrap;gap:8px}
+#genba-import-modal .gi-photo{width:100px;border:1px solid #dde2e7;border-radius:5px;overflow:hidden;font-size:10px;background:#fff}
+#genba-import-modal .gi-photo img{width:100%;height:74px;object-fit:cover;display:block;background:#eee}
+#genba-import-modal .gi-photo .cap{padding:2px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#genba-import-modal .gi-badge{display:inline-block;padding:0 5px;border-radius:8px;font-size:9.5px;color:#fff;line-height:15px}
+#genba-import-modal .gi-badge.new{background:#2e7d32}
+#genba-import-modal .gi-badge.dup{background:#1565c0}
+#genba-import-modal .gi-badge.sim{background:#e65100}
+#genba-import-modal .gi-simgroup{border:1px solid #ffcc80;background:#fff8ef;border-radius:6px;padding:7px;margin:6px 0}
+#genba-import-modal .gi-simgroup .simrow{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
+#genba-import-modal .gi-simopts{display:flex;flex-direction:column;gap:3px;font-size:11.5px;justify-content:center}
+#genba-import-modal .gi-simopts label{display:flex;gap:4px;align-items:center;cursor:pointer}
+#genba-import-modal .gi-conflict{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:3px 0;font-size:11.5px}
+#genba-import-modal .gi-conflict label{display:flex;gap:4px;align-items:center;cursor:pointer}
+#genba-import-modal .gi-warnbox{background:#fff3e0;border:1px solid #ffb74d;border-radius:5px;padding:7px 9px;font-size:11.5px;color:#9c4a00;margin:6px 0}
+#genba-import-modal .gi-errbox{background:#ffebee;border:1px solid #ef9a9a;border-radius:5px;padding:7px 9px;font-size:11.5px;color:#b71c1c;margin:6px 0}
+#genba-import-modal .gi-muted{color:#b8c2cc}
+</style>
+<div class="modal-backdrop" id="genba-import-modal">
+  <div class="modal" style="min-width:560px;max-width:780px;max-height:88vh;overflow-y:auto;">
+    <h3 id="gi-title">📥 現場データの取り込み</h3>
+    <div id="gi-sub" style="font-size:11.5px;color:#555;margin-bottom:6px;"></div>
+    <div id="gi-body" style="font-size:12px;"></div>
+    <label id="gi-apply-all-wrap" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;margin-top:8px;cursor:pointer;">
+      <input type="checkbox" id="gi-apply-all"> 残りのファイルも確認なしで取り込む（既定ルール：台帳優先・写真は両方残す）
+    </label>
+    <div style="display:flex;gap:6px;margin-top:12px;justify-content:flex-end;flex-wrap:wrap;">
+      <button id="gi-import" style="background:#1565c0;color:#fff;border:1px solid #0d47a1;padding:7px 16px;border-radius:3px;cursor:pointer;font-size:12px;font-weight:600;">🔀 取り込む</button>
+      <button id="gi-skip" style="background:#666;color:#fff;border:1px solid #444;padding:7px 14px;border-radius:3px;cursor:pointer;font-size:12px;">この件はスキップ</button>
+      <button id="gi-cancel" style="background:#fff;color:#5d4037;border:1px solid #8d6e63;padding:7px 14px;border-radius:3px;cursor:pointer;font-size:12px;">全部中止</button>
     </div>
   </div>
 </div>
@@ -10788,6 +10835,30 @@ function formatAsbestosSummary(s){
   return parts.length ? parts.join(' ・ ') : '―';
 }
 
+/* ============================================================
+   現場入力(genba)戸別JSON ⇄ 物件 マージ 共通ヘルパー（Phase 0）
+   ・出自スタンプ（_origin / _schemaVer / editedAt）で、内容ベースの
+     「新しい方優先」・出自判定・スキーマドリフト検知を可能にする。
+   ・写真の内容ID（photoContentId）＝撮影時に一度だけ付与し、圧縮・サムネ化でも
+     維持する安定識別子。両アプリで同一アルゴリズムなので、別解像度でも同一写真を
+     突合できる（現場原本 ⇔ PC軽量化 の重複を1枚に畳める）。
+   ============================================================ */
+const GENBA_SCHEMA_VER = 1;
+function nowIsoStamp(){ try { return new Date().toISOString(); } catch(_){ return ""; } }
+/* data URI から決定的に算出する安定な写真ID（djb2＋sdbm の2ハッシュ＋長さ）。
+   ※ genba(現場入力.html)側と完全に同一実装であること（cross-app 突合の要）。 */
+function photoContentId(dataUri){
+  if(!dataUri || typeof dataUri !== "string") return "";
+  let a = 5381, b = 0;
+  for(let i = 0; i < dataUri.length; i++){
+    const c = dataUri.charCodeAt(i);
+    a = ((a << 5) + a + c) >>> 0;          // djb2
+    b = (c + (b << 6) + (b << 16) - b) >>> 0; // sdbm
+  }
+  const hex = x => ("00000000" + (x >>> 0).toString(16)).slice(-8);
+  return "p" + hex(a) + hex(b) + "_" + dataUri.length;
+}
+
 function collectState(){
   const ids = ["work_type","is_catv","high_work","snow_guard","indoor_adj",
     "antenna_main","antenna_46","antenna_50","ch46","bs_cs","bs_antenna_state","bsmix_type","bsmix_state",
@@ -10855,13 +10926,26 @@ function collectState(){
   // 電波測定値
   s.measurements = cloneMeasurements(STATE.measurements || DEFAULT_MEASUREMENTS);
   // 工事調書 写真（複数枚配列・base64 data URI）
+  // ・id＝安定な写真ID（既存なら維持、無ければ dataUri から算出）。圧縮・サムネ化でも維持され、
+  //   現場入力との重複突合（別解像度の同一写真）に使う。
   s.chosho_photos = Array.isArray(STATE.photos)
-    ? STATE.photos.map(p => ({ label: String((p && p.label) || ""), dataUri: (p && p.dataUri) || null }))
+    ? STATE.photos.map(p => {
+        const dataUri = (p && p.dataUri) || null;
+        const o = { label: String((p && p.label) || ""), dataUri };
+        const id = (p && p.id) || (dataUri ? photoContentId(dataUri) : "");
+        if(id) o.id = id;
+        return o;
+      })
     : migratePhotosShape(STATE.photos);
   // 石綿対応（みなし判定）
   s.asbestos = collectAsbestosState();
   // アンテナ取付ガイド
   s.antenna_guide = normalizeAntennaGuide(STATE.antennaGuide);
+  // 出自スタンプ（Phase 0）：この戸別JSONを PC(物件) が書き出したことを記録。
+  // 現場入力(genba)側は _origin:"genba" を書く。マージ時の出自判定・ドリフト検知に使う。
+  s._origin = "main";
+  s._schemaVer = GENBA_SCHEMA_VER;
+  s.editedAt = nowIsoStamp();
   return s;
 }
 // 最後に保存したディレクトリハンドル（同一セッション内で記憶）
@@ -15393,10 +15477,13 @@ STATE.photos = [
 /* 旧形式 {before:dataUri, after:dataUri} → 配列形式に変換 */
 function migratePhotosShape(p){
   if(Array.isArray(p)){
-    return p.map(it => ({
-      label: String((it && it.label) || ""),
-      dataUri: (it && it.dataUri) || null
-    }));
+    return p.map(it => {
+      const dataUri = (it && it.dataUri) || null;
+      const o = { label: String((it && it.label) || ""), dataUri };
+      const id = (it && it.id) || (dataUri ? photoContentId(dataUri) : "");
+      if(id) o.id = id;   // 安定な写真IDを維持（現場入力との重複突合に使う）
+      return o;
+    });
   }
   if(p && typeof p === "object"){
     const arr = [];
@@ -15748,6 +15835,7 @@ function readPhotoFileToEntry(inp, idx){
       STATE.photos[idx] = { label: "写真" + (idx + 1), dataUri: null };
     }
     STATE.photos[idx].dataUri = ev.target.result;
+    STATE.photos[idx].id = photoContentId(ev.target.result); // 撮影/追加時に安定IDを付与
     renderPhotoInputs();
     if(typeof projAutoSaveEdit === "function") projAutoSaveEdit(); // 写真追加/差替を物件へ自動保存
   };
@@ -19700,6 +19788,418 @@ function bindEditorCaseFieldSync(){
 }
 
 /* ============================================================
+   現場入力(genba)戸別JSON マージエンジン（管理番号キー・Phase 1）
+   ------------------------------------------------------------
+   方針（浪岡電設の運用ルール）:
+   ・main(物件/PC)＝顧客・受付台帳・料金・石綿・PC図面手編集の権威。
+   ・genba(現場入力)＝アンテナ/取付/部材/ケーブル/配線/測定/写真/取付ガイドの権威。
+   実装:
+   ・base = main の完全クローン。現場権威フィールドだけを genba 値で上書きする
+     （＝許可リスト方式。genba のキーが hard-keep 領域へ混入できない構造）。
+   ・顧客は main 優先(空欄のみ genba で埋める)。状態は最進捗優先。写真は和集合＋重複統合。
+   ・料金/石綿/PC図面手編集/meas_show は絶対保持（genba値は採らない）。
+   ・BOM/積算/図面は派生データ＝ここでは触れず、呼出側でキャッシュ破棄→再計算。
+   ・純粋関数（DOM非依存・単体テスト可能）。UIの選択は opts で受け取る。
+   ============================================================ */
+// 現場(genba)が権威＝上書き取込する入力フィールド（顧客/日付/状態/写真は下で個別処理）
+const GENBA_AUTHORITATIVE_FIELDS = [
+  "work_type","is_catv","high_work","snow_guard","indoor_adj",
+  "antenna_main","antenna_46","antenna_50","ch46","bs_cs","bs_antenna_state","bsmix_type","bsmix_state",
+  "mount_type","side_base_1","side_base_2","side_base_3","mast","mast_2","mast_3",
+  "connector_type","connector_qty","turnbuckle_qty",
+  "amplifier","line_booster","hpf","outer_splitter","indoor_split","split_all_pass",
+  "power_pos","indoor_wire","outer_wire","tv_count",
+  "remove_safety","remove_drop","cable_drop_len","dummy_attached","use_fa",
+  "cable_new_len","cable_main_len","cable_ch46_len","cable_ch50_len","cable_amp_next_len",
+  "cable_indoor_new","cable_vvf_len","cable_s5cfb_power","ext_power_conn",
+  "att_main","att_46","att_50","box_consent","ofmu_qty","wire_sus16_len",
+  "tv_rooms","tv_bd","tv_sp","tv_term",
+  "wire_overrides","text_annotations","antenna_guide","measurements"
+];
+// main(PC/物件)を絶対保持＝genba値を採らないフィールド（現場は既定値/空を出すため）
+const GENBA_HARD_KEEP_MAIN = [
+  "asbestos","tax_mode","misc_fee","outsource_fee_on","outsource_fee_amount","outsource_fee_auto",
+  "qty_overrides","node_offsets","meas_transforms","node_existing_overrides","ag_placement","meas_show"
+];
+const GENBA_CUSTOMER_FIELDS = ["chosho_cust_name","chosho_cust_addr","chosho_cust_tel"];
+const GENBA_STATUS_RANK = { provisional:1, in_progress:2, completed:3 };
+// 既定/自動で付く写真ラベル（統合時に「人が付けた具体名」を優先するための判定に使う）
+const GENBA_DEFAULT_PHOTO_LABELS = new Set(["","施工前","施工前②","施工中","施工完了","施工完了②","現地","表札","その他"]);
+function _genbaIsDefaultLabel(l){ l=String(l||""); return GENBA_DEFAULT_PHOTO_LABELS.has(l) || /^写真\d+$/.test(l); }
+function _genbaClone(v){ return v==null ? v : JSON.parse(JSON.stringify(v)); }
+
+/* 2枚の同一写真から残す1枚を選ぶ（高画質優先＝dataUri長が大きい方、同点は現場を優先）。
+   ラベルは既定名より「人が付けた具体名」を優先して引き継ぐ。 */
+function pickBetterPhoto(a, b){
+  const alen=(a.p.dataUri||"").length, blen=(b.p.dataUri||"").length;
+  let win = (blen>alen) ? b : (alen>blen ? a : (b.from==="genba" ? b : a));
+  let label = win.p.label;
+  if(_genbaIsDefaultLabel(label)){
+    if(!_genbaIsDefaultLabel(a.p.label)) label=a.p.label;
+    else if(!_genbaIsDefaultLabel(b.p.label)) label=b.p.label;
+  }
+  const o={ label: label||win.p.label, dataUri: win.p.dataUri };
+  if(win.p.id) o.id=win.p.id;
+  return { p:o, from:win.from };
+}
+
+/* 写真の統合。main/genba の写真配列 → 統合配列（実写真の和集合＋重複1枚化）。
+   ・突合キー＝安定id（無ければ dataUri 完全一致）。id は圧縮/サムネ化でも維持されるため、
+     現場原本 ⇔ PC軽量化 の同一写真も1枚に畳める。
+   ・現場側に実写真が無ければ main をそのまま保持（空/サムネで原本を潰さない）。
+   ・opts.dropKeys＝プレビューで「似ている(要確認)」から捨てると決めた写真キー集合。
+   ・空スロット(dataUri無し)は出力しない（applyStateData が既定2枠を再生成する）。 */
+function mergeGenbaPhotos(mainPhotos, genbaPhotos, opts, report){
+  opts = opts || {};
+  const dropKeys = new Set(opts.dropKeys || []);
+  const hasImg = p => !!(p && p.dataUri && /^data:/.test(p.dataUri));
+  const norm = arr => (Array.isArray(arr)?arr:[]).map(p => {
+    const dataUri=(p&&p.dataUri)||null;
+    const id=(p&&p.id)||(dataUri?photoContentId(dataUri):"");
+    return { label:String((p&&p.label)||""), dataUri, id, _key: id || ("uri:"+(dataUri||"")) };
+  });
+  const M=norm(mainPhotos), G=norm(genbaPhotos);
+  const gReal=G.filter(hasImg);
+  if(gReal.length===0){
+    if(report) report.photos={ result:(Array.isArray(mainPhotos)?mainPhotos.length:0), added:0, dedup:0, kept:"main", note:"現場側に写真なし＝PC写真を保持" };
+    return Array.isArray(mainPhotos) ? mainPhotos : [];
+  }
+  const mRealKeys=new Set(M.filter(hasImg).map(p=>p._key));
+  const map=new Map(); const order=[];
+  const put=(p, from)=>{
+    if(!hasImg(p)) return;                 // 空スロットは統合対象外
+    if(dropKeys.has(p._key) || (p.id && dropKeys.has(p.id))) return; // L2で除外指定
+    const cand={ p:{label:p.label, dataUri:p.dataUri, id:p.id||undefined}, from };
+    if(!map.has(p._key)){ map.set(p._key, cand); order.push(p._key); return; }
+    map.set(p._key, pickBetterPhoto(map.get(p._key), cand)); // 同一写真→高画質1枚に
+  };
+  M.forEach(p=>put(p,"main"));   // main を土台に
+  G.forEach(p=>put(p,"genba"));  // genba で追加/高画質化
+  const result=[]; let added=0;
+  order.forEach(k=>{ const e=map.get(k); if(!e) return; result.push(e.p); if(!mRealKeys.has(k)) added++; });
+  const dedup = Math.max(0, (M.filter(hasImg).length + gReal.length) - result.length);
+  if(report) report.photos={ result:result.length, added, dedup, kept:"union" };
+  return result;
+}
+
+/* 戸別データのマージ本体。mainData をベースに genbaData を統合。
+   戻り値 { merged, report }。merged は BOM/積算/図面のキャッシュを持たない生データ
+   （呼出側で row._bomCache/_amtCache を破棄して再計算すること）。 */
+function genbaMergeCaseData(mainData, genbaData, opts){
+  opts = opts || {};
+  const g = genbaData || {};
+  const report = {
+    technical:[], customer:[], status:null, date:null, photos:null,
+    conflicts:[], hardKept:[], notes:[],
+    origin:{ main:(mainData&&mainData._origin)||null, genba:g._origin||null }
+  };
+  const base = mainData ? JSON.parse(JSON.stringify(mainData)) : {};
+  // A. 現場権威フィールド → 上書き
+  GENBA_AUTHORITATIVE_FIELDS.forEach(k=>{
+    if(!(k in g)) return;
+    if(JSON.stringify(base[k]) !== JSON.stringify(g[k])) report.technical.push(k);
+    base[k]=_genbaClone(g[k]);
+  });
+  // B. 顧客 merge-nonempty（main優先。空欄のみ genba で埋める。非空衝突は既定main・opts.customerで現場採用可）
+  GENBA_CUSTOMER_FIELDS.forEach(k=>{
+    const mv=(mainData&&mainData[k]!=null)?String(mainData[k]):"";
+    const gv=(g[k]!=null)?String(g[k]):"";
+    const mEmpty=mv.trim()==="", gEmpty=gv.trim()==="";
+    if(mEmpty && !gEmpty){ base[k]=g[k]; report.customer.push({field:k,action:"seed",value:gv.trim()}); }
+    else if(!mEmpty && !gEmpty && mv.trim()!==gv.trim()){
+      const choice=(opts.customer&&opts.customer[k])||"main";
+      if(choice==="genba"){ base[k]=g[k]; report.customer.push({field:k,action:"genba",main:mv.trim(),genba:gv.trim()}); }
+      else report.conflicts.push({cat:"customer",field:k,main:mv.trim(),genba:gv.trim(),resolved:"main"});
+    }
+  });
+  // C. 状態 最進捗優先（completed>in_progress>provisional。後退させない）
+  { const mr=GENBA_STATUS_RANK[(mainData&&mainData.chosho_status)]||0, gr=GENBA_STATUS_RANK[g.chosho_status]||0;
+    if(gr>mr){ base.chosho_status=g.chosho_status; report.status={from:(mainData&&mainData.chosho_status)||"",to:g.chosho_status}; } }
+  // D. 日付（現場が本日既定でPCに予定日があればPC保持。それ以外は現場優先だが非空衝突は既定main）
+  { const md=((mainData&&mainData.chosho_date)||"").trim(), gd=((g.chosho_date)||"").trim();
+    if(gd && gd!==md){
+      const gIsToday = opts.genbaToday ? (gd===opts.genbaToday) : false;
+      if(md && gIsToday){ report.notes.push("日付: 現場は本日既定のためPCの予定日 "+md+" を保持"); }
+      else if(md && !gIsToday){
+        if((opts.date||"main")==="genba"){ base.chosho_date=gd; report.date={from:md,to:gd}; }
+        else report.conflicts.push({cat:"date",main:md,genba:gd,resolved:"main"});
+      } else { base.chosho_date=gd; report.date={from:md,to:gd}; }
+    }
+  }
+  // E. 写真 和集合＋重複統合
+  base.chosho_photos = mergeGenbaPhotos(mainData&&mainData.chosho_photos, g.chosho_photos, opts.photo, report);
+  // F. hard-keep（base は main クローン＝これらは既に main 値。許可リスト外なので genba は混入しない）
+  GENBA_HARD_KEEP_MAIN.forEach(k=>{ if(mainData && (k in mainData)) report.hardKept.push(k); });
+  // G. マージスタンプ（呼出側でキャッシュ破棄＋再計算）
+  base._schemaVer=GENBA_SCHEMA_VER;
+  base.editedAt=nowIsoStamp();
+  base._origin="merged";
+  base._mergedFrom={ main:(mainData&&mainData._origin)||null, genba:"genba", at:base.editedAt };
+  return { merged: base, report };
+}
+
+/* ============================================================
+   現場入力(genba)戸別JSON 取込フロー（手動・プレビュー付き・Phase 2/3）
+   ・一覧ツールバー「📥 現場JSN取込」から現場の「管理番号.json」を選択。
+   ・同じ管理番号の戸別（台帳のみ行／既存戸別／無ければ新規作成）へフィールド単位マージ。
+   ・取込前にプレビューで差分・写真・保護項目を確認し、顧客/日付の競合と「似ている写真」を選択。
+   ============================================================ */
+function _genbaTodayStr(){ try { const d=new Date(); const p=n=>String(n).padStart(2,"0"); return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate()); } catch(_){ return ""; } }
+function giSec(title, innerHtml){
+  return '<div class="gi-sec"><div class="gi-sec-h">'+escapeHtml(title)+'</div><div class="gi-sec-b">'+innerHtml+'</div></div>';
+}
+// 写真の近似ハッシュ（8x8 グレースケール平均ハッシュ）。同一写真の別解像度検知用。失敗時 null。
+function genbaAHash(dataUri){
+  return new Promise(resolve => {
+    if(!dataUri || !/^data:image\//i.test(dataUri)) return resolve(null);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const N=8, cv=document.createElement("canvas"); cv.width=N; cv.height=N;
+        const ctx=cv.getContext("2d"); ctx.drawImage(img,0,0,N,N);
+        const d=ctx.getImageData(0,0,N,N).data; const g=[]; let sum=0;
+        for(let i=0;i<N*N;i++){ const v=0.299*d[i*4]+0.587*d[i*4+1]+0.114*d[i*4+2]; g.push(v); sum+=v; }
+        const avg=sum/(N*N); let bits="";
+        for(let i=0;i<N*N;i++) bits+= g[i]>=avg ? "1":"0";
+        resolve(bits);
+      } catch(_){ resolve(null); }
+    };
+    img.onerror=()=>resolve(null);
+    img.src=dataUri;
+  });
+}
+function genbaHamming(a,b){ if(!a||!b||a.length!==b.length) return 999; let d=0; for(let i=0;i<a.length;i++) if(a[i]!==b[i]) d++; return d; }
+// main/genba の写真から「似ている(要確認)」ペアを算出（idが既に一致するL1完全一致は除外）。
+async function genbaBuildPhotoSimilarPairs(mainPhotos, genbaPhotos){
+  const norm = (arr,side) => (Array.isArray(arr)?arr:[]).map(p=>{
+    const dataUri=(p&&p.dataUri)||null;
+    const id=(p&&p.id)||(dataUri?photoContentId(dataUri):"");
+    return { label:String((p&&p.label)||""), dataUri, id, key:id||("uri:"+(dataUri||"")), side };
+  }).filter(p=>p.dataUri && /^data:image\//i.test(p.dataUri));
+  const M=norm(mainPhotos,"main"), G=norm(genbaPhotos,"genba");
+  if(!M.length || !G.length) return [];
+  const hashM=await Promise.all(M.map(p=>genbaAHash(p.dataUri)));
+  const hashG=await Promise.all(G.map(p=>genbaAHash(p.dataUri)));
+  const pairs=[]; const usedG=new Set(); const THRESH=8; // 64bit中 ≤8bit差 ≈ ほぼ同一
+  M.forEach((m,mi)=>{
+    let best=-1, bestDist=THRESH+1;
+    G.forEach((g,gi)=>{
+      if(usedG.has(gi) || g.key===m.key) return; // 完全一致(L1)は別処理
+      const dist=genbaHamming(hashM[mi],hashG[gi]);
+      if(dist<bestDist){ bestDist=dist; best=gi; }
+    });
+    if(best>=0 && bestDist<=THRESH){ usedG.add(best); pairs.push({ main:m, genba:G[best], dist:bestDist }); }
+  });
+  return pairs;
+}
+
+const GENBA_TECH_LABELS = {
+  work_type:"工事種別",is_catv:"既設CATV",high_work:"高所作業車",snow_guard:"雪害対策",indoor_adj:"宅内調整",
+  antenna_main:"主アンテナ",antenna_46:"46chアンテナ",antenna_50:"50chアンテナ",ch46:"UHF本数",
+  bs_cs:"BS/CS",bs_antenna_state:"BSアンテナ",bsmix_type:"BS混合方式",bsmix_state:"BS混合器",
+  mount_type:"取付方式",side_base_1:"サイドベース",side_base_2:"サイドベース2",side_base_3:"サイドベース3",
+  mast:"マスト",mast_2:"マスト2",mast_3:"マスト3",connector_type:"接続金具",connector_qty:"接続金具数",turnbuckle_qty:"ターンバックル",
+  amplifier:"増幅器",line_booster:"ラインブースター",hpf:"HPF",outer_splitter:"屋外分配",indoor_split:"宅内分配",split_all_pass:"全端子通電",
+  power_pos:"電源位置",indoor_wire:"宅内配線",outer_wire:"屋外配線",tv_count:"TV台数",
+  remove_safety:"保安器撤去",remove_drop:"引込撤去",cable_drop_len:"引込長",dummy_attached:"ダミー",use_fa:"FA",
+  att_main:"減衰(主)",att_46:"減衰(46)",att_50:"減衰(50)",box_consent:"BOXコンセント",ofmu_qty:"OFMU数",wire_sus16_len:"SUS16長",ext_power_conn:"外部電源"
+};
+
+// 取込プレビュー・モーダル。戻り値 {action:'import'|'skip'|'cancel', opts, applyAll}
+async function openGenbaImportPreview(ctx){
+  const { row, mgmt, mainData, genbaData, matchType, fileName } = ctx;
+  const md = document.getElementById("genba-import-modal");
+  const body = document.getElementById("gi-body");
+  const sub = document.getElementById("gi-sub");
+  const todayS=_genbaTodayStr();
+  const dry = genbaMergeCaseData(mainData, genbaData, { genbaToday: todayS });
+  const rep = dry.report;
+  const simPairs = await genbaBuildPhotoSimilarPairs(mainData&&mainData.chosho_photos, genbaData&&genbaData.chosho_photos);
+  const hasImg=p=>!!(p&&p.dataUri&&/^data:/.test(p.dataUri));
+  const keyOf=p=>{ const du=(p&&p.dataUri)||null; const id=(p&&p.id)||(du?photoContentId(du):""); return id||("uri:"+(du||"")); };
+  const mPhotos=(Array.isArray(mainData&&mainData.chosho_photos)?mainData.chosho_photos:[]);
+  const gPhotos=(Array.isArray(genbaData&&genbaData.chosho_photos)?genbaData.chosho_photos:[]);
+  const mKeys=new Set(mPhotos.filter(hasImg).map(keyOf));
+  const gKeys=new Set(gPhotos.filter(hasImg).map(keyOf));
+  const simKeys=new Set(); simPairs.forEach(p=>{ simKeys.add(p.main.key); simKeys.add(p.genba.key); });
+
+  let html="";
+  sub.innerHTML="管理番号 <b>"+escapeHtml(mgmt)+"</b>"
+    + (fileName?("　／　"+escapeHtml(fileName)):"")
+    + "　／　"+(matchType==="new"?"🆕 台帳に無い管理番号（新規作成して取込）":(matchType==="manual"?"📒 台帳のみの行（現場データで肉付け）":"📄 既存の戸別へ統合"));
+
+  // 顧客
+  {
+    const nm={chosho_cust_name:"顧客名",chosho_cust_addr:"住所",chosho_cust_tel:"電話番号"};
+    const rows=GENBA_CUSTOMER_FIELDS.map(k=>{
+      const mv=((mainData&&mainData[k])||"").toString().trim();
+      const gv=((genbaData&&genbaData[k])||"").toString().trim();
+      const seed=rep.customer.find(c=>c.field===k&&c.action==="seed");
+      const conflict=rep.conflicts.find(c=>c.cat==="customer"&&c.field===k);
+      let ctrl, chg=false;
+      if(conflict){ chg=true;
+        ctrl='<div class="gi-conflict" data-cust="'+k+'">'
+          +'<label><input type="radio" name="gi-cust-'+k+'" value="main" checked> 📒台帳 <b>'+escapeHtml(mv)+'</b></label>'
+          +'<label><input type="radio" name="gi-cust-'+k+'" value="genba"> 📱現場 <b>'+escapeHtml(gv)+'</b></label></div>';
+      } else if(seed){ chg=true; ctrl='<span class="gi-take">📱現場から補完: '+escapeHtml(gv)+'</span>'; }
+      else { ctrl='<span class="gi-muted">'+(mv?escapeHtml(mv):"（空欄）")+'（変更なし）</span>'; }
+      return '<tr class="gi-diff-row'+(chg?' chg':'')+'"><th>'+nm[k]+'</th><td>'+ctrl+'</td></tr>';
+    }).join("");
+    html+=giSec("👤 顧客情報（台帳を優先・空欄のみ現場で補完）","<table class='gi-diff'>"+rows+"</table>");
+  }
+  // 進捗・日付
+  {
+    const stName=v=>({provisional:"仮受付",in_progress:"未完了",completed:"完了"})[v]||v||"（空）";
+    let inner="";
+    if(rep.status) inner+="<div>進捗: "+escapeHtml(stName(rep.status.from))+" → <span class='gi-take'>"+escapeHtml(stName(rep.status.to))+"</span>（現場が先の状態）</div>";
+    else inner+="<div class='gi-muted'>進捗: "+escapeHtml(stName(mainData&&mainData.chosho_status))+"（変更なし）</div>";
+    const dConf=rep.conflicts.find(c=>c.cat==="date");
+    if(dConf) inner+='<div class="gi-conflict" data-date="1" style="margin-top:4px">日付: '
+      +'<label><input type="radio" name="gi-date" value="main" checked> 📒'+escapeHtml(dConf.main)+'</label>'
+      +'<label><input type="radio" name="gi-date" value="genba"> 📱'+escapeHtml(dConf.genba)+'</label></div>';
+    else if(rep.date) inner+="<div>日付: <span class='gi-take'>"+escapeHtml(rep.date.to)+"</span>（現場）</div>";
+    else { const nD=rep.notes.find(n=>n.indexOf("日付")>=0); inner+="<div class='gi-muted'>日付: "+escapeHtml((mainData&&mainData.chosho_date)||"（空）")+(nD?"（現場は本日既定のため台帳保持）":"（変更なし）")+"</div>"; }
+    html+=giSec("🗓 進捗・日付",inner);
+  }
+  // 技術（アンテナ・部材・測定・図面）
+  {
+    const structural=new Set(["measurements","wire_overrides","text_annotations","antenna_guide"]);
+    const changed=rep.technical.filter(k=>!structural.has(k)&&!/^tv_/.test(k));
+    let inner="<div>アンテナ・取付・部材・ケーブル等：<b class='gi-take'>"+changed.length+" 項目</b>を現場値で更新";
+    if(changed.length) inner+="<div class='gi-muted' style='margin-top:3px'>"+changed.slice(0,14).map(k=>escapeHtml(GENBA_TECH_LABELS[k]||k)).join(" ・ ")+(changed.length>14?" …":"")+"</div>";
+    inner+="</div>";
+    const flags=[];
+    if(rep.technical.includes("measurements")) flags.push("電波測定表(dB/MER/BER)");
+    if(rep.technical.includes("wire_overrides")) flags.push("配線色(新規/既存)");
+    if(rep.technical.includes("text_annotations")) flags.push("図面の赤文字メモ");
+    if(rep.technical.includes("antenna_guide")) flags.push("アンテナ取付ガイド");
+    if(rep.technical.some(k=>/^tv_/.test(k))) flags.push("TV各室");
+    if(flags.length) inner+="<div style='margin-top:5px'>現場で更新: <span class='gi-take'>"+flags.map(escapeHtml).join(" / ")+"</span></div>";
+    html+=giSec("📡 アンテナ・部材・測定・図面（現場を採用／BOM・積算・系統図は取込後に自動再計算）",inner);
+  }
+  // 写真
+  {
+    let inner='<div class="gi-photos">';
+    (dry.merged.chosho_photos||[]).forEach(p=>{
+      const k=keyOf(p); if(simKeys.has(k)) return; // 似ているペアは下で別表示
+      const inM=mKeys.has(k), inG=gKeys.has(k);
+      let badge = (inM&&inG)?'<span class="gi-badge dup">🔵重複統合</span>':((inG&&!inM)?'<span class="gi-badge new">🟢新規</span>':'');
+      inner+='<div class="gi-photo"><img src="'+escapeHtml(p.dataUri||"")+'"><div class="cap">'+badge+' '+escapeHtml(p.label||"")+'</div></div>';
+    });
+    inner+='</div>';
+    if(simPairs.length){
+      inner+='<div style="margin-top:8px;font-weight:600;color:#e65100;">🟡 似ている写真（別解像度/別カットの可能性）— どちらを残すか選べます（既定=両方）</div>';
+      simPairs.forEach((pr,i)=>{
+        inner+='<div class="gi-simgroup" data-sim="'+i+'"><div class="simrow">'
+          +'<div class="gi-photo"><img src="'+escapeHtml(pr.main.dataUri||"")+'"><div class="cap">📒PC: '+escapeHtml(pr.main.label||"")+'</div></div>'
+          +'<div class="gi-photo"><img src="'+escapeHtml(pr.genba.dataUri||"")+'"><div class="cap">📱現場: '+escapeHtml(pr.genba.label||"")+'</div></div>'
+          +'<div class="gi-simopts">'
+          +'<label><input type="radio" name="gi-sim-'+i+'" value="both" checked> 両方残す</label>'
+          +'<label><input type="radio" name="gi-sim-'+i+'" value="genba"> 現場を残す（PCを捨てる）</label>'
+          +'<label><input type="radio" name="gi-sim-'+i+'" value="main"> PCを残す（現場を捨てる）</label>'
+          +'</div></div></div>';
+      });
+    }
+    html+=giSec("📷 写真（現場と統合・重複は自動で1枚"+(simPairs.length?("・"+simPairs.length+"組は要確認"):"")+"）",inner);
+  }
+  // 保護ブロック
+  html+='<div class="gi-protect">🔒 <b>PCを保持（現場からは取り込みません）</b>：料金（税/諸経費/協力会社諸経費）・石綿(みなし)判定・PC図面の手編集（数量/ノード位置/測定表配置）・取付ガイドの貼付位置・電波測定表の表示ON/OFF。<br>これらは現場入力アプリが既定値を出すため、取り込むとPCで作り込んだ内容を壊す恐れがあります。BOM・積算・系統図は取込後に自動で再計算されます。</div>';
+
+  body.innerHTML=html;
+  document.getElementById("gi-title").textContent="📥 現場データの取り込み（管理番号 "+mgmt+"）";
+  document.getElementById("gi-apply-all").checked=false;
+  md.classList.add("open");
+  return new Promise(resolve=>{
+    const cleanup=()=>{ md.classList.remove("open"); ["gi-import","gi-skip","gi-cancel"].forEach(id=>{ const b=document.getElementById(id); if(b) b.onclick=null; }); };
+    const collectOpts=()=>{
+      const opts={ genbaToday: todayS, customer:{}, photo:{ dropKeys:[] } };
+      GENBA_CUSTOMER_FIELDS.forEach(k=>{ const r=body.querySelector('input[name="gi-cust-'+k+'"]:checked'); if(r) opts.customer[k]=r.value; });
+      const dr=body.querySelector('input[name="gi-date"]:checked'); if(dr) opts.date=dr.value;
+      simPairs.forEach((pr,i)=>{
+        const sel=body.querySelector('input[name="gi-sim-'+i+'"]:checked'); const v=sel?sel.value:"both";
+        if(v==="genba") opts.photo.dropKeys.push(pr.main.key);
+        else if(v==="main") opts.photo.dropKeys.push(pr.genba.key);
+      });
+      return opts;
+    };
+    document.getElementById("gi-import").onclick=()=>{ const opts=collectOpts(); const applyAll=document.getElementById("gi-apply-all").checked; cleanup(); resolve({action:"import",opts,applyAll}); };
+    document.getElementById("gi-skip").onclick=()=>{ cleanup(); resolve({action:"skip"}); };
+    document.getElementById("gi-cancel").onclick=()=>{ cleanup(); resolve({action:"cancel"}); };
+  });
+}
+
+// 開いていない行の個別JSON書戻し（_editingRow を一時的に差し替えて既存の書戻し機構を流用）。
+async function _genbaWriteRowIndividual(row){
+  if(!_currentProject || !row || row.fileType==="full") return "";
+  if(_listRows.indexOf(row)<0) return "";
+  const prev=_editingRow;
+  try { _editingRow=row; return await writeCurrentCaseToIndividualFile(); }
+  catch(err){ console.warn("[現場取込] 個別JSON書戻し失敗:", err); return ""; }
+  finally { _editingRow=prev; }
+}
+
+// 1件のマージを行へ適用（再計算＋書戻し＋物件反映）。
+async function applyGenbaMergeToRow(row, genbaData, opts){
+  opts = Object.assign({ genbaToday:_genbaTodayStr() }, opts||{});
+  const wasEditing = (_editingRow===row);
+  const { merged } = genbaMergeCaseData(row.data||{}, genbaData, opts);
+  row.data = merged;
+  row._manual = false;
+  row._amtCache=undefined; row._bomCache=undefined; row._thumbs=undefined;
+  row._photoCount = Array.isArray(merged.chosho_photos)?merged.chosho_photos.filter(p=>p&&p.dataUri).length:0;
+  try { resolveRowOutsourceFee(row); } catch(_){}  // 物件の協力会社諸経費を auto 行へ再適用
+  try { markCaseEdited(row); } catch(_){}
+  const note = await _genbaWriteRowIndividual(row);  // 原寸写真は温存して個別JSONへ書戻し
+  try { projTouch(); } catch(_){}
+  if(wasEditing){ try { applyStateData(row.data); _editingRow=row; try{ rtClaimLock(row); }catch(_){} } catch(_){} }
+  return note;
+}
+
+// エントリポイント：現場入力(genba)の「管理番号.json」を選んで物件へ取り込む。
+function genbaImportFlow(){
+  if(!_currentProject && (!_listRows || _listRows.length===0)){
+    if(!confirm("物件も一覧も開いていません。\n現場JSNを取り込むには、先に物件を開くか一覧を読み込んでください。\n\nこのまま新規の一覧として取り込みますか？")) return;
+  }
+  pickFile({ accept:".json,application/json,text/plain", multiple:true }, async files => {
+    const arr = Array.isArray(files) ? files : (files?[files]:[]);
+    if(!arr.length) return;
+    let applyAllDefault=false;
+    let done=0, skipped=0, failed=0; const notes=[];
+    for(const f of arr){
+      let data;
+      try { data=JSON.parse(await f.text()); } catch(_){ failed++; notes.push("・"+f.name+"：JSONとして読めません"); continue; }
+      const fmt = (typeof detectEncFormat==="function") ? detectEncFormat(data) : "plain";
+      if(fmt!=="plain"){ skipped++; notes.push("・"+f.name+"：暗号化ファイルは対象外（現場JSNは平文です）"); continue; }
+      const mg=((data.chosho_mgmt_no||"")+"").trim();
+      if(!mg){ skipped++; notes.push("・"+f.name+"：管理番号が空欄のため取込めません"); continue; }
+      let row=_listRows.find(r=> subCaseKey(r)==="m:"+mg);
+      let matchType, createdRow=null;
+      if(!row){ row=createManualRow({chosho_mgmt_no:mg},"genba-import"); createdRow=row; matchType="new"; }
+      else if(row._manual) matchType="manual";
+      else matchType="case";
+      if((row.fileType==="hybrid"||row.fileType==="full") && !row.unlocked){
+        skipped++; notes.push("・管理番号 "+mg+"：暗号化戸別（未復号）のためスキップ（先に🔓一括復号してください）");
+        if(createdRow){ const i=_listRows.indexOf(createdRow); if(i>=0) _listRows.splice(i,1); }
+        continue;
+      }
+      let choice;
+      if(applyAllDefault){ choice={action:"import",opts:{}}; }
+      else {
+        choice=await openGenbaImportPreview({ row, mgmt:mg, mainData:row.data, genbaData:data, matchType, fileName:f.name });
+        if(choice.action==="cancel"){ if(createdRow){ const i=_listRows.indexOf(createdRow); if(i>=0) _listRows.splice(i,1); } notes.push("（以降を中止しました）"); break; }
+        if(choice.applyAll) applyAllDefault=true;
+      }
+      if(choice.action==="skip"){ skipped++; if(createdRow){ const i=_listRows.indexOf(createdRow); if(i>=0) _listRows.splice(i,1); } continue; }
+      try { await applyGenbaMergeToRow(row, data, choice.opts||{}); done++; }
+      catch(err){ failed++; notes.push("・管理番号 "+mg+"：取込失敗 "+(err&&err.message||err)); console.warn("[現場取込] 失敗",err); }
+    }
+    try { renderListTable(); } catch(_){}
+    if(_currentProject){ try { await prepareProjectThumbs(); } catch(_){} try { await projSaveNow(); } catch(_){} }
+    alert("📥 現場データ取込 完了\n\n取込: "+done+" 件 ／ スキップ: "+skipped+" 件"+(failed?(" ／ 失敗: "+failed+" 件"):"")+(notes.length?("\n\n"+notes.join("\n")):""));
+  });
+}
+
+/* ============================================================
    フォルダ一括読み込み → 台帳マージ（6-3）
    台帳起点の行（_manual）を保持し、同じ管理番号のファイルが読み込まれたら
    件ごとに確認ダイアログ（台帳優先／読み込み値で上書き／スキップ＋以降すべて適用）
@@ -19760,21 +20260,28 @@ async function mergeRowsWithManual(newRows){
       if(res.all) applyAll = choice;
     }
     if(choice === "ledger"){
-      // 台帳を優先：ファイル行（積算・図面データ）を土台に、台帳の記入済み値で上書き（空欄のみ読み込み値）
-      const merged = Object.assign({}, match.data);
-      ["chosho_cust_name", "chosho_cust_addr", "chosho_cust_tel", "chosho_date"].forEach(k => {
-        if(mr.data && mr.data[k]) merged[k] = mr.data[k];
-      });
-      if(mr.data && mr.data.chosho_status && mr.data.chosho_status !== "provisional"){
-        merged.chosho_status = mr.data.chosho_status;
+      if(match.fileType === "plain" && match.data && match.data._origin === "genba"){
+        // 現場入力(genba)ファイル：フィールド単位マージ（台帳＝顧客/日付/料金/石綿/図面の権威、
+        // 現場＝アンテナ・部材・測定・写真・配線の権威）。genbaの既定値は base(台帳)に無いため混入しない。
+        const res = genbaMergeCaseData(mr.data || {}, match.data, { genbaToday: _genbaTodayStr() });
+        match.data = res.merged;
+      } else {
+        // 従来：ファイル行（積算・図面データ）を土台に、台帳の記入済み値で上書き（空欄のみ読み込み値）
+        const merged = Object.assign({}, match.data);
+        ["chosho_cust_name", "chosho_cust_addr", "chosho_cust_tel", "chosho_date"].forEach(k => {
+          if(mr.data && mr.data[k]) merged[k] = mr.data[k];
+        });
+        if(mr.data && mr.data.chosho_status && mr.data.chosho_status !== "provisional"){
+          merged.chosho_status = mr.data.chosho_status;
+        }
+        match.data = merged;
       }
-      match.data = merged;
       // ハイブリッド行は平文部（施工日・状態）も同期（再保存・物件保存で持続させる）
       if(match.fileType === "hybrid" && match.envelope && match.envelope.plain){
         match.envelope = Object.assign({}, match.envelope);
         match.envelope.plain = Object.assign({}, match.envelope.plain);
-        if(merged.chosho_date) match.envelope.plain.chosho_date = merged.chosho_date;
-        if(merged.chosho_status) match.envelope.plain.chosho_status = merged.chosho_status;
+        if(match.data.chosho_date) match.envelope.plain.chosho_date = match.data.chosho_date;
+        if(match.data.chosho_status) match.envelope.plain.chosho_status = match.data.chosho_status;
       }
       match._amtCache = undefined; match._bomCache = undefined;
     } else if(choice === "skip"){
@@ -20113,6 +20620,7 @@ function init(){
   document.getElementById("btn-list-bulk-reenc").onclick = openBulkReencModal;
   document.getElementById("btn-list-bulk-plain").onclick = bulkConvertToPlain;
   { const b = document.getElementById("btn-list-bulk-photos"); if(b) b.onclick = bulkExportPhotosToFolders; }
+  { const b = document.getElementById("btn-genba-import"); if(b) b.onclick = genbaImportFlow; }
   document.getElementById("bulk-reenc-modal").addEventListener("click", e => {
     if(e.target.id === "bulk-reenc-modal") closeBulkReencModal();
   });
