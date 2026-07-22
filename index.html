@@ -26387,9 +26387,12 @@ window.addEventListener("DOMContentLoaded", init);
   function gotoLedgerFromMap(highlightMgmtNo){
     mapTeardown();
     var key = String(highlightMgmtNo == null ? "" : highlightMgmtNo).trim();
-    try { if(key) _ledgerHighlightKey = "m:" + key; } catch(_){}
     try {
+      // 先に一覧ビューを表示（現在のモードで1回描画）。ハイライトキーはこの描画では設定しない。
       if(typeof openListView === "function") openListView();
+      // 既に受付台帳モードだと openListView の描画でキーが消費されてしまうため、
+      // キー設定は openListView の後・setListMode の前に行い、最後の台帳描画でのみ消費させる。
+      if(key) _ledgerHighlightKey = "m:" + key;
       if(typeof setListMode === "function") setListMode("ledger");
       else if(typeof openMenuView === "function") openMenuView();
     } catch(e){
