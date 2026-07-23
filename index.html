@@ -18805,6 +18805,7 @@ function renderListLedgerMode(rows, container){
     + '<button id="lg-print-sel" title="左端のチェックを入れた戸別の工事調書を 1戸1ページ でまとめて印刷／PDF出力します"' + (selCount ? '' : ' disabled')
     + ' style="background:#7a4e1e;color:#fff;border:1px solid #5e3c16;padding:4px 12px;border-radius:3px;cursor:' + (selCount ? 'pointer' : 'not-allowed') + ';font-size:12px;opacity:' + (selCount ? '1' : '.5') + ';">🖨 選択印刷' + (selCount ? '（' + selCount + '件）' : '') + '</button>'
     + (selCount ? '<button id="lg-print-clear" title="工事調書の選択をすべて解除" style="background:#fff;color:#7a4e1e;border:1px solid #b08a55;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:12px;">選択解除</button>' : '')
+    + '<button id="lg-export-genba" title="この受付台帳を1ファイル（受付台帳.json）に書き出します。スマホの現場入力アプリで取り込むと、一覧から選んで入力を開始できます（管理番号・氏名・住所が入った状態）。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📤 現場用に書き出し</button>'
     + '<span style="font-size:11px;color:#667482;">セルをクリックで直接編集。日程・打合せはカレンダーに、名前・住所等は図面に即反映されます</span>'
     + '<span class="lg-count">全 ' + rows.length + ' 件（仮 ' + prov + ' ／ 完了 ' + done + ' ／ ビラ済 ' + flyered + '）' + (shown.length !== rows.length ? ' → 表示 ' + shown.length + ' 件' : '') + '</span>'
     + '</div>';
@@ -18945,6 +18946,40 @@ function refreshLedgerPrintSelUI(container){
     allBox.indeterminate = selN > 0 && selN < printable.length;
   }
 }
+/* 受付台帳を「現場入力アプリ(genba)」用に1ファイル書き出し。
+   genba側で取り込むと、一覧から選んで管理番号・氏名・住所入りの入力を開始できる。 */
+function exportReceptionLedgerForGenba(){
+  const src = (typeof _listRows !== "undefined" && Array.isArray(_listRows)) ? _listRows : [];
+  const rows = src.map(r => {
+    const d = r.data || {};
+    const lg = (typeof getLedger === "function") ? (getLedger(subCaseKey(r)) || {}) : {};
+    const ctr = (typeof rowContractor === "function") ? (rowContractor(r) || "") : "";
+    return {
+      mgmt_no: (d.chosho_mgmt_no || "").trim(),
+      name:    d.chosho_cust_name || "",
+      addr:    d.chosho_cust_addr || "",
+      tel:     d.chosho_cust_tel  || "",
+      date:    d.chosho_date      || "",
+      time:    lg.time            || "",
+      meet:    lg.meetAt          || "",
+      status:  d.chosho_status    || "",
+      contractor: ctr,
+      note:    lg.note            || ""
+    };
+  }).filter(x => x.mgmt_no || x.name || x.addr);
+  if(!rows.length){ alert("書き出す受付台帳の行がありません。先に戸別一覧を読み込むか、台帳に行を追加してください。"); return; }
+  const projName = (typeof _currentProject !== "undefined" && _currentProject && _currentProject.name) ? String(_currentProject.name) : "";
+  const payload = { type: "antenna_reception_ledger", version: 1, exportedAt: new Date().toISOString(), project: projName, count: rows.length, rows };
+  const base = "受付台帳" + (projName ? ("_" + projName) : "") + "_" + new Date().toISOString().slice(0, 10);
+  const fname = ((typeof sanitizePrintFilename === "function") ? sanitizePrintFilename(base) : base).replace(/\.json$/i, "") + ".json";
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = fname;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  alert("受付台帳を書き出しました（" + rows.length + "件）。\nスマホの現場入力アプリの「🗒 受付台帳」から取り込むと、一覧から選んで入力を開始できます。");
+}
 function bindLedgerHandlers(container){
   if(container._ledgerBound) return;
   container._ledgerBound = true;
@@ -18959,6 +18994,7 @@ function bindLedgerHandlers(container){
     }
     if(e.target.closest("#lg-print-sel")){ printSelectedChosho(); return; }
     if(e.target.closest("#lg-print-clear")){ _ledgerPrintSel.clear(); renderListTable(); return; }
+    if(e.target.closest("#lg-export-genba")){ exportReceptionLedgerForGenba(); return; }
     // 施工会社チップ：一発割当／会社名クリックで変更モード（セルのみ差し替え＝スクロール位置を保つ）
     const ctrEl = e.target.closest(".lg-ctr-cur, .lg-ctr-chip");
     if(ctrEl){
