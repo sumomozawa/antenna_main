@@ -4642,7 +4642,8 @@
             <button type="button" class="map-side-btn" id="map-legend-add" style="flex:1;">▤ 凡例</button>
             <button type="button" class="map-side-btn" id="map-sitename-add" style="flex:1;">🏠 現場名</button>
           </div>
-          <div class="map-side-note">方位角を入れて配置 → 基点をドラッグで設置位置へ。配置後は選択して角度・長さを微調整できます。送信所プリセットは未設定のため当面は方位角の手入力です。各要素は印刷にも出ます。</div>
+          <button type="button" class="map-side-btn" id="map-ctrlegend-add" style="background:#00695c;border-color:#004d40;">🎨 施工会社の色凡例</button>
+          <div class="map-side-note">方位角を入れて配置 → 基点をドラッグで設置位置へ。配置後は選択して角度・長さを微調整できます。送信所プリセットは未設定のため当面は方位角の手入力です。各要素は印刷にも出ます。<br>「🎨 施工会社の色凡例」＝各社の色見本を載せた枠を配置（ドラッグで移動・印刷にも掲載）。施工業者マスターの内容に自動追従します。</div>
         </div>
       </div>
       <div class="map-side-sec">
@@ -25187,6 +25188,33 @@ window.addEventListener("DOMContentLoaded", init);
         });
         return '<g data-obj-id="' + esc(o.id) + '" data-layer="label" style="cursor:pointer;">' + inner + '</g>';
       }
+      if(o.kind === "ctrlegend"){
+        // 施工会社の色凡例：施工業者マスターの各社を色見本つきで一覧（描画時に最新のマスターへ追従）。
+        var u3 = o.size || defaultTextSize();
+        var clist = [];
+        try { if(typeof getContractorList === "function") clist = getContractorList() || []; } catch(_){}
+        var crows = clist.map(function(nm){
+          var cc = "";
+          try { if(typeof calContractorColor === "function") cc = calContractorColor(nm); } catch(_){}
+          return { color: cc || "#78828c", name: String(nm || "") };
+        });
+        crows.push({ color: "#78828c", name: "未割当（番号あり）" });
+        var ttl3 = "施工会社（色分け）";
+        var pad3 = u3 * 0.6, sw3 = u3 * 1.0, gap3 = u3 * 0.5, rowH3 = u3 * 1.7, titleH3 = u3 * 1.7;
+        var maxCh3 = ttl3.length;
+        crows.forEach(function(r){ if(r.name.length > maxCh3) maxCh3 = r.name.length; });
+        var boxW3 = pad3 + sw3 + gap3 + maxCh3 * u3 * 1.05 + pad3;   // 全角名でも枠内に収まるよう余裕を持たせる
+        var boxH3 = titleH3 + rowH3 * crows.length + pad3 * 1.2;
+        var inner3 = '<rect x="' + o.x + '" y="' + o.y + '" width="' + boxW3 + '" height="' + boxH3 + '" fill="#ffffff" stroke="#888" stroke-width="' + (u3 * 0.08) + '"/>';
+        inner3 += '<text x="' + (o.x + pad3) + '" y="' + (o.y + titleH3 * 0.72) + '" font-size="' + (u3 * 0.98) + '" fill="#1e3a5f" font-weight="bold" font-family="sans-serif">' + esc(ttl3) + '</text>';
+        crows.forEach(function(r, i){
+          var ry3 = o.y + titleH3 + rowH3 * i;
+          var swy3 = ry3 + (rowH3 - sw3) / 2;
+          inner3 += '<rect x="' + (o.x + pad3) + '" y="' + swy3 + '" width="' + sw3 + '" height="' + sw3 + '" fill="' + hexToRgba(r.color, 0.30) + '" stroke="' + esc(r.color) + '" stroke-width="' + (u3 * 0.09) + '"/>';
+          inner3 += '<text x="' + (o.x + pad3 + sw3 + gap3) + '" y="' + (ry3 + rowH3 * 0.72) + '" font-size="' + u3 + '" fill="#333" font-family="sans-serif">' + esc(r.name) + '</text>';
+        });
+        return '<g data-obj-id="' + esc(o.id) + '" data-layer="label" style="cursor:pointer;">' + inner3 + '</g>';
+      }
       if(o.kind === "signal"){
         var S = o.size || 24;
         var horiz = (o.orient === "h");
@@ -25249,6 +25277,16 @@ window.addEventListener("DOMContentLoaded", init);
     var o = { id: "o_" + mapUid(), kind: "legend", x: c.x, y: c.y, size: Math.max(12, b.w / 120) };
     current.layers.label.objects.push(o); renderObjects(); flushSave(); setTool("pan"); selectObject("label", o.id);
   }
+  // 施工会社の色凡例（施工業者マスターの各社→色見本）。ドラッグで移動でき、印刷にも出る。中身は描画時にマスターへ自動追従。
+  function addCtrLegend(){
+    if(!current){ toast("シートがありません。"); return; }
+    pushUndo();
+    var c = viewCornerWorld(0.72, 0.40), b = worldBounds();
+    var o = { id: "o_" + mapUid(), kind: "ctrlegend", x: c.x, y: c.y, size: Math.max(12, b.w / 120) };
+    current.layers.label.objects.push(o); renderObjects(); flushSave(); setTool("pan"); selectObject("label", o.id);
+    var n = 0; try { n = (typeof getContractorList === "function") ? (getContractorList() || []).length : 0; } catch(_){}
+    toast(n ? "施工会社の色凡例を配置しました（" + n + "社）。ドラッグで移動できます。" : "施工会社の色凡例を配置しました。施工業者マスターが未登録のため、登録すると各社が表示されます。");
+  }
   function addSiteName(){
     if(!current){ toast("シートがありません。"); return; }
     var name = "", mgmt = "";
@@ -25263,7 +25301,7 @@ window.addEventListener("DOMContentLoaded", init);
   }
 
   /* ---------- 選択・編集 ---------- */
-  function isPointObj(o){ return !!o && (o.kind === "text" || o.kind === "pin" || o.kind === "azimuth" || o.kind === "north" || o.kind === "legend" || o.kind === "signal"); }
+  function isPointObj(o){ return !!o && (o.kind === "text" || o.kind === "pin" || o.kind === "azimuth" || o.kind === "north" || o.kind === "legend" || o.kind === "ctrlegend" || o.kind === "signal"); }
   function objAnchors(o){ return isPointObj(o) ? [[o.x, o.y]] : o.points; }
   function setObjPoint(o, i, x, y){ if(isPointObj(o)){ o.x = x; o.y = y; } else { o.points[i] = [x, y]; } }
   function applyObjDelta(o, orig, dx, dy){
@@ -25513,8 +25551,8 @@ window.addEventListener("DOMContentLoaded", init);
       on("map-obj-delete", "click", deleteSelected);
       return;
     }
-    if(layer === "label" && (o.kind === "azimuth" || o.kind === "north" || o.kind === "legend")){
-      var ttl = o.kind === "azimuth" ? "📡 受信方向（方位線）" : (o.kind === "north" ? "🧭 真北記号" : "▤ 凡例");
+    if(layer === "label" && (o.kind === "azimuth" || o.kind === "north" || o.kind === "legend" || o.kind === "ctrlegend")){
+      var ttl = o.kind === "azimuth" ? "📡 受信方向（方位線）" : (o.kind === "north" ? "🧭 真北記号" : (o.kind === "ctrlegend" ? "🎨 施工会社の色凡例" : "▤ 凡例"));
       var body;
       if(o.kind === "azimuth"){
         body = '<label class="map-fld">方位角（度・北=0・時計回り）<input type="number" id="map-az-deg" value="' + (Math.round((o.angle || 0) * 10) / 10) + '" step="1"></label>'
@@ -26167,6 +26205,7 @@ window.addEventListener("DOMContentLoaded", init);
     on("map-azim-add", "click", addAzimuth);
     on("map-north-add", "click", addNorth);
     on("map-legend-add", "click", addLegend);
+    on("map-ctrlegend-add", "click", addCtrLegend);
     on("map-sitename-add", "click", addSiteName);
     on("map-undo", "click", undo);
     on("map-redo", "click", redo);
