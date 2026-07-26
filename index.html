@@ -18949,7 +18949,7 @@ function refreshLedgerPrintSelUI(container){
 }
 /* 受付台帳を「現場入力アプリ(genba)」用に1ファイル書き出し。
    genba側で取り込むと、一覧から選んで管理番号・氏名・住所入りの入力を開始できる。 */
-function exportReceptionLedgerForGenba(){
+async function exportReceptionLedgerForGenba(){
   const src = (typeof _listRows !== "undefined" && Array.isArray(_listRows)) ? _listRows : [];
   const rows = src.map(r => {
     const d = r.data || {};
@@ -18971,15 +18971,37 @@ function exportReceptionLedgerForGenba(){
   if(!rows.length){ alert("書き出す受付台帳の行がありません。先に戸別一覧を読み込むか、台帳に行を追加してください。"); return; }
   const projName = (typeof _currentProject !== "undefined" && _currentProject && _currentProject.name) ? String(_currentProject.name) : "";
   const payload = { type: "antenna_reception_ledger", version: 1, exportedAt: new Date().toISOString(), project: projName, count: rows.length, rows };
+  const content = JSON.stringify(payload, null, 2);
   const base = "受付台帳" + (projName ? ("_" + projName) : "") + "_" + new Date().toISOString().slice(0, 10);
-  const fname = ((typeof sanitizePrintFilename === "function") ? sanitizePrintFilename(base) : base).replace(/\.json$/i, "") + ".json";
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const defaultBase = ((typeof sanitizePrintFilename === "function") ? sanitizePrintFilename(base) : base).replace(/\.json$/i, "");
+  const fname = defaultBase + ".json";
+
+  // File System Access API 対応（Chrome/Edge）：保存先ダイアログを表示 → どこに保存したか分かる
+  if(window.showSaveFilePicker){
+    try {
+      const opts = { suggestedName: fname, types: [{ description: "JSON ファイル", accept: { "application/json": [".json"] } }] };
+      if(lastSaveDirHandle) opts.startIn = lastSaveDirHandle;
+      const handle = await window.showSaveFilePicker(opts);
+      const writable = await handle.createWritable();
+      await writable.write(content);
+      await writable.close();
+      try { lastSaveDirHandle = handle.getParent ? await handle.getParent() : lastSaveDirHandle; } catch(_){}
+      alert("受付台帳を保存しました（" + rows.length + "件）。\n選んだ保存先に「" + fname + "」を書き出しました。\nこのファイルをスマホに移し、現場入力アプリの「🗒 受付台帳」から取り込んでください。");
+      return;
+    } catch(err){
+      if(err && err.name === "AbortError") return;   // ユーザーがキャンセル
+      console.warn("showSaveFilePicker 失敗、ダウンロード方式にフォールバック:", err);
+    }
+  }
+
+  // フォールバック：保存先ダイアログ非対応（スマホのブラウザ等）→ ブラウザ既定のダウンロードフォルダへ
+  const blob = new Blob([content], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url; a.download = fname;
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
-  alert("受付台帳を書き出しました（" + rows.length + "件）。\nスマホの現場入力アプリの「🗒 受付台帳」から取り込むと、一覧から選んで入力を開始できます。");
+  alert("受付台帳を書き出しました（" + rows.length + "件）。\n保存先：ブラウザの「ダウンロード」フォルダ（ファイル名「" + fname + "」）。\nこのファイルをスマホに移し、現場入力アプリの「🗒 受付台帳」から取り込んでください。");
 }
 function bindLedgerHandlers(container){
   if(container._ledgerBound) return;
