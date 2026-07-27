@@ -2670,6 +2670,12 @@
     border-bottom: 2px solid #1e3a5f; padding-bottom: 5px; margin-bottom: 10px;
     display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   }
+  /* バージョン表記（メニュー最下部・目立たせない） */
+  .app-ver-foot {
+    margin: 18px 2px 4px; padding-top: 8px; border-top: 1px solid #e5e9ee;
+    font-size: 10.5px; color: #9aa3ad; text-align: right; line-height: 1.7;
+  }
+  .app-ver-foot b { color: #7c8894; font-weight: 600; }
   .menu-sec-head .menu-sec-actions { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
   .menu-sec-head .menu-sec-actions button {
     background: #fff; border: 1px solid #2e5488; color: #2e5488;
@@ -2954,7 +2960,8 @@
   .map-layer-row .map-layer-extra { font-size: 10px; color: #667482; display: inline-flex; align-items: center; gap: 2px; }
 
   .map-stage-wrap { flex: 1 1 auto; position: relative; min-width: 0; background: #dfe4ea; overflow: hidden; }
-  #map-stage { width: 100%; height: 100%; display: block; touch-action: none; background: #dfe4ea; cursor: grab; }
+  /* 無限キャンバス：背景は白一色（有限の「紙」枠は廃止し、方眼はSVG側で敷く） */
+  #map-stage { width: 100%; height: 100%; display: block; touch-action: none; background: #ffffff; cursor: grab; }
   #map-stage.map-grabbing { cursor: grabbing; }
   #map-stage.zooming [data-layer="boundary"],
   #map-stage.zooming [data-layer="chome"] { stroke-dasharray: none !important; }
@@ -4467,6 +4474,27 @@
       </div>
       <div id="menu-proj-list"></div>
     </section>
+    <section class="menu-sec" id="menu-company-sec">
+      <div class="menu-sec-head">🏷 自社名・共有フォルダへの控え（この端末の設定）</div>
+      <div class="menu-proj-note">
+        <b>自社名</b>は「<b>誰が最後に保存したか</b>」の記録と、共有フォルダに置く <b>.bak</b> のファイル名に使います（他業者の控えと混ざりません）。<b>端末ごと</b>の設定です。
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0 4px;">
+        <input type="text" id="menu-company-name" placeholder="例）浪岡電設" style="flex:1 1 220px;max-width:320px;font-size:13px;padding:6px 8px;border:1px solid #cdd3da;border-radius:4px;">
+        <button id="menu-company-save" style="background:#1e3a5f;color:#fff;border:1px solid #16314f;padding:5px 16px;border-radius:3px;cursor:pointer;font-size:12px;">自社名を保存</button>
+        <span id="menu-company-stat" style="font-size:11px;color:#667482;"></span>
+      </div>
+      <label style="display:flex;gap:6px;align-items:flex-start;font-size:12px;color:#33414f;margin-top:8px;cursor:pointer;">
+        <input type="checkbox" id="menu-bak-enable" style="margin-top:2px;">
+        <span>📦 <b>共有ファイルに連動中は、同じフォルダへ .bak も保存する</b><br>
+          <span style="font-size:11px;color:#667482;">共有ファイルへ書き戻すたびに、同じ内容の控えを「<span id="menu-bak-name">物件名_自社名.bak.json</span>」として同フォルダに保存します（最短1分間隔）。</span></span>
+      </label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px;">
+        <button id="menu-bak-dir" style="background:#fff;border:1px solid #cdd3da;padding:5px 14px;border-radius:3px;cursor:pointer;font-size:12px;">📂 .bak の保存先フォルダを指定</button>
+        <span id="menu-bak-stat" style="font-size:11px;color:#667482;"></span>
+      </div>
+      <div id="menu-lastsaved" class="menu-proj-note" style="margin-top:10px;"></div>
+    </section>
     <section class="menu-sec" id="menu-contractor-sec">
       <div class="menu-sec-head">🏢 施工業者（この物件で使う協力会社）</div>
       <div class="menu-proj-note">
@@ -4533,6 +4561,7 @@
       </div>
       <div id="tsl-root"></div>
     </section>
+    <div class="app-ver-foot" id="app-ver-foot"></div>
   </div>
 </div>
 <input type="file" id="menu-proj-import-file" accept=".json,application/json,text/plain,application/octet-stream" style="display:none;">
@@ -4634,16 +4663,8 @@
       <div class="map-side-sec">
         <div class="map-side-head">アンテナ図 仕上げ</div>
         <div class="map-gsi">
-          <div class="map-gsi-zip-row" style="flex-wrap:wrap;">受信方位 <input type="number" id="map-azim-deg" min="0" max="359" step="1" placeholder="例:120" style="width:72px;">°（北=0・時計回り）</div>
-          <input type="text" id="map-azim-label" placeholder="送信所名（任意・例: ○○中継局）" autocomplete="off">
-          <button type="button" class="map-side-btn" id="map-azim-add" style="background:#ad1457;border-color:#880e4f;">📡 受信方向（方位線）を配置</button>
-          <div style="display:flex;gap:6px;">
-            <button type="button" class="map-side-btn" id="map-north-add" style="flex:1;">🧭 真北</button>
-            <button type="button" class="map-side-btn" id="map-legend-add" style="flex:1;">▤ 凡例</button>
-            <button type="button" class="map-side-btn" id="map-sitename-add" style="flex:1;">🏠 現場名</button>
-          </div>
           <button type="button" class="map-side-btn" id="map-ctrlegend-add" style="background:#00695c;border-color:#004d40;">🎨 施工会社の色凡例</button>
-          <div class="map-side-note">方位角を入れて配置 → 基点をドラッグで設置位置へ。配置後は選択して角度・長さを微調整できます。送信所プリセットは未設定のため当面は方位角の手入力です。各要素は印刷にも出ます。<br>「🎨 施工会社の色凡例」＝各社の色見本を載せた枠を配置（ドラッグで移動・印刷にも掲載）。施工業者マスターの内容に自動追従します。</div>
+          <div class="map-side-note">各社の色見本を載せた枠を配置します。<b>ドラッグで移動</b>でき、<b>印刷にも掲載</b>されます。中身は施工業者マスターに自動追従します。配置後に選択するとサイズ変更・削除ができます。</div>
         </div>
       </div>
       <div class="map-side-sec">
@@ -4821,6 +4842,35 @@
 </div>
 
 <script>
+/* ============================================================
+   アプリの版（更新日ベース）。画面の隅に控えめに表示し、
+   現場入力(genba)と「どちらが新しいか」を突き合わせられるようにする。
+   ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
+   ============================================================ */
+const APP_NAME_SHORT = "メイン";
+const APP_VERSION = "2026.07.27";
+/* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
+   ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
+const COMPANY_KEY = "antenna_company_name_v1";
+function getCompanyName(){ try { return (localStorage.getItem(COMPANY_KEY) || "").trim(); } catch(_){ return ""; } }
+function setCompanyName(v){ try { localStorage.setItem(COMPANY_KEY, String(v || "").trim()); } catch(_){} }
+/* 表示用：会社名が未設定なら端末名で代用（誰が保存したかを必ず何かしら残す）。 */
+function savedByLabel(by){
+  if(!by) return "";
+  const co = (by.company || "").trim(), dev = (by.device || "").trim();
+  if(co && dev) return co + "（" + dev + "）";
+  return co || dev || "";
+}
+// 現場入力(genba)の版：現場JSNを取り込んだときに記録し、メニュー下部に併記する（食い違いに気付けるように）
+const GENBA_VER_KEY = "antenna_genba_appver_v1";
+function noteGenbaVersion(v){
+  const ver = String(v || "").trim(); if(!ver) return;
+  try { localStorage.setItem(GENBA_VER_KEY, JSON.stringify({ ver: ver, at: new Date().toISOString().slice(0, 10) })); } catch(_){}
+}
+function getGenbaVersion(){
+  try { const o = JSON.parse(localStorage.getItem(GENBA_VER_KEY) || "null"); return (o && o.ver) ? o : null; } catch(_){ return null; }
+}
+
 // 地図復元/uid書き戻し中の抑制フラグ（mapRestoreFromSnapshot/mapCollectForExport が使用）。
 // 未初期化(undefined)混入を防ぐため、地図処理より前に必ず false で明示初期化する。
 window.__mapRestoring = false;
@@ -16333,10 +16383,21 @@ const PROJ_DB_NAME = "antenna_projects_db";
 const PROJ_STORE = "projects";
 const PROJ_HANDLE_STORE = "fileHandles"; // 共有ファイルのFileSystemFileHandleを物件ID別に保持（再起動後の自動再接続用・out-of-line key）
 const PROJ_BACKUP_STORE = "backups";       // 物件の世代バックアップ（タイムスタンプ付き・物件ID別・keyPath=bid）
+const PROJ_BACKUP_META_STORE = "backupMeta"; // 世代の軽量メタ（説明・内訳・差分。一覧はこれだけ読む＝本体を読まずに高速表示）
 const MAP_SHEETS_STORE = "mapSheets";      // 🗺️ 地図シート本体（keyPath=id, index byProject=projectId）
 const MAP_BLOBS_STORE  = "mapBlobs";       // 🗺️ 地図の背景画像 実体Blob（out-of-line key=blobKey）
-const BACKUP_THROTTLE_MS = 10 * 60 * 1000; // 自動世代バックアップの最小間隔（10分）
-const BACKUP_KEEP = 30;                    // 物件ごとに保持する世代数（古いものから自動削除）
+const BACKUP_THROTTLE_MS = 5 * 60 * 1000;  // 自動世代バックアップの最小間隔（5分＝細かく戻せる）
+const BACKUP_KEEP = 300;                   // 物件ごとの絶対上限（段階間引き後もこれを超えたら古い順に削除）
+/* 世代の段階的間引き（古いほど間隔を広げ、少ない件数で“ずっと遠くまで”遡れるようにする）。
+   新しい順に走査し、同じ時間バケットに複数あれば新しい方だけ残す。everyMs=0 は「全部残す」。
+   手動(manual)・復元前(pre-restore)は利用者にとって意味のある目印なので間引き対象外。 */
+const BACKUP_TIERS = [
+  { maxAgeMs: 6 * 3600e3,       everyMs: 0 },             // 6時間以内：すべて残す
+  { maxAgeMs: 48 * 3600e3,      everyMs: 3600e3 },        // 2日以内：1時間に1件
+  { maxAgeMs: 14 * 86400e3,     everyMs: 86400e3 },       // 2週間以内：1日1件
+  { maxAgeMs: 90 * 86400e3,     everyMs: 7 * 86400e3 },   // 3か月以内：1週間1件
+  { maxAgeMs: Infinity,         everyMs: 30 * 86400e3 }   // それ以前：1か月1件
+];
 const PROJ_TRASH_ID = "__trash__";
 const PROJ_CURRENT_KEY = "antenna_current_project_v1";
 const LEDGER_KEY = "antenna_ledger_v1";
@@ -16468,7 +16529,7 @@ const PROJ_FS_SUPPORTED = !!(window.showOpenFilePicker && window.showSaveFilePic
 function projOpenDb(){
   return new Promise((resolve, reject) => {
     if(_projDb) return resolve(_projDb);
-    const req = indexedDB.open(PROJ_DB_NAME, 4); // v3→v4: 地図シート用ストアを加算（既存ストアは消さない）
+    const req = indexedDB.open(PROJ_DB_NAME, 5); // v4→v5: 世代バックアップの軽量メタ用ストアを加算（既存ストアは消さない）
     req.onupgradeneeded = () => {
       const db = req.result;
       if(!db.objectStoreNames.contains(PROJ_STORE)) db.createObjectStore(PROJ_STORE, { keyPath: "id" });
@@ -16484,6 +16545,11 @@ function projOpenDb(){
       }
       if(!db.objectStoreNames.contains(MAP_BLOBS_STORE)){
         db.createObjectStore(MAP_BLOBS_STORE); // out-of-line key（背景画像Blob）
+      }
+      // 🕘 世代バックアップの軽量メタ（v5で加算）。一覧はここだけ読む＝本体（地図画像込みで重い）を読まずに済む。
+      if(!db.objectStoreNames.contains(PROJ_BACKUP_META_STORE)){
+        const bm = db.createObjectStore(PROJ_BACKUP_META_STORE, { keyPath: "bid" });
+        bm.createIndex("byProject", "projectId", { unique:false });
       }
     };
     req.onblocked = () => { console.warn("[物件DB] 別タブが旧バージョンを保持中。全タブを閉じ直すと更新されます。"); };
@@ -16552,39 +16618,321 @@ function backupDelete(bid){
   return projOpenDb().then(db => new Promise(res => {
     try { const tx = db.transaction(PROJ_BACKUP_STORE, "readwrite"); const r = tx.objectStore(PROJ_BACKUP_STORE).delete(bid); r.onsuccess = () => res(true); r.onerror = () => res(false); }
     catch(e){ res(false); }
+  })).then(async ok => { try { await backupMetaDelete(bid); } catch(_){} return ok; });   // 軽量メタも一緒に掃除
+}
+/* ※ 世代の一覧は backupMetaListByProject（軽量メタ）を使う。本体は地図画像を含み重いので、
+   復元/書き出しのときに backupGet で1件だけ読む。 */
+function fmtBackupTs(ts){
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(ts || ""));
+  return m ? (m[1] + "/" + m[2] + "/" + m[3] + " " + m[4] + ":" + m[5]) : String(ts || "");
+}
+function fmtBackupDay(ts){
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(ts || ""));
+  return m ? (m[1] + "/" + m[2] + "/" + m[3]) : String(ts || "");
+}
+function fmtBackupTime(ts){
+  const m = /T(\d{2}):(\d{2})/.exec(String(ts || ""));
+  return m ? (m[1] + ":" + m[2]) : "";
+}
+/* 「3分前」「2時間前」など、どれくらい前の状態かを一目で分かるように。 */
+function fmtBackupAgo(at){
+  const ms = Date.now() - (at || 0);
+  if(!(at > 0) || ms < 0) return "";
+  const min = Math.floor(ms / 60000);
+  if(min < 1) return "たった今";
+  if(min < 60) return min + "分前";
+  const hr = Math.floor(min / 60);
+  if(hr < 24) return hr + "時間前";
+  const day = Math.floor(hr / 24);
+  if(day < 31) return day + "日前";
+  const mon = Math.floor(day / 30);
+  return (mon < 12) ? (mon + "か月前") : (Math.floor(day / 365) + "年前");
+}
+const BACKUP_KIND_LABEL = { auto: "自動", manual: "手動", "pre-restore": "復元前" };
+const BACKUP_PROTECTED_KINDS = { manual: 1, "pre-restore": 1 };  // 間引き対象外（利用者にとって意味のある目印）
+
+/* ---------- 世代の軽量メタ（一覧・説明用。本体スナップショットは読まない） ---------- */
+function backupMetaPut(rec){
+  return projOpenDb().then(db => new Promise(res => {
+    try { const tx = db.transaction(PROJ_BACKUP_META_STORE, "readwrite"); const r = tx.objectStore(PROJ_BACKUP_META_STORE).put(rec); r.onsuccess = () => res(true); r.onerror = () => res(false); }
+    catch(e){ res(false); }
   }));
 }
-/* 物件IDの全世代を新しい順で取得（snapshot本体も含む。一覧表示前提なので件数は数十） */
-function backupListByProject(pid){
+function backupMetaDelete(bid){
+  return projOpenDb().then(db => new Promise(res => {
+    try { const tx = db.transaction(PROJ_BACKUP_META_STORE, "readwrite"); const r = tx.objectStore(PROJ_BACKUP_META_STORE).delete(bid); r.onsuccess = () => res(true); r.onerror = () => res(false); }
+    catch(e){ res(false); }
+  }));
+}
+function backupMetaGetAll(pid){
   return projOpenDb().then(db => new Promise(res => {
     try {
-      const tx = db.transaction(PROJ_BACKUP_STORE, "readonly");
-      const idx = tx.objectStore(PROJ_BACKUP_STORE).index("byProject");
+      const tx = db.transaction(PROJ_BACKUP_META_STORE, "readonly");
+      const idx = tx.objectStore(PROJ_BACKUP_META_STORE).index("byProject");
       const r = idx.getAll(pid);
       r.onsuccess = () => res((r.result || []).sort((a, b) => String(b.ts).localeCompare(String(a.ts))));
       r.onerror = () => res([]);
     } catch(e){ res([]); }
   }));
 }
-function fmtBackupTs(ts){
-  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(ts || ""));
-  return m ? (m[1] + "/" + m[2] + "/" + m[3] + " " + m[4] + ":" + m[5]) : String(ts || "");
+/* 世代のID一覧だけを取得（本体＝地図画像込みで重いので読まない）。 */
+function backupIdsByProject(pid){
+  return projOpenDb().then(db => new Promise(res => {
+    try {
+      const tx = db.transaction(PROJ_BACKUP_STORE, "readonly");
+      const idx = tx.objectStore(PROJ_BACKUP_STORE).index("byProject");
+      const r = idx.getAllKeys(pid);
+      r.onsuccess = () => res(r.result || []);
+      r.onerror = () => res([]);
+    } catch(e){ res([]); }
+  }));
 }
-const BACKUP_KIND_LABEL = { auto: "自動", manual: "手動", "pre-restore": "復元前" };
-/* スナップショットを1世代として控える＋古い世代を間引く。 */
-async function createProjectBackup(snap, kind){
-  if(!snap || !snap.id) return;
-  const rec = {
-    bid: backupNewId(), projectId: snap.id,
-    ts: snap.updatedAt || new Date().toISOString(), at: Date.now(),
-    name: snap.name || "", caseCount: (snap.cases || []).length, kind: kind || "auto",
-    snapshot: snap
+/* v5より前に作られた世代はメタが無いので、その分だけ本体から作り直す（後追い生成＝過去の履歴にも説明が付く）。
+   本体が消えている孤児メタも掃除する。起動後1回だけ実行し、以降は軽いメタ読みだけで一覧できる。 */
+let _backupMetaSynced = {};
+async function backupMetaSync(pid){
+  const ids = await backupIdsByProject(pid);
+  const metas = await backupMetaGetAll(pid);
+  const have = {}; metas.forEach(m => { have[m.bid] = true; });
+  const alive = {}; ids.forEach(id => { alive[id] = true; });
+  for(const id of ids){
+    if(have[id]) continue;
+    try { const rec = await backupGet(id); if(rec) await backupMetaPut(backupMetaFromRecord(rec)); } catch(_){}
+  }
+  for(const m of metas){ if(!alive[m.bid]){ try { await backupMetaDelete(m.bid); } catch(_){} } }
+}
+/* 一覧用のメタを新しい順で取得（本体は読まない＝世代が数百あっても軽い）。 */
+async function backupMetaListByProject(pid){
+  if(!_backupMetaSynced[pid]){
+    _backupMetaSynced[pid] = true;
+    try { await backupMetaSync(pid); } catch(_){}
+  }
+  return await backupMetaGetAll(pid);
+}
+/* 保存済みレコード（本体つき）から軽量メタを作る。 */
+function backupMetaFromRecord(rec){
+  const built = buildBackupSummary(rec && rec.snapshot);
+  return {
+    bid: rec.bid, projectId: rec.projectId,
+    ts: rec.ts, at: rec.at || Date.parse(rec.ts) || 0,
+    kind: rec.kind || "auto", name: rec.name || "",
+    caseCount: (rec.caseCount != null) ? rec.caseCount : built.summary.cases,
+    summary: built.summary, mgmtNos: built.mgmtNos,
+    diff: rec.diff || null,
+    company: rec.company || ((rec.snapshot && rec.snapshot.lastSavedBy && rec.snapshot.lastSavedBy.company) || ""),
+    device: rec.device || ((rec.snapshot && rec.snapshot.lastSavedBy && rec.snapshot.lastSavedBy.device) || ""),
+    editing: rec.editing || "", note: rec.note || ""
   };
-  await backupPut(rec);
-  _lastBackupAt[snap.id] = Date.now();
+}
+
+/* ---------- 世代の中身を要約（＝履歴の「詳細説明」の材料） ---------- */
+/* 戸別1件分の payload から表示可能なフィールドを取り出す（平文/ハイブリッド両対応）。 */
+function bkCaseFields(payload){
+  if(!payload || typeof payload !== "object") return { mgmt: "", status: "", name: "", date: "", photos: 0 };
+  const p = (payload.plain && typeof payload.plain === "object") ? payload.plain : payload;
+  const pc = p.chosho_photo_count;
+  return {
+    mgmt: String(p.chosho_mgmt_no || "").trim(),
+    status: String(p.chosho_status || ""),
+    name: String(p.chosho_cust_name || ""),
+    date: String(p.chosho_date || ""),
+    photos: (typeof pc === "number" && pc > 0) ? pc : 0
+  };
+}
+/* スナップショット全体を数値で要約。戸別・台帳・地図・施工会社・提出書類まで拾う。 */
+function buildBackupSummary(snap){
+  const s = {
+    cases: 0, done: 0, prov: 0, pending: 0, scheduled: 0, photos: 0,
+    ledgerMeet: 0, ledgerFlyer: 0, ledgerConsent: 0, ledgerCompdoc: 0, ledgerNote: 0,
+    contractors: 0, assigned: 0,
+    mapSheets: 0, mapBuildings: 0, mapLinked: 0, mapLabels: 0,
+    teishutsu: false, encSkipped: 0, selfContained: false
+  };
+  const mgmtNos = [];
+  if(!snap || typeof snap !== "object") return { summary: s, mgmtNos };
+  (snap.cases || []).forEach(c => {
+    const f = bkCaseFields(c && c.payload);
+    s.cases++;
+    if(f.mgmt) mgmtNos.push(f.mgmt);
+    if(f.status === "completed") s.done++;
+    else if(f.status === "provisional") s.prov++;
+    else s.pending++;
+    if(f.date) s.scheduled++;
+    s.photos += f.photos;
+  });
+  const lg = snap.ledger || {};
+  Object.keys(lg).forEach(k => {
+    const e = lg[k] || {};
+    if(e.meetAt) s.ledgerMeet++;
+    if(e.flyer) s.ledgerFlyer++;
+    if(e.consent) s.ledgerConsent++;
+    if(e.compdoc) s.ledgerCompdoc++;
+    if(e.note) s.ledgerNote++;
+  });
+  s.contractors = (snap.contractors || []).length;
+  s.assigned = Object.keys(snap.contractorAssign || {}).length;
+  (snap.maps || []).forEach(m => {
+    s.mapSheets++;
+    const L = m && m.layers;
+    const b = L && L.building && L.building.objects;
+    if(Array.isArray(b)){
+      s.mapBuildings += b.length;
+      b.forEach(o => { if(o && String(o.linkMgmtNo || "").trim()) s.mapLinked++; });
+    }
+    const lb = L && L.label && L.label.objects;
+    if(Array.isArray(lb)) s.mapLabels += lb.length;
+  });
+  s.teishutsu = !!snap.teishutsu;
+  s.encSkipped = snap.encSkipped || 0;
+  s.selfContained = (snap.partsOverride !== undefined);
+  return { summary: s, mgmtNos };
+}
+/* 直前の世代と比べて「何が変わったか」を組み立てる（履歴の主役になる説明）。 */
+function buildBackupDiff(curSummary, curMgmtNos, prevMeta){
+  const listStr = arr => arr.slice(0, 3).join("・") + (arr.length > 3 ? (" 他" + (arr.length - 3) + "件") : "");
+  if(!prevMeta || !prevMeta.summary){
+    return { first: true, changed: true, parts: ["最初の控え（この時点の全内容を保存）"], added: [], removed: [] };
+  }
+  const p = prevMeta.summary, c = curSummary;
+  const prevSet = {}; (prevMeta.mgmtNos || []).forEach(x => { prevSet[x] = 1; });
+  const curSet = {}; (curMgmtNos || []).forEach(x => { curSet[x] = 1; });
+  const added = (curMgmtNos || []).filter(x => !prevSet[x]);
+  const removed = (prevMeta.mgmtNos || []).filter(x => !curSet[x]);
+  const parts = [];
+  const sign = n => (n > 0 ? ("+" + n) : String(n));
+  const d = (a, b) => (a || 0) - (b || 0);
+  if(added.length)   parts.push("戸別 +" + added.length + "（" + listStr(added) + "）");
+  if(removed.length) parts.push("戸別 -" + removed.length + "（" + listStr(removed) + "）");
+  const dDone = d(c.done, p.done);           if(dDone) parts.push("完了 " + sign(dDone) + "件");
+  const dProv = d(c.prov, p.prov);           if(dProv) parts.push("仮受付 " + sign(dProv) + "件");
+  const dSch  = d(c.scheduled, p.scheduled); if(dSch)  parts.push("工事日程 " + sign(dSch) + "件");
+  const dMeet = d(c.ledgerMeet, p.ledgerMeet);   if(dMeet) parts.push("打合せ予定 " + sign(dMeet) + "件");
+  const dFly  = d(c.ledgerFlyer, p.ledgerFlyer); if(dFly)  parts.push("ビラ配布 " + sign(dFly) + "件");
+  const dCon  = d(c.ledgerConsent, p.ledgerConsent); if(dCon) parts.push("承諾書 " + sign(dCon) + "件");
+  const dCmp  = d(c.ledgerCompdoc, p.ledgerCompdoc); if(dCmp) parts.push("完了書 " + sign(dCmp) + "件");
+  const dNote = d(c.ledgerNote, p.ledgerNote);   if(dNote) parts.push("備考 " + sign(dNote) + "件");
+  const dPh   = d(c.photos, p.photos);       if(dPh)   parts.push("写真 " + sign(dPh) + "枚");
+  const dCtr  = d(c.contractors, p.contractors); if(dCtr) parts.push("施工業者マスター " + sign(dCtr) + "社");
+  const dAsg  = d(c.assigned, p.assigned);   if(dAsg)  parts.push("施工会社の割当 " + sign(dAsg) + "件");
+  const dSh   = d(c.mapSheets, p.mapSheets); if(dSh)   parts.push("地図シート " + sign(dSh) + "枚");
+  const dBld  = d(c.mapBuildings, p.mapBuildings); if(dBld) parts.push("地図の建物 " + sign(dBld));
+  const dLnk  = d(c.mapLinked, p.mapLinked); if(dLnk)  parts.push("番号リンク済み建物 " + sign(dLnk));
+  const dLbl  = d(c.mapLabels, p.mapLabels); if(dLbl)  parts.push("地図の注記 " + sign(dLbl));
+  if(!!c.teishutsu !== !!p.teishutsu) parts.push(c.teishutsu ? "提出書類を追加" : "提出書類をクリア");
+  return { first: false, changed: parts.length > 0, parts: parts, added: added.slice(0, 20), removed: removed.slice(0, 20) };
+}
+/* 履歴1行の説明文（変更点）。変更が拾えないときは「内容の微修正」扱い。 */
+function backupDiffText(meta){
+  const df = meta && meta.diff;
+  if(df && df.parts && df.parts.length) return df.parts.join("／");
+  if(df && df.changed === false) return "件数の変化なし（本文・図面などの微修正）";
+  return "―";
+}
+/* 履歴1行の内訳（その時点の中身）。 */
+function backupBreakdownText(meta){
+  const s = (meta && meta.summary) || {};
+  const seg = [];
+  seg.push("戸別 " + (s.cases || 0) + "件（完了 " + (s.done || 0) + "／仮受付 " + (s.prov || 0) + "／未完了 " + (s.pending || 0) + "）");
+  if(s.scheduled) seg.push("日程あり " + s.scheduled + "件");
+  if(s.ledgerFlyer) seg.push("ビラ済 " + s.ledgerFlyer + "件");
+  if(s.ledgerConsent) seg.push("承諾書 " + s.ledgerConsent + "件");
+  if(s.ledgerCompdoc) seg.push("完了書 " + s.ledgerCompdoc + "件");
+  if(s.photos) seg.push("写真 " + s.photos + "枚");
+  if(s.contractors) seg.push("施工業者 " + s.contractors + "社（割当 " + (s.assigned || 0) + "件）");
+  if(s.mapSheets) seg.push("地図 " + s.mapSheets + "枚（建物 " + (s.mapBuildings || 0) + "・番号付き " + (s.mapLinked || 0) + "）");
+  if(s.teishutsu) seg.push("提出書類あり");
+  if(s.encSkipped) seg.push("⚠全暗号化のため対象外 " + s.encSkipped + "件");
+  return seg.join(" ／ ");
+}
+/* スナップショットを1世代として控える＋古い世代を間引く。 */
+async function createProjectBackup(snap, kind, note){
+  if(!snap || !snap.id) return;
+  const bid = backupNewId();
+  const ts = snap.updatedAt || new Date().toISOString();
+  const at = Date.now();
+  // この世代の中身を要約し、直前の世代と比べて「何が変わったか」を記録する（履歴の詳細説明）
+  const built = buildBackupSummary(snap);
+  let prevMeta = null;
+  try { prevMeta = (await backupMetaListByProject(snap.id))[0] || null; } catch(_){}
+  const diff = buildBackupDiff(built.summary, built.mgmtNos, prevMeta);
+  let device = "";
+  try { if(typeof rtDeviceNameOrDefault === "function") device = rtDeviceNameOrDefault() || ""; } catch(_){}
+  // 誰の版か（この世代を保存した会社）。スナップショットの刻印を優先し、無ければこの端末の設定。
+  const company = ((snap.lastSavedBy && snap.lastSavedBy.company) || getCompanyName() || "");
+  let editing = "";
   try {
-    const all = await backupListByProject(snap.id); // 新しい順
-    if(all.length > BACKUP_KEEP){ for(const r of all.slice(BACKUP_KEEP)) await backupDelete(r.bid); }
+    if(_editingRow && _editingRow.data) editing = String(_editingRow.data.chosho_mgmt_no || "").trim();
+  } catch(_){}
+  const meta = {
+    bid: bid, projectId: snap.id, ts: ts, at: at,
+    name: snap.name || "", caseCount: built.summary.cases, kind: kind || "auto",
+    summary: built.summary, mgmtNos: built.mgmtNos, diff: diff,
+    company: company, device: device, editing: editing, note: note || ""
+  };
+  await backupPut({
+    bid: bid, projectId: snap.id, ts: ts, at: at,
+    name: snap.name || "", caseCount: built.summary.cases, kind: kind || "auto",
+    diff: diff, company: company, device: device, editing: editing, note: note || "",
+    snapshot: snap
+  });
+  try { await backupMetaPut(meta); } catch(_){}
+  _lastBackupAt[snap.id] = at;
+  try { await pruneProjectBackups(snap.id); } catch(_){}
+}
+/* 段階的に間引く（BACKUP_TIERS）＋絶対上限（BACKUP_KEEP）＋空き容量が厳しければ追加で古い順に削除。
+   これにより「直近は細かく・古いものは間隔を空けて、ずっと遠くまで」遡れる。 */
+async function pruneProjectBackups(pid){
+  const list = await backupMetaListByProject(pid);   // 新しい順
+  if(!list.length) return;
+  const now = Date.now();
+  const seen = {};
+  const keep = [], drop = [];
+  list.forEach(m => {
+    if(BACKUP_PROTECTED_KINDS[m.kind]){ keep.push(m); return; }   // 手動・復元前は間引かない
+    const at = m.at || Date.parse(m.ts) || 0;
+    const age = now - at;
+    let tier = null;
+    for(let i = 0; i < BACKUP_TIERS.length; i++){ if(age <= BACKUP_TIERS[i].maxAgeMs){ tier = BACKUP_TIERS[i]; break; } }
+    if(!tier) tier = BACKUP_TIERS[BACKUP_TIERS.length - 1];
+    if(!tier.everyMs){ keep.push(m); return; }                    // 直近＝すべて残す
+    const bkey = tier.everyMs + ":" + Math.floor(at / tier.everyMs);
+    if(seen[bkey]) drop.push(m);                                  // 同じ時間帯は新しい方だけ残す
+    else { seen[bkey] = 1; keep.push(m); }
+  });
+  // 絶対上限：超過分は古い順に削除（保護対象は最後の手段としてのみ削除）
+  if(keep.length > BACKUP_KEEP){
+    const over = keep.slice(BACKUP_KEEP);                         // keep は新しい順＝末尾が古い
+    over.forEach(m => { if(!BACKUP_PROTECTED_KINDS[m.kind]) drop.push(m); });
+    const stillOver = keep.length - drop.filter(m => over.indexOf(m) >= 0).length - BACKUP_KEEP;
+    if(stillOver > 0){
+      const prot = over.filter(m => BACKUP_PROTECTED_KINDS[m.kind]).reverse(); // 古い順
+      prot.slice(0, stillOver).forEach(m => drop.push(m));
+    }
+  }
+  for(const m of drop){ await backupDelete(m.bid); }
+  await backupEnforceQuota(pid);
+}
+/* 端末の空き容量が厳しいときだけ、古い世代を追加で削除（保存失敗で履歴が止まるのを防ぐ）。 */
+async function backupEnforceQuota(pid){
+  try {
+    if(!navigator.storage || !navigator.storage.estimate) return;
+    let est = await navigator.storage.estimate();
+    if(!est || !est.quota) return;
+    if((est.usage || 0) / est.quota < 0.85) return;
+    let list = await backupMetaListByProject(pid);                 // 新しい順
+    let i = list.length - 1;
+    let removed = 0;
+    while(i >= 0 && removed < 50 && list.length - removed > 20){
+      const m = list[i--];
+      if(BACKUP_PROTECTED_KINDS[m.kind]) continue;
+      await backupDelete(m.bid);
+      removed++;
+      if(removed % 5 === 0){
+        est = await navigator.storage.estimate();
+        if(!est || !est.quota || (est.usage || 0) / est.quota < 0.75) break;
+      }
+    }
+    if(removed) console.warn("[物件履歴] 空き容量が少ないため古い世代を " + removed + " 件削除しました。");
   } catch(_){}
 }
 /* メニュー：現在の物件を今すぐ1世代控える（最新の編集を取り込んでから）。 */
@@ -16598,7 +16946,14 @@ async function manualBackupProject(pid){
 async function restoreProjectBackup(bid){
   const rec = await backupGet(bid);
   if(!rec || !rec.snapshot || !rec.snapshot.id){ alert("このバックアップを読み込めませんでした。"); return; }
-  if(!confirm("この物件を【" + fmtBackupTs(rec.ts) + "】の状態に戻します。\n\n現在の状態は自動で履歴に控えてから復元します（戻し過ぎても元に戻せます）。\n\nよろしいですか？")) return;
+  // 戻す先の中身を明示してから確認（何を復元するのかが分かるように）
+  let detail = "";
+  try {
+    const m = backupMetaFromRecord(rec);
+    detail = "\n【この版の内容】\n" + backupBreakdownText(m) + "\n";
+  } catch(_){}
+  if(!confirm("この物件を【" + fmtBackupTs(rec.ts) + "（" + fmtBackupAgo(rec.at) + "）】の状態に戻します。\n" + detail
+    + "\n現在の状態は自動で履歴に控えてから復元します（戻し過ぎても元に戻せます）。\n\nよろしいですか？")) return;
   const pid = rec.snapshot.id;
   // 復元前セーフティ：この物件の現在の保存内容を控える
   try { const cur = await projIdbGet(pid); if(cur && cur.id) await createProjectBackup(cur, "pre-restore"); } catch(_){}
@@ -16624,40 +16979,84 @@ async function openBackupModal(pid){
   closeBackupModal();
   _backupModalPid = pid;
   const proj = await projIdbGet(pid);
-  const list = await backupListByProject(pid);
+  const list = await backupMetaListByProject(pid);   // 軽量メタのみ（本体は復元/書出し時に読む）
   const bd = document.createElement("div");
   bd.id = "backup-modal-backdrop";
   bd.className = "photo-prev-backdrop";
+  // 日付ごとの世代数（見出し用）
+  const dayCount = {};
+  list.forEach(r => { const d = fmtBackupDay(r.ts); dayCount[d] = (dayCount[d] || 0) + 1; });
+  const cell = "padding:6px 8px;border:1px solid #dde3ea;vertical-align:top;";
   let rows;
   if(list.length === 0){
-    rows = '<div class="photo-prev-empty">まだ履歴がありません。<br>物件を開いて編集すると自動で控えられます（約10分ごと）。下の「今すぐ控える」でも作成できます。</div>';
+    rows = '<div class="photo-prev-empty">まだ履歴がありません。<br>物件を開いて編集すると自動で控えられます（約5分ごと）。下の「今すぐ控える」でも作成できます。</div>';
   } else {
-    rows = '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+    let lastDay = "";
+    rows = '<table style="width:100%;border-collapse:collapse;font-size:12.5px;">'
       + '<thead><tr style="background:#eef2f6;color:#1e3a5f;">'
-      + '<th style="text-align:left;padding:6px 8px;border:1px solid #dde3ea;">日時</th>'
-      + '<th style="padding:6px 8px;border:1px solid #dde3ea;width:64px;">種類</th>'
-      + '<th style="padding:6px 8px;border:1px solid #dde3ea;width:64px;">件数</th>'
-      + '<th style="padding:6px 8px;border:1px solid #dde3ea;width:200px;">操作</th></tr></thead><tbody>'
-      + list.map(r =>
-        '<tr data-bid="' + escapeHtml(r.bid) + '">'
-        + '<td style="padding:6px 8px;border:1px solid #dde3ea;font-family:Consolas,Menlo,monospace;">' + escapeHtml(fmtBackupTs(r.ts)) + '</td>'
-        + '<td style="padding:6px 8px;border:1px solid #dde3ea;text-align:center;">' + escapeHtml(BACKUP_KIND_LABEL[r.kind] || r.kind || "") + '</td>'
-        + '<td style="padding:6px 8px;border:1px solid #dde3ea;text-align:right;">' + (r.caseCount || 0) + ' 件</td>'
-        + '<td style="padding:6px 8px;border:1px solid #dde3ea;white-space:nowrap;">'
+      + '<th style="text-align:left;' + cell + 'width:104px;">日時</th>'
+      + '<th style="' + cell + 'width:56px;">種類</th>'
+      + '<th style="text-align:left;' + cell + '">この世代の内容・前回からの変更点</th>'
+      + '<th style="' + cell + 'width:186px;">操作</th></tr></thead><tbody>';
+    list.forEach(r => {
+      const day = fmtBackupDay(r.ts);
+      if(day !== lastDay){
+        lastDay = day;
+        rows += '<tr><td colspan="4" style="padding:5px 9px;border:1px solid #dde3ea;background:#f4f7fa;font-weight:700;color:#1e3a5f;">'
+          + escapeHtml(day) + '　<span style="font-weight:400;font-size:11px;color:#667482;">' + (dayCount[day] || 0) + ' 世代</span></td></tr>';
+      }
+      const protectedKind = !!BACKUP_PROTECTED_KINDS[r.kind];
+      const kindStyle = protectedKind
+        ? "display:inline-block;background:#1e3a5f;color:#fff;border-radius:8px;padding:0 7px;font-size:10.5px;line-height:17px;"
+        : "display:inline-block;background:#eef2f6;color:#33414f;border-radius:8px;padding:0 7px;font-size:10.5px;line-height:17px;";
+      const sub = [];
+      const who = savedByLabel(r);          // 保存した会社（＋端末）
+      if(who) sub.push("保存: " + who);
+      if(r.editing) sub.push("編集中: " + r.editing);
+      rows += '<tr data-bid="' + escapeHtml(r.bid) + '">'
+        + '<td style="' + cell + 'white-space:nowrap;"><span style="font-family:Consolas,Menlo,monospace;font-weight:600;">' + escapeHtml(fmtBackupTime(r.ts)) + '</span>'
+        +   '<div style="font-size:10.5px;color:#8a95a1;">' + escapeHtml(fmtBackupAgo(r.at)) + '</div></td>'
+        + '<td style="' + cell + 'text-align:center;"><span style="' + kindStyle + '">' + escapeHtml(BACKUP_KIND_LABEL[r.kind] || r.kind || "") + '</span>'
+        +   (protectedKind ? '<div style="font-size:9.5px;color:#8a95a1;margin-top:2px;">保持</div>' : '') + '</td>'
+        + '<td style="' + cell + '">'
+        +   '<div style="color:#1b5e20;font-weight:600;">' + escapeHtml(backupDiffText(r)) + '</div>'
+        +   '<div style="font-size:11px;color:#5b6773;margin-top:2px;">' + escapeHtml(backupBreakdownText(r)) + '</div>'
+        +   (sub.length ? '<div style="font-size:10.5px;color:#8a95a1;margin-top:2px;">' + escapeHtml(sub.join("／")) + '</div>' : '')
+        + '</td>'
+        + '<td style="' + cell + 'white-space:nowrap;">'
         +   '<button data-bact="restore" style="background:#1e3a5f;color:#fff;border:1px solid #16314f;border-radius:3px;padding:3px 10px;cursor:pointer;font-size:12px;">↩ この版に戻す</button> '
         +   '<button data-bact="export" title="この版をJSONファイルに書き出し" style="background:#fff;border:1px solid #bbb;border-radius:3px;padding:3px 8px;cursor:pointer;font-size:12px;">⬇</button> '
         +   '<button data-bact="del" title="この世代を削除" style="background:#fff;color:#c62828;border:1px solid #c62828;border-radius:3px;padding:3px 8px;cursor:pointer;font-size:12px;">🗑</button>'
-        + '</td></tr>'
-      ).join("")
-      + '</tbody></table>';
+        + '</td></tr>';
+    });
+    rows += '</tbody></table>';
   }
+  // 端末の保存容量（履歴を含むこのアプリ全体の概算）
+  let usageNote = "";
+  try {
+    if(navigator.storage && navigator.storage.estimate){
+      const est = await navigator.storage.estimate();
+      if(est && est.quota){
+        const mb = n => (n / 1048576);
+        usageNote = "　／　端末の保存容量：" + mb(est.usage || 0).toFixed(0) + " MB 使用（上限の約 "
+          + Math.round(((est.usage || 0) / est.quota) * 100) + "%）";
+      }
+    }
+  } catch(_){}
+  const oldest = list.length ? list[list.length - 1] : null;
   bd.innerHTML =
-    '<div class="photo-prev-panel" role="dialog" aria-modal="true" style="max-width:760px;">'
+    '<div class="photo-prev-panel" role="dialog" aria-modal="true" style="max-width:940px;">'
     + '<div class="photo-prev-head"><span>🕘 バックアップ履歴</span>'
     + '<span class="pp-sub">' + escapeHtml(proj ? (proj.name || "（無題）") : "") + '</span>'
     + '<button type="button" class="photo-prev-close" id="backup-modal-close">✕ 閉じる</button></div>'
     + '<div class="photo-prev-body" id="backup-modal-body" style="display:block;background:#fff;">'
-    +   '<div style="font-size:11px;color:#667482;margin-bottom:8px;">タイムスタンプ付きの世代を物件ごとに最大 ' + BACKUP_KEEP + ' 件保持します（古い世代は自動削除）。「↩ この版に戻す」で復元（復元前に現状を自動で控えます）。</div>'
+    +   '<div style="font-size:11px;color:#667482;margin-bottom:8px;line-height:1.7;">'
+    +     '編集中は約5分ごとに自動で控えます。<b>直近6時間はすべて／2日以内は1時間ごと／2週間以内は1日ごと／3か月以内は1週間ごと／それ以前は1か月ごと</b>に間引いて保持するので、少ない容量でずっと前まで遡れます（最大 ' + BACKUP_KEEP + ' 世代）。'
+    +     '<b>「手動」「復元前」の世代は間引かれません</b>（目印として残ります）。「↩ この版に戻す」で復元でき、復元前の状態も自動で控えるので戻し過ぎても元に戻せます。'
+    +     '<br>現在 <b>' + list.length + '</b> 世代'
+    +     (oldest ? '（最古 ' + escapeHtml(fmtBackupTs(oldest.ts)) + '＝' + escapeHtml(fmtBackupAgo(oldest.at)) + '）' : '')
+    +     escapeHtml(usageNote)
+    +   '</div>'
     +   rows
     + '</div>'
     + '<div style="padding:10px 16px;border-top:1px solid #e5e9ee;display:flex;gap:10px;align-items:center;">'
@@ -17065,6 +17464,12 @@ function buildProjectSnapshot(base){
     id: base.id, name: base.name,
     createdAt: base.createdAt || now,
     updatedAt: now,
+    // 最終保存した会社/端末（共有ファイルを複数業者で使うときに「誰が最後に保存したか」を特定できるように）
+    lastSavedBy: {
+      company: getCompanyName(),
+      device: (typeof rtDeviceNameOrDefault === "function") ? (rtDeviceNameOrDefault() || "") : "",
+      at: now, app: APP_VERSION
+    },
     caseCount: cases.length,
     encSkipped,
     cases,
@@ -17521,6 +17926,80 @@ function detachProjectConfirm(){
 /* ---------- 共有物件JSONファイルへの書き戻し（複数端末同期・Chrome/Edge） ---------- */
 /* スナップショットを書込ハンドルのファイルへ上書き。成功でtrue。
    marks＝控えた編集マーク（保存処理開始時点のもの）。競合マージはこのマークだけを上乗せする。 */
+/* ============================================================
+   共有フォルダ（Dropbox等）への .bak 同時保存 — 連動中のみ
+   ・共有ファイルへ書き戻すたびに、同じフォルダへ控え（.bak.json）も書く。
+   ・ファイル名に自社名を入れる＝他業者の .bak と衝突しない（各社が自分の控えを持てる）。
+   ・フォルダは一度だけ指定して記憶（物件ID別）。権限が無い間は黙ってスキップし、
+     自動保存のたびに許可ダイアログが出ないようにする（明示操作のときだけ許可を求める）。
+   ============================================================ */
+const BAK_ENABLED_KEY = "antenna_bak_enabled_v1";
+const BAK_THROTTLE_MS = 60 * 1000;   // 書き過ぎ防止（Dropbox同期の負荷対策）
+let _bakDirHandle = null;
+let _bakDirPid = null;
+let _lastBakAt = 0;
+let _bakWarned = false;
+function bakEnabled(){ try { return localStorage.getItem(BAK_ENABLED_KEY) === "1"; } catch(_){ return false; } }
+function setBakEnabled(v){ try { localStorage.setItem(BAK_ENABLED_KEY, v ? "1" : "0"); } catch(_){} }
+/* 例：令和8年度戸別_浪岡電設.bak.json（会社名未設定なら端末名、それも無ければ「会社未設定」） */
+function bakFileName(snap){
+  const base = sanitizePrintFilename(String((snap && snap.name) || "物件")) || "物件";
+  let who = getCompanyName();
+  if(!who){ try { who = (typeof rtDeviceNameOrDefault === "function") ? (rtDeviceNameOrDefault() || "") : ""; } catch(_){ who = ""; } }
+  return base + "_" + (sanitizePrintFilename(who) || "会社未設定") + ".bak.json";
+}
+/* .bak を書くフォルダのハンドルを得る。interactive=false のときは許可済みの時だけ返す（無言スキップ）。 */
+async function getBakDirHandle(pid, interactive){
+  if(!pid) return null;
+  if(_bakDirHandle && _bakDirPid === pid){
+    try {
+      let p = await _bakDirHandle.queryPermission({ mode: "readwrite" });
+      if(p !== "granted" && interactive) p = await _bakDirHandle.requestPermission({ mode: "readwrite" });
+      if(p === "granted") return _bakDirHandle;
+    } catch(_){}
+    if(!interactive) return null;
+  }
+  try {
+    const h = await projHandleGet(pid + ":bakdir");
+    if(h){
+      let p = await h.queryPermission({ mode: "readwrite" });
+      if(p !== "granted" && interactive) p = await h.requestPermission({ mode: "readwrite" });
+      if(p === "granted"){ _bakDirHandle = h; _bakDirPid = pid; return h; }
+    }
+  } catch(_){}
+  if(!interactive || !window.showDirectoryPicker) return null;
+  try {
+    const dh = await window.showDirectoryPicker({ mode: "readwrite" });
+    // 共有ファイルが本当にこのフォルダの中にあるか確認（別フォルダ指定の取り違え防止）
+    if(_projFileHandle && dh.resolve){
+      let rel = null;
+      try { rel = await dh.resolve(_projFileHandle); } catch(_){ rel = null; }
+      if(!rel && !confirm("選んだフォルダの中に、いま連動している共有ファイルが見つかりませんでした。\n（別のフォルダを選んだ可能性があります）\n\nこのフォルダに .bak を保存しますか？")) return null;
+    }
+    _bakDirHandle = dh; _bakDirPid = pid;
+    try { await projHandlePut(pid + ":bakdir", dh); } catch(_){}
+    return dh;
+  } catch(err){ if(err && err.name === "AbortError") return null; console.warn("[.bak] フォルダ指定に失敗", err); return null; }
+}
+/* 共有ファイルへ書けた内容と同じものを .bak として同フォルダへ保存（連動中・設定ONのときだけ）。 */
+async function writeSharedBak(content, snap, force){
+  try {
+    if(!bakEnabled() || !_projFileHandle || !snap || !snap.id) return false;
+    if(!force && Date.now() - _lastBakAt < BAK_THROTTLE_MS) return false;
+    const dh = await getBakDirHandle(snap.id, false);
+    if(!dh){
+      if(!_bakWarned){ _bakWarned = true; console.warn("[.bak] 保存先フォルダが未指定/未許可のためスキップ（メニューの『📦 .bak も保存』から指定してください）"); }
+      return false;
+    }
+    const fh = await dh.getFileHandle(bakFileName(snap), { create: true });
+    const w = await fh.createWritable();
+    await w.write(content);
+    await w.close();
+    _lastBakAt = Date.now();
+    _bakWarned = false;
+    return true;
+  } catch(err){ console.warn("[.bak] 保存に失敗", err); return false; }
+}
 async function projWriteFile(snap, marks){
   if(!_projFileHandle) return false;
   marks = marks || captureMarks();
@@ -17549,17 +18028,21 @@ async function projWriteFile(snap, marks){
           console.warn("[物件] 戸別マージに失敗→安全のため上書き中止（競合扱い）:", e);
           return { conflict: true, diskUpdatedAt: disk.updatedAt };
         }
+        const mergedText = JSON.stringify(merged);
         const wm = await _projFileHandle.createWritable();
-        await wm.write(JSON.stringify(merged));
+        await wm.write(mergedText);
         await wm.close();
         _projLastWrittenUpdatedAt = merged.updatedAt;
+        try { await writeSharedBak(mergedText, merged); } catch(_){}   // 同フォルダへ自社名つき .bak も
         return { merged: merged };
       }
     }
+    const snapText = JSON.stringify(snap);
     const w = await _projFileHandle.createWritable();
-    await w.write(JSON.stringify(snap));
+    await w.write(snapText);
     await w.close();
     _projLastWrittenUpdatedAt = snap.updatedAt || _projLastWrittenUpdatedAt;
+    try { await writeSharedBak(snapText, snap); } catch(_){}           // 同フォルダへ自社名つき .bak も
     return true;
   } catch(err){
     console.warn("[物件] 共有ファイルへの書き戻し失敗:", err);
@@ -18675,7 +19158,83 @@ async function renderMenuView(){
     const rb = document.getElementById("menu-proj-restore");
     if(rb) rb.style.display = (t && t.project) ? "" : "none";
   } catch(_){}
+  await renderCompanySection();
+  renderAppVersionFoot();
   updateProjBar();
+}
+/* 🏷 自社名・.bak設定・最終保存者の表示（メニュー） */
+async function renderCompanySection(){
+  const inp = document.getElementById("menu-company-name");
+  if(!inp) return;
+  if(document.activeElement !== inp) inp.value = getCompanyName();
+  const stat = document.getElementById("menu-company-stat");
+  if(stat) stat.textContent = getCompanyName() ? "設定済み" : "未設定（端末名で代用されます）";
+  const nameEl = document.getElementById("menu-bak-name");
+  if(nameEl) nameEl.textContent = bakFileName(_currentProject || { name: "物件名" });
+  const cb = document.getElementById("menu-bak-enable");
+  if(cb) cb.checked = bakEnabled();
+  // .bak 保存先フォルダの状態
+  const bstat = document.getElementById("menu-bak-stat");
+  if(bstat){
+    let txt = "保存先フォルダ未指定";
+    if(!window.showDirectoryPicker) txt = "このブラウザは非対応（Chrome/Edge でご利用ください）";
+    else if(_currentProject){
+      try {
+        const h = await projHandleGet(_currentProject.id + ":bakdir");
+        if(h){
+          let p = "prompt";
+          try { p = await h.queryPermission({ mode: "readwrite" }); } catch(_){}
+          txt = (p === "granted") ? ("指定済み：" + (h.name || "フォルダ")) : ("指定済み：" + (h.name || "フォルダ") + "（許可待ち→クリックで許可）");
+        }
+      } catch(_){}
+    } else txt = "物件を開くと指定できます";
+    bstat.textContent = txt;
+  }
+  // 最終保存した会社
+  const ls = document.getElementById("menu-lastsaved");
+  if(ls){
+    const by = _currentProject && _currentProject.lastSavedBy;
+    const who = savedByLabel(by);
+    ls.innerHTML = who
+      ? ('🕒 <b>最終保存：' + escapeHtml(who) + '</b>　' + escapeHtml(fmtBackupTs((by && by.at) || (_currentProject && _currentProject.updatedAt) || ""))
+         + ((by && by.app) ? ('　<span style="color:#8a95a1;">v' + escapeHtml(by.app) + '</span>') : ''))
+      : (_currentProject ? '🕒 最終保存：<span style="color:#8a95a1;">記録なし（この物件を次に保存すると記録されます）</span>' : '');
+  }
+  const saveBtn = document.getElementById("menu-company-save");
+  if(saveBtn) saveBtn.onclick = async () => {
+    setCompanyName(inp.value);
+    if(stat) stat.textContent = "✓ 保存しました";
+    if(nameEl) nameEl.textContent = bakFileName(_currentProject || { name: "物件名" });
+    if(_currentProject){ try { await projSaveNow(); } catch(_){} }   // 直ちに「最終保存＝自社」を反映
+    renderCompanySection();
+  };
+  if(cb) cb.onchange = async () => {
+    setBakEnabled(cb.checked);
+    if(cb.checked && _currentProject){
+      const dh = await getBakDirHandle(_currentProject.id, true);     // 明示操作なのでここで指定/許可を求める
+      if(!dh) alert("保存先フォルダが未指定のため、.bak は保存されません。\n「📂 .bak の保存先フォルダを指定」から共有ファイルと同じフォルダを選んでください。");
+    }
+    renderCompanySection();
+  };
+  const dirBtn = document.getElementById("menu-bak-dir");
+  if(dirBtn) dirBtn.onclick = async () => {
+    if(!_currentProject){ alert("先に物件を開いてください。"); return; }
+    const dh = await getBakDirHandle(_currentProject.id, true);
+    if(dh){
+      _bakWarned = false;
+      alert("✅ .bak の保存先フォルダを設定しました：" + (dh.name || "") + "\n\nファイル名：" + bakFileName(_currentProject));
+    }
+    renderCompanySection();
+  };
+}
+/* メニュー最下部の版表記（メイン＋最後に取り込んだ現場入力の版）。目立たせない。 */
+function renderAppVersionFoot(){
+  const vf = document.getElementById("app-ver-foot");
+  if(!vf) return;
+  const gv = getGenbaVersion();
+  vf.innerHTML = escapeHtml(APP_NAME_SHORT) + ' <b>v' + escapeHtml(APP_VERSION) + '</b>'
+    + (gv ? '　／　現場入力 <b>v' + escapeHtml(gv.ver) + '</b><span title="現場JSNを取り込んだ時点で記録した版です">（' + escapeHtml(gv.at) + ' 取込）</span>'
+          : '　／　現場入力 <span title="現場JSNを取り込むと、その現場入力アプリの版をここに表示します">（未取込）</span>');
 }
 
 /* ============================================================
@@ -18970,7 +19529,7 @@ async function exportReceptionLedgerForGenba(){
   }).filter(x => x.mgmt_no || x.name || x.addr);
   if(!rows.length){ alert("書き出す受付台帳の行がありません。先に戸別一覧を読み込むか、台帳に行を追加してください。"); return; }
   const projName = (typeof _currentProject !== "undefined" && _currentProject && _currentProject.name) ? String(_currentProject.name) : "";
-  const payload = { type: "antenna_reception_ledger", version: 1, exportedAt: new Date().toISOString(), project: projName, count: rows.length, rows };
+  const payload = { type: "antenna_reception_ledger", version: 1, appVersion: APP_VERSION, exportedAt: new Date().toISOString(), project: projName, count: rows.length, rows };
   const content = JSON.stringify(payload, null, 2);
   const base = "受付台帳" + (projName ? ("_" + projName) : "") + "_" + new Date().toISOString().slice(0, 10);
   const defaultBase = ((typeof sanitizePrintFilename === "function") ? sanitizePrintFilename(base) : base).replace(/\.json$/i, "");
@@ -20254,6 +20813,7 @@ function genbaImportFlow(){
       try { data=JSON.parse(await f.text()); } catch(_){ failed++; notes.push("・"+f.name+"：JSONとして読めません"); continue; }
       const fmt = (typeof detectEncFormat==="function") ? detectEncFormat(data) : "plain";
       if(fmt!=="plain"){ skipped++; notes.push("・"+f.name+"：暗号化ファイルは対象外（現場JSNは平文です）"); continue; }
+      try { if(data && data._appVersion) noteGenbaVersion(data._appVersion); } catch(_){}   // 現場入力アプリの版を記録（メニュー下部に併記）
       const mg=((data.chosho_mgmt_no||"")+"").trim();
       if(!mg){ skipped++; notes.push("・"+f.name+"：管理番号が空欄のため取込めません"); continue; }
       let row=_listRows.find(r=> subCaseKey(r)==="m:"+mg);
@@ -21851,8 +22411,10 @@ window.addEventListener("DOMContentLoaded", init);
       + '<defs><pattern id="map-grid-pat" width="100" height="100" patternUnits="userSpaceOnUse">'
       + '<path d="M100 0 H0 V100" fill="none" stroke="#d3dae1" stroke-width="1"/>'
       + '</pattern></defs>'
+      // 無限キャンバス：画面いっぱいの矩形にグリッドを敷き、パターン自体をビューに追従させる
+      // （従来の有限な「紙」矩形 #map-sheet-rect は廃止＝どこまでも描ける）
+      + '<rect id="map-grid-bg" x="0" y="0" width="100%" height="100%" fill="url(#map-grid-pat)" pointer-events="none"/>'
       + '<g id="map-viewport">'
-      + '<rect id="map-sheet-rect" x="0" y="0" width="' + DEFAULT_W + '" height="' + DEFAULT_H + '" fill="url(#map-grid-pat)" stroke="#aeb8c2" stroke-width="1"/>'
       + '<g id="map-bg-group"></g>'
       + '<g id="map-zenrin-group"></g>'
       + '<foreignObject id="map-paint-fo" x="0" y="0" width="0" height="0" style="display:none;pointer-events:none;"><canvas id="map-paint-canvas" style="width:100%;height:100%;display:block;"></canvas></foreignObject>'
@@ -21878,7 +22440,6 @@ window.addEventListener("DOMContentLoaded", init);
       +   '<div id="map-mini-body">'
       +     '<svg id="map-mini-svg" viewBox="0 0 ' + MINI_PANEL_W + ' ' + MINI_BODY_H + '" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">'
       +       '<g id="map-mini-content">'
-      +         '<rect id="map-mini-sheet" x="0" y="0" width="' + DEFAULT_W + '" height="' + DEFAULT_H + '" fill="#ffffff" stroke="#aeb8c2" stroke-width="1" vector-effect="non-scaling-stroke"/>'
       +         '<g id="map-mini-bg"></g>'
       +         '<g id="map-mini-objs"></g>'
       +       '</g>'
@@ -21892,11 +22453,25 @@ window.addEventListener("DOMContentLoaded", init);
     bindMiniOnce(); setMiniCollapsed(_miniCollapsed);
   }
 
-  function layoutSheetRect(){
-    var b = worldBounds();
-    var r = el("map-sheet-rect");
-    if(r){ r.setAttribute("width", b.w); r.setAttribute("height", b.h); }
+  /* 無限キャンバスのグリッドをビュー（パン・ズーム・回転）に追従させる。
+     画面いっぱいの矩形は動かさず、パターン側を動かすことで“果てのない”方眼になる。 */
+  function syncGridPattern(){
+    var pat = el("map-grid-pat"); if(!pat) return;
+    pat.setAttribute("patternTransform",
+      "translate(" + view.tx + "," + view.ty + ") scale(" + view.scale + ") rotate(" + (view.rot || 0) + ")");
+    // 線の太さはパターンごと拡大されるので、画面上で常に約1pxになるよう逆補正
+    var path = pat.querySelector("path");
+    if(path) path.setAttribute("stroke-width", Math.max(0.15, 1 / (view.scale || 1)));
+    var bg = el("map-grid-bg");
+    if(bg){
+      var hide = (100 * view.scale < 5);                    // 細かすぎる時は消す
+      // 下地を半透明でなぞる時は方眼が透けないように消す（旧「白い紙」の役割）
+      try { if(bgImages().length && bgOpacity() < 1) hide = true; } catch(_){}
+      bg.style.display = hide ? "none" : "";
+    }
   }
+  // 旧「紙」矩形の再配置。無限キャンバス化により矩形は廃止したため、グリッド更新に充てる（呼び出し箇所はそのまま）。
+  function layoutSheetRect(){ syncGridPattern(); }
 
   /* ---------- 座標変換・ビュー適用 ---------- */
   function screenToWorld(cx, cy){
@@ -21914,6 +22489,7 @@ window.addEventListener("DOMContentLoaded", init);
   function applyTransform(){
     if(!viewport) return;
     viewport.setAttribute("transform", "translate(" + view.tx + "," + view.ty + ") scale(" + view.scale + ") rotate(" + (view.rot || 0) + ")");
+    syncGridPattern();                          // 無限キャンバスの方眼をビューに追従
     var pct = el("map-zoom-pct");
     if(pct) pct.textContent = Math.round(view.scale * 100) + "%";
     if(drawing) renderDrawingOverlay();        // 作図中の頂点ハンドルをズーム追従
@@ -22519,11 +23095,7 @@ window.addEventListener("DOMContentLoaded", init);
     _miniDirty = false;
     var fit = computeMiniFit(); _miniFit = fit;
     cg.setAttribute("transform", "translate(" + fit.ox + "," + fit.oy + ") scale(" + fit.k + ")");
-    var sheet = el("map-mini-sheet");
-    // 白シート矩形は「紙」＝ worldBounds のまま（layoutSheetRect と一致させる）。
-    // fit.w/fit.h は内容寸法に変わったので使ってはいけない。x/y=0 は markup のままでよい
-    // （sheet は map-mini-content の内側＝ ox/oy がワールド原点に一致するため）。
-    if(sheet){ var wbm = worldBounds(); sheet.setAttribute("width", wbm.w); sheet.setAttribute("height", wbm.h); }
+    // 「紙」の白矩形は廃止（無限キャンバス化）。縮小マップは実際に描かれている内容だけを映す。
     miniBgSync();
     var objG = el("map-mini-objs"); if(!objG) return;
     var html = "";
@@ -22672,19 +23244,18 @@ window.addEventListener("DOMContentLoaded", init);
     }
   }
   function renderBg(){
-    var grp = el("map-bg-group"), rect = el("map-sheet-rect");
+    var grp = el("map-bg-group");
     if(!grp) return;
     pruneBgUrls();
     var imgs = bgImages();
     if(!imgs.length){
       grp.innerHTML = "";
-      if(rect) rect.setAttribute("fill", "url(#map-grid-pat)");
+      syncGridPattern();     // 下地なし＝方眼を表示
       miniBgSync();
       return;
     }
-    // 半透明で下絵をなぞる時だけ下を白紙にする（方眼が透けないように）。不透明(100%)のときは
-    // 白紙にせず方眼のまま＝白い紙が下地の移動に追従して見える現象を防ぐ。
-    if(rect) rect.setAttribute("fill", bgOpacity() < 1 ? "#ffffff" : "url(#map-grid-pat)");
+    // 半透明で下絵をなぞる時は方眼を消す（透けないように）。不透明(100%)なら方眼のまま。
+    syncGridPattern();
     grp.style.opacity = bgOpacity();
     grp.innerHTML = imgs.map(function(im){
       var W = bgImgW(im), H = bgImgH(im), clipDef = "", clipAttr = "";
@@ -22775,7 +23346,7 @@ window.addEventListener("DOMContentLoaded", init);
         var g = el("map-bg-group"); if(g) g.style.opacity = v;
         var mg = el("map-mini-bg"); if(mg) mg.style.opacity = v;
         var s = el("map-bg-op-val"); if(s) s.textContent = Math.round(v * 100) + "%";
-        var sr = el("map-sheet-rect"); if(sr && bgImages().length) sr.setAttribute("fill", v < 1 ? "#ffffff" : "url(#map-grid-pat)");   // 不透明時は白紙にしない
+        syncGridPattern();   // 半透明なぞり中は方眼を消す／不透明に戻したら再表示
         scheduleSave();
       });
       on("map-bg-edit-toggle", "click", function(){ setTool(tool === "bgedit" ? "pan" : "bgedit"); });
@@ -25269,36 +25840,11 @@ window.addEventListener("DOMContentLoaded", init);
       return "";
     }).join("");
   }
-  /* ---------- アンテナ図 仕上げ（受信方向方位線 / 真北 / 凡例 / 現場名） ---------- */
-  function viewCenterWorld(){ var rect = stage.getBoundingClientRect(); return screenToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2); }
+  /* ---------- アンテナ図 仕上げ（施工会社の色凡例） ----------
+     受信方向（方位線）・真北・凡例・現場名の「配置ボタン」は廃止した。
+     ただし過去に配置済みの図形が消えないよう、描画・選択・サイズ変更・削除の処理は残してある
+     （不要になったものは、その図形を選んで「🗑 削除」で消せる）。 */
   function viewCornerWorld(fx, fy){ var rect = stage.getBoundingClientRect(); return screenToWorld(rect.left + rect.width * fx, rect.top + rect.height * fy); }
-  function addAzimuth(){
-    if(!current){ toast("シートがありません。"); return; }
-    var inp = el("map-azim-deg"); var deg = parseFloat(inp ? inp.value : "");
-    if(!isFinite(deg)){ toast("受信方位（方位角・度）を入力してください。北=0、時計回りです。"); if(inp) inp.focus(); return; }
-    deg = ((deg % 360) + 360) % 360;
-    var lblInp = el("map-azim-label"); var lbl = (lblInp && lblInp.value.trim()) ? lblInp.value.trim() : ("受信方向 " + Math.round(deg) + "°");
-    pushUndo();
-    var c = viewCenterWorld(), b = worldBounds();
-    var o = { id: "o_" + mapUid(), kind: "azimuth", x: c.x, y: c.y, len: Math.max(60, b.w * 0.18), angle: deg, label: lbl };
-    current.layers.label.objects.push(o);
-    renderObjects(); flushSave(); setTool("pan"); selectObject("label", o.id);
-    toast("方位線を配置しました（" + Math.round(deg) + "°）。基点をドラッグで設置位置に合わせてください。");
-  }
-  function addNorth(){
-    if(!current){ toast("シートがありません。"); return; }
-    pushUndo();
-    var c = viewCornerWorld(0.9, 0.16), b = worldBounds();
-    var o = { id: "o_" + mapUid(), kind: "north", x: c.x, y: c.y, size: Math.max(40, b.w * 0.06) };
-    current.layers.label.objects.push(o); renderObjects(); flushSave(); setTool("pan"); selectObject("label", o.id);
-  }
-  function addLegend(){
-    if(!current){ toast("シートがありません。"); return; }
-    pushUndo();
-    var c = viewCornerWorld(0.72, 0.68), b = worldBounds();
-    var o = { id: "o_" + mapUid(), kind: "legend", x: c.x, y: c.y, size: Math.max(12, b.w / 120) };
-    current.layers.label.objects.push(o); renderObjects(); flushSave(); setTool("pan"); selectObject("label", o.id);
-  }
   // 施工会社の色凡例（施工業者マスターの各社→色見本）。ドラッグで移動でき、印刷にも出る。中身は描画時にマスターへ自動追従。
   function addCtrLegend(){
     if(!current){ toast("シートがありません。"); return; }
@@ -25308,18 +25854,6 @@ window.addEventListener("DOMContentLoaded", init);
     current.layers.label.objects.push(o); renderObjects(); flushSave(); setTool("pan"); selectObject("label", o.id);
     var n = 0; try { n = (typeof getContractorList === "function") ? (getContractorList() || []).length : 0; } catch(_){}
     toast(n ? "施工会社の色凡例を配置しました（" + n + "社）。ドラッグで移動できます。" : "施工会社の色凡例を配置しました。施工業者マスターが未登録のため、登録すると各社が表示されます。");
-  }
-  function addSiteName(){
-    if(!current){ toast("シートがありません。"); return; }
-    var name = "", mgmt = "";
-    try { var e2 = document.getElementById("chosho_cust_name"); if(e2) name = (e2.value || "").trim(); var m2 = document.getElementById("chosho_mgmt_no"); if(m2) mgmt = (m2.value || "").trim(); } catch(_){}
-    var txt = (mgmt ? ("管理番号 " + mgmt) : "") + (name ? ((mgmt ? "　" : "") + name + " 様") : "");
-    if(!txt){ txt = prompt("現場名（管理番号・お客様名など）を入力してください", "") || ""; }
-    txt = txt.trim(); if(!txt) return;
-    pushUndo();
-    var c = viewCornerWorld(0.06, 0.09), b = worldBounds();
-    var o = { id: "o_" + mapUid(), kind: "text", x: c.x, y: c.y, text: txt, size: Math.max(14, b.w / 90), color: "#1e3a5f", angle: 0 };
-    current.layers.label.objects.push(o); renderObjects(); flushSave(); setTool("pan"); selectObject("label", o.id);
   }
 
   /* ---------- 選択・編集 ---------- */
@@ -26224,11 +26758,7 @@ window.addEventListener("DOMContentLoaded", init);
       if(!files.length) return;
       e.preventDefault(); e.stopPropagation(); onZenFiles(files);
     }, true);
-    on("map-azim-add", "click", addAzimuth);
-    on("map-north-add", "click", addNorth);
-    on("map-legend-add", "click", addLegend);
     on("map-ctrlegend-add", "click", addCtrLegend);
-    on("map-sitename-add", "click", addSiteName);
     on("map-undo", "click", undo);
     on("map-redo", "click", redo);
     on("map-attach", "click", attachToProject);
