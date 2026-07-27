@@ -25635,7 +25635,14 @@ window.addEventListener("DOMContentLoaded", init);
         var d = Math.hypot(w.x - o.x, w.y - o.y);
         var th2 = pth;
         if(o.kind === "signal"){ th2 = Math.max(pth, (o.size || 24) * 0.9); }
-        var hit = (o.kind === "text") ? ((d <= pth) || textBBoxHit(o, w)) : (d <= th2);
+        var hit;
+        if(o.kind === "text"){ hit = (d <= pth) || textBBoxHit(o, w); }
+        else {
+          // 凡例類は「枠の中（＋上のつまみ）」ならどこでも掴めるようにする（基点付近だけだと掴みにくい）
+          var bx = legendBoxOf(o);
+          if(bx && w.x >= bx.x && w.x <= bx.x + bx.w && w.y >= bx.y && w.y <= bx.y + bx.h){ hit = true; d = 0; }
+          else hit = (d <= th2);
+        }
         if(hit && d < bestD){ bestD = d; best = { key: "label", id: o.id }; }
       });
     }
@@ -25783,7 +25790,9 @@ window.addEventListener("DOMContentLoaded", init);
       }
       if(o.kind === "ctrlegend"){
         // 施工会社の色凡例：施工業者マスターの各社を色見本つきで一覧（描画時に最新のマスターへ追従）。
-        var u3 = o.size || defaultTextSize();
+        // 寸法は ctrLegendGeom() に一本化（当たり判定＝legendBoxOf と必ず一致させる）
+        var G3 = ctrLegendGeom(o);
+        var u3 = G3.u;
         var clist = [];
         try { if(typeof getContractorList === "function") clist = getContractorList() || []; } catch(_){}
         var crows = clist.map(function(nm){
@@ -25793,12 +25802,22 @@ window.addEventListener("DOMContentLoaded", init);
         });
         crows.push({ color: "#78828c", name: "未割当（番号あり）" });
         var ttl3 = "施工会社（色分け）";
-        var pad3 = u3 * 0.6, sw3 = u3 * 1.0, gap3 = u3 * 0.5, rowH3 = u3 * 1.7, titleH3 = u3 * 1.7;
-        var maxCh3 = ttl3.length;
-        crows.forEach(function(r){ if(r.name.length > maxCh3) maxCh3 = r.name.length; });
-        var boxW3 = pad3 + sw3 + gap3 + maxCh3 * u3 * 1.05 + pad3;   // 全角名でも枠内に収まるよう余裕を持たせる
-        var boxH3 = titleH3 + rowH3 * crows.length + pad3 * 1.2;
-        var inner3 = '<rect x="' + o.x + '" y="' + o.y + '" width="' + boxW3 + '" height="' + boxH3 + '" fill="#ffffff" stroke="#888" stroke-width="' + (u3 * 0.08) + '"/>';
+        var pad3 = G3.pad, sw3 = G3.sw, gap3 = G3.gap, rowH3 = G3.rowH, titleH3 = G3.titleH;
+        var boxW3 = G3.w, boxH3 = G3.h;
+        // 掴む部分（つまみ）：箱の上に常時表示。data-noprint を付けて印刷時には出さない。
+        var hh3 = G3.handleH, hy3 = o.y - hh3;
+        var gcx3 = o.x + pad3 + u3 * 0.15, gcy3 = hy3 + hh3 / 2, gr3 = u3 * 0.1, dots3 = "";
+        for(var gi3 = 0; gi3 < 3; gi3++){
+          for(var gj3 = 0; gj3 < 2; gj3++){
+            dots3 += '<circle cx="' + (gcx3 + gj3 * gr3 * 2.6) + '" cy="' + (gcy3 + (gi3 - 1) * gr3 * 2.6) + '" r="' + gr3 + '" fill="#ffffff" opacity="0.9"/>';
+          }
+        }
+        var inner3 = '<g data-noprint="1" style="cursor:move;">'
+          + '<rect x="' + o.x + '" y="' + hy3 + '" width="' + boxW3 + '" height="' + (hh3 + u3 * 0.35) + '" rx="' + (hh3 * 0.3) + '" fill="#1e3a5f" opacity="0.92"/>'
+          + dots3
+          + '<text x="' + (gcx3 + gr3 * 5.2) + '" y="' + (gcy3 + u3 * 0.3) + '" font-size="' + (u3 * 0.8) + '" fill="#ffffff" font-family="sans-serif">ドラッグで移動（印刷されません）</text>'
+          + '</g>';
+        inner3 += '<rect x="' + o.x + '" y="' + o.y + '" width="' + boxW3 + '" height="' + boxH3 + '" fill="#ffffff" stroke="#888" stroke-width="' + (u3 * 0.08) + '"/>';
         inner3 += '<text x="' + (o.x + pad3) + '" y="' + (o.y + titleH3 * 0.72) + '" font-size="' + (u3 * 0.98) + '" fill="#1e3a5f" font-weight="bold" font-family="sans-serif">' + esc(ttl3) + '</text>';
         crows.forEach(function(r, i){
           var ry3 = o.y + titleH3 + rowH3 * i;
@@ -25857,6 +25876,34 @@ window.addEventListener("DOMContentLoaded", init);
   }
 
   /* ---------- 選択・編集 ---------- */
+  /* 施工会社の色凡例の寸法（描画と当たり判定で同じ計算を使う）。u=文字サイズ基準。 */
+  function ctrLegendGeom(o){
+    var u = (o && o.size) || defaultTextSize();
+    var list = [];
+    try { if(typeof getContractorList === "function") list = getContractorList() || []; } catch(_){}
+    var n = list.length + 1;                         // ＋「未割当」行
+    var title = "施工会社（色分け）";
+    var maxCh = title.length;
+    list.forEach(function(nm){ var L = String(nm || "").length; if(L > maxCh) maxCh = L; });
+    var un = "未割当（番号あり）".length; if(un > maxCh) maxCh = un;
+    var pad = u * 0.6, sw = u * 1.0, gap = u * 0.5, rowH = u * 1.7, titleH = u * 1.7;
+    return { u: u, pad: pad, sw: sw, gap: gap, rowH: rowH, titleH: titleH,
+             w: pad + sw + gap + maxCh * u * 1.05 + pad, h: titleH + rowH * n + pad * 1.2,
+             handleH: u * 1.35 };
+  }
+  /* 凡例類の当たり判定用の矩形（つまみを含む）。基点から少ししか掴めない問題の解消に使う。 */
+  function legendBoxOf(o){
+    if(!o || typeof o.x !== "number") return null;
+    if(o.kind === "ctrlegend"){
+      var G = ctrLegendGeom(o);
+      return { x: o.x, y: o.y - G.handleH, w: G.w, h: G.h + G.handleH };
+    }
+    if(o.kind === "legend"){
+      var u2 = o.size || defaultTextSize();
+      return { x: o.x, y: o.y, w: u2 * 9, h: u2 * 1.7 * 6 + u2 * 1.2 };
+    }
+    return null;
+  }
   function isPointObj(o){ return !!o && (o.kind === "text" || o.kind === "pin" || o.kind === "azimuth" || o.kind === "north" || o.kind === "legend" || o.kind === "ctrlegend" || o.kind === "signal"); }
   function objAnchors(o){ return isPointObj(o) ? [[o.x, o.y]] : o.points; }
   function setObjPoint(o, i, x, y){ if(isPointObj(o)){ o.x = x; o.y = y; } else { o.points[i] = [x, y]; } }
@@ -26508,6 +26555,10 @@ window.addEventListener("DOMContentLoaded", init);
       var L = current.layers[k]; if(!L || L.visible === false) return;
       var g = el("map-layer-" + k); if(!g) return;
       var clone = g.cloneNode(true);
+      // 画面だけの補助表示（凡例の「つまみ」など）は印刷に出さない
+      Array.prototype.forEach.call(clone.querySelectorAll("[data-noprint]"), function(node){
+        if(node.parentNode) node.parentNode.removeChild(node);
+      });
       var w2w = (PRINT_DPI / 96) / pxPerWorld;   // 画面px → 印刷ワールド単位の換算
       Array.prototype.forEach.call(clone.querySelectorAll("[vector-effect]"), function(node){
         var wpx = parseFloat(node.getAttribute("stroke-width") || "1") || 1;
