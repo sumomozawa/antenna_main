@@ -2670,6 +2670,40 @@
     border-bottom: 2px solid #1e3a5f; padding-bottom: 5px; margin-bottom: 10px;
     display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   }
+  /* 📗 Excel取込プレビュー：チェックボックスではなく「文字をクリックして選ぶ」方式 */
+  .xi-note { font-size: 11.5px; color: #667482; line-height: 1.7; margin-bottom: 8px; }
+  .xi-bulk { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .xi-bbtn {
+    font-size: 11.5px; color: #2e5488; background: #eef2f6; border: 1px solid #cdd3da;
+    border-radius: 12px; padding: 3px 11px; cursor: pointer; user-select: none;
+  }
+  .xi-bbtn:hover { background: #dce9f5; border-color: #2e5488; }
+  .xi-list { max-height: 56vh; overflow: auto; }
+  .xi-row { border: 1px solid #e1e6ea; border-radius: 6px; padding: 7px 9px; margin-bottom: 6px; background: #fafbfc; }
+  .xi-row.on { background: #fff; border-color: #9fc3a6; }
+  .xi-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .xi-last3 { font-family: Consolas, Menlo, monospace; font-weight: 700; color: #1e3a5f; background: #eef2f6; border-radius: 10px; padding: 1px 9px; font-size: 12px; }
+  .xi-status { font-size: 11.5px; font-weight: 600; }
+  .xi-apply {
+    margin-left: auto; font-size: 12px; font-weight: 700; cursor: pointer; user-select: none;
+    border: 1px solid #cdd3da; border-radius: 12px; padding: 2px 12px; color: #8a95a1; background: #fff;
+  }
+  .xi-row.on .xi-apply { color: #1b5e20; border-color: #1b5e20; background: #e8f5e9; }
+  .xi-fields { display: flex; flex-direction: column; gap: 4px; }
+  .xi-f { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; font-size: 12px; }
+  .xi-lbl { color: #667482; font-size: 11px; width: 68px; flex: 0 0 auto; }
+  .xi-arrow { color: #8a95a1; }
+  .xi-val {
+    border: 1px solid #dde3ea; border-radius: 4px; padding: 2px 8px; background: #fff; color: #33414f;
+    max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .xi-val i { color: #9aa3ad; font-style: normal; font-size: 10px; margin-left: 6px; }
+  .xi-val.pick { cursor: pointer; user-select: none; }
+  .xi-val.pick:hover { background: #eef2f6; border-color: #90a0b0; }
+  .xi-val.on { background: #e3f0fb; border-color: #2e5488; color: #1e3a5f; font-weight: 600; }
+  .xi-val.keep { color: #8a95a1; }
+  .xi-co { font-size: 11px; color: #1b5e20; margin-left: 4px; }
+  .xi-cands { display: flex; flex-wrap: wrap; gap: 6px; }
   /* バージョン表記（メニュー最下部・目立たせない） */
   .app-ver-foot {
     margin: 18px 2px 4px; padding-top: 8px; border-top: 1px solid #e5e9ee;
@@ -4506,6 +4540,16 @@
       <div style="margin-top:6px;display:flex;gap:10px;align-items:center;">
         <button id="menu-contractor-save" style="background:#1e3a5f;color:#fff;border:1px solid #16314f;padding:5px 16px;border-radius:3px;cursor:pointer;font-size:12px;">施工業者を保存</button>
         <span id="menu-contractor-stat" style="font-size:11px;color:#667482;"></span>
+      </div>
+      <div class="menu-sec-head" style="margin-top:16px;">🔢 業者番号の割り当て（管理番号の左から4桁目）</div>
+      <div class="menu-proj-note">
+        管理番号の<b>左から4桁目の数字（1〜4）</b>に会社を割り当てると、受付台帳で<b>施工会社を自動で判別</b>します。<br>
+        <span style="color:#9aa3ad;">例：管理番号「2622MAT001」なら4桁目は「2」→ 2番の会社が施工会社になります。空欄の番号は自動判別しません。</span>
+      </div>
+      <div id="menu-ctrdigit-rows" style="display:flex;flex-direction:column;gap:6px;margin:8px 0 4px;"></div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <button id="menu-ctrdigit-save" style="background:#1e3a5f;color:#fff;border:1px solid #16314f;padding:5px 16px;border-radius:3px;cursor:pointer;font-size:12px;">業者番号を保存</button>
+        <span id="menu-ctrdigit-stat" style="font-size:11px;color:#667482;"></span>
       </div>
     </section>
     <section class="menu-sec" id="menu-fee-sec">
@@ -17231,6 +17275,27 @@ function setContractorList(arr){
   saveContractorList();
   projTouch();
 }
+/* 施工業者の「番号」対応表（1〜4 → 会社名）。管理番号の左から4桁目で施工会社を自動判別するのに使う。
+   物件JSONに含めて共有（contractorDigits）。未設定なら自動判別はしない。 */
+const CONTRACTOR_DIGIT_KEY = "antenna_contractor_digit_v1";
+let _contractorDigitMap = (() => {
+  try { const o = JSON.parse(localStorage.getItem(CONTRACTOR_DIGIT_KEY)); return (o && typeof o === "object") ? o : {}; }
+  catch { return {}; }
+})();
+function getContractorDigitMap(){ return (_contractorDigitMap && typeof _contractorDigitMap === "object") ? _contractorDigitMap : {}; }
+function setContractorDigitMap(obj){
+  const out = {};
+  ["1", "2", "3", "4"].forEach(k => { const v = String((obj && obj[k]) || "").trim(); if(v) out[k] = v; });
+  _contractorDigitMap = out;
+  try { localStorage.setItem(CONTRACTOR_DIGIT_KEY, JSON.stringify(out)); } catch(_){}
+  projTouch();
+}
+/* 管理番号（左から4桁目）から施工会社名を引く。対応表が未設定/該当なしなら空。 */
+function contractorByMgmtNo(mgmtNo){
+  const t = String(mgmtNo == null ? "" : mgmtNo).trim();
+  if(t.length < 4) return "";
+  return getContractorDigitMap()[t.charAt(3)] || "";
+}
 /* 行の施工会社（割当名）を取得。 */
 function rowContractor(r){ return r ? getContractor(subCaseKey(r)) : ""; }
 /* チップ用の短縮名：法人格（株式会社/有限会社/(株)/㈱ 等）と空白を除いた「頭文字」。
@@ -17478,6 +17543,7 @@ function buildProjectSnapshot(base){
     review: pick(_reviewMap),
     contractorAssign: pick(_contractorMap), // 戸別→施工会社 割当（管理番号キー）
     contractors: getContractorList(),       // 施工会社マスター一覧
+    contractorDigits: getContractorDigitMap(), // 業者番号(管理番号の4桁目 1〜4)→会社名 の対応表
     outsourceFee: getProjOutsourceFee(),    // 物件の諸経費（協力会社諸経費の既定額・未設定はnull）
     teishutsu: (typeof window.__tslCapture === "function" ? window.__tslCapture() : undefined) // 提出書類チェックリスト（チェック/提出日/下請負人/契約日＋編集テンプレ）
   });
@@ -17843,6 +17909,9 @@ async function applyProject(p, opts){
     saveContractorMap();
     _contractorList = Array.isArray(p.contractors) ? p.contractors.slice() : [];
     saveContractorList();
+    // 業者番号の対応表（この物件の値へ切替。旧物件ファイルには無いのでその場合は空）
+    _contractorDigitMap = (p.contractorDigits && typeof p.contractorDigits === "object") ? Object.assign({}, p.contractorDigits) : {};
+    try { localStorage.setItem(CONTRACTOR_DIGIT_KEY, JSON.stringify(_contractorDigitMap)); } catch(_){}
     // 物件ごとに変わる設定（単価マスター・プリセット等）をこの物件の値へ切替（旧物件ファイルは該当キー無し＝従来通り）
     if(p.partsOverride !== undefined){
       applyPartsOverrideObj(p.partsOverride || {});
@@ -19066,6 +19135,7 @@ async function renderMenuView(){
   if(cTa && document.activeElement !== cTa){ cTa.value = getContractorList().join("\n"); }
   const cStat = document.getElementById("menu-contractor-stat");
   if(cStat){ const n = getContractorList().length; cStat.textContent = n ? (n + " 社 登録済") : "未登録"; }
+  renderContractorDigitRows();
   // 物件の諸経費（協力会社諸経費の既定額）
   {
     const feeInp = document.getElementById("menu-proj-fee");
@@ -19227,6 +19297,32 @@ async function renderCompanySection(){
     renderCompanySection();
   };
 }
+/* 🔢 業者番号（管理番号の4桁目 1〜4）→ 会社名 の割り当てUI。施工業者マスターから選ぶ。 */
+function renderContractorDigitRows(){
+  const host = document.getElementById("menu-ctrdigit-rows");
+  if(!host) return;
+  const list = getContractorList(), map = getContractorDigitMap();
+  const opts = cur => '<option value="">（割り当てなし）</option>'
+    + list.map(n => '<option value="' + escapeHtml(n) + '"' + (n === cur ? " selected" : "") + '>' + escapeHtml(n) + '</option>').join("")
+    + ((cur && list.indexOf(cur) < 0) ? '<option value="' + escapeHtml(cur) + '" selected>' + escapeHtml(cur) + '（一覧外）</option>' : "");
+  host.innerHTML = ["1", "2", "3", "4"].map(d =>
+    '<div style="display:flex;gap:8px;align-items:center;">'
+    + '<span style="font-size:12px;color:#33414f;width:88px;">4桁目が <b>' + d + '</b></span>'
+    + '<select data-ctrdigit="' + d + '" style="flex:1;max-width:320px;font-size:13px;padding:5px 8px;border:1px solid #cdd3da;border-radius:4px;background:#fff;">'
+    + opts(map[d] || "") + '</select></div>'
+  ).join("");
+  const stat = document.getElementById("menu-ctrdigit-stat");
+  if(stat){ const n = Object.keys(map).length; stat.textContent = n ? (n + " 件 割当済") : "未設定（自動判別しません）"; }
+  const btn = document.getElementById("menu-ctrdigit-save");
+  if(btn) btn.onclick = () => {
+    const obj = {};
+    host.querySelectorAll("select[data-ctrdigit]").forEach(s => { obj[s.dataset.ctrdigit] = s.value; });
+    setContractorDigitMap(obj);
+    const st = document.getElementById("menu-ctrdigit-stat");
+    if(st) st.textContent = "✓ 保存しました（" + Object.keys(getContractorDigitMap()).length + " 件）";
+    try { if(_listMode === "ledger") renderListTable(); } catch(_){}
+  };
+}
 /* メニュー最下部の版表記（メイン＋最後に取り込んだ現場入力の版）。目立たせない。 */
 function renderAppVersionFoot(){
   const vf = document.getElementById("app-ver-foot");
@@ -19365,6 +19461,7 @@ function renderListLedgerMode(rows, container){
     + '<button id="lg-print-sel" title="左端のチェックを入れた戸別の工事調書を 1戸1ページ でまとめて印刷／PDF出力します"' + (selCount ? '' : ' disabled')
     + ' style="background:#7a4e1e;color:#fff;border:1px solid #5e3c16;padding:4px 12px;border-radius:3px;cursor:' + (selCount ? 'pointer' : 'not-allowed') + ';font-size:12px;opacity:' + (selCount ? '1' : '.5') + ';">🖨 選択印刷' + (selCount ? '（' + selCount + '件）' : '') + '</button>'
     + (selCount ? '<button id="lg-print-clear" title="工事調書の選択をすべて解除" style="background:#fff;color:#7a4e1e;border:1px solid #b08a55;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:12px;">選択解除</button>' : '')
+    + '<button id="lg-xlsx-import" title="Excel（.xlsx）のH列「管理番号」を読み込み、下三桁で突き合わせて台帳の管理番号を更新します。取込前に、住所や過去の情報のどちらを残すかを選べます。" style="background:#2e5488;color:#fff;border:1px solid #1e3a5f;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📗 Excelで管理番号を更新</button>'
     + '<button id="lg-export-genba" title="この受付台帳を1ファイル（受付台帳.json）に書き出します。スマホの現場入力アプリで取り込むと、一覧から選んで入力を開始できます（管理番号・氏名・住所が入った状態）。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📤 現場用に書き出し</button>'
     + '<span style="font-size:11px;color:#667482;">セルをクリックで直接編集。日程・打合せはカレンダーに、名前・住所等は図面に即反映されます</span>'
     + '<span class="lg-count">全 ' + rows.length + ' 件（仮 ' + prov + ' ／ 完了 ' + done + ' ／ ビラ済 ' + flyered + '）' + (shown.length !== rows.length ? ' → 表示 ' + shown.length + ' 件' : '') + '</span>'
@@ -19562,6 +19659,282 @@ async function exportReceptionLedgerForGenba(){
   URL.revokeObjectURL(url);
   alert("受付台帳を書き出しました（" + rows.length + "件）。\n保存先：ブラウザの「ダウンロード」フォルダ（ファイル名「" + fname + "」）。\nこのファイルをスマホに移し、現場入力アプリの「🗒 受付台帳」から取り込んでください。");
 }
+/* ============================================================
+   📗 Excel（.xlsx）から管理番号を更新 — 受付台帳
+   ・外部ライブラリ不要。xlsx は ZIP なので、ブラウザ内蔵の DecompressionStream で展開して読む。
+   ・突合キーは「管理番号の下三桁」（数字だけ抜いた末尾3桁＝地図の建物表示と同じ規則）。
+   ・住所・過去の情報は「台帳の値」「Excelの値」を並べ、文字をクリックして残す方を選ぶ。
+   ・施工会社は管理番号の左から4桁目（1〜4）で自動判別（対応表はメニューで設定）。
+   ============================================================ */
+/* --- 最小限の xlsx リーダ（ZIP → sharedStrings + 先頭シート） --- */
+async function xlsxReadSheet(file){
+  const buf = await file.arrayBuffer();
+  const dv = new DataView(buf);
+  let eocd = -1;
+  for(let i = buf.byteLength - 22; i >= 0; i--){ if(dv.getUint32(i, true) === 0x06054b50){ eocd = i; break; } }
+  if(eocd < 0) throw new Error("xlsxファイルとして読めません（ZIP構造が見つかりません）");
+  const cnt = dv.getUint16(eocd + 10, true), off = dv.getUint32(eocd + 16, true);
+  const files = {};
+  let q = off;
+  for(let i = 0; i < cnt; i++){
+    if(dv.getUint32(q, true) !== 0x02014b50) break;
+    const method = dv.getUint16(q + 10, true), csize = dv.getUint32(q + 20, true);
+    const nlen = dv.getUint16(q + 28, true), elen = dv.getUint16(q + 30, true), clen = dv.getUint16(q + 32, true);
+    const lho = dv.getUint32(q + 42, true);
+    const name = new TextDecoder().decode(new Uint8Array(buf, q + 46, nlen));
+    files[name] = { method, csize, lho };
+    q += 46 + nlen + elen + clen;
+  }
+  async function readEntry(name){
+    const f = files[name]; if(!f) return null;
+    const ln = dv.getUint16(f.lho + 26, true), le = dv.getUint16(f.lho + 28, true);
+    const raw = new Uint8Array(buf, f.lho + 30 + ln + le, f.csize);
+    if(f.method === 0) return new TextDecoder().decode(raw);
+    if(typeof DecompressionStream !== "function") throw new Error("このブラウザは .xlsx の展開に対応していません（Chrome/Edge をご利用ください）");
+    const st = new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    return await new Response(st).text();
+  }
+  // シート名 → 実ファイルの対応（先頭シートを使う）
+  let sheetPath = "xl/worksheets/sheet1.xml";
+  if(!files[sheetPath]){
+    const k = Object.keys(files).filter(n => /^xl\/worksheets\/.*\.xml$/.test(n)).sort()[0];
+    if(!k) throw new Error("シートが見つかりません");
+    sheetPath = k;
+  }
+  const ssXml = await readEntry("xl/sharedStrings.xml");
+  const shXml = await readEntry(sheetPath);
+  const strs = [];
+  if(ssXml){
+    const d = new DOMParser().parseFromString(ssXml, "application/xml");
+    d.querySelectorAll("si").forEach(si => { let t = ""; si.querySelectorAll("t").forEach(n => { t += n.textContent; }); strs.push(t); });
+  }
+  const d2 = new DOMParser().parseFromString(shXml, "application/xml");
+  const rows = [];
+  d2.querySelectorAll("row").forEach(row => {
+    const obj = {};
+    row.querySelectorAll("c").forEach(c => {
+      const ref = c.getAttribute("r") || "";
+      const col = ref.replace(/[0-9]/g, "");
+      const t = c.getAttribute("t");
+      let val = "";
+      if(t === "inlineStr"){ const is = c.querySelector("is"); val = is ? is.textContent : ""; }
+      else { const v = c.querySelector("v"); val = v ? v.textContent : ""; if(t === "s") val = strs[parseInt(val, 10)] || ""; }
+      val = String(val == null ? "" : val).trim();
+      if(val !== "") obj[col] = val;
+    });
+    rows.push(obj);
+  });
+  return rows;
+}
+/* ヘッダー行から列を推定（列がずれても動くように）。見つからなければ既定の列を使う。 */
+function xlsxDetectCols(rows){
+  const want = { mgmt: ["管理番号"], addr: ["住所結合", "住所"], note: ["過去の情報", "備考"], area: ["地区番号"], ctr: ["業者"] };
+  const cols = { mgmt: "H", addr: "E", note: "F", area: "I", ctr: "J" }, found = {};
+  let headerIdx = -1;
+  for(let i = 0; i < Math.min(rows.length, 10); i++){
+    const r = rows[i], hit = {};
+    Object.keys(r).forEach(col => {
+      const v = String(r[col] || "").replace(/\s+/g, "");
+      Object.keys(want).forEach(k => { if(!hit[k] && want[k].some(w => v.indexOf(w) === 0)) hit[k] = col; });
+    });
+    if(hit.mgmt){ headerIdx = i; Object.assign(found, hit); break; }
+  }
+  return { cols: Object.assign(cols, found), headerIdx: headerIdx };
+}
+/* 管理番号の左から4桁目（施工業者の番号 1〜4） */
+function mgmtContractorDigit(s){ const t = String(s == null ? "" : s).trim(); return (t.length >= 4) ? t.charAt(3) : ""; }
+/* 数字だけ抜いた末尾3桁（地図の建物表示と同じ規則） */
+function mgmtLast3Digits(s){ const d = String(s == null ? "" : s).replace(/[^0-9]/g, ""); return d.slice(-3); }
+
+let _xlsxPlan = null;   // 取込プレビューの状態 { entries:[...], fileName }
+function ledgerXlsxImportFlow(){
+  pickFile({ accept: ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/octet-stream" }, async f => {
+    let rows;
+    try { rows = await xlsxReadSheet(f); }
+    catch(err){ alert("Excelを読み込めませんでした：\n" + (err && err.message || err)); return; }
+    const det = xlsxDetectCols(rows), C = det.cols;
+    const data = rows.slice(det.headerIdx + 1).map(r => ({
+      mgmt: String(r[C.mgmt] || "").trim(),
+      addr: String(r[C.addr] || "").trim(),
+      note: String(r[C.note] || "").trim()
+    })).filter(x => x.mgmt && mgmtLast3Digits(x.mgmt));
+    if(!data.length){ alert("「管理番号」の列が見つかりませんでした。\n1行目に「管理番号」という見出しがあるシートをお選びください。"); return; }
+    // 台帳側を下三桁で索引
+    const byLast3 = {};
+    _listRows.forEach(r => {
+      if(!r || !r.data) return;
+      const k = mgmtLast3Digits(r.data.chosho_mgmt_no);
+      if(k) (byLast3[k] = byLast3[k] || []).push(r);
+    });
+    const entries = data.map(x => {
+      const k = mgmtLast3Digits(x.mgmt);
+      const cands = (byLast3[k] || []).slice();
+      return {
+        excel: x, last3: k, cands: cands, targetIdx: cands.length ? 0 : -1,
+        apply: cands.length > 0,          // 一致あり＝既定で更新。一致なし＝既定で追加しない
+        addrPick: "keep", notePick: "keep"
+      };
+    });
+    _xlsxPlan = { entries: entries, fileName: f.name || "" };
+    openXlsxPreview();
+  });
+}
+function closeXlsxPreview(){ const bd = document.getElementById("xlsx-modal-backdrop"); if(bd) bd.remove(); }
+function openXlsxPreview(){
+  closeXlsxPreview();
+  const P = _xlsxPlan; if(!P) return;
+  const bd = document.createElement("div");
+  bd.id = "xlsx-modal-backdrop";
+  bd.className = "photo-prev-backdrop";
+  const nMatch = P.entries.filter(e => e.cands.length).length;
+  const nNew = P.entries.length - nMatch;
+  const nDup = P.entries.filter(e => e.cands.length > 1).length;
+  const nApply = P.entries.filter(e => e.apply).length;
+  const val = (v, ph) => v ? escapeHtml(v) : '<span style="color:#b8c2cc;">' + ph + '</span>';
+  let body = "";
+  P.entries.forEach((e, i) => {
+    const t = (e.targetIdx >= 0) ? e.cands[e.targetIdx] : null;
+    const cur = t ? (t.data || {}) : {};
+    const curMgmt = String(cur.chosho_mgmt_no || "").trim();
+    const same = curMgmt === e.excel.mgmt;
+    const co = contractorByMgmtNo(e.excel.mgmt);
+    const statusTxt = !e.cands.length ? "台帳に無し（追加）" : (e.cands.length > 1 ? ("候補 " + e.cands.length + " 件") : (same ? "変更なし" : "更新"));
+    const statusCol = !e.cands.length ? "#8a6d1f" : (e.cands.length > 1 ? "#b3433a" : (same ? "#8a95a1" : "#1b5e20"));
+    body += '<div class="xi-row' + (e.apply ? " on" : "") + '" data-xi="' + i + '">'
+      + '<div class="xi-head">'
+      +   '<span class="xi-last3">' + escapeHtml(e.last3) + '</span>'
+      +   '<span class="xi-status" style="color:' + statusCol + ';">' + statusTxt + '</span>'
+      +   '<span class="xi-apply" data-xact="toggle" title="クリックで切替">' + (e.apply ? "✓ 反映する" : "反映しない") + '</span>'
+      + '</div>'
+      + '<div class="xi-fields">'
+      +   '<div class="xi-f"><span class="xi-lbl">管理番号</span>'
+      +     '<span class="xi-val keep">' + val(curMgmt, t ? "（空欄）" : "―") + '</span>'
+      +     '<span class="xi-arrow">→</span>'
+      +     '<span class="xi-val on">' + escapeHtml(e.excel.mgmt) + '</span>'
+      +     (co ? '<span class="xi-co">施工会社: ' + escapeHtml(co) + '</span>'
+                : '<span class="xi-co" style="color:#b8c2cc;">施工会社: 未割当（4桁目 ' + escapeHtml(mgmtContractorDigit(e.excel.mgmt) || "?") + '）</span>')
+      +   '</div>';
+    // 住所：どちらを残すかを文字クリックで選ぶ
+    if(t && (e.excel.addr || cur.chosho_cust_addr)){
+      const a1 = String(cur.chosho_cust_addr || ""), a2 = e.excel.addr;
+      if(a1 !== a2){
+        body += '<div class="xi-f"><span class="xi-lbl">住所</span>'
+          + '<span class="xi-val pick' + (e.addrPick === "keep" ? " on" : "") + '" data-xact="addr" data-v="keep">' + val(a1, "（空欄）") + '<i>台帳</i></span>'
+          + '<span class="xi-val pick' + (e.addrPick === "excel" ? " on" : "") + '" data-xact="addr" data-v="excel">' + val(a2, "（空欄）") + '<i>Excel</i></span>'
+          + '</div>';
+      }
+    }
+    // 過去の情報（備考）
+    if(t && e.excel.note){
+      const n1 = (typeof getLedger === "function") ? (getLedger(subCaseKey(t)).note || "") : "";
+      if(n1 !== e.excel.note){
+        body += '<div class="xi-f"><span class="xi-lbl">過去の情報</span>'
+          + '<span class="xi-val pick' + (e.notePick === "keep" ? " on" : "") + '" data-xact="note" data-v="keep">' + val(n1, "（空欄）") + '<i>台帳</i></span>'
+          + '<span class="xi-val pick' + (e.notePick === "excel" ? " on" : "") + '" data-xact="note" data-v="excel">' + escapeHtml(e.excel.note) + '<i>Excel</i></span>'
+          + '</div>';
+      }
+    }
+    // 候補が複数＝どの戸別に当てるかを文字クリックで選ぶ
+    if(e.cands.length > 1){
+      body += '<div class="xi-f"><span class="xi-lbl">対象を選ぶ</span><span class="xi-cands">'
+        + e.cands.map((c, ci) => {
+            const d = c.data || {};
+            return '<span class="xi-val pick' + (ci === e.targetIdx ? " on" : "") + '" data-xact="target" data-v="' + ci + '">'
+              + escapeHtml(String(d.chosho_mgmt_no || "（番号なし）")) + (d.chosho_cust_name ? ("　" + escapeHtml(d.chosho_cust_name)) : "")
+              + (d.chosho_cust_addr ? ('<i>' + escapeHtml(d.chosho_cust_addr) + '</i>') : "") + '</span>';
+          }).join("")
+        + '</span></div>';
+    }
+    body += '</div></div>';
+  });
+  bd.innerHTML =
+    '<div class="photo-prev-panel" role="dialog" aria-modal="true" style="max-width:1000px;">'
+    + '<div class="photo-prev-head"><span>📗 Excelで管理番号を更新</span>'
+    +   '<span class="pp-sub">' + escapeHtml(P.fileName) + '</span>'
+    +   '<button type="button" class="photo-prev-close" id="xlsx-close">✕ 閉じる</button></div>'
+    + '<div class="photo-prev-body" style="display:block;background:#fff;">'
+    +   '<div class="xi-note">Excel <b>' + P.entries.length + '</b> 行 ／ 台帳と一致（下三桁） <b>' + nMatch + '</b> 件'
+    +     (nDup ? ' ／ <span style="color:#b3433a;">候補が複数 <b>' + nDup + '</b> 件</span>' : '')
+    +     (nNew ? ' ／ 台帳に無し <b>' + nNew + '</b> 件' : '') + '<br>'
+    +     '<span style="color:#9aa3ad;">下三桁で突き合わせています。<b>文字をクリック</b>すると残す方を選べます（青＝採用）。「反映する／しない」も文字クリックで切り替わります。名前は上書きしません。</span></div>'
+    +   '<div class="xi-bulk">'
+    +     '<span class="xi-bbtn" data-xbulk="all-on">すべて反映する</span>'
+    +     '<span class="xi-bbtn" data-xbulk="all-off">すべて反映しない</span>'
+    +     '<span class="xi-bbtn" data-xbulk="match-on">一致分だけ反映</span>'
+    +     '<span class="xi-bbtn" data-xbulk="addr-excel">住所：すべてExcel</span>'
+    +     '<span class="xi-bbtn" data-xbulk="addr-keep">住所：すべて台帳</span>'
+    +     '<span class="xi-bbtn" data-xbulk="note-excel">過去の情報：すべてExcel</span>'
+    +     '<span class="xi-bbtn" data-xbulk="note-keep">過去の情報：すべて台帳</span>'
+    +   '</div>'
+    +   '<div class="xi-list">' + body + '</div>'
+    + '</div>'
+    + '<div style="padding:10px 16px;border-top:1px solid #e5e9ee;display:flex;gap:10px;align-items:center;">'
+    +   '<button id="xlsx-apply" style="background:#1b5e20;color:#fff;border:1px solid #14481a;border-radius:3px;padding:6px 18px;cursor:pointer;font-size:13px;">✓ 選んだ内容で反映（' + nApply + ' 件）</button>'
+    +   '<span style="font-size:11px;color:#667482;">反映後、地図の建物リンクも下三桁で新しい番号へ自動更新します。</span>'
+    + '</div></div>';
+  document.body.appendChild(bd);
+  bd.addEventListener("mousedown", e => { if(e.target === bd) closeXlsxPreview(); });
+  document.getElementById("xlsx-close").addEventListener("click", closeXlsxPreview);
+  document.getElementById("xlsx-apply").addEventListener("click", applyXlsxPlan);
+  bd.addEventListener("click", e => {
+    const bulk = e.target.closest("[data-xbulk]");
+    if(bulk){
+      const k = bulk.dataset.xbulk;
+      P.entries.forEach(en => {
+        if(k === "all-on") en.apply = true;
+        else if(k === "all-off") en.apply = false;
+        else if(k === "match-on") en.apply = en.cands.length > 0;
+        else if(k === "addr-excel") en.addrPick = "excel";
+        else if(k === "addr-keep") en.addrPick = "keep";
+        else if(k === "note-excel") en.notePick = "excel";
+        else if(k === "note-keep") en.notePick = "keep";
+      });
+      openXlsxPreview(); return;
+    }
+    const act = e.target.closest("[data-xact]");
+    if(!act) return;
+    const rowEl = act.closest("[data-xi]"); if(!rowEl) return;
+    const en = P.entries[parseInt(rowEl.dataset.xi, 10)]; if(!en) return;
+    const a = act.dataset.xact;
+    if(a === "toggle") en.apply = !en.apply;
+    else if(a === "addr") en.addrPick = act.dataset.v;
+    else if(a === "note") en.notePick = act.dataset.v;
+    else if(a === "target") en.targetIdx = parseInt(act.dataset.v, 10);
+    openXlsxPreview();
+  });
+}
+async function applyXlsxPlan(){
+  const P = _xlsxPlan; if(!P) return;
+  const todo = P.entries.filter(e => e.apply);
+  if(!todo.length){ alert("反映する行が選ばれていません。"); return; }
+  let updated = 0, added = 0, ctrSet = 0;
+  const relink = {};   // 下三桁 → 新しい管理番号（地図の追従用）
+  todo.forEach(e => {
+    let row = (e.targetIdx >= 0) ? e.cands[e.targetIdx] : null;
+    if(!row){
+      row = createManualRow({ chosho_mgmt_no: "", chosho_cust_addr: (e.addrPick === "excel" ? e.excel.addr : "") }, "xlsx-import");
+      added++;
+    } else updated++;
+    lgWriteCaseField(row, "mgmt", e.excel.mgmt);          // 改番＝台帳/持出/確認/施工会社のキーも移行される
+    if(e.addrPick === "excel" && e.excel.addr) lgWriteCaseField(row, "addr", e.excel.addr);
+    const tk = subCaseKey(row);
+    if(e.notePick === "excel" && e.excel.note){ try { setLedger(tk, { note: e.excel.note }); } catch(_){} }
+    const co = contractorByMgmtNo(e.excel.mgmt);          // 4桁目→施工会社を自動判別
+    if(co && getContractor(tk) !== co){ try { setContractor(tk, co); ctrSet++; } catch(_){} }
+    if(e.last3) relink[e.last3] = e.excel.mgmt;
+  });
+  closeXlsxPreview();
+  try { renderListTable(); } catch(_){}
+  // 地図の建物リンクを下三桁で新しい番号へ追従
+  let mapN = 0;
+  try { if(typeof window.mapRelinkByLast3 === "function") mapN = await window.mapRelinkByLast3(relink); } catch(err){ console.warn("[xlsx] map relink failed", err); }
+  if(_currentProject){ try { await projSaveNow(); } catch(_){} }
+  try { refreshMapLinkedSet(); } catch(_){}
+  alert("📗 Excelの内容を反映しました。\n\n管理番号を更新: " + updated + " 件"
+    + (added ? ("\n新しく追加: " + added + " 件") : "")
+    + (ctrSet ? ("\n施工会社を自動割当: " + ctrSet + " 件") : "")
+    + (mapN ? ("\n地図の建物リンクを更新: " + mapN + " 件") : ""));
+}
 function bindLedgerHandlers(container){
   if(container._ledgerBound) return;
   container._ledgerBound = true;
@@ -19576,6 +19949,7 @@ function bindLedgerHandlers(container){
     }
     if(e.target.closest("#lg-print-sel")){ printSelectedChosho(); return; }
     if(e.target.closest("#lg-print-clear")){ _ledgerPrintSel.clear(); renderListTable(); return; }
+    if(e.target.closest("#lg-xlsx-import")){ ledgerXlsxImportFlow(); return; }
     if(e.target.closest("#lg-export-genba")){ exportReceptionLedgerForGenba(); return; }
     // 施工会社チップ：一発割当／会社名クリックで変更モード（セルのみ差し替え＝スクロール位置を保つ）
     const ctrEl = e.target.closest(".lg-ctr-cur, .lg-ctr-chip");
@@ -27111,6 +27485,45 @@ window.addEventListener("DOMContentLoaded", init);
     }, function(){ return {}; });
   }
 
+  /* 受付台帳で管理番号が更新されたとき、地図の建物リンクを「下三桁」で突き合わせて新しい番号へ追従させる。
+     map = { "083": "2622HIN083", ... }。開いていないシートも保存済み(IndexedDB)を直接書き換える。
+     戻り値＝更新した建物の数。 */
+  async function mapRelinkByLast3(map){
+    if(!map || !Object.keys(map).length) return 0;
+    var p = curProj();
+    var list = [];
+    try { list = await (p ? sheetByProject(p.id) : sheetLocal()) || []; } catch(_){ list = []; }
+    var n = 0;
+    for(var i = 0; i < list.length; i++){
+      var s = list[i];
+      var bl = s && s.layers && s.layers.building;
+      if(!bl || !Array.isArray(bl.objects)) continue;
+      var changed = false;
+      bl.objects.forEach(function(o){
+        var cur = o && String(o.linkMgmtNo || "").trim();
+        if(!cur) return;
+        var k = mgmtLast3(cur);
+        if(k && map[k] && map[k] !== cur){ o.linkMgmtNo = map[k]; changed = true; n++; }
+      });
+      if(changed){
+        s.updatedAt = nowISO();
+        try { await sheetPut(s); } catch(_){}
+        // 開いているシートなら画面も更新（メモリ側の実体を差し替え）
+        if(current && current.id === s.id){
+          current.layers.building.objects = s.layers.building.objects;
+          try { renderObjects(); } catch(_){}
+        }
+        var mem = sheets && sheets.find ? sheets.find(function(x){ return x.id === s.id; }) : null;
+        if(mem && mem !== s && mem.layers && mem.layers.building) mem.layers.building.objects = s.layers.building.objects;
+      }
+    }
+    if(n){
+      try { window.__mapsDirty = true; } catch(_){}
+      try { if(window.markMapsEdited) window.markMapsEdited(); } catch(_){}   // 実編集としてマージ対象に
+    }
+    return n;
+  }
+  window.mapRelinkByLast3 = mapRelinkByLast3;   // 受付台帳の管理番号更新に地図を追従させる
   window.openMapView = openMapView;
   window.closeMapView = closeMapView;
   window.__mapLinkedMgmtSet = mapLinkedMgmtSet;   // 受付台帳の🗺️登録済み判定に使用
