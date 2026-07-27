@@ -22429,6 +22429,7 @@ window.addEventListener("DOMContentLoaded", init);
       + '<g id="map-print-overlay"></g>'
       + '<g id="map-vec-overlay"></g>'
       + '<g id="map-marquee-overlay"></g>'
+      + '<g id="map-layer-top"></g>'   // 最前面：施工会社の色凡例（印刷枠などのオーバーレイより手前）
       + '</g></svg>'
       + '<div class="map-stage-empty" id="map-stage-empty" style="display:none;"></div>'
       + '<div class="map-draw-bar" id="map-draw-bar" style="display:none;"></div>'
@@ -23035,6 +23036,9 @@ window.addEventListener("DOMContentLoaded", init);
       var g = el("map-layer-" + k);
       if(g) g.style.display = (current.layers[k] && current.layers[k].visible !== false) ? "" : "none";
     });
+    // 最前面グループ（施工会社の色凡例）はラベルレイヤーの表示/非表示に追従させる
+    var gt = el("map-layer-top");
+    if(gt) gt.style.display = (current.layers.label && current.layers.label.visible !== false) ? "" : "none";
   }
   function pickColor(layerObj, cb){
     if(!layerObj) return;
@@ -25725,7 +25729,7 @@ window.addEventListener("DOMContentLoaded", init);
   function renderLabelLayer(){
     var g = el("map-layer-label"); if(!g || !current) return;
     var objs = (current.layers.label && current.layers.label.objects) || [];
-    g.innerHTML = objs.map(function(o){
+    var parts = objs.map(function(o){
       if(o.kind === "text"){
         var size = o.size || defaultTextSize();
         var col = o.color || "#333";
@@ -25857,7 +25861,15 @@ window.addEventListener("DOMContentLoaded", init);
           + '</g>';
       }
       return "";
-    }).join("");
+    });
+    // 施工会社の色凡例だけは最前面グループ（#map-layer-top）へ。印刷枠などのオーバーレイより手前に出る。
+    var htmlNormal = "", htmlTop = "";
+    objs.forEach(function(o, i){
+      if(o && o.kind === "ctrlegend") htmlTop += parts[i]; else htmlNormal += parts[i];
+    });
+    g.innerHTML = htmlNormal;
+    var gt = el("map-layer-top");
+    if(gt) gt.innerHTML = htmlTop;
   }
   /* ---------- アンテナ図 仕上げ（施工会社の色凡例） ----------
      受信方向（方位線）・真北・凡例・現場名の「配置ボタン」は廃止した。
@@ -26551,8 +26563,9 @@ window.addEventListener("DOMContentLoaded", init);
     var mul = (isFinite(lineMul) && lineMul > 0) ? lineMul : 1;
     mul = Math.max(0.3, Math.min(4, mul));
     var out = "";
-    LAYER_KEYS.forEach(function(k){
-      var L = current.layers[k]; if(!L || L.visible === false) return;
+    // 最前面グループ（施工会社の色凡例）もラベル扱いで印刷に含める（最後＝紙の上でも一番手前）
+    LAYER_KEYS.concat(["top"]).forEach(function(k){
+      var L = current.layers[(k === "top") ? "label" : k]; if(!L || L.visible === false) return;
       var g = el("map-layer-" + k); if(!g) return;
       var clone = g.cloneNode(true);
       // 画面だけの補助表示（凡例の「つまみ」など）は印刷に出さない
