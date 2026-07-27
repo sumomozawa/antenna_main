@@ -19706,7 +19706,20 @@ async function xlsxReadSheet(file){
   const strs = [];
   if(ssXml){
     const d = new DOMParser().parseFromString(ssXml, "application/xml");
-    d.querySelectorAll("si").forEach(si => { let t = ""; si.querySelectorAll("t").forEach(n => { t += n.textContent; }); strs.push(t); });
+    // ふりがな（<rPh>）は本文ではないので拾わない。直下の <t> と、書式付き実行 <r> の中の <t> だけを連結する。
+    // （拾ってしまうと「三沢ボウル」→「三沢ボウルミサワ」のようにカナが後ろに付く）
+    d.querySelectorAll("si").forEach(si => {
+      let t = "";
+      for(let n = si.firstElementChild; n; n = n.nextElementSibling){
+        const nm = n.localName;
+        if(nm === "t") t += n.textContent;
+        else if(nm === "r"){
+          for(let c = n.firstElementChild; c; c = c.nextElementSibling){ if(c.localName === "t") t += c.textContent; }
+        }
+        // rPh（ふりがな）・phoneticPr は無視
+      }
+      strs.push(t);
+    });
   }
   const d2 = new DOMParser().parseFromString(shXml, "application/xml");
   const rows = [];
