@@ -2678,6 +2678,17 @@
     border-radius: 12px; padding: 3px 11px; cursor: pointer; user-select: none;
   }
   .xi-bbtn:hover { background: #dce9f5; border-color: #2e5488; }
+  /* 行が増える操作は色で区別（押し間違い防止） */
+  .xi-bbtn.xi-warn { color: #8a4b1f; background: #fff4e5; border-color: #e0b98a; }
+  .xi-bbtn.xi-warn:hover { background: #ffe8cc; border-color: #b3712f; }
+  /* 突合結果の説明（何が起きるかを明示） */
+  .xi-legend { margin: 6px 0 7px; padding: 7px 10px; background: #f4f7fa; border: 1px solid #e1e6ea; border-radius: 5px; }
+  .xi-legend > div { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; padding: 1.5px 0; color: #33414f; }
+  .xi-legend .xi-exp { color: #667482; }
+  .xi-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; display: inline-block; }
+  .xi-dot.ok { background: #1b5e20; }
+  .xi-dot.new { background: #e0a145; }
+  .xi-dot.dup { background: #b3433a; }
   .xi-list { max-height: 56vh; overflow: auto; }
   .xi-row { border: 1px solid #e1e6ea; border-radius: 6px; padding: 7px 9px; margin-bottom: 6px; background: #fafbfc; }
   .xi-row.on { background: #fff; border-color: #9fc3a6; }
@@ -19811,7 +19822,9 @@ function openXlsxPreview(){
     const curMgmt = String(cur.chosho_mgmt_no || "").trim();
     const same = curMgmt === e.excel.mgmt;
     const co = contractorByMgmtNo(e.excel.mgmt);
-    const statusTxt = !e.cands.length ? "台帳に無し（追加）" : (e.cands.length > 1 ? ("候補 " + e.cands.length + " 件") : (same ? "変更なし" : "更新"));
+    const statusTxt = !e.cands.length ? "台帳に無い → 反映すると新規追加"
+      : (e.cands.length > 1 ? ("候補 " + e.cands.length + " 件 → 対象を選んでください")
+      : (same ? "台帳にある（番号は同じ）" : "台帳にある → 番号を更新"));
     const statusCol = !e.cands.length ? "#8a6d1f" : (e.cands.length > 1 ? "#b3433a" : (same ? "#8a95a1" : "#1b5e20"));
     body += '<div class="xi-row' + (e.apply ? " on" : "") + '" data-xi="' + i + '">'
       + '<div class="xi-head">'
@@ -19866,14 +19879,21 @@ function openXlsxPreview(){
     +   '<span class="pp-sub">' + escapeHtml(P.fileName) + '</span>'
     +   '<button type="button" class="photo-prev-close" id="xlsx-close">✕ 閉じる</button></div>'
     + '<div class="photo-prev-body" style="display:block;background:#fff;">'
-    +   '<div class="xi-note">Excel <b>' + P.entries.length + '</b> 行 ／ 台帳と一致（下三桁） <b>' + nMatch + '</b> 件'
-    +     (nDup ? ' ／ <span style="color:#b3433a;">候補が複数 <b>' + nDup + '</b> 件</span>' : '')
-    +     (nNew ? ' ／ 台帳に無し <b>' + nNew + '</b> 件' : '') + '<br>'
-    +     '<span style="color:#9aa3ad;">下三桁で突き合わせています。<b>文字をクリック</b>すると残す方を選べます（青＝採用）。「反映する／しない」も文字クリックで切り替わります。名前は上書きしません。</span></div>'
+    +   '<div class="xi-note">'
+    +     'Excel <b>' + P.entries.length + '</b> 行を、管理番号の<b>下三桁</b>で台帳と突き合わせました。'
+    +     '<div class="xi-legend">'
+    +       '<div><span class="xi-dot ok"></span><b>台帳にある … ' + nMatch + ' 件</b>'
+    +         '<span class="xi-exp">→ その戸別の<b>管理番号を新しい番号に更新</b>します（行は増えません）</span></div>'
+    +       (nNew ? ('<div><span class="xi-dot new"></span><b>台帳に無い … ' + nNew + ' 件</b>'
+    +         '<span class="xi-exp">→ 反映すると<b>新しい行として台帳に追加</b>されます（初期は「反映しない」）</span></div>') : '')
+    +       (nDup ? ('<div><span class="xi-dot dup"></span><b>候補が複数 … ' + nDup + ' 件</b>'
+    +         '<span class="xi-exp">→ 下三桁が同じ戸別が複数あります。<b>どれに当てるかをクリックで選んで</b>ください</span></div>') : '')
+    +     '</div>'
+    +     '<span style="color:#9aa3ad;"><b>文字をクリック</b>すると残す方を選べます（青＝採用）。「反映する／しない」も文字クリックで切り替わります。<b>名前は上書きしません。</b></span></div>'
     +   '<div class="xi-bulk">'
-    +     '<span class="xi-bbtn" data-xbulk="all-on">すべて反映する</span>'
-    +     '<span class="xi-bbtn" data-xbulk="all-off">すべて反映しない</span>'
-    +     '<span class="xi-bbtn" data-xbulk="match-on">一致分だけ反映</span>'
+    +     '<span class="xi-bbtn" data-xbulk="match-on" title="台帳に既にある戸別の管理番号だけを更新します。台帳に無い番号は追加しません（初期状態）">台帳にある分だけ更新（' + nMatch + ' 件・行は増えません）</span>'
+    +     '<span class="xi-bbtn xi-warn" data-xbulk="all-on" title="Excelの全行を反映します。台帳に無い番号は新しい行として台帳に追加されます">すべて反映' + (nNew ? ('（台帳に無い ' + nNew + ' 件を新規追加）') : '') + '</span>'
+    +     '<span class="xi-bbtn" data-xbulk="all-off" title="どの行も反映しません（すべて解除）">すべて反映しない</span>'
     +     '<span class="xi-bbtn" data-xbulk="addr-excel">住所：すべてExcel</span>'
     +     '<span class="xi-bbtn" data-xbulk="addr-keep">住所：すべて台帳</span>'
     +     '<span class="xi-bbtn" data-xbulk="note-excel">過去の情報：すべてExcel</span>'
