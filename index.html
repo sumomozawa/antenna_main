@@ -19942,7 +19942,13 @@ async function applyXlsxPlan(){
   if(!todo.length){ alert("反映する行が選ばれていません。"); return; }
   let updated = 0, added = 0, ctrSet = 0;
   const relink = {};   // 下三桁 → 新しい管理番号（地図の追従用）
-  todo.forEach(e => {
+  // 数百件でも「固まった」ように見えないよう、ボタンに進捗を出しつつ時々描画を挟む
+  const btn = document.getElementById("xlsx-apply");
+  const setProg = n => { if(btn) btn.textContent = "反映中… " + n + " / " + todo.length; };
+  if(btn){ btn.disabled = true; btn.style.opacity = "0.75"; btn.style.cursor = "progress"; }
+  setProg(0);
+  for(let i = 0; i < todo.length; i++){
+    const e = todo[i];
     let row = (e.targetIdx >= 0) ? e.cands[e.targetIdx] : null;
     if(!row){
       row = createManualRow({ chosho_mgmt_no: "", chosho_cust_addr: (e.addrPick === "excel" ? e.excel.addr : "") }, "xlsx-import");
@@ -19955,7 +19961,9 @@ async function applyXlsxPlan(){
     const co = contractorByMgmtNo(e.excel.mgmt);          // 4桁目→施工会社を自動判別
     if(co && getContractor(tk) !== co){ try { setContractor(tk, co); ctrSet++; } catch(_){} }
     if(e.last3) relink[e.last3] = e.excel.mgmt;
-  });
+    if((i + 1) % 25 === 0){ setProg(i + 1); await new Promise(r => setTimeout(r, 0)); }  // 画面を描画させる
+  }
+  setProg(todo.length);
   closeXlsxPreview();
   try { renderListTable(); } catch(_){}
   // 地図の建物リンクを下三桁で新しい番号へ追従
