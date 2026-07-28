@@ -2943,6 +2943,17 @@
   }
   .cal-quick-row #cal-quick-add:hover { background: #fbc02d; }
   .cal-quick-row .cal-quick-note { font-size: 10px; color: #7a6a30; }
+  /* 戸別に紐づかない予定（その他） */
+  .cal-ev.cal-free { background: #ede7f6; color: #4527a0; border-left: 4px solid #6a1b9a; padding-left: 4px; }
+  .cal-free-mark { background: #6a1b9a; color: #fff; border-radius: 3px; padding: 0 3px; margin-right: 3px; font-size: 9px; }
+  .cal-ev-type.t-free, .cu-type.t-free { background: #ede7f6; color: #4527a0; }
+  .cal-free-sec { margin-top: 10px; padding: 8px 10px; background: #faf7fd; border: 1px solid #e4dcf0; border-radius: 5px; }
+  .cal-free-head { font-size: 12px; font-weight: 700; color: #4527a0; margin-bottom: 6px; }
+  .cal-free-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 5px; }
+  .cal-free-row input { padding: 4px 6px; border: 1px solid #cdd3da; border-radius: 3px; font-size: 12.5px; font-family: inherit; }
+  .cal-free-row button { padding: 3px 10px; border: 1px solid #cdd3da; background: #fff; border-radius: 3px; cursor: pointer; font-size: 12px; }
+  .cal-free-add { border-top: 1px dashed #d8cfe8; padding-top: 6px; margin-top: 2px; }
+  .cal-free-note { font-size: 10.5px; color: #7c6a99; }
   /* --- 今後の予定（先の工程）レポート：カレンダーと同じ予定データから自動生成 --- */
   .cal-upcoming { margin-top: 14px; background: #fff; border: 1px solid #cdd3da; border-radius: 4px; padding: 12px 16px; }
   .cal-upcoming .cu-head { font-size: 15px; font-weight: 700; color: #1e3a5f; margin-bottom: 4px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
@@ -17571,6 +17582,7 @@ function buildProjectSnapshot(base){
     contractorAssign: pick(_contractorMap), // 戸別→施工会社 割当（管理番号キー）
     contractors: getContractorList(),       // 施工会社マスター一覧
     contractorDigits: getContractorDigitMap(), // 業者番号(管理番号の4桁目 1〜4)→会社名 の対応表
+    calEvents: getCalFreeEvents(),          // 戸別に紐づかない予定（元請打合せ・社内会議など）
     outsourceFee: getProjOutsourceFee(),    // 物件の諸経費（協力会社諸経費の既定額・未設定はnull）
     teishutsu: (typeof window.__tslCapture === "function" ? window.__tslCapture() : undefined) // 提出書類チェックリスト（チェック/提出日/下請負人/契約日＋編集テンプレ）
   });
@@ -17939,6 +17951,9 @@ async function applyProject(p, opts){
     // 業者番号の対応表（この物件の値へ切替。旧物件ファイルには無いのでその場合は空）
     _contractorDigitMap = (p.contractorDigits && typeof p.contractorDigits === "object") ? Object.assign({}, p.contractorDigits) : {};
     try { localStorage.setItem(CONTRACTOR_DIGIT_KEY, JSON.stringify(_contractorDigitMap)); } catch(_){}
+    // 戸別に紐づかない予定（この物件の値へ切替。旧物件ファイルには無いので空）
+    _calFreeEvents = Array.isArray(p.calEvents) ? p.calEvents.slice() : [];
+    try { localStorage.setItem(CAL_FREE_KEY, JSON.stringify(_calFreeEvents)); } catch(_){}
     // 物件ごとに変わる設定（単価マスター・プリセット等）をこの物件の値へ切替（旧物件ファイルは該当キー無し＝従来通り）
     if(p.partsOverride !== undefined){
       applyPartsOverrideObj(p.partsOverride || {});
@@ -20152,6 +20167,36 @@ function bindLedgerHandlers(container){
 const CAL_MAX_PER_DAY = 4;
 let _calY = null, _calM = null;      // 表示中の年・月(0-11)
 let _calPanel = null;                 // {type:"day",date} / {type:"event",tk,evType}
+/* ---------- 戸別に紐づかない予定（元請との打合せ・社内会議など） ----------
+   台帳の戸別とは無関係にカレンダーへ登録できる。物件JSONに含めて共有（calEvents）。 */
+const CAL_FREE_KEY = "antenna_cal_free_v1";
+let _calFreeEvents = (() => {
+  try { const a = JSON.parse(localStorage.getItem(CAL_FREE_KEY)); return Array.isArray(a) ? a : []; }
+  catch { return []; }
+})();
+function getCalFreeEvents(){ return Array.isArray(_calFreeEvents) ? _calFreeEvents : []; }
+function saveCalFreeEvents(){
+  try { localStorage.setItem(CAL_FREE_KEY, JSON.stringify(getCalFreeEvents())); } catch(_){}
+  projTouch();
+}
+function calFreeAdd(date, time, title, note){
+  const t = String(title || "").trim();
+  if(!date) return null;
+  const ev = { id: "cf" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+    date: date, time: String(time || "").slice(0, 5), title: t || "打合せ", note: String(note || "") };
+  _calFreeEvents = getCalFreeEvents().concat([ev]);
+  saveCalFreeEvents();
+  return ev;
+}
+function calFreeUpdate(id, patch){
+  _calFreeEvents = getCalFreeEvents().map(e => (e && e.id === id) ? Object.assign({}, e, patch) : e);
+  saveCalFreeEvents();
+}
+function calFreeDelete(id){
+  _calFreeEvents = getCalFreeEvents().filter(e => e && e.id !== id);
+  saveCalFreeEvents();
+}
+function calFreeById(id){ return getCalFreeEvents().find(e => e && e.id === id) || null; }
 let _calHighlightKey = null;
 let _calDrag = null;                  // D&D中 {tk, type}
 
@@ -20174,6 +20219,11 @@ function calBuildEvents(rows){
       evs.push({ type: "meet", date: p[0], time: (p[1] || "").slice(0, 5), tk, row: r, done: false, prov });
     }
   });
+  // 戸別に紐づかない予定（元請との打合せ・社内会議など）
+  getCalFreeEvents().forEach(fe => {
+    if(!fe || !fe.date) return;
+    evs.push({ type: "free", date: fe.date, time: fe.time || "", tk: "", row: null, free: fe, done: false, prov: false });
+  });
   return evs;
 }
 function calWorkCountOn(dateS, exceptTk){
@@ -20186,11 +20236,16 @@ function calWorkCountOn(dateS, exceptTk){
   return n;
 }
 function calEvLabel(ev){
+  if(ev.type === "free"){ return (ev.time ? ev.time + " " : "") + ((ev.free && ev.free.title) || "打合せ"); }
   const d = ev.row.data || {};
   const no = (d.chosho_mgmt_no || "").trim() || (d.chosho_cust_name || "―");
   return (ev.time ? ev.time + " " : "") + no;
 }
 function calEvTitle(ev){
+  if(ev.type === "free"){
+    const f = ev.free || {};
+    return "その他の予定（戸別に紐づかない）\n" + (f.title || "打合せ") + (f.time ? "　" + f.time : "") + (f.note ? "\n" + f.note : "");
+  }
   const d = ev.row.data || {};
   const cc = getContractor(ev.tk);
   const cLine = cc ? "\n施工： " + cc : "";
@@ -20247,6 +20302,17 @@ function renderUpcomingSchedule(rows){
       const dow = new Date(p[0], p[1] - 1, p[2]).getDay();
       const dcls = dow === 0 ? " cu-sun" : (dow === 6 ? " cu-sat" : "");
       html += '<div class="cu-day"><div class="cu-day-head' + dcls + '">' + calFmtDateJP(ev.date) + '</div><table class="cu-list">';
+    }
+    if(ev.type === "free"){
+      const f = ev.free || {};
+      html += '<tr>'
+        + '<td style="width:60px;"><span class="cu-type t-free">その他</span></td>'
+        + '<td class="cu-time" style="width:48px;">' + escapeHtml(f.time || "―") + '</td>'
+        + '<td>' + escapeHtml(f.title || "打合せ") + '</td>'
+        + '<td class="cu-ctr" style="width:130px;"></td>'
+        + '<td style="color:#667482;">' + escapeHtml(f.note || "") + '</td>'
+        + '</tr>';
+      return;
     }
     const d = ev.row.data || {};
     const no = (d.chosho_mgmt_no || "").trim();
@@ -20349,6 +20415,12 @@ function renderListCalendarMode(rows, container){
         + (workN >= CAL_MAX_PER_DAY ? '<span class="cal-full-mark">満</span>' : (workN > 0 ? '<span style="color:#90a0b0;font-weight:400;font-size:9px;"> ' + workN + '/' + CAL_MAX_PER_DAY + '</span>' : ''))
         + '</div>';
       dayEvs.forEach(ev => {
+        if(ev.type === "free"){
+          // 戸別に紐づかない予定（元請打合せ・社内会議など）
+          html += '<span class="cal-ev cal-free" draggable="true" data-free="' + escapeHtml(ev.free.id) + '" data-evtype="free" title="' + escapeHtml(calEvTitle(ev)) + '">'
+            + '<b class="cal-free-mark">他</b>' + escapeHtml(calEvLabel(ev)) + '</span>';
+          return;
+        }
         const cls = ["cal-ev", ev.type === "work" ? "cal-work" : "cal-meet"];
         if(ev.prov) cls.push("cal-prov");
         if(ev.done) cls.push("cal-done");
@@ -20389,6 +20461,17 @@ function renderCalPanel(byDate){
     if(evs.length){
       html += '<table class="cal-day-list">';
       evs.forEach(ev => {
+        if(ev.type === "free"){
+          const f = ev.free || {};
+          html += '<tr>'
+            + '<td style="width:70px;"><span class="cal-ev-type t-free">その他</span></td>'
+            + '<td style="width:52px;">' + escapeHtml(f.time || "―") + '</td>'
+            + '<td>' + escapeHtml(f.title || "打合せ") + (f.note ? ' <span style="color:#8a95a1;font-size:11px;">' + escapeHtml(f.note) + '</span>' : '') + '</td>'
+            + '<td style="width:150px;"><span class="cal-ctr-tag cal-ctr-none">戸別なし</span></td>'
+            + '<td style="width:70px;text-align:right;"><button data-cal-free-del="' + escapeHtml(f.id) + '" title="この予定を削除">🗑</button></td>'
+            + '</tr>';
+          return;
+        }
         const d = ev.row.data || {};
         const cc = getContractor(ev.tk);
         const ccChip = cc
@@ -20419,6 +20502,26 @@ function renderCalPanel(byDate){
       + '<select id="cal-assign-case"><option value="">（戸別を選択）</option>' + opts + '</select>'
       + '<input type="time" id="cal-assign-time" value="09:00">'
       + '<button id="cal-assign-apply" style="border-color:#2e5488;color:#2e5488;">＋ 割り当て</button>'
+      + '</div>';
+    // 戸別に紐づかない予定（元請との打合せ・社内会議・現場立会いなど）
+    const frees = getCalFreeEvents().filter(f => f && f.date === ds)
+      .sort((a, b) => String(a.time || "").localeCompare(String(b.time || "")));
+    html += '<div class="cal-free-sec">'
+      + '<div class="cal-free-head">🗓 その他の予定（戸別に紐づかない打合せ・会議など）</div>'
+      + frees.map(f =>
+          '<div class="cal-free-row" data-freeid="' + escapeHtml(f.id) + '">'
+          + '<input type="time" data-ff="time" value="' + escapeHtml(f.time || "") + '">'
+          + '<input type="text" data-ff="title" value="' + escapeHtml(f.title || "") + '" placeholder="件名" style="flex:1 1 200px;">'
+          + '<input type="text" data-ff="note" value="' + escapeHtml(f.note || "") + '" placeholder="メモ（任意）" style="flex:1 1 160px;">'
+          + '<button data-cal-free-del="' + escapeHtml(f.id) + '" title="削除">🗑</button>'
+          + '</div>').join("")
+      + '<div class="cal-free-row cal-free-add">'
+      +   '<input type="time" id="cal-free-time" value="09:00">'
+      +   '<input type="text" id="cal-free-title" placeholder="件名（例：元請と現場打合せ）" style="flex:1 1 220px;">'
+      +   '<input type="text" id="cal-free-note" placeholder="メモ（任意）" style="flex:1 1 160px;">'
+      +   '<button id="cal-free-add" style="border-color:#7a4e1e;color:#7a4e1e;">＋ 追加</button>'
+      + '</div>'
+      + '<div class="cal-free-note">戸別（管理番号）と関係のない予定をこの日に登録できます。カレンダーには「他」印で表示され、.ics書き出しにも含まれます。</div>'
       + '</div>';
     return html;
   }
@@ -20528,6 +20631,23 @@ function bindCalendarHandlers(container){
       if(_calPanel && _calPanel.type === "event") calMoveEvent(_calPanel.tk, _calPanel.evType, ds, ts);
       return;
     }
+    // 戸別に紐づかない予定：追加／削除
+    if(e.target.id === "cal-free-add"){
+      if(_calPanel && _calPanel.type === "day"){
+        const t = (document.getElementById("cal-free-time") || {}).value || "";
+        const ti = ((document.getElementById("cal-free-title") || {}).value || "").trim();
+        const nt = ((document.getElementById("cal-free-note") || {}).value || "").trim();
+        if(!ti){ alert("件名を入力してください（例：元請と現場打合せ）"); return; }
+        calFreeAdd(_calPanel.date, t, ti, nt);
+        renderListTable();
+      }
+      return;
+    }
+    if(e.target.dataset && e.target.dataset.calFreeDel){
+      const f = calFreeById(e.target.dataset.calFreeDel);
+      if(f && confirm("「" + (f.title || "打合せ") + "」を削除しますか？")){ calFreeDelete(f.id); renderListTable(); }
+      return;
+    }
     if(e.target.id === "cal-ev-del"){
       if(_calPanel && _calPanel.type === "event" && confirm("この打合せ予定を削除しますか？")){
         setLedger(_calPanel.tk, { meetAt: "" });
@@ -20596,11 +20716,28 @@ function bindCalendarHandlers(container){
       return;
     }
   });
+  // その他の予定：時刻・件名・メモの直接編集（入力欄から離れた時点で保存）
+  container.addEventListener("change", e => {
+    if(_listMode !== "calendar") return;
+    const inp = e.target.closest && e.target.closest("[data-ff]");
+    if(!inp) return;
+    const rowEl = inp.closest("[data-freeid]"); if(!rowEl) return;
+    const patch = {};
+    patch[inp.dataset.ff] = (inp.dataset.ff === "time") ? String(inp.value || "").slice(0, 5) : String(inp.value || "");
+    calFreeUpdate(rowEl.dataset.freeid, patch);
+    renderListTable();
+  });
   // ドラッグ＆ドロップで日付変更
   container.addEventListener("dragstart", e => {
     if(_listMode !== "calendar") return;
     const evEl = e.target.closest && e.target.closest(".cal-ev");
     if(!evEl) return;
+    if(evEl.dataset.evtype === "free"){
+      _calDrag = { freeId: evEl.dataset.free, type: "free" };
+      evEl.classList.add("cal-drag");
+      try { e.dataTransfer.setData("text/plain", evEl.dataset.free); e.dataTransfer.effectAllowed = "move"; } catch(_){}
+      return;
+    }
     _calDrag = { tk: evEl.dataset.tk, type: evEl.dataset.evtype };
     evEl.classList.add("cal-drag");
     try { e.dataTransfer.setData("text/plain", evEl.dataset.tk); e.dataTransfer.effectAllowed = "move"; } catch(_){}
@@ -20630,6 +20767,7 @@ function bindCalendarHandlers(container){
     e.preventDefault();
     const drag = _calDrag;
     _calDrag = null;
+    if(drag.type === "free"){ calFreeUpdate(drag.freeId, { date: td.dataset.date }); renderListTable(); return; }
     calMoveEvent(drag.tk, drag.type, td.dataset.date);
   });
 }
@@ -20673,10 +20811,13 @@ function calBuildICS(rows){
     const no = (d.chosho_mgmt_no || "").trim();
     const nm = (d.chosho_cust_name || "").trim();
     const addr = (d.chosho_cust_addr || "").trim();
-    const kindJP = ev.prov ? "仮受付" : (ev.type === "work" ? "工事" : "打合せ");
+    const isFree = (ev.type === "free");
+    const kindJP = isFree ? "その他" : (ev.prov ? "仮受付" : (ev.type === "work" ? "工事" : "打合せ"));
     const doneJP = ev.done ? "（完了）" : "";
-    const sum = "【" + kindJP + "】" + (no || "―") + (nm ? " " + nm : "") + doneJP;
-    const uid = (ev.tk || ("row" + i)).replace(/[^0-9A-Za-z_\-]/g, "_") + "-" + ev.type + "@antenna-app";
+    const sum = isFree
+      ? ("【その他】" + ((ev.free && ev.free.title) || "打合せ"))
+      : ("【" + kindJP + "】" + (no || "―") + (nm ? " " + nm : "") + doneJP);
+    const uid = (ev.tk || (isFree ? ((ev.free && ev.free.id) || ("free" + i)) : ("row" + i))).replace(/[^0-9A-Za-z_\-]/g, "_") + "-" + ev.type + "@antenna-app";
     lines.push("BEGIN:VEVENT");
     lines.push("UID:" + uid);
     lines.push("DTSTAMP:" + stamp);
@@ -20696,7 +20837,9 @@ function calBuildICS(rows){
     }
     lines.push("SUMMARY:" + icsEsc(sum));
     if(addr) lines.push("LOCATION:" + icsEsc(addr));
-    const descParts = [no ? "管理番号: " + no : "", nm ? "氏名: " + nm : "", "種別: " + kindJP + doneJP]
+    const descParts = (isFree
+      ? ["種別: その他（戸別に紐づかない予定）", (ev.free && ev.free.note) ? ("メモ: " + ev.free.note) : ""]
+      : [no ? "管理番号: " + no : "", nm ? "氏名: " + nm : "", "種別: " + kindJP + doneJP])
       .filter(Boolean).map(icsEsc);
     if(descParts.length) lines.push("DESCRIPTION:" + descParts.join("\\n"));
     lines.push("END:VEVENT");
