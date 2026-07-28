@@ -2685,8 +2685,22 @@
     border-bottom: 2px solid #1e3a5f; padding-bottom: 5px; margin-bottom: 10px;
     display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   }
+  /* 📗 Excel取込：読み取り列の軽い説明（操作バー内・控えめ） */
+  .lg-xlsx-cols { font-size: 11px; color: #667482; line-height: 1.5; }
+  .lg-xlsx-cols b {
+    display: inline-block; background: #eef2f6; color: #1e3a5f; border: 1px solid #cdd3da;
+    border-radius: 3px; padding: 0 4px; margin-right: 1px; font-size: 10.5px;
+  }
+  .lg-xlsx-cols .req { color: #b3433a; font-size: 9.5px; margin-left: 2px; }
+  .lg-xlsx-cols .sub { color: #9aa3ad; }
   /* 📗 Excel取込プレビュー：チェックボックスではなく「文字をクリックして選ぶ」方式 */
   .xi-note { font-size: 11.5px; color: #667482; line-height: 1.7; margin-bottom: 8px; }
+  .xi-cols { margin: 4px 0 2px; font-size: 11px; color: #33414f; }
+  .xi-cols b {
+    display: inline-block; background: #eef2f6; color: #1e3a5f; border: 1px solid #cdd3da;
+    border-radius: 3px; padding: 0 5px; font-size: 10.5px;
+  }
+  .xi-cols .sub { color: #9aa3ad; }
   .xi-bulk { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
   .xi-bbtn {
     font-size: 11.5px; color: #2e5488; background: #eef2f6; border: 1px solid #cdd3da;
@@ -19519,6 +19533,9 @@ function renderListLedgerMode(rows, container){
     + ' style="background:#7a4e1e;color:#fff;border:1px solid #5e3c16;padding:4px 12px;border-radius:3px;cursor:' + (selCount ? 'pointer' : 'not-allowed') + ';font-size:12px;opacity:' + (selCount ? '1' : '.5') + ';">🖨 選択印刷' + (selCount ? '（' + selCount + '件）' : '') + '</button>'
     + (selCount ? '<button id="lg-print-clear" title="工事調書の選択をすべて解除" style="background:#fff;color:#7a4e1e;border:1px solid #b08a55;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:12px;">選択解除</button>' : '')
     + '<button id="lg-xlsx-import" title="Excel（.xlsx）のH列「管理番号」を読み込み、下三桁で突き合わせて台帳の管理番号を更新します。取込前に、住所や過去の情報のどちらを残すかを選べます。" style="background:#2e5488;color:#fff;border:1px solid #1e3a5f;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📗 Excelで管理番号を更新</button>'
+    + '<span class="lg-xlsx-cols" title="1行目の見出し（管理番号／住所結合／過去の情報）から列を自動で探します。見出しが無い場合は H / E / F 列を使います。">'
+    +   '読む列：<b>H</b>管理番号<span class="req">必須</span> ／ <b>E</b>住所 ／ <b>F</b>過去の情報→備考'
+    +   '<span class="sub">（1行目の見出しから自動判別。上から下へ全行）</span></span>'
     + '<button id="lg-export-genba" title="この受付台帳を1ファイル（受付台帳.json）に書き出します。スマホの現場入力アプリで取り込むと、一覧から選んで入力を開始できます（管理番号・氏名・住所が入った状態）。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📤 現場用に書き出し</button>'
     + '<span style="font-size:11px;color:#667482;">セルをクリックで直接編集。日程・打合せはカレンダーに、名前・住所等は図面に即反映されます</span>'
     + '<span class="lg-count">全 ' + rows.length + ' 件（仮 ' + prov + ' ／ 完了 ' + done + ' ／ ビラ済 ' + flyered + '）' + (shown.length !== rows.length ? ' → 表示 ' + shown.length + ' 件' : '') + '</span>'
@@ -19848,7 +19865,7 @@ function ledgerXlsxImportFlow(){
         addrPick: "keep", notePick: "keep"
       };
     });
-    _xlsxPlan = { entries: entries, fileName: f.name || "" };
+    _xlsxPlan = { entries: entries, fileName: f.name || "", cols: C, headerIdx: det.headerIdx };
     openXlsxPreview();
   });
 }
@@ -19930,6 +19947,10 @@ function openXlsxPreview(){
     + '<div class="photo-prev-body" style="display:block;background:#fff;">'
     +   '<div class="xi-note">'
     +     'Excel <b>' + P.entries.length + '</b> 行を、管理番号の<b>下三桁</b>で台帳と突き合わせました。'
+    +     '<div class="xi-cols">読み取った列： <b>' + escapeHtml((P.cols && P.cols.mgmt) || "H") + '</b> 管理番号'
+    +       ' ／ <b>' + escapeHtml((P.cols && P.cols.addr) || "E") + '</b> 住所'
+    +       ' ／ <b>' + escapeHtml((P.cols && P.cols.note) || "F") + '</b> 過去の情報（→備考）'
+    +       '<span class="sub">　' + ((P.headerIdx >= 0) ? ((P.headerIdx + 1) + "行目の見出しから自動判別") : "見出しが見つからないため既定の列を使用") + '</span></div>'
     +     '<div class="xi-legend">'
     +       '<div><span class="xi-dot ok"></span><b>台帳にある … ' + nMatch + ' 件</b>'
     +         '<span class="xi-exp">→ その戸別の<b>管理番号を新しい番号に更新</b>します（行は増えません）</span></div>'
