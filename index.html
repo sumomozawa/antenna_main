@@ -1075,6 +1075,10 @@
     body.list-print-mode .ledger-table input[type=time],
     body.list-print-mode .ledger-table input[type=datetime-local] { display: none !important; }
     body.list-print-mode .ledger-table .lg-dt-print { display: inline !important; white-space: nowrap; font-size: 10px; }
+    /* 住所は印刷では半角数字で表示（全角は幅が2倍で折り返しやすいため）。データは全角のまま。 */
+    body.list-print-mode .ledger-table tbody td:nth-child(6) .lg-edit,
+    body.list-print-mode .ledger-table tbody td:nth-child(6) .lg-lock { display: none !important; }
+    body.list-print-mode .ledger-table .lg-addr-print { display: inline !important; }
     /* 「状態」列に仮受付と出るので、管理番号セルの「仮」バッジは印刷では重複 → 消す */
     body.list-print-mode .ledger-table .lg-prov-badge { display: none !important; }
     /* 余白・行間・文字を詰める */
@@ -2870,6 +2874,7 @@
   .lg-note-input { color: #5d4037; }
   .lg-note-print { display: none; }   /* 印刷時のみ折返しテキストで全文表示（画面はinput編集） */
   .lg-dt-print { display: none; }     /* 印刷時のみ「8/1-10:00」の短い1行表示（画面は日付/時刻の入力欄） */
+  .lg-addr-print { display: none; }   /* 印刷時のみ住所を半角数字で表示（画面は入力値そのまま） */
 
   /* --- 予定カレンダー --- */
   .cal-toolbar {
@@ -19424,6 +19429,8 @@ function lgEditableField(row, f){
 const LG_FIELD_MAP = { mgmt: "chosho_mgmt_no", name: "chosho_cust_name", addr: "chosho_cust_addr", tel: "chosho_cust_tel", date: "chosho_date", status: "chosho_status" };
 function lgWriteCaseField(row, f, v){
   const key = LG_FIELD_MAP[f] || f;
+  // 住所・電話の数字は半角へ統一（全角のままだと検索・並び・印刷幅が揃わないため）
+  if(f === "addr" || f === "tel") v = toHalfWidthNum(v);
   const oldTk = subCaseKey(row);
   const writeBoth = (k2, v2) => {
     row.data = Object.assign({}, row.data);
@@ -19459,6 +19466,15 @@ function lgWriteCaseField(row, f, v){
   }
   try { markCaseEdited(row); } catch(_){} // Phase2: 戸別本体をマージ上乗せ対象に
   projTouch();
+}
+/* 全角数字を半角へ（住所の「松原町１丁目３１番地」→「松原町1丁目31番地」）。
+   保存データは全角のまま変えず、印刷の表示だけ半角にする（全角は幅も2倍なので紙も詰まる）。 */
+function toHalfWidthNum(s){
+  return String(s == null ? "" : s)
+    .replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+    // 全角ハイフン・マイナス類は半角へ（「０１７６－５３」→「0176-53」）。
+    // ※ 長音符「ー」(U+30FC) は「コーポ」等の語を壊すので対象にしない。
+    .replace(/[－−‐‑]/g, "-");
 }
 /* 印刷用の短い日付表記。"2026-08-01"＋"10:00" → "8/1-10:00"（時刻が無ければ "8/1"）。
    入力欄を縦に積むと行が高くなり枚数が増えるため、印刷ではこの1行表示に置き換える。 */
@@ -19599,7 +19615,8 @@ function renderListLedgerMode(rows, container){
       + '<span class="lg-map-ind" title="' + (mapReg ? "地図に登録済み（建物にこの管理番号をリンク済み）" : "地図に未登録（地図で建物にこの管理番号をリンクすると🗺️になります）") + '">' + (mapReg ? "🗺️" : "－") + '</span></td>'
       + '<td>' + tCell("name", d.chosho_cust_name) + '</td>'
       + '<td class="lg-c lg-ctr-cell">' + lgContractorCellHtml(r, false) + '</td>'
-      + '<td>' + tCell("addr", d.chosho_cust_addr) + '</td>'
+      + '<td>' + tCell("addr", d.chosho_cust_addr)
+      +   '<span class="lg-addr-print">' + escapeHtml(toHalfWidthNum(d.chosho_cust_addr || "")) + '</span></td>'
       + '<td>' + tCell("tel", d.chosho_cust_tel) + '</td>';
     // 工事日程予定（日付=chosho_date ＋ 時間=ledger.time）
     // 印刷では入力欄を隠し、「8/1-10:00」の1行表示にする（縦に積まれた入力欄が行を高くし、枚数が増えるため）
@@ -19845,7 +19862,7 @@ function ledgerXlsxImportFlow(){
     const det = xlsxDetectCols(rows), C = det.cols;
     const data = rows.slice(det.headerIdx + 1).map(r => ({
       mgmt: String(r[C.mgmt] || "").trim(),
-      addr: String(r[C.addr] || "").trim(),
+      addr: toHalfWidthNum(String(r[C.addr] || "").trim()),   // 住所の数字は半角へ統一
       note: String(r[C.note] || "").trim()
     })).filter(x => x.mgmt && mgmtLast3Digits(x.mgmt));
     if(!data.length){ alert("「管理番号」の列が見つかりませんでした。\n1行目に「管理番号」という見出しがあるシートをお選びください。"); return; }
@@ -20972,6 +20989,9 @@ function syncEditorToRowData(){
   try { markCaseEdited(_editingRow); } catch(_){} // Phase2: 開いている戸別をマージ上乗せ対象に
   try {
     const s = collectState();
+    // 住所・電話の数字は半角へ統一（台帳での編集と揃える）
+    if(s.chosho_cust_addr) s.chosho_cust_addr = toHalfWidthNum(s.chosho_cust_addr);
+    if(s.chosho_cust_tel)  s.chosho_cust_tel  = toHalfWidthNum(s.chosho_cust_tel);
     // 写真：消さずに行へ持たせて _thumbs を破棄 → 直後の物件保存(prepareProjectThumbs)が
     // サムネイルを再生成して物件に保存する（エディタで追加/差替した写真も物件に残る）。
     // 元ファイルを持たない行は ensureRowThumbs がフル写真をサムネへ差し替えるためメモリも軽いまま。
