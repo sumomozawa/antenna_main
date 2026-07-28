@@ -1058,17 +1058,32 @@
     body.list-print-mode .ledger-table tbody td:nth-child(1) { display: none !important; }
     body.list-print-mode .ledger-table thead th:nth-child(2) { width: 5%; }   /* 状態 */
     body.list-print-mode .ledger-table thead th:nth-child(3) { width: 10%; }  /* 管理番号（番号の改行防止のため拡大） */
-    body.list-print-mode .ledger-table thead th:nth-child(4) { width: 8%; }   /* 名前 */
-    body.list-print-mode .ledger-table thead th:nth-child(5) { width: 12%; }  /* 施工会社（住所と同じ幅に拡大＝会社名の折返しを防ぐ） */
-    body.list-print-mode .ledger-table thead th:nth-child(6) { width: 12%; }  /* 住所 */
-    body.list-print-mode .ledger-table thead th:nth-child(7) { width: 9%; }   /* 電話番号 */
-    body.list-print-mode .ledger-table thead th:nth-child(8) { width: 11%; }  /* 工事日程予定（施工会社拡大分を捻出） */
-    body.list-print-mode .ledger-table thead th:nth-child(9) { width: 10%; }  /* 打合せ予定（施工会社拡大分を捻出） */
+    body.list-print-mode .ledger-table thead th:nth-child(4) { width: 9%; }   /* 名前 */
+    body.list-print-mode .ledger-table thead th:nth-child(5) { width: 12%; }  /* 施工会社 */
+    body.list-print-mode .ledger-table thead th:nth-child(6) { width: 15%; }  /* 住所（日付列を詰めた分を回す） */
+    body.list-print-mode .ledger-table thead th:nth-child(7) { width: 8%; }   /* 電話番号 */
+    body.list-print-mode .ledger-table thead th:nth-child(8) { width: 7%; }   /* 工事日程予定（8/1-10:00 表記で十分） */
+    body.list-print-mode .ledger-table thead th:nth-child(9) { width: 7%; }   /* 打合せ予定（同上） */
     body.list-print-mode .ledger-table thead th:nth-child(10) { width: 3%; }  /* ビラ */
     body.list-print-mode .ledger-table thead th:nth-child(11) { width: 3%; }  /* 完了 */
     body.list-print-mode .ledger-table thead th:nth-child(12) { width: 3%; }  /* 承諾書 */
     body.list-print-mode .ledger-table thead th:nth-child(13) { width: 3%; }  /* 完了書 */
-    body.list-print-mode .ledger-table thead th:nth-child(14) { width: 11%; } /* 備考（開く列の分を吸収して拡大） */
+    body.list-print-mode .ledger-table thead th:nth-child(14) { width: 15%; } /* 備考（開く列＋日付列の分を吸収） */
+    /* ▼ 行を詰める（縦の枚数を減らす） */
+    /* 日付・時刻は入力欄を隠し、「8/1-10:00」の1行表示に置き換える（入力欄が縦に積まれて行が高くなるのを防ぐ） */
+    body.list-print-mode .ledger-table input[type=date],
+    body.list-print-mode .ledger-table input[type=time],
+    body.list-print-mode .ledger-table input[type=datetime-local] { display: none !important; }
+    body.list-print-mode .ledger-table .lg-dt-print { display: inline !important; white-space: nowrap; font-size: 10px; }
+    /* 「状態」列に仮受付と出るので、管理番号セルの「仮」バッジは印刷では重複 → 消す */
+    body.list-print-mode .ledger-table .lg-prov-badge { display: none !important; }
+    /* 余白・行間・文字を詰める */
+    body.list-print-mode .ledger-table th,
+    body.list-print-mode .ledger-table td { padding: 1px 4px !important; line-height: 1.25 !important; font-size: 10px !important; }
+    body.list-print-mode .ledger-table .lg-edit,
+    body.list-print-mode .ledger-table .lg-lock { display: inline !important; min-height: 0 !important; padding: 0 !important; }
+    body.list-print-mode .ledger-table input[type=checkbox] { width: 11px; height: 11px; margin: 0; }
+    body.list-print-mode .ledger-table select.lg-st-sel { font-size: 10px !important; line-height: 1.2 !important; }
     /* 管理番号セルの「地図登録」アイコン(🗺️/－)は印刷では不要 → 非表示 */
     body.list-print-mode .ledger-table .lg-map-ind { display: none !important; }
     /* 管理番号は途中改行させない（PDF/印刷で数字が折れて読みづらいのを防ぐ）。
@@ -2840,6 +2855,7 @@
   table.ledger-table .lg-open-btns button:hover { background: #eef2f6; }
   .lg-note-input { color: #5d4037; }
   .lg-note-print { display: none; }   /* 印刷時のみ折返しテキストで全文表示（画面はinput編集） */
+  .lg-dt-print { display: none; }     /* 印刷時のみ「8/1-10:00」の短い1行表示（画面は日付/時刻の入力欄） */
 
   /* --- 予定カレンダー --- */
   .cal-toolbar {
@@ -19415,6 +19431,21 @@ function lgWriteCaseField(row, f, v){
   try { markCaseEdited(row); } catch(_){} // Phase2: 戸別本体をマージ上乗せ対象に
   projTouch();
 }
+/* 印刷用の短い日付表記。"2026-08-01"＋"10:00" → "8/1-10:00"（時刻が無ければ "8/1"）。
+   入力欄を縦に積むと行が高くなり枚数が増えるため、印刷ではこの1行表示に置き換える。 */
+function lgFmtDateTime(dateStr, timeStr){
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dateStr || ""));
+  const t = String(timeStr || "").slice(0, 5);
+  if(!m) return t;
+  const md = parseInt(m[2], 10) + "/" + parseInt(m[3], 10);
+  return t ? (md + "-" + t) : md;
+}
+/* "2026-08-01T10:00" → "8/1-10:00" */
+function lgFmtMeetAt(meetAt){
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(meetAt || ""));
+  if(!m) return "";
+  return parseInt(m[2], 10) + "/" + parseInt(m[3], 10) + "-" + m[4] + ":" + m[5];
+}
 function lgDateStrToday(offset){
   const t = new Date();
   t.setDate(t.getDate() + (offset || 0));
@@ -19539,14 +19570,17 @@ function renderListLedgerMode(rows, container){
       + '<td>' + tCell("addr", d.chosho_cust_addr) + '</td>'
       + '<td>' + tCell("tel", d.chosho_cust_tel) + '</td>';
     // 工事日程予定（日付=chosho_date ＋ 時間=ledger.time）
+    // 印刷では入力欄を隠し、「8/1-10:00」の1行表示にする（縦に積まれた入力欄が行を高くし、枚数が増えるため）
     if(lgEditableField(r, "date")){
       html += '<td class="lg-c"><input type="date" data-f="date" value="' + escapeHtml(d.chosho_date || "") + '">'
-        + '<input type="time" data-f="time" value="' + escapeHtml(lg.time || "") + '"' + (enabled ? "" : " disabled") + '></td>';
+        + '<input type="time" data-f="time" value="' + escapeHtml(lg.time || "") + '"' + (enabled ? "" : " disabled") + '>'
+        + '<span class="lg-dt-print">' + escapeHtml(lgFmtDateTime(d.chosho_date, lg.time)) + '</span></td>';
     } else {
       html += '<td class="lg-c">' + escapeHtml(d.chosho_date || "―") + (lg.time ? " " + escapeHtml(lg.time) : "") + ' 🔒</td>';
     }
     // 打合せ予定（ledger.meetAt）
-    html += '<td class="lg-c"><input type="datetime-local" data-f="meet" value="' + escapeHtml(lg.meetAt || "") + '"' + (enabled ? "" : " disabled") + '></td>';
+    html += '<td class="lg-c"><input type="datetime-local" data-f="meet" value="' + escapeHtml(lg.meetAt || "") + '"' + (enabled ? "" : " disabled") + '>'
+      + '<span class="lg-dt-print">' + escapeHtml(lgFmtMeetAt(lg.meetAt)) + '</span></td>';
     // ビラ・完了
     html += '<td class="lg-c"><input type="checkbox" data-f="flyer"' + (lg.flyer ? " checked" : "") + (enabled ? "" : " disabled") + ' title="ビラ配布済み"></td>';
     html += '<td class="lg-c"><input type="checkbox" data-f="done"' + (isDone ? " checked" : "") + (lgEditableField(r, "done") ? "" : " disabled") + ' title="工事完了"></td>';
