@@ -914,7 +914,9 @@
   body.list-print-mode .list-search-row,
   body.list-print-mode .sub-controls,
   body.list-print-mode .list-mode-tabs { display: none !important; }
-  body.list-print-mode .list-view-body { padding: 0; background: #fff; }
+  /* 印刷では高さ制限・スクロールを外す（overflow:auto のままだと、環境によっては
+     表示領域から溢れた分が切れて印刷されない・スクロールバーが紙に写る恐れがある） */
+  body.list-print-mode .list-view-body { padding: 0; background: #fff; overflow: visible !important; height: auto !important; max-height: none !important; }
   body.list-print-mode .list-view { background: #fff; }
   @media print {
     body.list-print-mode .app { display: none !important; }
