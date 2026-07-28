@@ -1088,8 +1088,10 @@
     body.list-print-mode .ledger-table .lg-lock { display: inline !important; min-height: 0 !important; padding: 0 !important; }
     body.list-print-mode .ledger-table input[type=checkbox] { width: 11px; height: 11px; margin: 0; }
     body.list-print-mode .ledger-table select.lg-st-sel { font-size: 10px !important; line-height: 1.2 !important; }
-    /* 管理番号セルの「地図登録」アイコン(🗺️/－)は印刷では不要 → 非表示 */
-    body.list-print-mode .ledger-table .lg-map-ind { display: none !important; }
+    /* 管理番号セルの補助マークは印刷では不要 → 非表示。
+       ・地図登録(🗺️/－) ・図面の有無(📄/－)。画面では「図面未作成のみ」の絞り込みに使うため残す。 */
+    body.list-print-mode .ledger-table .lg-map-ind,
+    body.list-print-mode .ledger-table .lg-dwg-ind { display: none !important; }
     /* 管理番号は途中改行させない（PDF/印刷で数字が折れて読みづらいのを防ぐ）。
        セル全体のword-break:anywhereを、管理番号の番号スパンだけ打ち消す。 */
     body.list-print-mode .ledger-table tbody td:nth-child(3) .lg-edit,
