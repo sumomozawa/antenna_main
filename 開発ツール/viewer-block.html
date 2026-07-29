@@ -1,0 +1,618 @@
+<!--
+  ============================================================================
+  viewer-block.html — 閲覧専用ビューアで「隠す・止める」処理の編集元
+  ----------------------------------------------------------------------------
+  ビューア(ソフトウェア_ビューア/index.html)は自動生成物です。直接編集しないでください。
+  閲覧専用まわりを変えたいときは、このファイルだけを直して生成スクリプトを実行します。
+
+      powershell -ExecutionPolicy Bypass -File "…\開発ツール\ビューア生成.ps1"
+
+  このファイル単体をブラウザで開いても意味はありません（部品置き場です）。
+  下の 3 ブロックを、生成スクリプトがメイン(index.html)の決まった位置へ差し込みます。
+
+    STYLE            </head> の直前に差し込む CSS
+                     （入力・保存・編集まわりのUIを隠す）
+    MAP-POINTERDOWN  地図の onStagePointerDown() の冒頭に差し込む JS
+                     （作図・移動を止めて「クリック＝選択／ドラッグ＝パン」に固定）
+    SCRIPT           </body> の直前に差し込む JS
+                     （保存・同期・バックアップの停止、ビューアのホーム画面 など）
+
+  ・「==BLOCK … START==」「==BLOCK … END==」の行は生成スクリプトの目印です。
+    消したり書き換えたりしないでください（見つからないと生成が止まります）。
+  ・目印の行は出力には入りません（出力側には ==VIEWER-MODE … == の目印が付きます）。
+  ・中身はインデントも含めてそのまま差し込まれます。
+  ============================================================================
+-->
+
+<!-- ==BLOCK STYLE START== -->
+<style id="vw-style">
+/* ============================================================
+   閲覧専用ビューア：入力・編集・保存のUIをすべて隠す
+   ・元のCSSより後ろ（</head>直前）に置くので、同順位なら後勝ち。
+     取りこぼしを防ぐため原則 !important。
+   ============================================================ */
+
+/* ---------- 共通：閲覧専用バッジ ---------- */
+.vw-badge{
+  display:inline-block; margin-left:10px; padding:1px 9px;
+  font-size:11px; font-weight:700; letter-spacing:.06em;
+  color:#08312b; background:#7fe3cf; border:1px solid #46b39d;
+  border-radius:11px; vertical-align:middle; white-space:nowrap;
+}
+
+/* ---------- 編集画面ヘッダー：保存・読込・暗号化・単価マスターを撤去 ---------- */
+#btn-reset, #btn-save, #btn-save-overwrite, #btn-load,
+#btn-save-enc, #btn-save-hyb, #btn-load-enc, #btn-parts-edit,
+#rt-ind-app, #rt-locks-app, #rt-ind-list, #rt-locks-list, #rt-ind-menu,
+#rt-bump-banner{ display:none !important; }
+
+/* ---------- 入力パネル：閲覧のみ（クリック・入力はJSで遮断） ---------- */
+#input-panel{ background:#fbfcfd !important; }
+#input-panel input, #input-panel select, #input-panel textarea{
+  background:#f4f7fa !important;
+  color:#1f2a36 !important;
+  -webkit-text-fill-color:#1f2a36 !important;
+  opacity:1 !important;
+  cursor:default !important;
+  caret-color:transparent !important;
+}
+#input-panel button,
+#btn-photo-add, #btn-photo-export, #btn-photo-compress,
+#btn-asbestos-minus2y{ display:none !important; }
+/* 写真はサムネイルだけ残し、差し替え・削除のUIは撤去 */
+#photo-list button,
+#photo-list input[type="file"]{ display:none !important; }
+.vw-readonly-note{
+  margin:0 0 8px; padding:6px 9px; border-radius:5px;
+  background:#e7f4f1; border:1px solid #b6ded4; color:#0d5045;
+  font-size:11.5px; line-height:1.55;
+}
+
+/* ---------- 図面パネル：ズームだけ残し、編集ツールは撤去 ---------- */
+#btn-wire-reset, #btn-pos-reset, #btn-add-text, #btn-ag-paste,
+#btn-tb-help, #tb-hint{ display:none !important; }
+.diagram-toolbar .tb-check{ display:none !important; }
+svg#diagram{ cursor:default !important; }
+
+/* ---------- 積算パネル：協力会社（対下請）の欄は出さない ---------- */
+#outsource_fee_on, #outsource_fee_amount, #outsource_fee_use_proj_wrap{ display:none !important; }
+.estimate-panel .tax-toggle:has(#outsource_fee_on){ display:none !important; }
+
+/* ---------- 戸別一覧ヘッダー：読込系だけ残す ---------- */
+#btn-list-bulk-reenc, #btn-list-bulk-plain, #btn-list-bulk-photos,
+#btn-list-clear-pw, #btn-list-clear, #list-pw-indicator,
+#btn-genba-import{ display:none !important; }
+
+/* 一覧のモードタブ：標準一覧 と 全体費用詳細 のみ */
+.list-mode-tabs .mode-tab[data-list-mode="by_folder"],
+.list-mode-tabs .mode-tab[data-list-mode="subcontractor"],
+.list-mode-tabs .mode-tab[data-list-mode="ledger"],
+.list-mode-tabs .mode-tab[data-list-mode="calendar"]{ display:none !important; }
+/* 基本工事プリセットの設定バー（物件側で決める設定） */
+.list-base-preset-row{ display:none !important; }
+/* 行の「読込」ボタンは閲覧なので「表示」と読ませる */
+.list-table .load-btn{ font-size:0 !important; }
+.list-table .load-btn::after{ content:"表示"; font-size:11px; }
+
+/* ---------- メニュー（ビューアのホーム） ---------- */
+#menu-projfile, #menu-detach, #menu-close,
+#menu-proj-new, #menu-proj-import, #menu-proj-restore, #menu-proj-openfile,
+#menu-summary, #menu-feats, #menu-feat-note,
+.menu-proj-note{ display:none !important; }
+/* 「機能」の見出しごと撤去（カードはビューア独自のものに置換） */
+.menu-sec-head:has(#menu-feat-note){ display:none !important; }
+/* 物件行のうち、編集・出力・削除は撤去（「📂 開く」だけ残す） */
+#menu-proj-list [data-act="save"],
+#menu-proj-list [data-act="rename"],
+#menu-proj-list [data-act="dup"],
+#menu-proj-list [data-act="history"],
+#menu-proj-list [data-act="export"],
+#menu-proj-list [data-act="del"]{ display:none !important; }
+/* 施工業者・諸経費・自社名/.bak・同期設定・提出書類チェックリストの各セクション */
+#menu-contractor-sec, #menu-fee-sec, #menu-company-sec,
+#menu-rt-sec, #menu-teishutsu-sec{ display:none !important; }
+
+/* ビューアのホーム（メニュー先頭に差し込む） */
+.vw-home{ margin:0 0 14px; }
+.vw-home h2{
+  margin:0 0 8px; font-size:15px; color:#0d5045; font-weight:700;
+  border-bottom:2px solid #b6ded4; padding-bottom:5px;
+}
+.vw-src{
+  display:flex; flex-wrap:wrap; gap:9px; align-items:center;
+  background:#f2f7f9; border:1px solid #d3e0e6; border-radius:7px;
+  padding:10px 12px; margin-bottom:12px;
+}
+.vw-src .vw-src-info{ flex:1 1 260px; font-size:12px; color:#33434f; line-height:1.6; }
+.vw-src .vw-src-info b{ color:#0d5045; }
+.vw-btn{
+  background:#0f6f60; color:#fff; border:1px solid #0a5145;
+  padding:8px 15px; border-radius:5px; cursor:pointer;
+  font-size:12.5px; font-family:inherit; font-weight:600; white-space:nowrap;
+}
+.vw-btn:hover{ background:#128071; }
+.vw-btn.sub{ background:#fff; color:#0f6f60; border-color:#8dc3b9; font-weight:600; }
+.vw-btn.sub:hover{ background:#eaf5f2; }
+.vw-cards{ display:flex; flex-wrap:wrap; gap:11px; }
+.vw-card{
+  flex:1 1 210px; min-width:190px; text-align:left; cursor:pointer;
+  background:#fff; border:1px solid #cfd8de; border-left:5px solid #0f6f60;
+  border-radius:7px; padding:13px 15px; font-family:inherit;
+}
+.vw-card:hover{ background:#f3faf8; border-color:#0f6f60; }
+.vw-card .vc-t{ font-size:15px; font-weight:700; color:#1f2a36; margin-bottom:4px; }
+.vw-card .vc-d{ font-size:11.5px; color:#5b6a76; line-height:1.55; }
+.vw-note{ font-size:11.5px; color:#5b6a76; line-height:1.65; margin-top:10px; }
+
+/* ---------- 地図：閲覧（見る・探す・印刷）だけ ---------- */
+#map-new-sheet, #map-rename-sheet, #map-delete-sheet, #map-attach,
+#map-undo, #map-redo, #map-save-state,
+#map-marq-bar, #map-draw-bar{ display:none !important; }
+/* サイドバー：ツール／地図作成／下地／参照地図／仕上げ／ペイントの各節を撤去
+   （レイヤー・建物の色分け・印刷範囲・検索だけ残す。JSで節ごとに印を付ける） */
+.map-side-sec.vw-off{ display:none !important; }
+/* 建物の詳細パネル：入力欄・削除・リンク解除は撤去、情報と写真・戸別を開くは残す */
+#map-detail .map-fld,
+#map-detail #map-bld-delete,
+#map-detail #map-bld-unlink,
+#map-detail #map-obj-delete,
+#map-detail #map-tx-angle2pt,
+#map-detail #map-tx-colors,
+#map-detail #map-tx-type,
+#map-detail #map-tx-presets,
+#map-detail #map-link-search,
+#map-detail #map-link-results,
+#map-detail #map-bld-ledger{ display:none !important; }
+/* 未リンクの建物では「管理番号でリンク」欄ごと出さない */
+#map-bld-link-sec:has(#map-link-search){ display:none !important; }
+/* 「左の『下地』から画像を読み込めます」等の作図向け案内は出さない */
+#map-stage-empty{ display:none !important; }
+
+/* ---------- 版表示に閲覧専用を明記 ---------- */
+#app-ver-foot::after{ content:"　／　閲覧専用ビューア"; color:#0d5045; font-weight:700; }
+
+/* ---------- 印刷時はバッジ等を出さない ---------- */
+@media print{
+  .vw-badge, .vw-home, .vw-readonly-note{ display:none !important; }
+}
+</style>
+<!-- ==BLOCK STYLE END== -->
+
+<!-- ==BLOCK MAP-POINTERDOWN START== -->
+    /* ==VIEWER== 閲覧専用：作図・移動はせず「クリック＝選択(詳細表示)／ドラッグ＝パン」に固定 */
+    if(window.__VIEWER_MODE__){
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType });
+      ensureDocListeners();
+      if(pointers.size >= 2){ panState = null; gesture = "pinch"; beginPinch(); updateCursor(); return; }
+      down = { id: e.pointerId, cx: e.clientX, cy: e.clientY, world: screenToWorld(e.clientX, e.clientY) };
+      var _vwHit = hitTest(e.clientX, e.clientY);
+      if(_vwHit) selectObject(_vwHit.key, _vwHit.id); else clearSelection();
+      gesture = "pan"; beginPan(e.pointerId); capturePointer(e.pointerId);
+      updateCursor();
+      return;
+    }
+<!-- ==BLOCK MAP-POINTERDOWN END== -->
+
+<!-- ==BLOCK SCRIPT START== -->
+<script id="vw-script">
+/* ============================================================
+   閲覧専用ビューア（設計事務所・市の確認用）
+   ------------------------------------------------------------
+   方針
+   ・本体コード（積算・系統図・地図・印刷）はそのまま使う＝表示は本番と完全に同じ。
+   ・「書き込む」処理だけを止める：共有物件JSONへの書き戻し／リアルタイム同期の
+     ロック取得・通知／世代バックアップ／.bak出力／各種保存。
+     → 共有フォルダのデータは絶対に書き換わらない。
+   ・入力UIは隠す／操作を遮断する（DOMの値自体は触らないので計算・印刷は正常）。
+   ============================================================ */
+(function(){
+  "use strict";
+  window.__VIEWER_MODE__ = true;
+
+  var SCHEMA   = (typeof PROJ_SCHEMA      !== "undefined") ? PROJ_SCHEMA      : "antenna_project_v1";
+  var CURKEY   = (typeof PROJ_CURRENT_KEY !== "undefined") ? PROJ_CURRENT_KEY : "antenna_current_project_v1";
+  var SRCKEY   = "vw_last_source_v1";
+
+  /* ==========================================================
+     1) 書き込み系を停止（共有ファイル・同期・バックアップ）
+     ========================================================== */
+  function noopAsync(){ return Promise.resolve(); }
+  var KILL_ASYNC = [
+    "projTouch",              // 自動保存の予約
+    "projSaveNow",            // 端末内＋共有ファイルへの保存
+    "createProjectBackup",    // 世代バックアップ
+    "writeSharedBak",         // 共有フォルダへの .bak
+    "tryReconnectSharedFile", // 前回の共有ファイルへ自動再接続（書込ハンドル）
+    "reconnectSharedFileClick",
+    "projHandlePut",          // 書込ハンドルの記憶
+    "attachProjectFile", "attachProjectToHandle",
+    "openProjectFromFile",    // 書込連動で開く（ビューアでは読み取り専用の開き方に置換）
+    "pickAndImportProject",
+    "createProjectFlow", "deleteProjectFlow", "exportProjectFlow", "restoreTrashedProject",
+    "ensureRealtime", "rtJoinForCurrentProject", "rtClaimKey", "rtClaimLock",
+    "rtPublishBump", "rtStartHeartbeat", "rtOpenConfig", "rtPullLatest",
+    "overwriteSaveCurrent", "saveEncrypted", "saveHybrid"
+  ];
+  KILL_ASYNC.forEach(function(n){
+    if(typeof window[n] === "function") window[n] = noopAsync;
+  });
+  /* 共有ファイルへの書き戻しは「成功した体」で返す＝警告バナーを出さずに何もしない */
+  if(typeof window.projWriteFile === "function"){
+    window.projWriteFile = function(){ return Promise.resolve(true); };
+  }
+  /* 物件モードの「印刷/PDF」は協力会社内訳（対下請）へ差し替わる仕様。
+     ビューアは対市の積算書のままにする。 */
+  if(typeof window.prepareBukkenPrintPage === "function"){
+    window.prepareBukkenPrintPage = function(){
+      try { if(typeof cleanupBukkenPrintPage === "function") cleanupBukkenPrintPage(); } catch(_){}
+      return false;
+    };
+  }
+  /* 隠したモードへは行かせない（地図→受付台帳 等の経路対策） */
+  if(typeof window.setListMode === "function"){
+    var _setListMode = window.setListMode;
+    window.setListMode = function(m){
+      if(m === "ledger" || m === "calendar" || m === "subcontractor" || m === "by_folder") m = "standard";
+      return _setListMode.call(this, m);
+    };
+  }
+
+  /* ==========================================================
+     2) 物件ファイル（共有物件JSON）を読み取り専用で開く
+     ========================================================== */
+  function vwReadFileText(f){
+    if(f.text) return f.text();
+    return new Promise(function(res, rej){
+      var r = new FileReader();
+      r.onload = function(){ res(String(r.result || "")); };
+      r.onerror = function(){ rej(r.error); };
+      r.readAsText(f, "utf-8");
+    });
+  }
+  function vwFmtTime(ms){
+    if(!ms) return "";
+    var d = new Date(ms), p = function(n){ return String(n).padStart(2, "0"); };
+    return d.getFullYear() + "/" + p(d.getMonth()+1) + "/" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+  }
+  function vwOpenProjectFile(){
+    if(typeof pickFile !== "function"){ alert("この端末ではファイルを開けません。"); return; }
+    pickFile({}, function(f){
+      vwReadFileText(f).then(function(txt){
+        var p = null;
+        try { p = JSON.parse(txt); } catch(_){ }
+        if(!p || p.schema !== SCHEMA || !Array.isArray(p.cases)){
+          alert("物件ファイルではありません。\n\n「物件_○○.json」（共有物件JSON）を選んでください。\n個々の戸別JSONを見る場合は「📁 工事フォルダを読み込む」をお使いください。");
+          return;
+        }
+        (typeof projIdbPut === "function" ? projIdbPut(p) : Promise.resolve())
+          .catch(function(){})
+          .then(function(){ return applyProject(p, { silent: true }); })
+          .then(function(){
+            try { localStorage.setItem(CURKEY, p.id); } catch(_){}
+            var src = { name: f.name || "", at: f.lastModified || 0, proj: p.name || "", updatedAt: p.updatedAt || "", n: (p.cases || []).length };
+            try { localStorage.setItem(SRCKEY, JSON.stringify(src)); } catch(_){}
+            vwRenderSource();
+            try { renderMenuView(); } catch(_){}
+            alert("物件「" + (p.name || "") + "」を読み込みました（戸別 " + src.n + " 件）。\n\nこのビューアは閲覧専用です。共有フォルダのファイルは書き換わりません。");
+          })
+          .catch(function(e){
+            console.warn("[viewer] 物件の読込に失敗:", e);
+            alert("物件ファイルを読み込めませんでした。");
+          });
+      }).catch(function(){ alert("ファイルを読み込めませんでした。"); });
+    });
+  }
+
+  /* ----------------------------------------------------------
+     GitHub Pages など http(s) で公開した場合のみ、
+       index.html?data=物件_○○.json
+     のように書くと、その物件JSONを自動で読み込む。
+     ※ file://（ローカルの共有フォルダ運用）ではブラウザの制限で使えないので、
+        その場合は「📂 物件ファイルを開く」で選んでもらう。
+     ※ 個人情報を含む物件JSONを公開リポジトリに置くと誰でも見られます。
+        公開するのは「このビューア本体（データなし）」だけにしてください。
+     ---------------------------------------------------------- */
+  function vwAutoLoadFromUrl(){
+    if(location.protocol === "file:") return;
+    var m = /[?&]data=([^&#]+)/.exec(location.search);
+    if(!m) return;
+    var url = decodeURIComponent(m[1]);
+    fetch(url).then(function(r){
+      if(!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    }).then(function(p){
+      if(!p || p.schema !== SCHEMA || !Array.isArray(p.cases)) throw new Error("not a project json");
+      return (typeof projIdbPut === "function" ? projIdbPut(p) : Promise.resolve())
+        .catch(function(){})
+        .then(function(){ return applyProject(p, { silent: true }); })
+        .then(function(){
+          try { localStorage.setItem(CURKEY, p.id); } catch(_){}
+          try {
+            localStorage.setItem(SRCKEY, JSON.stringify({
+              name: url, at: 0, proj: p.name || "", updatedAt: p.updatedAt || "", n: (p.cases || []).length
+            }));
+          } catch(_){}
+          try { renderMenuView(); } catch(_){}
+        });
+    }).catch(function(e){
+      console.warn("[viewer] ?data の読込に失敗:", url, e);
+    });
+  }
+
+  /* ==========================================================
+     3) DOMの調整（本体の init 実行後に走る）
+     ========================================================== */
+  function el(id){ return document.getElementById(id); }
+  function badge(host){
+    if(!host || host.querySelector(".vw-badge")) return;
+    var s = document.createElement("span");
+    s.className = "vw-badge";
+    s.textContent = "閲覧専用";
+    host.appendChild(s);
+  }
+
+  /* 入力を受け付けないようにする（DOMの値は触らない＝計算・印刷はそのまま） */
+  function makeReadOnly(node, opts){
+    if(!node || node._vwRo) return;
+    node._vwRo = true;
+    var evs = ["pointerdown", "mousedown", "click", "dblclick", "keydown", "keypress",
+               "input", "change", "paste", "drop", "contextmenu"];
+    if(opts && opts.allowClick){ evs = ["keydown", "keypress", "input", "change", "paste", "drop"]; }
+    evs.forEach(function(t){
+      node.addEventListener(t, function(e){
+        // 印刷ダイアログ等のショートカットは通す
+        if((t === "keydown" || t === "keypress") && (e.ctrlKey || e.metaKey)) return;
+        e.stopPropagation();
+        if(t !== "keydown" && t !== "keypress") e.preventDefault();
+      }, true);
+    });
+  }
+
+  /* 物件バー（保存状態・切離リンク）は閲覧専用では意味がないので落とす。
+     updateProjBar が呼ばれるたびに書き戻されるので、そのラッパから毎回実行する。 */
+  function vwFixProjBar(){
+    var mc = el("menu-cur-proj");
+    if(mc){
+      var t = mc.textContent || "";
+      if(t.indexOf("新規作成") >= 0){
+        mc.textContent = "物件を開いていません（下の「📂 物件ファイルを開く」または「📁 工事フォルダを読み込む」からデータを選んでください）";
+      } else if(t){
+        mc.textContent = t.split(/[⚠✓]|📄共有|（保存|（変更は/)[0].replace(/[　\s]+$/, "");
+      }
+      mc.style.color = "";
+    }
+    ["proj-ind-app", "proj-ind-list"].forEach(function(id){
+      var e = el(id); if(!e) return;
+      e.textContent = (e.textContent || "").split("　🔌")[0];
+      e.onclick = null; e.style.cursor = "default";
+      e.title = (e.textContent || "").replace(/^📁\s*/, "");
+    });
+  }
+
+  /* 合計欄の「　└ うち協力会社諸経費」は対下請の情報なので外部には出さない。
+     （明細表の行は合計との整合のため残す） */
+  function vwStripOutsourceLine(){
+    var t = el("totals"); if(!t) return;
+    Array.prototype.forEach.call(t.querySelectorAll(".total-row"), function(row){
+      if((row.textContent || "").indexOf("協力会社") >= 0) row.style.display = "none";
+    });
+  }
+
+  /* メニュー上部の案内文・物件リストの空メッセージ・版表示をビューア向けに言い換える */
+  function vwFixWording(){
+    vwFixProjBar();
+    var pl = el("menu-proj-list");
+    if(pl && (pl.textContent || "").indexOf("新規作成") >= 0){
+      pl.innerHTML = '<div class="menu-proj-note" style="display:block;">'
+        + 'この端末にはまだ物件が取り込まれていません。上の「📂 物件ファイルを開く」で共有フォルダの <b>物件_○○.json</b> を選んでください。'
+        + '</div>';
+    }
+    var vf = el("app-ver-foot");
+    if(vf && (vf.textContent || "").indexOf("閲覧専用") < 0){
+      vf.innerHTML = vf.innerHTML + ' ／ <b>閲覧専用ビューア</b>';
+    }
+    /* 機能カードの節ごと撤去（:has 非対応ブラウザの保険） */
+    var mf = el("menu-feats");
+    if(mf && mf.closest(".menu-sec")) mf.closest(".menu-sec").style.display = "none";
+  }
+
+  function vwRenderSource(){
+    var box = el("vw-src-info");
+    if(!box) return;
+    var src = null;
+    try { src = JSON.parse(localStorage.getItem(SRCKEY) || "null"); } catch(_){}
+    var cur = (typeof _currentProject !== "undefined" && _currentProject) ? _currentProject : null;
+    var n = (typeof _listRows !== "undefined" && _listRows) ? _listRows.length : 0;
+    if(!cur && !n){
+      box.innerHTML = "まだデータを読み込んでいません。右のボタンから <b>物件ファイル</b> または <b>工事フォルダ</b> を選んでください。";
+      return;
+    }
+    var html = "";
+    if(cur) html += "物件：<b>" + (cur.name || "（無題）") + "</b>　";
+    html += "戸別：<b>" + n + " 件</b>";
+    if(src && src.name) html += "<br>読込元：" + src.name + (src.at ? "（ファイル更新 " + vwFmtTime(src.at) + "）" : "");
+    if(src && src.updatedAt){
+      var d = new Date(src.updatedAt);
+      html += "<br>データ更新：" + (isNaN(d.getTime()) ? src.updatedAt : vwFmtTime(d.getTime()));
+    }
+    box.innerHTML = html;
+  }
+
+  function buildHome(){
+    var body = document.querySelector(".menu-body");
+    if(!body || el("vw-home")) return;
+    var home = document.createElement("section");
+    home.className = "menu-sec vw-home";
+    home.id = "vw-home";
+    home.innerHTML =
+      '<h2>アンテナ工事 図面・物件ビューア（閲覧専用）</h2>'
+      + '<div class="vw-src">'
+      +   '<div class="vw-src-info" id="vw-src-info"></div>'
+      +   '<button type="button" class="vw-btn" id="vw-open-proj" title="共有フォルダの「物件_○○.json」を開きます">📂 物件ファイルを開く</button>'
+      +   '<button type="button" class="vw-btn sub" id="vw-open-folder" title="工事フォルダを選ぶと、中の戸別JSONをサブフォルダも含めてまとめて読み込みます（Chrome / Edge）">📁 工事フォルダを読み込む</button>'
+      +   '<button type="button" class="vw-btn sub" id="vw-open-files" title="戸別JSONを1件ずつ／複数選んで読み込みます">📄 ファイルを選ぶ</button>'
+      + '</div>'
+      + '<div class="vw-cards">'
+      +   '<button type="button" class="vw-card" data-vw="standard"><div class="vc-t">📋 戸別一覧</div><div class="vc-d">管理番号・氏名・住所・工事種別・金額を一覧。検索と印刷ができます</div></button>'
+      +   '<button type="button" class="vw-card" data-vw="map"><div class="vc-t">🗺️ 地図</div><div class="vc-d">建物をクリックすると管理番号・お客様情報・写真を表示。用紙を決めて印刷できます</div></button>'
+      +   '<button type="button" class="vw-card" data-vw="cost_detail"><div class="vc-t">💴 全体費用詳細</div><div class="vc-d">読み込んだ全戸別の材料費・労務費を工事全体で集計</div></button>'
+      +   '<button type="button" class="vw-card" data-vw="editor"><div class="vc-t">📐 系統図・工事調書</div><div class="vc-d">戸別一覧で「表示」を押すと、系統図・積算・工事調書を確認／印刷できます</div></button>'
+      + '</div>'
+      + '<div class="vw-note">'
+      +   '印刷は各画面の <b>🖨 / 印刷</b> ボタンから行えます（ブラウザの印刷ダイアログで「PDFに保存」も選べます）。<br>'
+      +   'このビューアは<b>閲覧専用</b>です。編集・保存はできず、共有フォルダのファイルが書き換わることはありません。'
+      + '</div>';
+    body.insertBefore(home, body.firstChild);
+
+    el("vw-open-proj").onclick = vwOpenProjectFile;
+    el("vw-open-folder").onclick = function(){
+      closeMenuView(); openListView();
+      setTimeout(function(){ var b = el("btn-list-select-folder"); if(b) b.click(); }, 0);
+    };
+    el("vw-open-files").onclick = function(){
+      closeMenuView(); openListView();
+      setTimeout(function(){ var b = el("btn-list-select-files"); if(b) b.click(); }, 0);
+    };
+    home.querySelector(".vw-cards").addEventListener("click", function(e){
+      var c = e.target.closest(".vw-card"); if(!c) return;
+      var k = c.dataset.vw;
+      if(k === "map"){
+        closeMenuView();
+        if(typeof openMapView === "function") openMapView();
+        else alert("地図を開けませんでした。");
+        return;
+      }
+      if(k === "editor"){ closeMenuView(); openListView(); setListMode("standard"); return; }
+      closeMenuView(); openListView(); setListMode(k);
+    });
+    vwRenderSource();
+  }
+
+  /* 地図サイドバー：閲覧に不要な節へ vw-off を付ける（節の見出し文字で判定） */
+  var MAP_KEEP = ["レイヤー", "建物の色分け", "印刷範囲", "検索"];
+  function trimMapSidebar(){
+    var side = el("map-sidebar"); if(!side || side._vwDone) return;
+    side._vwDone = true;
+    Array.prototype.forEach.call(side.querySelectorAll(".map-side-sec"), function(sec){
+      var h = sec.querySelector(".map-side-head");
+      var t = h ? (h.textContent || "").trim() : "";
+      var keep = MAP_KEEP.some(function(k){ return t.indexOf(k) === 0; });
+      if(!keep) sec.classList.add("vw-off");
+    });
+  }
+
+  function setup(){
+    /* --- タイトル・バッジ --- */
+    document.title = "アンテナ工事 図面・物件ビューア（閲覧専用）";
+    var ah = document.querySelector(".app > header h1");
+    if(ah && ah.firstChild && ah.firstChild.nodeType === 3) ah.firstChild.nodeValue = "アンテナ工事 図面・物件ビューア";
+    badge(ah);
+    badge(document.querySelector(".list-view-header h1"));
+    badge(document.querySelector(".menu-header h1"));
+    badge(document.querySelector(".map-header h1"));
+    var lh = document.querySelector(".list-view-header h1");
+    if(lh && lh.firstChild) lh.firstChild.nodeValue = "📋 戸別一覧 ";
+
+    /* --- 入力パネル：プリセット節を撤去し、以降は操作不可に --- */
+    var pl = el("preset-list");
+    if(pl && pl.closest(".section")) pl.closest(".section").style.display = "none";
+    var ip = el("input-panel");
+    if(ip){
+      var note = document.createElement("div");
+      note.className = "vw-readonly-note";
+      note.innerHTML = "👁 <b>閲覧専用</b>：内容の確認のみ行えます（入力・保存はできません）。";
+      ip.insertBefore(note, ip.firstChild);
+      makeReadOnly(ip);
+    }
+    /* アンテナ取付ガイドのウィジェットも操作不可（完成図は表示したまま） */
+    var ag = el("ag-host-edit"); if(ag) makeReadOnly(ag);
+
+    /* --- 系統図：ドラッグ・線色変更をさせない（ズームボタンは有効） --- */
+    var dw = document.querySelector(".diagram-wrap");
+    if(dw){
+      var svg = el("diagram");
+      if(svg){
+        ["pointerdown","mousedown","click","dblclick","contextmenu"].forEach(function(t){
+          svg.addEventListener(t, function(e){ e.stopPropagation(); e.preventDefault(); }, true);
+        });
+      }
+    }
+
+    /* --- 地図：Delete/Backspace による削除を遮断（window capture が最優先） --- */
+    window.addEventListener("keydown", function(e){
+      if(!document.body.classList.contains("map-open")) return;
+      var t = e.target;
+      if(t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if(e.key === "Delete" || e.key === "Backspace" || e.key === "Enter"){
+        e.stopPropagation(); e.stopImmediatePropagation();
+      }
+    }, true);
+
+    /* --- 地図：📋受付台帳 ボタンは戸別一覧へ --- */
+    var gl = el("map-goto-ledger");
+    if(gl){
+      gl.textContent = "📋 戸別一覧";
+      gl.title = "戸別一覧を開きます";
+    }
+
+    /* --- ホーム画面 --- */
+    buildHome();
+    vwFixWording();
+
+    /* 地図を開いた時にサイドバーを整える（生成が遅延するため都度） */
+    if(typeof window.openMapView === "function"){
+      var _openMapView = window.openMapView;
+      window.openMapView = function(){
+        var r = _openMapView.apply(this, arguments);
+        setTimeout(trimMapSidebar, 0);
+        setTimeout(trimMapSidebar, 300);
+        return r;
+      };
+    }
+
+    /* 一覧・メニューを描き直したら読込元表示も更新 */
+    if(typeof window.renderMenuView === "function"){
+      var _rmv = window.renderMenuView;
+      window.renderMenuView = function(){
+        var r = _rmv.apply(this, arguments);
+        try { buildHome(); vwFixWording(); vwRenderSource(); } catch(_){}
+        return r;
+      };
+    }
+    if(typeof window.renderListTable === "function"){
+      var _rlt = window.renderListTable;
+      window.renderListTable = function(){
+        var r = _rlt.apply(this, arguments);
+        try { vwRenderSource(); } catch(_){}
+        return r;
+      };
+    }
+    if(typeof window.renderTotals === "function"){
+      var _rtot = window.renderTotals;
+      window.renderTotals = function(){
+        var r = _rtot.apply(this, arguments);
+        try { vwStripOutsourceLine(); } catch(_){}
+        return r;
+      };
+    }
+    if(typeof window.updateProjBar === "function"){
+      var _upb = window.updateProjBar;
+      window.updateProjBar = function(){
+        var r = _upb.apply(this, arguments);
+        try { vwFixProjBar(); } catch(_){}
+        return r;
+      };
+    }
+    vwFixProjBar();
+    vwRenderSource();
+    vwAutoLoadFromUrl();
+  }
+
+  if(document.readyState === "loading"){
+    window.addEventListener("DOMContentLoaded", function(){ setTimeout(setup, 0); });
+  } else {
+    setTimeout(setup, 0);
+  }
+})();
+</script>
+<!-- ==BLOCK SCRIPT END== -->
