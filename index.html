@@ -8514,6 +8514,7 @@ function markPartsDirty(){
   _partsDirty = true;
   document.getElementById("parts-dirty-indicator").style.display = "";
   // 物件を開いている間は単価マスター変更も物件JSONへ自動保存（物件ごとの単価）
+  try { markProjMetaEdited("partsOverride"); } catch(_){}   // 競合マージでこの変更が disk へ戻らないように
   if(typeof projTouch === "function") projTouch();
 }
 function clearPartsDirty(){
@@ -10311,6 +10312,9 @@ function loadUserPresets(){
 }
 function saveUserPresets(p){
   localStorage.setItem(USER_PRESET_KEY, JSON.stringify(p));
+  // 物件に内包される設定：編集した端末を競合マージで優先させ、ついでに自動保存も予約する
+  try { markProjMetaEdited("userPresets"); } catch(_){}
+  try { projTouch(); } catch(_){}
   // 全体費用詳細の「★基本工事プリセット」ドロップダウンを即時同期。
   // （従来は起動時と物件切替時にしか作り直されず、積算エディタでプリセットを
   //   保存/上書き/削除しても一覧側の選択肢が古いまま＝「読み込めない」原因だった）
@@ -10766,6 +10770,9 @@ function saveAsbestosOfficePreset(){
   try {
     localStorage.setItem(ASBESTOS_PRESET_KEY, JSON.stringify(preset));
     updateAsbestosPresetStatus();
+    // 物件に内包される設定：編集した端末を競合マージで優先させ、ついでに自動保存も予約する
+    try { markProjMetaEdited("asbestosOffice"); } catch(_){}
+    try { projTouch(); } catch(_){}
     return true;
   } catch(err){
     alert("プリセット保存に失敗しました: " + (err.message || err));
@@ -12328,6 +12335,9 @@ function setBaseJobPreset(key){
     if(_baseJobPresetKey) localStorage.setItem(BASE_PRESET_KEY, _baseJobPresetKey);
     else localStorage.removeItem(BASE_PRESET_KEY);
   } catch(_){}
+  // 物件に内包される設定：編集した端末を競合マージで優先させ、ついでに自動保存も予約する
+  try { markProjMetaEdited("basePresetKey"); } catch(_){}
+  try { projTouch(); } catch(_){}
   updateBasePresetStatus();
   renderListTable();
 }
@@ -14817,6 +14827,9 @@ function sfpLoadPrefs(){
 }
 function sfpSavePrefs(p){
   try { localStorage.setItem(SFP_PREF_KEY, JSON.stringify(p)); } catch(_){}
+  // 物件に内包される設定：編集した端末を競合マージで優先させ、ついでに自動保存も予約する
+  try { markProjMetaEdited("sfpPref"); } catch(_){}
+  try { projTouch(); } catch(_){}
 }
 /* レイアウト選択に応じて関連オプションの表示を切替（一覧表⇔ブロック） */
 function sfpSyncLayoutUI(){
@@ -16758,8 +16771,12 @@ function fmtBackupAgo(at){
   const mon = Math.floor(day / 30);
   return (mon < 12) ? (mon + "か月前") : (Math.floor(day / 365) + "年前");
 }
-const BACKUP_KIND_LABEL = { auto: "自動", manual: "手動", "pre-restore": "復元前" };
-const BACKUP_PROTECTED_KINDS = { manual: 1, "pre-restore": 1 };  // 間引き対象外（利用者にとって意味のある目印）
+const BACKUP_KIND_LABEL = { auto: "自動", manual: "手動", "pre-restore": "復元前", merge: "他社版と統合" };
+// 間引き対象外（利用者にとって意味のある目印）。
+// ※ 他社版との統合(merge)はここに入れない：2社で同時に作業した日は統合が何十回も起きうるため、
+//    間引き対象外にすると手動・復元前の目印を上限から押し出してしまう。統合はスロットルを待たずに
+//    その場で1世代作るので「直後にアプリを閉じても記録が無い」ことはなく、あとは通常どおり間引かれる。
+const BACKUP_PROTECTED_KINDS = { manual: 1, "pre-restore": 1 };
 
 /* ---------- 世代の軽量メタ（一覧・説明用。本体スナップショットは読まない） ---------- */
 function backupMetaPut(rec){
@@ -17341,6 +17358,7 @@ function setContractorList(arr){
   list = list.filter((v, i) => list.indexOf(v) === i); // 重複除去（順序維持）
   _contractorList = list;
   saveContractorList();
+  try { markProjMetaEdited("contractors"); } catch(_){}   // 競合マージでこの変更が disk へ戻らないように
   projTouch();
 }
 /* 施工業者の「番号」対応表（1〜4 → 会社名）。管理番号の左から4桁目で施工会社を自動判別するのに使う。
@@ -17357,6 +17375,7 @@ function setContractorDigitMap(obj){
   _contractorDigitMap = out;
   try { localStorage.setItem(CONTRACTOR_DIGIT_KEY, JSON.stringify(out)); } catch(_){}
   invalidateContractorColors();
+  try { markProjMetaEdited("contractorDigits"); } catch(_){}   // 競合マージでこの変更が disk へ戻らないように
   projTouch();
 }
 /* 管理番号（左から4桁目）から施工会社名を引く。対応表が未設定/該当なしなら空。 */
@@ -17676,6 +17695,11 @@ function buildProjectSnapshot(base){
 let _editedCaseKeys = new Set();  // この端末が編集した戸別の caseId（マージで上乗せする対象）
 let _editedAnnoKeys = new Set();  // この端末が編集した注釈(台帳/持出/確認/施工会社割当)の subCaseKey
 let _editedProjMeta = new Set();  // この端末が編集した物件全体設定のキー名（例 "outsourceFee"）。マージで local を優先
+/* 物件全体の設定＝戸別ごとではなく物件に1つだけ持つ値。競合マージでは、この端末が実際に編集した
+   キーだけ local を採用し、触っていないキーは disk（他社の最新）を維持する。
+   ここに載っていないキーは「編集しても競合時に disk へ戻る」ので、設定を増やしたら必ず追記すること。 */
+const PROJ_META_KEYS = ["name", "contractors", "contractorDigits", "calEvents", "outsourceFee",
+  "teishutsu", "partsOverride", "basePresetKey", "userPresets", "asbestosOffice", "sfpPref"];
 let _deletedCaseKeys = new Set(); // この端末が削除した戸別の caseId（マージで disk からも除外する）
 let _deletedAnnoKeys = new Set(); // この端末が削除した注釈の subCaseKey（マージで disk からも除外する）
 let _projSaving = false;          // projSaveNow 実行中ガード（保存の多重実行・書込交錯を防ぐ）
@@ -17856,17 +17880,27 @@ function mergeProjectSnapshots(disk, local, marks){
     // 地図はシート単位でマージ（この端末が地図を実編集していなければdisk側を維持＝非編集端末が他端末の地図を消さない）。
     maps: mergeMapsSheets(disk.maps, local.maps, marks.editedMaps)
   });
-  // 物件全体設定：この端末が実際に編集したキーだけ local(snap) を優先（未編集なら disk 維持）
+  // 物件全体設定：この端末が実際に編集したキーだけ local(snap) を優先（未編集なら disk 維持）。
+  // 以前は outsourceFee だけを見ていたため、施工業者マスター・業者番号の対応表・単価マスター・
+  // 提出書類チェックリスト・物件名などを直した直後に他社の保存と競合すると、
+  // その変更が警告なしで disk の値へ戻されていた。
   const metaKeys = marks.editedProjMeta;
   if(metaKeys && metaKeys.size){
-    if(metaKeys.has("outsourceFee")){
+    PROJ_META_KEYS.forEach(k => {
+      if(!metaKeys.has(k)) return;
       // null(未設定に戻した)も「編集」として尊重。キー欠落(undefined)と区別するため hasOwnProperty で判定
-      if(Object.prototype.hasOwnProperty.call(local, "outsourceFee")){
-        merged.outsourceFee = local.outsourceFee;   // 数値 or null をそのまま採用
-      }
-    }
-    // 将来の他設定はここに has("partsOverride") 等で同様に追加できる
+      if(!Object.prototype.hasOwnProperty.call(local, k)) return;
+      if(k === "name" && !String(local.name || "").trim()) return;   // 空の物件名では上書きしない
+      merged[k] = local[k];
+    });
   }
+  // 「誰が最後に保存したか」の記録。マージ結果を書き込むのはこの端末なので local の刻印を採用する
+  // （disk のまま返すと、自分が書いたファイルに他社が最後の保存者として残り続ける）。
+  // 土台にした他社の版は mergedFrom として残し、あとから経緯をたどれるようにする。
+  if(local.lastSavedBy) merged.lastSavedBy = local.lastSavedBy;
+  const dby = disk.lastSavedBy || {};
+  merged.mergedFrom = { company: dby.company || "", device: dby.device || "",
+                        at: dby.at || disk.updatedAt || "", updatedAt: disk.updatedAt || "" };
   return merged;
 }
 /* マージ結果をこの端末にも反映（共有ファイルへ書いた直後）。編集中エディタは caseId で再リンクして壊さない。
@@ -17906,6 +17940,13 @@ async function projSaveNow(){
     try { await prepareProjectThumbs(true); } catch(_){}
     const cap = captureMarks();          // このスナップショットに織り込む編集マークを控える（保存中に来た新規編集は残す）
     const snap = buildProjectSnapshot(base);
+    // メニューの「最終保存」表示を今回の刻印へ更新（マージした場合は書き戻し後に上書きされる）。
+    // ここまでに await を挟むので、その間に物件が切り離された場合に備えて存在確認する。
+    if(_currentProject){
+      _currentProject.lastSavedBy = snap.lastSavedBy || null;
+      _currentProject.updatedAt = snap.updatedAt || "";
+      _currentProject.mergedFrom = null;
+    }
     await projIdbPut(snap);   // 端末内の物件レコードには地図を含めない（地図はmapSheets/mapBlobsに別保存）
     // 地図一式（背景/参照地図下地/手描きペイント/作図・テキスト）を 共有ファイル・世代バックアップ に同梱し、
     // 別端末・履歴復元でも地図が失われないようにする。画像のbase64化は重いので、地図に変更があった時だけ
@@ -17938,6 +17979,9 @@ async function projSaveNow(){
         // Phase2: 他端末の変更とマージして書き戻し済み → この端末にもマージ結果を反映
         _projWriteWarn = "";
         consumed = true;
+        // 統合した結果そのものを1世代残す（自動世代のスロットル待ちにすると、直後にアプリを閉じた場合に
+        // 「他社の版に上乗せした時点」が履歴に残らず、あとから経緯をたどれない）。
+        try { await createProjectBackup(res.merged, "merge"); } catch(_){}
         try { await applyMergedLocally(res.merged); } catch(e){ console.warn("[物件] マージ結果の反映に失敗:", e); }
         try { rtPublishBump(res.merged.updatedAt); } catch(_){}
       } else if(res && res.conflict){
@@ -18007,18 +18051,25 @@ async function applyProject(p, opts){
     saveTakeoutMap();
     Object.keys(p.review || {}).forEach(k => { _reviewMap[k] = p.review[k]; });
     saveReviewMap();
-    // 施工会社：割当(管理番号キー)をマージ＋マスター一覧をこの物件の値へ
+    // 施工会社：割当(管理番号キー)をマージ＋マスター一覧をこの物件の値へ。
+    // マスター・業者番号・その他の予定は、物件ファイルがそのキーを持っているときだけ切り替える
+    // （単価マスターやプリセットと同じ扱い）。以前は無条件に空へ落としていたため、これらを持たない
+    // 古い物件ファイルを開いただけで、端末に貯めた施工業者マスターと業者番号の対応表が消えていた。
     Object.keys(p.contractorAssign || {}).forEach(k => { _contractorMap[k] = p.contractorAssign[k]; });
     saveContractorMap();
-    _contractorList = Array.isArray(p.contractors) ? p.contractors.slice() : [];
-    saveContractorList();
-    // 業者番号の対応表（この物件の値へ切替。旧物件ファイルには無いのでその場合は空）
-    _contractorDigitMap = (p.contractorDigits && typeof p.contractorDigits === "object") ? Object.assign({}, p.contractorDigits) : {};
-    try { localStorage.setItem(CONTRACTOR_DIGIT_KEY, JSON.stringify(_contractorDigitMap)); } catch(_){}
+    if(p.contractors !== undefined){
+      _contractorList = Array.isArray(p.contractors) ? p.contractors.slice() : [];
+      saveContractorList();
+    }
+    if(p.contractorDigits !== undefined){
+      _contractorDigitMap = (p.contractorDigits && typeof p.contractorDigits === "object") ? Object.assign({}, p.contractorDigits) : {};
+      try { localStorage.setItem(CONTRACTOR_DIGIT_KEY, JSON.stringify(_contractorDigitMap)); } catch(_){}
+    }
     invalidateContractorColors();   // 物件を切り替えたら色の並びを引き直す
-    // 戸別に紐づかない予定（この物件の値へ切替。旧物件ファイルには無いので空）
-    _calFreeEvents = Array.isArray(p.calEvents) ? p.calEvents.slice() : [];
-    try { localStorage.setItem(CAL_FREE_KEY, JSON.stringify(_calFreeEvents)); } catch(_){}
+    if(p.calEvents !== undefined){
+      _calFreeEvents = Array.isArray(p.calEvents) ? p.calEvents.slice() : [];
+      try { localStorage.setItem(CAL_FREE_KEY, JSON.stringify(_calFreeEvents)); } catch(_){}
+    }
     // 物件ごとに変わる設定（単価マスター・プリセット等）をこの物件の値へ切替（旧物件ファイルは該当キー無し＝従来通り）
     if(p.partsOverride !== undefined){
       applyPartsOverrideObj(p.partsOverride || {});
@@ -18038,7 +18089,11 @@ async function applyProject(p, opts){
       try { localStorage.setItem(SFP_PREF_KEY, JSON.stringify(p.sfpPref || {})); } catch(_){}
     }
     refreshPartsAndPresetUI();
-    _currentProject = { id: p.id, name: p.name || "" };
+    // 「最終保存した会社」の刻印もここで持ち回る。id と name しか持たせていなかったため、
+    // 物件ファイルに刻印があってもメニューの表示は常に「記録なし」になっていた。
+    _currentProject = { id: p.id, name: p.name || "",
+                        lastSavedBy: p.lastSavedBy || null, updatedAt: p.updatedAt || "",
+                        mergedFrom: p.mergedFrom || null };
     try { localStorage.setItem(PROJ_CURRENT_KEY, p.id); } catch(_){}
     // 物件の諸経費（協力会社諸経費の既定額）を復元し、追従(auto)戸別へ反映
     _projOutsourceFee = (typeof p.outsourceFee === "number" && isFinite(p.outsourceFee)) ? Math.max(0, p.outsourceFee) : null;
@@ -18954,6 +19009,10 @@ async function renameProjectFlow(id){
     _currentProject.name = p.name;
     _listSelectedFolderName = p.name;
     updateProjBar();
+    // 改名を共有ファイルへも反映する（以前は他の編集が起きるまで共有ファイルは旧名のままで、
+    // さらに競合マージでは disk 側の名前が勝つため改名が消えていた）。
+    try { markProjMetaEdited("name"); } catch(_){}
+    try { projTouch(); } catch(_){}
   }
   renderMenuView();
 }
@@ -19372,9 +19431,16 @@ async function renderCompanySection(){
   if(ls){
     const by = _currentProject && _currentProject.lastSavedBy;
     const who = savedByLabel(by);
+    // 他社の版に上乗せして保存した場合は、その土台になった会社と時刻も併記する
+    const mf = _currentProject && _currentProject.mergedFrom;
+    const mfWho = savedByLabel(mf);
+    const mfLine = mfWho
+      ? ('<br><span style="color:#8a6d1f;">↳ ' + escapeHtml(mfWho) + ' の版（'
+         + escapeHtml(fmtBackupTs((mf && (mf.at || mf.updatedAt)) || "")) + '）に上乗せして保存しました</span>')
+      : '';
     ls.innerHTML = who
       ? ('🕒 <b>最終保存：' + escapeHtml(who) + '</b>　' + escapeHtml(fmtBackupTs((by && by.at) || (_currentProject && _currentProject.updatedAt) || ""))
-         + ((by && by.app) ? ('　<span style="color:#8a95a1;">v' + escapeHtml(by.app) + '</span>') : ''))
+         + ((by && by.app) ? ('　<span style="color:#8a95a1;">v' + escapeHtml(by.app) + '</span>') : '') + mfLine)
       : (_currentProject ? '🕒 最終保存：<span style="color:#8a95a1;">記録なし（この物件を次に保存すると記録されます）</span>' : '');
   }
   const saveBtn = document.getElementById("menu-company-save");
@@ -20261,6 +20327,7 @@ let _calFreeEvents = (() => {
 function getCalFreeEvents(){ return Array.isArray(_calFreeEvents) ? _calFreeEvents : []; }
 function saveCalFreeEvents(){
   try { localStorage.setItem(CAL_FREE_KEY, JSON.stringify(getCalFreeEvents())); } catch(_){}
+  try { markProjMetaEdited("calEvents"); } catch(_){}   // 競合マージでこの変更が disk へ戻らないように
   projTouch();
 }
 function calFreeAdd(date, time, title, note){
@@ -22364,7 +22431,14 @@ window.addEventListener("DOMContentLoaded", init);
       }
     }
   }
-  function save(){try{localStorage.setItem(curKey,JSON.stringify(state));}catch(e){}}
+  /* チェック・提出日・下請負人/契約日を保存。localStorage に書くだけでは物件ファイルへ渡らないので、
+     物件側の自動保存も予約し、競合マージでこの端末の変更が優先されるよう印を付ける
+     （以前は他の操作が偶然保存を起こすまで共有ファイルに乗らず、競合すると無言で他社の版へ戻っていた）。 */
+  function save(){
+    try{localStorage.setItem(curKey,JSON.stringify(state));}catch(e){}
+    try{ if(typeof markProjMetaEdited==='function') markProjMetaEdited('teishutsu'); }catch(e){}
+    try{ if(typeof projTouch==='function') projTouch(); }catch(e){}
+  }
   function totals(){var tot=0,dn=0,md=0;TPL.sections.forEach(function(s){s.items.forEach(function(it){tot++;var st=state.items[it.id]||{};if(st.checked)dn++;if(st.made)md++;});});return [dn,tot,md];}
 
   function renderMeta(){
