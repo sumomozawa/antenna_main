@@ -625,6 +625,46 @@
   .folder-table td.folder-company-cell { padding: 3px 6px; }
   .folder-table select.folder-contractor-sel { max-width: 150px; font-size: 11px; padding: 1px 3px; border: 1px solid #cdd3da; border-radius: 3px; background: #fff; }
   .folder-table select.folder-contractor-sel[value=""], .folder-table select.folder-contractor-sel option[value=""] { color: #9aa3ad; }
+  /* 一括処理の進捗表示（写真の一括書き出しなど、100件規模で数分かかる処理用）。
+     バーの伸び＋斜めストライプの流れで「止まっていない」ことが一目で分かるようにする。 */
+  .bulk-prog-backdrop {
+    position: fixed; inset: 0; background: rgba(15,23,38,.62);
+    z-index: 100050; display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  .bulk-prog-panel {
+    background: #fff; border-radius: 6px; width: 100%; max-width: 460px;
+    box-shadow: 0 12px 40px rgba(0,0,0,.4); overflow: hidden;
+  }
+  .bulk-prog-head { background: #00695c; color: #fff; padding: 10px 14px; font-size: 14px; font-weight: 600; }
+  .bulk-prog-body { padding: 14px; }
+  .bulk-prog-count { font-size: 21px; font-weight: 700; color: #1e3a5f; font-variant-numeric: tabular-nums; }
+  .bulk-prog-count small { font-size: 12px; font-weight: 400; color: #667482; margin-left: 7px; }
+  .bulk-prog-track { height: 12px; background: #e8edf2; border-radius: 6px; overflow: hidden; margin: 9px 0 8px; }
+  .bulk-prog-fill {
+    height: 100%; width: 0%; border-radius: 6px; background-color: #00897b;
+    background-image: linear-gradient(45deg, rgba(255,255,255,.30) 25%, transparent 25%, transparent 50%,
+      rgba(255,255,255,.30) 50%, rgba(255,255,255,.30) 75%, transparent 75%, transparent);
+    background-size: 22px 22px;
+    animation: bulkProgStripe .9s linear infinite;
+    transition: width .18s ease-out;
+  }
+  @keyframes bulkProgStripe { from { background-position: 0 0; } to { background-position: 22px 0; } }
+  .bulk-prog-now { font-size: 12.5px; color: #33414f; min-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bulk-prog-sub { font-size: 11px; color: #667482; margin-top: 3px; min-height: 15px; }
+  .bulk-prog-foot { display: flex; justify-content: flex-end; padding: 0 14px 12px; }
+  .bulk-prog-cancel {
+    padding: 4px 14px; font-size: 12px; background: #fff; border: 1px solid #b3433a;
+    color: #b3433a; border-radius: 3px; cursor: pointer;
+  }
+  .bulk-prog-cancel:hover { background: #fdecea; }
+  .bulk-prog-cancel:disabled { opacity: .5; cursor: default; }
+  /* 画面下の軽い通知（地図画面の外でも使える簡易トースト） */
+  .ui-toast {
+    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
+    background: rgba(30,58,95,.94); color: #fff; padding: 8px 16px; border-radius: 4px;
+    font-size: 12.5px; z-index: 100060; box-shadow: 0 4px 16px rgba(0,0,0,.3); pointer-events: none;
+  }
+  @media (prefers-reduced-motion: reduce) { .bulk-prog-fill { animation: none; } }
   .photo-prev-backdrop {
     position: fixed; inset: 0; background: rgba(15,23,38,.62);
     z-index: 100000; display: flex; align-items: center; justify-content: center; padding: 24px;
@@ -15766,6 +15806,73 @@ function removePhotoEntry(idx){
    - dataURI の原本バイトをそのまま書き込む＝無劣化（再圧縮しない）。
    - PC の Chrome/Edge（File System Access API）専用。
    ============================================================ */
+/* ---------- 画面下の軽い通知 ----------
+   ※ これまで写真の書き出し等は toast() を呼んでいたが、toast は地図モジュール（IIFE）の中だけの
+      関数で外からは見えず、typeof toast === "function" が常に false ＝ 何も出ていなかった。 */
+let _uiToastTimer = null;
+function uiToast(msg, ms){
+  let el = document.getElementById("ui-toast");
+  if(!el){
+    el = document.createElement("div");
+    el.id = "ui-toast"; el.className = "ui-toast";
+    document.body.appendChild(el);
+  }
+  el.textContent = String(msg == null ? "" : msg);
+  el.style.display = "block";
+  if(_uiToastTimer) clearTimeout(_uiToastTimer);
+  _uiToastTimer = setTimeout(() => { el.style.display = "none"; }, ms || 2600);
+}
+
+/* ---------- 一括処理の進捗表示 ----------
+   100件規模で数分かかる処理（写真の一括書き出し等）向け。何件目を処理中かと、
+   止まっていないことが分かるアニメーションを出す。中止も受け付ける。
+   使い方: bulkProgressOpen(...) → ループ内で bulkProgressUpdate(...) と await bulkProgressYield()
+           → bulkProgressAborted() を見て抜ける → finally で bulkProgressClose()。 */
+let _bulkProg = null;
+function bulkProgressOpen(title, total, cancelable){
+  bulkProgressClose();
+  const bd = document.createElement("div");
+  bd.className = "bulk-prog-backdrop";
+  bd.innerHTML =
+    '<div class="bulk-prog-panel">'
+    + '<div class="bulk-prog-head">' + escapeHtml(title || "処理中") + '</div>'
+    + '<div class="bulk-prog-body">'
+    +   '<div class="bulk-prog-count"><span class="bp-done">0</span> / ' + (total || 0) + ' <small>件</small></div>'
+    +   '<div class="bulk-prog-track"><div class="bulk-prog-fill"></div></div>'
+    +   '<div class="bulk-prog-now"></div>'
+    +   '<div class="bulk-prog-sub"></div>'
+    + '</div>'
+    + (cancelable === false ? '' : '<div class="bulk-prog-foot"><button type="button" class="bulk-prog-cancel">中止</button></div>')
+    + '</div>';
+  document.body.appendChild(bd);
+  const st = { el: bd, total: total || 0, aborted: false,
+    fill: bd.querySelector(".bulk-prog-fill"), done: bd.querySelector(".bp-done"),
+    now: bd.querySelector(".bulk-prog-now"), sub: bd.querySelector(".bulk-prog-sub") };
+  const btn = bd.querySelector(".bulk-prog-cancel");
+  if(btn) btn.onclick = () => {
+    st.aborted = true;
+    btn.disabled = true;
+    if(st.now) st.now.textContent = "中止しています（この1件を書き終えてから止まります）…";
+  };
+  _bulkProg = st;
+  return st;
+}
+function bulkProgressUpdate(done, nowLabel, subLabel){
+  const st = _bulkProg; if(!st) return;
+  const n = Math.max(0, Math.min(st.total, done | 0));
+  if(st.done) st.done.textContent = String(n);
+  if(st.fill) st.fill.style.width = (st.total ? (n / st.total * 100) : 0) + "%";
+  if(nowLabel != null && st.now && !st.aborted) st.now.textContent = String(nowLabel);
+  if(subLabel != null && st.sub) st.sub.textContent = String(subLabel);
+}
+function bulkProgressAborted(){ return !!(_bulkProg && _bulkProg.aborted); }
+/* 画面を描画させるための一拍。setTimeout(0) は背景タブでも必ず動く（rAF は止まる）。 */
+function bulkProgressYield(){ return new Promise(r => setTimeout(r, 0)); }
+function bulkProgressClose(){
+  if(_bulkProg && _bulkProg.el && _bulkProg.el.parentNode) _bulkProg.el.parentNode.removeChild(_bulkProg.el);
+  _bulkProg = null;
+}
+
 let _lastPhotoExportDir = null; // 書き出し先の親フォルダ（メモリキャッシュ・実体はIndexedDBへ永続化）
 const PHOTO_EXPORT_DIR_KEY = "photoExportDir"; // projHandle系(fileHandlesストア)の固定キー（物件非依存）
 /* 前回の書き出し先フォルダハンドルを取得（メモリ → IndexedDB）。無ければ null。
@@ -15843,7 +15950,7 @@ async function exportPhotosToFolder(){
     + (r.failed ? ("・失敗: " + r.failed + " 枚\n") : "")
     + "\n次回は前回と同じ場所からフォルダ選択が開きます。";
   alert(msg);
-  if(typeof toast === "function") toast("写真 " + r.written + " 枚を『" + mgmtNo + "』へ書き出しました");
+  uiToast("写真 " + r.written + " 枚を『" + mgmtNo + "』へ書き出しました");
 }
 
 /* 親フォルダ配下に「管理番号」フォルダ（無ければ作成／あれば流用）を作り、写真を無劣化で書き込む。
@@ -15930,30 +16037,44 @@ async function bulkExportPhotosToFolders(){
   let caseOk = 0, totalPhotos = 0, failedPhotos = 0;
   let noMgmt = 0, noPhotos = 0, encSkipped = 0, thumbUsed = 0;
   const encList = [], seenMgmt = {};
-  for(let idx = 0; idx < rows.length; idx++){
-    const row = rows[idx];
-    const mgmtRaw = ((row.data && row.data.chosho_mgmt_no) || "").trim();
-    if(!mgmtRaw){ noMgmt++; continue; }
-    let mgmtNo = _sanitizeName(mgmtRaw);
-    // 同一管理番号が複数ある場合はフォルダ名を分ける（_2, _3…）
-    seenMgmt[mgmtNo] = (seenMgmt[mgmtNo] || 0) + 1;
-    if(seenMgmt[mgmtNo] > 1) mgmtNo = mgmtNo + "_" + seenMgmt[mgmtNo];
+  let aborted = false;
+  // 100件規模だと数分かかる。何件目を処理中か・止まっていないことを画面に出す（中止も可）。
+  bulkProgressOpen("📸 写真を一括書き出し中", rows.length);
+  try {
+    for(let idx = 0; idx < rows.length; idx++){
+      if(bulkProgressAborted()){ aborted = true; break; }
+      const row = rows[idx];
+      const mgmtRaw = ((row.data && row.data.chosho_mgmt_no) || "").trim();
+      // 進捗はスキップする戸別でも必ず進める（飛ばした分だけ表示が止まって見えないように）
+      bulkProgressUpdate(idx, "処理中: " + (mgmtRaw || "（管理番号なし）"),
+        "書き出し済み " + caseOk + " 件 / " + totalPhotos + " 枚");
+      await bulkProgressYield();
+      if(!mgmtRaw){ noMgmt++; bulkProgressUpdate(idx + 1); continue; }
+      let mgmtNo = _sanitizeName(mgmtRaw);
+      // 同一管理番号が複数ある場合はフォルダ名を分ける（_2, _3…）
+      seenMgmt[mgmtNo] = (seenMgmt[mgmtNo] || 0) + 1;
+      if(seenMgmt[mgmtNo] > 1) mgmtNo = mgmtNo + "_" + seenMgmt[mgmtNo];
 
-    let res;
-    try{ res = await _getCasePhotos(row, parent, pwCandidates); }
-    catch(err){ console.warn("get photos failed", mgmtNo, err); res = { photos: [] }; }
-    if(res.encrypted){ encSkipped++; encList.push(mgmtRaw); continue; }
-    const photos = (res.photos || []).filter(p => p && p.dataUri);
-    if(!photos.length){ noPhotos++; continue; }
-    if(res.thumbOnly) thumbUsed++;
-    try{
-      const r = await _writeCasePhotos(parent, mgmtNo, photos);
-      totalPhotos += r.written; failedPhotos += r.failed; caseOk++;
-    }catch(err){ console.warn("case export failed", mgmtNo, err); }
-    if(typeof toast === "function") toast("写真書き出し中… " + (idx + 1) + "/" + rows.length);
+      let res;
+      try{ res = await _getCasePhotos(row, parent, pwCandidates); }
+      catch(err){ console.warn("get photos failed", mgmtNo, err); res = { photos: [] }; }
+      if(res.encrypted){ encSkipped++; encList.push(mgmtRaw); bulkProgressUpdate(idx + 1); continue; }
+      const photos = (res.photos || []).filter(p => p && p.dataUri);
+      if(!photos.length){ noPhotos++; bulkProgressUpdate(idx + 1); continue; }
+      if(res.thumbOnly) thumbUsed++;
+      try{
+        const r = await _writeCasePhotos(parent, mgmtNo, photos);
+        totalPhotos += r.written; failedPhotos += r.failed; caseOk++;
+      }catch(err){ console.warn("case export failed", mgmtNo, err); }
+      bulkProgressUpdate(idx + 1, null, "書き出し済み " + caseOk + " 件 / " + totalPhotos + " 枚");
+    }
+  } finally {
+    bulkProgressClose();
   }
 
-  let msg = "📸 一括写真書き出しが完了しました。\n\n"
+  let msg = (aborted
+      ? "📸 一括写真書き出しを中止しました。\n（中止するまでに書き出した分はそのまま残っています）\n\n"
+      : "📸 一括写真書き出しが完了しました。\n\n")
     + "・書き出した戸別: " + caseOk + " 件\n"
     + "・写真合計: " + totalPhotos + " 枚（無劣化・原本のまま）\n";
   if(failedPhotos) msg += "・書込失敗: " + failedPhotos + " 枚\n";
@@ -15962,7 +16083,7 @@ async function bulkExportPhotosToFolders(){
   if(thumbUsed)    msg += "・原寸が見つからずサムネで書き出し: " + thumbUsed + " 件（工事フォルダを選ぶと原寸になります）\n";
   if(encSkipped)   msg += "・暗号化で鍵がなくスキップ: " + encSkipped + " 件（先に🔓一括復号でパスワードを記憶させてください）\n" + (encList.length ? ("　→ " + encList.slice(0,10).join("・") + (encList.length>10?" …":"") + "\n") : "");
   alert(msg);
-  if(typeof toast === "function") toast("一括書き出し完了：" + caseOk + "件 / " + totalPhotos + "枚");
+  uiToast((aborted ? "中止：" : "一括書き出し完了：") + caseOk + "件 / " + totalPhotos + "枚");
 }
 
 /* ============================================================
@@ -16018,7 +16139,7 @@ async function compressCurrentCasePhotos(){
     + "・縮小: " + changed + " / " + withImg.length + " 枚\n"
     + "・写真サイズ: 約 " + bMB(beforeBytes) + " MB → 約 " + bMB(afterBytes) + " MB\n\n"
     + "💾 上書き保存 / 保存でJSONに反映されます。");
-  if(typeof toast === "function") toast("写真を軽量化しました（約 " + bMB(beforeBytes) + "→" + bMB(afterBytes) + "MB）");
+  uiToast("写真を軽量化しました（約 " + bMB(beforeBytes) + "→" + bMB(afterBytes) + "MB）");
 }
 
 /* 入力 UI を再構築 */
