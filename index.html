@@ -772,6 +772,17 @@
   .sub-controls .sub-csv-btn { border-color: #1b7a3d; color: #1b7a3d; }
   .sub-controls .sub-csv-btn:hover { background: #e9f7ee; }
   .sub-controls .sub-count { color: #555; }
+  /* 予備ツール（持出書出/持出取込）。持出チェックと確認状態は共有ファイル（物件ファイル）で
+     受け渡されるので日常操作ではない。日々使うボタンと同じ強さで並べず、右端に控えめにまとめる。 */
+  .sub-controls .sub-spare {
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-left: auto; padding-left: 12px; border-left: 1px dashed #cdd3da;
+  }
+  .sub-controls .sub-spare-label { font-size: 10.5px; color: #8a95a1; cursor: help; }
+  .sub-controls .sub-btn-quiet {
+    border-color: #cdd3da; color: #7a828b; padding: 3px 9px; font-size: 11px;
+  }
+  .sub-controls .sub-btn-quiet:hover { background: #f2f4f6; color: #55606a; }
   .sub-table th, .sub-table td { vertical-align: middle; }
   .sub-table td.sub-exp, .sub-table th.sub-exp { width: 30px; text-align: center; padding: 2px; }
   .sub-expand-btn {
@@ -14235,15 +14246,29 @@ async function importTakeoutData(file){
   if(payload._type !== "antenna_takeout_export" || (tk && typeof tk !== "object")){
     if(!confirm("このファイルは持出材料データ形式でない可能性があります。\nそれでも取り込みますか？")) return;
   }
+  // 上書きになる戸別を数えて先に知らせる（戸別ごと丸ごと差し替えで、取り消しもできないため）
+  const tkOver = (tk && typeof tk === "object") ? Object.keys(tk).filter(k => _takeoutMap[k]).length : 0;
+  const rvOver = (rv && typeof rv === "object") ? Object.keys(rv).filter(k => _reviewMap[k]).length : 0;
+  if(tkOver || rvOver){
+    if(!confirm("📥 持出材料データを取り込みます。\n\n"
+      + "すでにこの端末にある戸別は、ファイルの内容で<戸別ごと丸ごと>置き換わります（元に戻せません）。\n"
+      + "　持出フラグ: " + tkOver + " 件が上書き\n"
+      + "　確認状態: " + rvOver + " 件が上書き\n\n"
+      + "先に「📤 持出書出」で控えを取っておくと安全です。取り込みますか？")) return;
+  }
   let nTk = 0, nRv = 0;
+  // 取り込んだ分は「この端末が編集した注釈」として印を付ける。付けないと、直後の保存が他社の保存と
+  // ぶつかったときの戸別単位マージで上乗せ対象から外れ、取り込んだ内容が無言で他社の版へ戻る。
   if(tk && typeof tk === "object"){
-    Object.keys(tk).forEach(k => { _takeoutMap[k] = tk[k]; nTk++; });
+    Object.keys(tk).forEach(k => { _takeoutMap[k] = tk[k]; nTk++; try { markAnnoEdited(k); } catch(_){} });
     saveTakeoutMap();
   }
   if(rv && typeof rv === "object"){
-    Object.keys(rv).forEach(k => { _reviewMap[k] = rv[k]; nRv++; });
+    Object.keys(rv).forEach(k => { _reviewMap[k] = rv[k]; nRv++; try { markAnnoEdited(k); } catch(_){} });
     saveReviewMap();
   }
+  // 共有ファイル・世代バックアップへの保存を明示的に予約する（一覧の再描画まかせにしない）
+  if(nTk || nRv){ try { projTouch(); } catch(_){} }
   if(_listMode === "subcontractor") renderListTable();
   alert("📥 持出材料データを取り込みました。\n  持出フラグ: " + nTk + " 件\n  確認状態: " + nRv + " 件\n\n（管理番号で突合。読込済み戸別に反映されます）");
 }
@@ -14430,9 +14455,13 @@ function renderListSubcontractorMode(rows, container){
     + '<button class="sub-btn" id="sub-collapse-all" type="button">⤡ 全折りたたみ</button>'
     + '<button class="sub-btn sub-csv-btn" id="sub-csv" type="button">📊 Excel(CSV)出力</button>'
     + '<button class="sub-btn sub-pdf-btn" id="sub-fullpdf" type="button" title="全管理番号を 労務費の内訳＋持出材料 まで含めて印刷/PDF（用紙・向き選択可）">📑 全件明細PDF</button>'
-    + '<button class="sub-btn" id="sub-takeout-export" type="button" title="持出材料チェック＋確認状態をJSONに書き出し（別端末への移行・バックアップ用）">📤 持出書出</button>'
-    + '<button class="sub-btn" id="sub-takeout-import" type="button" title="書き出した持出材料JSONを取り込み（管理番号で突合してマージ）">📥 持出取込</button>'
-    + '<input type="file" id="sub-takeout-file" accept=".json,application/json,text/plain,application/octet-stream" style="display:none;">'
+    // 予備ツール：持出チェックと確認状態は物件ファイルに入って共有されるので、通常はこの2つを使う必要はない。
+    + '<span class="sub-spare">'
+    +   '<span class="sub-spare-label" title="持出材料のチェックと確認状態は、共有ファイル（物件ファイル）を開き直せばそのまま受け渡されます。ここの2つは普段は使いません。">予備 ⓘ</span>'
+    +   '<button class="sub-btn sub-btn-quiet" id="sub-takeout-export" type="button" title="持出材料のチェックと確認状態だけをJSONに書き出します。普段は不要です（共有ファイルで受け渡されるため）。取り込み前の控えを残したいとき、一覧に読み込んでいない戸別のぶんも含めて控えたいときに使います">📤 持出書出</button>'
+    +   '<button class="sub-btn sub-btn-quiet" id="sub-takeout-import" type="button" title="書き出したJSONを管理番号で突合して取り込みます。戸別ごと丸ごと上書きで取り消せません（重なる件数を確認してから実行します）。普段は不要です（共有ファイルで受け渡されるため）。確認状態や持出チェックだけを戻したい緊急用">📥 持出取込</button>'
+    +   '<input type="file" id="sub-takeout-file" accept=".json,application/json,text/plain,application/octet-stream" style="display:none;">'
+    + '</span>'
     + '<span class="sub-count" style="margin-left:auto;">※ チェックは持出材料の振り分け。全体費用詳細の金額は不変です</span>'
     + '</div>';
 
