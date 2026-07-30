@@ -5216,6 +5216,12 @@ function getInputs() {
     const tc = document.querySelector('.tv-row select[data-term-idx="'+i+'"]');
     term.push(tc ? tc.value : "");
   }
+  // 電源部を置くTV（0始まり）。未選択・範囲外は1台目＝従来の表示
+  let tvPowerIdx = 0;
+  document.querySelectorAll('.tv-row [data-pw-idx]').forEach(rb => {
+    if(rb.checked) tvPowerIdx = parseInt(rb.dataset.pwIdx, 10) || 0;
+  });
+  if(!(tvPowerIdx >= 0 && tvPowerIdx < tvCount)) tvPowerIdx = 0;
   return {
     work_type: $("work_type"),
     is_catv: $("is_catv") === "yes",
@@ -5255,6 +5261,7 @@ function getInputs() {
     tv_bd: bd,
     tv_sp: sp,
     tv_term: term,
+    tv_power: tvPowerIdx,
     remove_safety: $("remove_safety") === "yes",
     remove_drop: $("remove_drop") === "yes",
     cable_drop_len: parseFloat($("cable_drop_len"))||0,
@@ -5342,6 +5349,14 @@ function syncTerminalSelectsToIndoorWire(){
   });
 }
 
+/* 電源部を置くTVの選択を復元。未保存（旧データ）・範囲外は1台目＝従来どおり一番上の部屋。 */
+function applyTvPowerSelection(idx){
+  const list = document.querySelectorAll('.tv-row [data-pw-idx]');
+  if(!list.length) return;
+  let n = parseInt(idx, 10);
+  if(!(n >= 0 && n < list.length)) n = 0;
+  list.forEach(rb => { rb.checked = (parseInt(rb.dataset.pwIdx, 10) === n); });
+}
 function renderTvList(){
   const n = parseInt(document.getElementById("tv_count").value, 10);
   const wrap = document.getElementById("tv-list");
@@ -5363,6 +5378,12 @@ function renderTvList(){
   wrap.querySelectorAll('.tv-row [data-term-idx]').forEach(s => {
     prevTerm[s.dataset.termIdx] = s.value;
   });
+  // 電源部を置くTV（TV背面のとき）。再描画で選択が飛ばないよう控える
+  let prevPw = -1;
+  wrap.querySelectorAll('.tv-row [data-pw-idx]').forEach(rb => {
+    if(rb.checked) prevPw = parseInt(rb.dataset.pwIdx, 10);
+  });
+  if(prevPw < 0 || prevPw >= n) prevPw = 0;   // 台数を減らした場合などは1台目へ戻す
   const termOptsHtml = buildTerminalOptionsHtml();
   let html = "";
   for(let i=0;i<n;i++){
@@ -5377,6 +5398,7 @@ function renderTvList(){
       + ROOM_OPTIONS.map(r => '<option value="'+r+'"'+(r===defaultRoom?' selected':'')+'>'+r+'</option>').join("")
       + '</select>'
       + '<label class="bd-label" title="BD/レコーダー接続あり＝チャンネル調整必要"><input type="checkbox" data-bd-idx="'+i+'"'+bdChecked+'>BD</label>'
+      + '<label class="bd-label tv-pw-label" title="このTVの背面に電源部を置く（電源部位置が「TV背面」のときだけ選べます）"><input type="radio" name="tv_power" data-pw-idx="'+i+'"'+(i===prevPw?' checked':'')+'>電源部</label>'
       + '<select class="sp-state" data-sp-idx="'+i+'" title="壁端子の後に分配器を挿入する場合：新規=赤／既存=黒（積算対象外）">'
       + spOpt("no","分配なし")
       + spOpt("new","分配(新規)")
@@ -5403,6 +5425,12 @@ function renderTvList(){
   wrap.querySelectorAll('[data-bd-idx]').forEach(c => {
     c.addEventListener("change", rebuild);
   });
+  wrap.querySelectorAll('[data-pw-idx]').forEach(c => {
+    c.addEventListener("change", rebuild);   // 電源部を置くTVを変えたら図面を描き直す
+  });
+  // 「TV背面」以外のときは電源部の選択欄を隠す（rebuild前の初期描画でも整合させる）
+  const showPw = (document.getElementById("power_pos") || {}).value === "tv_back";
+  wrap.querySelectorAll(".tv-pw-label").forEach(el => { el.style.display = showPw ? "" : "none"; });
 }
 
 /* ============================================================
@@ -7752,7 +7780,10 @@ function renderDiagram(input){
   const rangeTop = 95;
   const rangeBottom = H - 70;
   const gapY = (rangeBottom - rangeTop) / Math.max(1, tvN);
-  const powerTvIdx = input.power_pos === "tv_back" ? 0 : -1;
+  // 電源部を置くTV（TV背面のときのみ）。既定は1台目＝旧データは従来どおり一番上の部屋。
+  const powerTvIdx = (input.power_pos === "tv_back")
+    ? Math.min(Math.max(0, parseInt(input.tv_power, 10) || 0), Math.max(0, tvN - 1))
+    : -1;
 
   // 宅内（壁端子→電源部→TV）の各区間が赤(新規)の場合：間隔を少し広げ、線の上に標準長(2m)を表示
   const indoorSegRed = key => {
@@ -9601,6 +9632,10 @@ function rebuild(){
   document.querySelectorAll(".power-outside-only").forEach(el => {
     el.style.display = STATE.input.power_pos === "outside" ? "" : "none";
   });
+  // 「TV背面」のときだけ、どの部屋のTV背面に置くかを部屋ごとに選べるようにする
+  document.querySelectorAll(".tv-pw-label").forEach(el => {
+    el.style.display = STATE.input.power_pos === "tv_back" ? "" : "none";
+  });
   // 3本構成（triple）UIの表示制御
   document.querySelectorAll(".triple-only").forEach(el => {
     el.style.display = STATE.input.ch50_separate ? "" : "none";
@@ -10432,6 +10467,7 @@ function applyPresetData(p){
     // 旧プリセット（tv_term 未保存）は indoor_wire から推定
     syncTerminalSelectsToIndoorWire();
   }
+  applyTvPowerSelection(p.tv_power);
   if(p.tax_mode){
     const r = document.querySelector('input[name=tax_mode][value="'+p.tax_mode+'"]');
     if(r) r.checked = true;
@@ -11167,6 +11203,11 @@ function collectState(){
   s.tv_term = [];
   document.querySelectorAll('.tv-row select[data-term-idx]').forEach(sel => {
     s.tv_term.push(sel.value || "");
+  });
+  // 電源部を置くTV（0始まり）。「TV背面」以外のときも選択は保持して往復させる
+  s.tv_power = 0;
+  document.querySelectorAll('.tv-row [data-pw-idx]').forEach(rb => {
+    if(rb.checked) s.tv_power = parseInt(rb.dataset.pwIdx, 10) || 0;
   });
   // 線色オーバーライド（クリックで変更された各配線の新規⇔既存）
   s.wire_overrides = Object.assign({}, STATE.wireOverrides || {});
@@ -12026,6 +12067,7 @@ function applyStateData(s){
     // 旧保存データは indoor_wire から推定
     syncTerminalSelectsToIndoorWire();
   }
+  applyTvPowerSelection(s.tv_power);
   STATE.wireOverrides = (s.wire_overrides && typeof s.wire_overrides === "object")
     ? Object.assign({}, s.wire_overrides) : {};
   STATE.qtyOverrides = (s.qty_overrides && typeof s.qty_overrides === "object")
