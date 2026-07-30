@@ -3095,6 +3095,11 @@
   .map-ctr-legend .mcl-sw { width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(0,0,0,0.28); flex: 0 0 auto; }
   .map-ctr-legend .mcl-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .map-ctr-legend .mcl-none { color: #8a95a1; font-size: 10px; }
+  .map-ctr-legend .mcl-cnt { margin-left: auto; flex: 0 0 auto; color: #8a95a1; font-size: 10px; font-variant-numeric: tabular-nums; }
+  .map-ctr-legend .mcl-warn {
+    margin-top: 6px; padding: 5px 7px; background: #fff8e1; border: 1px solid #e6d08a;
+    border-radius: 4px; font-size: 10.5px; line-height: 1.5; color: #7a5c12;
+  }
   .map-tx-preset-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
   .map-tx-preset-btn { padding: 4px 8px; font-size: 11px; border: 1px solid #cdd3da; border-radius: 4px; background: #fff; cursor: pointer; }
   .map-color-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 8px; }
@@ -17316,9 +17321,11 @@ let _contractorList = (() => {
 })();
 function saveContractorMap(){
   try { localStorage.setItem(CONTRACTOR_KEY, JSON.stringify(_contractorMap)); } catch(_){}
+  invalidateContractorColors();   // 割当が変われば色の並びも変わりうる
 }
 function saveContractorList(){
   try { localStorage.setItem(CONTRACTOR_LIST_KEY, JSON.stringify(_contractorList)); } catch(_){}
+  invalidateContractorColors();
 }
 function getContractor(tk){ return _contractorMap[tk] || ""; }
 function setContractor(tk, name){
@@ -17349,6 +17356,7 @@ function setContractorDigitMap(obj){
   ["1", "2", "3", "4"].forEach(k => { const v = String((obj && obj[k]) || "").trim(); if(v) out[k] = v; });
   _contractorDigitMap = out;
   try { localStorage.setItem(CONTRACTOR_DIGIT_KEY, JSON.stringify(out)); } catch(_){}
+  invalidateContractorColors();
   projTouch();
 }
 /* 管理番号（左から4桁目）から施工会社名を引く。対応表が未設定/該当なしなら空。 */
@@ -17377,21 +17385,51 @@ function contractorShortLabels(list){
     return s.slice(0, len) || "？";
   });
 }
-/* カレンダーの施工会社色分け用パレット（背景が淡色チップの上に載る濃色の帯）。
-   施工業者マスターの登録順で安定した色を割り当て、マスター外の名前は名前ハッシュで安定色にする。 */
+/* カレンダー・地図の施工会社色分け用パレット（背景が淡色チップの上に載る濃色の帯）。 */
 const CAL_CTR_COLORS = ["#1565c0", "#c62828", "#2e7d32", "#6a1b9a", "#e65100", "#00838f",
   "#ad1457", "#3949ab", "#558b2f", "#5d4037", "#0277bd", "#8d6e63"];
+/* 色を割り当てる会社の並び（この並びの順にパレットを配る）。
+   ① 施工業者マスターの登録順 → ② 業者番号の対応表（1→4）→ ③ 戸別に割り当て済みの会社（名前順）。
+   この3つはどれも物件ファイルに入っている情報なので、同じ物件を開いた端末どうしでは必ず同じ並び＝同じ色になる。
+   （以前は①だけを見ていたため、施工業者マスターが入っていない端末では全社が名前ハッシュ色に落ち、
+     別の色になったり複数社が同じ色に重なったりしていた。） */
+let _ctrColorOrder = null;   // 上の並びのキャッシュ。マスター/割当/業者番号表を変えたら捨てる
+function invalidateContractorColors(){ _ctrColorOrder = null; }
+function contractorColorOrder(){
+  if(_ctrColorOrder) return _ctrColorOrder;
+  const out = [], seen = Object.create(null);
+  const add = n => { n = String(n == null ? "" : n).trim(); if(n && !seen[n]){ seen[n] = 1; out.push(n); } };
+  getContractorList().forEach(add);
+  const dm = getContractorDigitMap();
+  Object.keys(dm).sort().forEach(k => add(dm[k]));          // 業者番号順＝端末によらず同じ
+  const rest = [];
+  Object.keys(_contractorMap || {}).forEach(k => {
+    const n = String(_contractorMap[k] || "").trim();
+    if(n && !seen[n] && rest.indexOf(n) < 0) rest.push(n);  // 割当にしか出てこない会社
+  });
+  rest.sort((a, b) => a.localeCompare(b, "ja")).forEach(add); // 名前順＝端末によらず同じ
+  _ctrColorOrder = out;
+  return out;
+}
 function calContractorColor(name){
   name = String(name || "").trim();
   if(!name) return "";
-  const list = getContractorList();
-  let idx = list.indexOf(name);
-  if(idx < 0){   // マスター外（過去の会社名など）は名前ハッシュで安定色
+  const order = contractorColorOrder();
+  let idx = order.indexOf(name);
+  if(idx < 0){   // どこにも出てこない名前（過去の会社名など）は名前ハッシュで安定色
     let h = 0;
     for(let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
     idx = Math.abs(h);
   }
   return CAL_CTR_COLORS[idx % CAL_CTR_COLORS.length];
+}
+/* 色分け用に「この管理番号の施工会社」を決める。
+   戸別に割り当てた会社が最優先。未割当でも業者番号（管理番号の左から4桁目）の対応表があればそこから判定する。
+   割当は各端末のブラウザに保存されるデータなので、これが無い端末でも管理番号だけで色が付くようにする。 */
+function contractorForMgmtNo(mgmtNo){
+  const mg = String(mgmtNo == null ? "" : mgmtNo).trim();
+  if(!mg) return "";
+  return getContractor("m:" + mg) || contractorByMgmtNo(mg);
 }
 /* 受付台帳の施工会社セル：未割当は業者の「頭文字チップ」を並べて一発選択（ホバーで正式名）、
    割当済みは会社名チップのみ表示（クリックで再びチップ一覧を開いて変更・解除できる）。
@@ -17569,6 +17607,10 @@ function buildProjectSnapshot(base){
   const keys = new Set();
   _listRows.forEach(r => {
     if(!r) return;
+    // 本体を内包できない行（全暗号化など）も、注釈（台帳メモ・持出・確認・施工会社の割当）は残す。
+    // ここで keys に入れ忘れると、その戸別の施工会社が保存のたびに物件ファイルから抜け落ち、
+    // 割当を作った端末だけ色が付いて他の端末では全部グレー（＝1色）になる。
+    keys.add(subCaseKey(r));
     if(r.fileType === "full"){ encSkipped++; return; }
     let payload = (r.fileType === "plain") ? projPlainPayload(r) : r.envelope;
     if(!payload) return;
@@ -17577,7 +17619,6 @@ function buildProjectSnapshot(base){
     const cw = { caseId: ensureRowCaseId(r), file: r.file || "", lastModified: r.lastModified || 0, payload };
     if(r._prevSubKey) cw.prevSub = r._prevSubKey; // Phase2: 改番した場合の旧キー（移行期のマージ突合用）
     cases.push(cw);
-    keys.add(subCaseKey(r));
   });
   const pick = map => {
     const o = {};
@@ -17974,6 +18015,7 @@ async function applyProject(p, opts){
     // 業者番号の対応表（この物件の値へ切替。旧物件ファイルには無いのでその場合は空）
     _contractorDigitMap = (p.contractorDigits && typeof p.contractorDigits === "object") ? Object.assign({}, p.contractorDigits) : {};
     try { localStorage.setItem(CONTRACTOR_DIGIT_KEY, JSON.stringify(_contractorDigitMap)); } catch(_){}
+    invalidateContractorColors();   // 物件を切り替えたら色の並びを引き直す
     // 戸別に紐づかない予定（この物件の値へ切替。旧物件ファイルには無いので空）
     _calFreeEvents = Array.isArray(p.calEvents) ? p.calEvents.slice() : [];
     try { localStorage.setItem(CAL_FREE_KEY, JSON.stringify(_calFreeEvents)); } catch(_){}
@@ -26105,9 +26147,9 @@ window.addEventListener("DOMContentLoaded", init);
     var linked = !!o.linkMgmtNo;
     var fill, miniFill, stroke;
     if(_bldColorMode === "contractor" && linked){
-      // 番号→戸別→施工会社 の色（施工業者マスターの登録順で安定した色）。
+      // 番号→施工会社 の色。戸別の割当が最優先、未割当でも業者番号（管理番号の左から4桁目）から判定する。
       var nm = "", cc = "";
-      try { if(typeof getContractor === "function") nm = getContractor("m:" + o.linkMgmtNo); } catch(_){}
+      try { if(typeof contractorForMgmtNo === "function") nm = contractorForMgmtNo(o.linkMgmtNo); } catch(_){}
       try { if(nm && typeof calContractorColor === "function") cc = calContractorColor(nm); } catch(_){}
       if(cc){ fill = hexToRgba(cc, 0.20); miniFill = hexToRgba(cc, 0.34); stroke = cc; }
       else { fill = "rgba(120,130,140,0.16)"; miniFill = "rgba(120,130,140,0.30)"; stroke = "#78828c"; } // 番号あり・施工会社未割当＝グレー
@@ -26143,6 +26185,7 @@ window.addEventListener("DOMContentLoaded", init);
       }
       return poly + lab;
     }).join("");
+    renderCtrLegend();   // 凡例の件数は建物の内容で変わるので、描き直すたびに追従させる
   }
   // 建物の色分けモードのUI（セグメント選択・説明文・施工会社凡例）を現在状態に合わせて更新
   function applyBldColorModeUI(){
@@ -26154,28 +26197,54 @@ window.addEventListener("DOMContentLoaded", init);
     var note = el("map-bld-cmode-note");
     if(note){
       note.textContent = (_bldColorMode === "contractor")
-        ? "番号を付けた建物を施工会社ごとの色で表示します（未割当はグレー・番号なしは緑）。"
+        ? "番号を付けた建物を施工会社ごとの色で表示します（受付台帳の割当が無い建物は業者番号＝管理番号の左から4桁目で判定・どちらも無ければグレー／番号なしは緑）。"
         : "番号を付けた建物をオレンジ、その他を緑で表示します。";
     }
     renderCtrLegend();
   }
-  // 施工会社別モード時の凡例（会社名→色）。施工業者マスターから生成。それ以外のモードでは非表示。
+  // いま開いているシートの「番号付き建物」を施工会社ごとに数える。 → { counts:{会社名:件数}, none:未判定, total:番号付き }
+  function ctrBuildingCounts(){
+    var counts = {}, none = 0, total = 0;
+    var objs = (current && current.layers && current.layers.building && current.layers.building.objects) || [];
+    objs.forEach(function(o){
+      if(!o || !o.linkMgmtNo) return;
+      total++;
+      var nm = "";
+      try { if(typeof contractorForMgmtNo === "function") nm = contractorForMgmtNo(o.linkMgmtNo); } catch(_){}
+      if(nm) counts[nm] = (counts[nm] || 0) + 1; else none++;
+    });
+    return { counts: counts, none: none, total: total };
+  }
+  // 施工会社別モード時の凡例（会社名→色＋この図での件数）。それ以外のモードでは非表示。
+  // 1色しか出ないときに「地図の不具合」と「この端末に割当データが無いだけ」を見分けられるよう、件数と原因も出す。
   function renderCtrLegend(){
     var box = el("map-ctr-legend"); if(!box) return;
     if(_bldColorMode !== "contractor"){ box.classList.remove("on"); box.innerHTML = ""; return; }
     var list = [];
-    try { if(typeof getContractorList === "function") list = getContractorList() || []; } catch(_){ list = []; }
+    try { if(typeof contractorColorOrder === "function") list = (contractorColorOrder() || []).slice(); } catch(_){ list = []; }
+    var C = ctrBuildingCounts();
+    // 並びに無い会社が実際に使われていたら必ず載せる（凡例と地図が食い違わないように）
+    Object.keys(C.counts).forEach(function(nm){ if(list.indexOf(nm) < 0) list.push(nm); });
     var rows = list.map(function(nm){
       var cc = "";
       try { if(typeof calContractorColor === "function") cc = calContractorColor(nm); } catch(_){}
-      return '<div class="mcl-row"><span class="mcl-sw" style="background:' + esc(hexToRgba(cc || "#78828c", 0.20)) + ';border-color:' + esc(cc || "#78828c") + ';"></span><span class="mcl-name" title="' + esc(nm) + '">' + esc(nm) + '</span></div>';
+      var n = C.counts[nm] || 0;
+      return '<div class="mcl-row"><span class="mcl-sw" style="background:' + esc(hexToRgba(cc || "#78828c", 0.20)) + ';border-color:' + esc(cc || "#78828c") + ';"></span><span class="mcl-name" title="' + esc(nm) + '">' + esc(nm) + '</span><span class="mcl-cnt">' + n + '</span></div>';
     });
-    rows.push('<div class="mcl-row"><span class="mcl-sw" style="background:rgba(120,130,140,0.16);border-color:#78828c;"></span><span class="mcl-name mcl-none">未割当（番号あり）</span></div>');
-    if(!list.length){
-      box.innerHTML = '<div class="mcl-none">施工業者が未登録です。メニュー画面の「🏢 施工業者」で登録すると、ここに会社ごとの色が並びます。</div>' + rows[rows.length - 1];
-    } else {
-      box.innerHTML = rows.join("");
+    rows.push('<div class="mcl-row"><span class="mcl-sw" style="background:rgba(120,130,140,0.16);border-color:#78828c;"></span><span class="mcl-name mcl-none">未割当（番号あり）</span><span class="mcl-cnt">' + C.none + '</span></div>');
+    var html = list.length
+      ? rows.join("")
+      : '<div class="mcl-none">施工業者が未登録です。メニュー画面の「🏢 施工業者」で登録すると、ここに会社ごとの色が並びます。</div>' + rows[rows.length - 1];
+    // 色が1色にしかならない状態は、たいてい「この端末に施工会社のデータが無い」ことが原因。原因と直し方をその場に出す。
+    var colored = Object.keys(C.counts).length;
+    if(C.total && colored === 0){
+      html += '<div class="mcl-warn">番号付きの建物 ' + C.total + ' 件がすべて未割当です（全部グレー＝1色）。'
+        + '受付台帳で施工会社を選ぶか、メニューの「🔢 業者番号の割り当て」を設定すると色が付きます。'
+        + 'このデータは物件ファイルに入って共有されるので、別のパソコンで割り当てた場合はそちらで物件を保存し、このパソコンでその物件を開き直してください。</div>';
+    } else if(C.total && colored === 1 && C.none === 0){
+      html += '<div class="mcl-warn">この図の建物はすべて同じ施工会社です（1色）。管理番号の左から4桁目で判定しているので、番号の付け方が正しいかご確認ください。</div>';
     }
+    box.innerHTML = html;
     box.classList.add("on");
   }
   function renderDrawingOverlay(){
@@ -26434,8 +26503,7 @@ window.addEventListener("DOMContentLoaded", init);
         // 寸法は ctrLegendGeom() に一本化（当たり判定＝legendBoxOf と必ず一致させる）
         var G3 = ctrLegendGeom(o);
         var u3 = G3.u;
-        var clist = [];
-        try { if(typeof getContractorList === "function") clist = getContractorList() || []; } catch(_){}
+        var clist = ctrLegendNames();
         var crows = clist.map(function(nm){
           var cc = "";
           try { if(typeof calContractorColor === "function") cc = calContractorColor(nm); } catch(_){}
@@ -26520,16 +26588,22 @@ window.addEventListener("DOMContentLoaded", init);
     var c = viewCornerWorld(0.72, 0.40), b = worldBounds();
     var o = { id: "o_" + mapUid(), kind: "ctrlegend", x: c.x, y: c.y, size: Math.max(12, b.w / 120) };
     current.layers.label.objects.push(o); renderObjects(); flushSave(); setTool("pan"); selectObject("label", o.id);
-    var n = 0; try { n = (typeof getContractorList === "function") ? (getContractorList() || []).length : 0; } catch(_){}
-    toast(n ? "施工会社の色凡例を配置しました（" + n + "社）。ドラッグで移動できます。" : "施工会社の色凡例を配置しました。施工業者マスターが未登録のため、登録すると各社が表示されます。");
+    var n = ctrLegendNames().length;
+    toast(n ? "施工会社の色凡例を配置しました（" + n + "社）。ドラッグで移動できます。" : "施工会社の色凡例を配置しました。施工業者が未登録のため、メニュー画面の「🏢 施工業者」で登録すると各社が表示されます。");
   }
 
   /* ---------- 選択・編集 ---------- */
+  /* 色凡例に載せる会社の並び。地図の塗り分けと同じ並び（施工業者マスター＋業者番号表＋実際の割当）を使う。
+     施工業者マスターだけを見ていると、マスター未登録の端末で凡例が空になり、色と食い違っていた。 */
+  function ctrLegendNames(){
+    try { if(typeof contractorColorOrder === "function") return contractorColorOrder() || []; } catch(_){}
+    try { if(typeof getContractorList === "function") return getContractorList() || []; } catch(_){}
+    return [];
+  }
   /* 施工会社の色凡例の寸法（描画と当たり判定で同じ計算を使う）。u=文字サイズ基準。 */
   function ctrLegendGeom(o){
     var u = (o && o.size) || defaultTextSize();
-    var list = [];
-    try { if(typeof getContractorList === "function") list = getContractorList() || []; } catch(_){}
+    var list = ctrLegendNames();
     var n = list.length + 1;                         // ＋「未割当」行
     var title = "施工会社（色分け）";
     var maxCh = title.length;
