@@ -14235,15 +14235,29 @@ async function importTakeoutData(file){
   if(payload._type !== "antenna_takeout_export" || (tk && typeof tk !== "object")){
     if(!confirm("このファイルは持出材料データ形式でない可能性があります。\nそれでも取り込みますか？")) return;
   }
+  // 上書きになる戸別を数えて先に知らせる（戸別ごと丸ごと差し替えで、取り消しもできないため）
+  const tkOver = (tk && typeof tk === "object") ? Object.keys(tk).filter(k => _takeoutMap[k]).length : 0;
+  const rvOver = (rv && typeof rv === "object") ? Object.keys(rv).filter(k => _reviewMap[k]).length : 0;
+  if(tkOver || rvOver){
+    if(!confirm("📥 持出材料データを取り込みます。\n\n"
+      + "すでにこの端末にある戸別は、ファイルの内容で<戸別ごと丸ごと>置き換わります（元に戻せません）。\n"
+      + "　持出フラグ: " + tkOver + " 件が上書き\n"
+      + "　確認状態: " + rvOver + " 件が上書き\n\n"
+      + "先に「📤 持出書出」で控えを取っておくと安全です。取り込みますか？")) return;
+  }
   let nTk = 0, nRv = 0;
+  // 取り込んだ分は「この端末が編集した注釈」として印を付ける。付けないと、直後の保存が他社の保存と
+  // ぶつかったときの戸別単位マージで上乗せ対象から外れ、取り込んだ内容が無言で他社の版へ戻る。
   if(tk && typeof tk === "object"){
-    Object.keys(tk).forEach(k => { _takeoutMap[k] = tk[k]; nTk++; });
+    Object.keys(tk).forEach(k => { _takeoutMap[k] = tk[k]; nTk++; try { markAnnoEdited(k); } catch(_){} });
     saveTakeoutMap();
   }
   if(rv && typeof rv === "object"){
-    Object.keys(rv).forEach(k => { _reviewMap[k] = rv[k]; nRv++; });
+    Object.keys(rv).forEach(k => { _reviewMap[k] = rv[k]; nRv++; try { markAnnoEdited(k); } catch(_){} });
     saveReviewMap();
   }
+  // 共有ファイル・世代バックアップへの保存を明示的に予約する（一覧の再描画まかせにしない）
+  if(nTk || nRv){ try { projTouch(); } catch(_){} }
   if(_listMode === "subcontractor") renderListTable();
   alert("📥 持出材料データを取り込みました。\n  持出フラグ: " + nTk + " 件\n  確認状態: " + nRv + " 件\n\n（管理番号で突合。読込済み戸別に反映されます）");
 }
