@@ -4284,9 +4284,9 @@
       <label class="list-hide-dup-label" title="同じ管理番号が複数あるとき、ファイル更新日時が最新の1件だけ表示します（古い重複を隠す）"><input type="checkbox" id="list-hide-dup"> 重複を隠す <span class="hd-sub">(同一管理番号は最新日付のみ)</span></label>
     </div>
     <div class="list-mode-tabs">
-      <button class="mode-tab active" data-list-mode="standard">📄 標準一覧</button>
-      <button class="mode-tab" data-list-mode="by_folder">📁 工事別フォルダ</button>
-      <button class="mode-tab" data-list-mode="cost_detail">💴 全体費用詳細</button>
+      <button class="mode-tab active" data-list-mode="standard" title="全戸別を1枚の表でフラットに表示。工事種別・ファイル形式（📄平文／🔐HYB／🔐FULL）・ファイル名が出るのはここだけです。番号や氏名で探す・どのファイルから読んだか確かめる用。">📄 標準一覧</button>
+      <button class="mode-tab" data-list-mode="by_folder" title="保存先フォルダ（工区）ごとにグループ分けし、グループごとに件数・小計・石綿サマリと全体合計を出します。施工会社の割り当て（プルダウン）・写真枚数の確認・石綿みなし判定が出るのはここだけです。">📁 工事別フォルダ</button>
+      <button class="mode-tab" data-list-mode="cost_detail" title="読み込んだ全戸別の材料費・労務費を工事全体で集計。★基本工事プリセットを指定すると、基本工事とそれ以外（追加工事）に分けて集計します。">💴 全体費用詳細</button>
       <button class="mode-tab" data-list-mode="subcontractor" title="協力会社→元請けへの請求内訳（労務費＋協力会社諸経費＋持出材料）。全体費用詳細の数値には一切影響しません。単価は標準単価（業者間の統一額）で計算し、物件用の単価変更（単価マスターの色付き行）は反映されません">🤝 協力会社請求内訳</button>
       <button class="mode-tab" data-list-mode="ledger" title="全戸別を1行ずつ一覧・セル直接編集（工事日程・打合せ・ビラ配布・完了・備考）。カレンダーと双方向連動">📒 受付台帳</button>
       <button class="mode-tab" data-list-mode="calendar" title="工事予定（青）と打合せ予定（緑）を月表示。受付台帳と双方向連動">📅 予定カレンダー</button>
@@ -20323,8 +20323,13 @@ async function xlsxReadSheet(file){
 }
 /* ヘッダー行から列を推定（列がずれても動くように）。見つからなければ既定の列を使う。 */
 function xlsxDetectCols(rows){
-  const want = { mgmt: ["管理番号"], addr: ["住所結合", "住所"], note: ["過去の情報", "備考"], area: ["地区番号"], ctr: ["業者"] };
-  const cols = { mgmt: "H", addr: "E", note: "F", area: "I", ctr: "J" }, found = {};
+  // built（建築年）は見出しが見つかった時だけ使う＝列位置の既定を置かない。
+  //   ・「建築年西暦」(2007) と「建築年和暦」(平成19年) のどちらでも読める（parseBuiltYear が両対応）。
+  //   ・見出し走査は列順なので、両方ある表では西暦側（左）が採用される。
+  //   ・この列を持たない従来の表では built が空のまま＝石綿の取り込みは行わない。
+  const want = { mgmt: ["管理番号"], addr: ["住所結合", "住所"], note: ["過去の情報", "備考"],
+                 area: ["地区番号"], ctr: ["業者"], built: ["建築年西暦", "建築年"] };
+  const cols = { mgmt: "H", addr: "E", note: "F", area: "I", ctr: "J", built: "" }, found = {};
   let headerIdx = -1;
   for(let i = 0; i < Math.min(rows.length, 10); i++){
     const r = rows[i], hit = {};
@@ -20335,6 +20340,41 @@ function xlsxDetectCols(rows){
     if(hit.mgmt){ headerIdx = i; Object.assign(found, hit); break; }
   }
   return { cols: Object.assign(cols, found), headerIdx: headerIdx };
+}
+/* Excelの「建築年」セルを西暦の年に直す。西暦（2007 / ２００７）と和暦（平成19年・R2・S60 等）の両方に対応。
+   読めなければ null。石綿の判定に使うので、あり得ない年は弾く。 */
+const _WAREKI_BASE = { "明治": 1867, "大正": 1911, "昭和": 1925, "平成": 1988, "令和": 2018,
+                       "M": 1867, "T": 1911, "S": 1925, "H": 1988, "R": 2018 };
+function parseBuiltYear(v){
+  let t = String(v == null ? "" : v).trim();
+  if(!t) return null;
+  t = t.replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0)).replace(/\s+/g, "");
+  // 和暦（元号＋数字。「元年」は1年）
+  const m = /^(明治|大正|昭和|平成|令和|[MTSHRmtshr])[.\-]?(元|\d{1,2})/.exec(t);
+  if(m){
+    const base = _WAREKI_BASE[m[1].length === 1 ? m[1].toUpperCase() : m[1]];
+    const n = (m[2] === "元") ? 1 : parseInt(m[2], 10);
+    if(base && n >= 1) return base + n;
+    return null;
+  }
+  // 西暦（先頭4桁）
+  const w = /^(\d{4})/.exec(t);
+  if(w){
+    const y = parseInt(w[1], 10);
+    if(y >= 1868 && y <= (new Date()).getFullYear() + 1) return y;
+  }
+  return null;
+}
+/* 建築年（西暦）から石綿の着工日として使う日付。年しか無いので 1/1 に寄せる。
+   ※ 判定境界は 2006-09-01。1/1 に寄せるのは「古い側＝みなし該当」に倒す安全側の丸めで、
+      2006年だけは 9/1 をまたぐため実際には対象外の可能性が残る（取込画面で要確認として出す）。 */
+function builtYearToDate(y){ return y ? (String(y) + "-01-01") : ""; }
+function builtYearNeedsCheck(y){ return y === 2006; }
+/* 建築年から見た石綿の見込み（取込プレビュー用の文言）。 */
+function builtYearAsbestosLabel(y){
+  if(!y) return "";
+  if(builtYearNeedsCheck(y)) return "⚠ 2006年（9/1が境目・要確認）";
+  return (builtYearToDate(y) < ASBESTOS_CUTOFF) ? "🟠 みなし該当" : "🟢 対象外";
 }
 /* 管理番号の左から4桁目（施工業者の番号 1〜4） */
 function mgmtContractorDigit(s){ const t = String(s == null ? "" : s).trim(); return (t.length >= 4) ? t.charAt(3) : ""; }
@@ -20351,7 +20391,9 @@ function ledgerXlsxImportFlow(){
     const data = rows.slice(det.headerIdx + 1).map(r => ({
       mgmt: String(r[C.mgmt] || "").trim(),
       addr: toHalfWidthNum(String(r[C.addr] || "").trim()),   // 住所の数字は半角へ統一
-      note: String(r[C.note] || "").trim()
+      note: String(r[C.note] || "").trim(),
+      // 建築年（列がある表のみ）。石綿の着工日として使う
+      built: C.built ? parseBuiltYear(r[C.built]) : null
     })).filter(x => x.mgmt && mgmtLast3Digits(x.mgmt));
     if(!data.length){ alert("「管理番号」の列が見つかりませんでした。\n1行目に「管理番号」という見出しがあるシートをお選びください。"); return; }
     // 台帳側を下三桁で索引
@@ -20367,7 +20409,8 @@ function ledgerXlsxImportFlow(){
       return {
         excel: x, last3: k, cands: cands, targetIdx: cands.length ? 0 : -1,
         apply: cands.length > 0,          // 一致あり＝既定で更新。一致なし＝既定で追加しない
-        addrPick: "keep", notePick: "keep"
+        addrPick: "keep", notePick: "keep",
+        builtPick: x.built ? "excel" : "keep"   // 建築年があれば既定で取り込む（石綿の着工日になる）
       };
     });
     _xlsxPlan = { entries: entries, fileName: f.name || "", cols: C, headerIdx: det.headerIdx };
@@ -20430,6 +20473,18 @@ function openXlsxPreview(){
           + '<span class="xi-val pick' + (e.notePick === "excel" ? " on" : "") + '" data-xact="note" data-v="excel">' + escapeHtml(e.excel.note) + '<i>Excel</i></span>'
           + '</div>';
       }
+    }
+    // 建築年 → 石綿の着工日。取り込むと工事別フォルダの石綿バッジ・みなし諸経費に反映される
+    if(e.excel.built){
+      const curAsb = (cur.asbestos && cur.asbestos.construction_date) || "";
+      body += '<div class="xi-f"><span class="xi-lbl">建築年</span>'
+        + '<span class="xi-val pick' + (e.builtPick === "keep" ? " on" : "") + '" data-xact="built" data-v="keep">'
+        +   val(curAsb, "（未入力）") + '<i>台帳</i></span>'
+        + '<span class="xi-val pick' + (e.builtPick === "excel" ? " on" : "") + '" data-xact="built" data-v="excel">'
+        +   escapeHtml(builtYearToDate(e.excel.built)) + '<i>Excel</i></span>'
+        + '<span class="xi-co" style="' + (builtYearNeedsCheck(e.excel.built) ? 'color:#8a6d1f;' : '') + '">石綿: '
+        +   escapeHtml(builtYearAsbestosLabel(e.excel.built)) + '</span>'
+        + '</div>';
     }
     // 候補が複数＝どの戸別に当てるかを文字クリックで選ぶ
     if(e.cands.length > 1){
@@ -20507,6 +20562,7 @@ function openXlsxPreview(){
     if(a === "toggle") en.apply = !en.apply;
     else if(a === "addr") en.addrPick = act.dataset.v;
     else if(a === "note") en.notePick = act.dataset.v;
+    else if(a === "built") en.builtPick = act.dataset.v;
     else if(a === "target") en.targetIdx = parseInt(act.dataset.v, 10);
     openXlsxPreview();
   });
@@ -20515,7 +20571,7 @@ async function applyXlsxPlan(){
   const P = _xlsxPlan; if(!P) return;
   const todo = P.entries.filter(e => e.apply);
   if(!todo.length){ alert("反映する行が選ばれていません。"); return; }
-  let updated = 0, added = 0, ctrSet = 0;
+  let updated = 0, added = 0, ctrSet = 0, builtSet = 0, builtCheck = 0;
   const relink = {};   // 下三桁 → 新しい管理番号（地図の追従用）
   // 数百件でも「固まった」ように見えないよう、ボタンに進捗を出しつつ時々描画を挟む
   const btn = document.getElementById("xlsx-apply");
@@ -20535,6 +20591,26 @@ async function applyXlsxPlan(){
     if(e.notePick === "excel" && e.excel.note){ try { setLedger(tk, { note: e.excel.note }); } catch(_){} }
     const co = contractorByMgmtNo(e.excel.mgmt);          // 4桁目→施工会社を自動判別
     if(co && getContractor(tk) !== co){ try { setContractor(tk, co); ctrSet++; } catch(_){} }
+    // 建築年 → 石綿の着工日。既存の石綿入力（建材・確認方法・担当者など）は残して日付だけ入れる。
+    // これで工事別フォルダの石綿バッジ・集計と、みなし諸経費の自動計上に反映される。
+    if(e.builtPick === "excel" && e.excel.built){
+      try {
+        const prev = (row.data && row.data.asbestos) || {};
+        const nextAsb = Object.assign({}, prev, { construction_date: builtYearToDate(e.excel.built) });
+        if(!nextAsb.applicability_mode) nextAsb.applicability_mode = "auto";
+        if(!nextAsb.level) nextAsb.level = "level3";
+        if(!nextAsb.date_source) nextAsb.date_source = "kenchiku_kakunin";
+        nextAsb.date_unknown = false;                      // 年が分かったので「不明」は解除
+        row.data = Object.assign({}, row.data, { asbestos: nextAsb });
+        if(row.fileType === "hybrid" && row.envelope && row.envelope.plain){
+          row.envelope = Object.assign({}, row.envelope);
+          row.envelope.plain = Object.assign({}, row.envelope.plain, { asbestos: nextAsb });
+        }
+        try { markCaseEdited(row); } catch(_){}
+        builtSet++;
+        if(builtYearNeedsCheck(e.excel.built)) builtCheck++;
+      } catch(_){}
+    }
     if(e.last3) relink[e.last3] = e.excel.mgmt;
     if((i + 1) % 25 === 0){ setProg(i + 1); await new Promise(r => setTimeout(r, 0)); }  // 画面を描画させる
   }
@@ -20549,6 +20625,11 @@ async function applyXlsxPlan(){
   alert("📗 Excelの内容を反映しました。\n\n管理番号を更新: " + updated + " 件"
     + (added ? ("\n新しく追加: " + added + " 件") : "")
     + (ctrSet ? ("\n施工会社を自動割当: " + ctrSet + " 件") : "")
+    + (builtSet ? ("\n建築年から石綿の着工日を設定: " + builtSet + " 件"
+        + "\n　→ 工事別フォルダの「石綿」列と集計に反映されます") : "")
+    + (builtCheck ? ("\n⚠ うち 2006年 の " + builtCheck + " 件は要確認"
+        + "\n　（判定の境目が 2006/9/1 のため、年だけでは決まりません。"
+        + "\n　　安全側に「みなし該当」で入れています。実際の着工日で見直してください）") : "")
     + (mapN ? ("\n地図の建物リンクを更新: " + mapN + " 件") : ""));
 }
 function bindLedgerHandlers(container){
