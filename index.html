@@ -625,6 +625,46 @@
   .folder-table td.folder-company-cell { padding: 3px 6px; }
   .folder-table select.folder-contractor-sel { max-width: 150px; font-size: 11px; padding: 1px 3px; border: 1px solid #cdd3da; border-radius: 3px; background: #fff; }
   .folder-table select.folder-contractor-sel[value=""], .folder-table select.folder-contractor-sel option[value=""] { color: #9aa3ad; }
+  /* 一括処理の進捗表示（写真の一括書き出しなど、100件規模で数分かかる処理用）。
+     バーの伸び＋斜めストライプの流れで「止まっていない」ことが一目で分かるようにする。 */
+  .bulk-prog-backdrop {
+    position: fixed; inset: 0; background: rgba(15,23,38,.62);
+    z-index: 100050; display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  .bulk-prog-panel {
+    background: #fff; border-radius: 6px; width: 100%; max-width: 460px;
+    box-shadow: 0 12px 40px rgba(0,0,0,.4); overflow: hidden;
+  }
+  .bulk-prog-head { background: #00695c; color: #fff; padding: 10px 14px; font-size: 14px; font-weight: 600; }
+  .bulk-prog-body { padding: 14px; }
+  .bulk-prog-count { font-size: 21px; font-weight: 700; color: #1e3a5f; font-variant-numeric: tabular-nums; }
+  .bulk-prog-count small { font-size: 12px; font-weight: 400; color: #667482; margin-left: 7px; }
+  .bulk-prog-track { height: 12px; background: #e8edf2; border-radius: 6px; overflow: hidden; margin: 9px 0 8px; }
+  .bulk-prog-fill {
+    height: 100%; width: 0%; border-radius: 6px; background-color: #00897b;
+    background-image: linear-gradient(45deg, rgba(255,255,255,.30) 25%, transparent 25%, transparent 50%,
+      rgba(255,255,255,.30) 50%, rgba(255,255,255,.30) 75%, transparent 75%, transparent);
+    background-size: 22px 22px;
+    animation: bulkProgStripe .9s linear infinite;
+    transition: width .18s ease-out;
+  }
+  @keyframes bulkProgStripe { from { background-position: 0 0; } to { background-position: 22px 0; } }
+  .bulk-prog-now { font-size: 12.5px; color: #33414f; min-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bulk-prog-sub { font-size: 11px; color: #667482; margin-top: 3px; min-height: 15px; }
+  .bulk-prog-foot { display: flex; justify-content: flex-end; padding: 0 14px 12px; }
+  .bulk-prog-cancel {
+    padding: 4px 14px; font-size: 12px; background: #fff; border: 1px solid #b3433a;
+    color: #b3433a; border-radius: 3px; cursor: pointer;
+  }
+  .bulk-prog-cancel:hover { background: #fdecea; }
+  .bulk-prog-cancel:disabled { opacity: .5; cursor: default; }
+  /* 画面下の軽い通知（地図画面の外でも使える簡易トースト） */
+  .ui-toast {
+    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
+    background: rgba(30,58,95,.94); color: #fff; padding: 8px 16px; border-radius: 4px;
+    font-size: 12.5px; z-index: 100060; box-shadow: 0 4px 16px rgba(0,0,0,.3); pointer-events: none;
+  }
+  @media (prefers-reduced-motion: reduce) { .bulk-prog-fill { animation: none; } }
   .photo-prev-backdrop {
     position: fixed; inset: 0; background: rgba(15,23,38,.62);
     z-index: 100000; display: flex; align-items: center; justify-content: center; padding: 24px;
@@ -5176,6 +5216,12 @@ function getInputs() {
     const tc = document.querySelector('.tv-row select[data-term-idx="'+i+'"]');
     term.push(tc ? tc.value : "");
   }
+  // 電源部を置くTV（0始まり）。未選択・範囲外は1台目＝従来の表示
+  let tvPowerIdx = 0;
+  document.querySelectorAll('.tv-row [data-pw-idx]').forEach(rb => {
+    if(rb.checked) tvPowerIdx = parseInt(rb.dataset.pwIdx, 10) || 0;
+  });
+  if(!(tvPowerIdx >= 0 && tvPowerIdx < tvCount)) tvPowerIdx = 0;
   return {
     work_type: $("work_type"),
     is_catv: $("is_catv") === "yes",
@@ -5215,6 +5261,7 @@ function getInputs() {
     tv_bd: bd,
     tv_sp: sp,
     tv_term: term,
+    tv_power: tvPowerIdx,
     remove_safety: $("remove_safety") === "yes",
     remove_drop: $("remove_drop") === "yes",
     cable_drop_len: parseFloat($("cable_drop_len"))||0,
@@ -5302,6 +5349,14 @@ function syncTerminalSelectsToIndoorWire(){
   });
 }
 
+/* 電源部を置くTVの選択を復元。未保存（旧データ）・範囲外は1台目＝従来どおり一番上の部屋。 */
+function applyTvPowerSelection(idx){
+  const list = document.querySelectorAll('.tv-row [data-pw-idx]');
+  if(!list.length) return;
+  let n = parseInt(idx, 10);
+  if(!(n >= 0 && n < list.length)) n = 0;
+  list.forEach(rb => { rb.checked = (parseInt(rb.dataset.pwIdx, 10) === n); });
+}
 function renderTvList(){
   const n = parseInt(document.getElementById("tv_count").value, 10);
   const wrap = document.getElementById("tv-list");
@@ -5323,6 +5378,12 @@ function renderTvList(){
   wrap.querySelectorAll('.tv-row [data-term-idx]').forEach(s => {
     prevTerm[s.dataset.termIdx] = s.value;
   });
+  // 電源部を置くTV（TV背面のとき）。再描画で選択が飛ばないよう控える
+  let prevPw = -1;
+  wrap.querySelectorAll('.tv-row [data-pw-idx]').forEach(rb => {
+    if(rb.checked) prevPw = parseInt(rb.dataset.pwIdx, 10);
+  });
+  if(prevPw < 0 || prevPw >= n) prevPw = 0;   // 台数を減らした場合などは1台目へ戻す
   const termOptsHtml = buildTerminalOptionsHtml();
   let html = "";
   for(let i=0;i<n;i++){
@@ -5337,6 +5398,7 @@ function renderTvList(){
       + ROOM_OPTIONS.map(r => '<option value="'+r+'"'+(r===defaultRoom?' selected':'')+'>'+r+'</option>').join("")
       + '</select>'
       + '<label class="bd-label" title="BD/レコーダー接続あり＝チャンネル調整必要"><input type="checkbox" data-bd-idx="'+i+'"'+bdChecked+'>BD</label>'
+      + '<label class="bd-label tv-pw-label" title="このTVの背面に電源部を置く（電源部位置が「TV背面」のときだけ選べます）"><input type="radio" name="tv_power" data-pw-idx="'+i+'"'+(i===prevPw?' checked':'')+'>電源部</label>'
       + '<select class="sp-state" data-sp-idx="'+i+'" title="壁端子の後に分配器を挿入する場合：新規=赤／既存=黒（積算対象外）">'
       + spOpt("no","分配なし")
       + spOpt("new","分配(新規)")
@@ -5363,6 +5425,12 @@ function renderTvList(){
   wrap.querySelectorAll('[data-bd-idx]').forEach(c => {
     c.addEventListener("change", rebuild);
   });
+  wrap.querySelectorAll('[data-pw-idx]').forEach(c => {
+    c.addEventListener("change", rebuild);   // 電源部を置くTVを変えたら図面を描き直す
+  });
+  // 「TV背面」以外のときは電源部の選択欄を隠す（rebuild前の初期描画でも整合させる）
+  const showPw = (document.getElementById("power_pos") || {}).value === "tv_back";
+  wrap.querySelectorAll(".tv-pw-label").forEach(el => { el.style.display = showPw ? "" : "none"; });
 }
 
 /* ============================================================
@@ -7712,7 +7780,10 @@ function renderDiagram(input){
   const rangeTop = 95;
   const rangeBottom = H - 70;
   const gapY = (rangeBottom - rangeTop) / Math.max(1, tvN);
-  const powerTvIdx = input.power_pos === "tv_back" ? 0 : -1;
+  // 電源部を置くTV（TV背面のときのみ）。既定は1台目＝旧データは従来どおり一番上の部屋。
+  const powerTvIdx = (input.power_pos === "tv_back")
+    ? Math.min(Math.max(0, parseInt(input.tv_power, 10) || 0), Math.max(0, tvN - 1))
+    : -1;
 
   // 宅内（壁端子→電源部→TV）の各区間が赤(新規)の場合：間隔を少し広げ、線の上に標準長(2m)を表示
   const indoorSegRed = key => {
@@ -9561,6 +9632,10 @@ function rebuild(){
   document.querySelectorAll(".power-outside-only").forEach(el => {
     el.style.display = STATE.input.power_pos === "outside" ? "" : "none";
   });
+  // 「TV背面」のときだけ、どの部屋のTV背面に置くかを部屋ごとに選べるようにする
+  document.querySelectorAll(".tv-pw-label").forEach(el => {
+    el.style.display = STATE.input.power_pos === "tv_back" ? "" : "none";
+  });
   // 3本構成（triple）UIの表示制御
   document.querySelectorAll(".triple-only").forEach(el => {
     el.style.display = STATE.input.ch50_separate ? "" : "none";
@@ -10392,6 +10467,7 @@ function applyPresetData(p){
     // 旧プリセット（tv_term 未保存）は indoor_wire から推定
     syncTerminalSelectsToIndoorWire();
   }
+  applyTvPowerSelection(p.tv_power);
   if(p.tax_mode){
     const r = document.querySelector('input[name=tax_mode][value="'+p.tax_mode+'"]');
     if(r) r.checked = true;
@@ -11127,6 +11203,11 @@ function collectState(){
   s.tv_term = [];
   document.querySelectorAll('.tv-row select[data-term-idx]').forEach(sel => {
     s.tv_term.push(sel.value || "");
+  });
+  // 電源部を置くTV（0始まり）。「TV背面」以外のときも選択は保持して往復させる
+  s.tv_power = 0;
+  document.querySelectorAll('.tv-row [data-pw-idx]').forEach(rb => {
+    if(rb.checked) s.tv_power = parseInt(rb.dataset.pwIdx, 10) || 0;
   });
   // 線色オーバーライド（クリックで変更された各配線の新規⇔既存）
   s.wire_overrides = Object.assign({}, STATE.wireOverrides || {});
@@ -11986,6 +12067,7 @@ function applyStateData(s){
     // 旧保存データは indoor_wire から推定
     syncTerminalSelectsToIndoorWire();
   }
+  applyTvPowerSelection(s.tv_power);
   STATE.wireOverrides = (s.wire_overrides && typeof s.wire_overrides === "object")
     ? Object.assign({}, s.wire_overrides) : {};
   STATE.qtyOverrides = (s.qty_overrides && typeof s.qty_overrides === "object")
@@ -15766,6 +15848,73 @@ function removePhotoEntry(idx){
    - dataURI の原本バイトをそのまま書き込む＝無劣化（再圧縮しない）。
    - PC の Chrome/Edge（File System Access API）専用。
    ============================================================ */
+/* ---------- 画面下の軽い通知 ----------
+   ※ これまで写真の書き出し等は toast() を呼んでいたが、toast は地図モジュール（IIFE）の中だけの
+      関数で外からは見えず、typeof toast === "function" が常に false ＝ 何も出ていなかった。 */
+let _uiToastTimer = null;
+function uiToast(msg, ms){
+  let el = document.getElementById("ui-toast");
+  if(!el){
+    el = document.createElement("div");
+    el.id = "ui-toast"; el.className = "ui-toast";
+    document.body.appendChild(el);
+  }
+  el.textContent = String(msg == null ? "" : msg);
+  el.style.display = "block";
+  if(_uiToastTimer) clearTimeout(_uiToastTimer);
+  _uiToastTimer = setTimeout(() => { el.style.display = "none"; }, ms || 2600);
+}
+
+/* ---------- 一括処理の進捗表示 ----------
+   100件規模で数分かかる処理（写真の一括書き出し等）向け。何件目を処理中かと、
+   止まっていないことが分かるアニメーションを出す。中止も受け付ける。
+   使い方: bulkProgressOpen(...) → ループ内で bulkProgressUpdate(...) と await bulkProgressYield()
+           → bulkProgressAborted() を見て抜ける → finally で bulkProgressClose()。 */
+let _bulkProg = null;
+function bulkProgressOpen(title, total, cancelable){
+  bulkProgressClose();
+  const bd = document.createElement("div");
+  bd.className = "bulk-prog-backdrop";
+  bd.innerHTML =
+    '<div class="bulk-prog-panel">'
+    + '<div class="bulk-prog-head">' + escapeHtml(title || "処理中") + '</div>'
+    + '<div class="bulk-prog-body">'
+    +   '<div class="bulk-prog-count"><span class="bp-done">0</span> / ' + (total || 0) + ' <small>件</small></div>'
+    +   '<div class="bulk-prog-track"><div class="bulk-prog-fill"></div></div>'
+    +   '<div class="bulk-prog-now"></div>'
+    +   '<div class="bulk-prog-sub"></div>'
+    + '</div>'
+    + (cancelable === false ? '' : '<div class="bulk-prog-foot"><button type="button" class="bulk-prog-cancel">中止</button></div>')
+    + '</div>';
+  document.body.appendChild(bd);
+  const st = { el: bd, total: total || 0, aborted: false,
+    fill: bd.querySelector(".bulk-prog-fill"), done: bd.querySelector(".bp-done"),
+    now: bd.querySelector(".bulk-prog-now"), sub: bd.querySelector(".bulk-prog-sub") };
+  const btn = bd.querySelector(".bulk-prog-cancel");
+  if(btn) btn.onclick = () => {
+    st.aborted = true;
+    btn.disabled = true;
+    if(st.now) st.now.textContent = "中止しています（この1件を書き終えてから止まります）…";
+  };
+  _bulkProg = st;
+  return st;
+}
+function bulkProgressUpdate(done, nowLabel, subLabel){
+  const st = _bulkProg; if(!st) return;
+  const n = Math.max(0, Math.min(st.total, done | 0));
+  if(st.done) st.done.textContent = String(n);
+  if(st.fill) st.fill.style.width = (st.total ? (n / st.total * 100) : 0) + "%";
+  if(nowLabel != null && st.now && !st.aborted) st.now.textContent = String(nowLabel);
+  if(subLabel != null && st.sub) st.sub.textContent = String(subLabel);
+}
+function bulkProgressAborted(){ return !!(_bulkProg && _bulkProg.aborted); }
+/* 画面を描画させるための一拍。setTimeout(0) は背景タブでも必ず動く（rAF は止まる）。 */
+function bulkProgressYield(){ return new Promise(r => setTimeout(r, 0)); }
+function bulkProgressClose(){
+  if(_bulkProg && _bulkProg.el && _bulkProg.el.parentNode) _bulkProg.el.parentNode.removeChild(_bulkProg.el);
+  _bulkProg = null;
+}
+
 let _lastPhotoExportDir = null; // 書き出し先の親フォルダ（メモリキャッシュ・実体はIndexedDBへ永続化）
 const PHOTO_EXPORT_DIR_KEY = "photoExportDir"; // projHandle系(fileHandlesストア)の固定キー（物件非依存）
 /* 前回の書き出し先フォルダハンドルを取得（メモリ → IndexedDB）。無ければ null。
@@ -15843,7 +15992,7 @@ async function exportPhotosToFolder(){
     + (r.failed ? ("・失敗: " + r.failed + " 枚\n") : "")
     + "\n次回は前回と同じ場所からフォルダ選択が開きます。";
   alert(msg);
-  if(typeof toast === "function") toast("写真 " + r.written + " 枚を『" + mgmtNo + "』へ書き出しました");
+  uiToast("写真 " + r.written + " 枚を『" + mgmtNo + "』へ書き出しました");
 }
 
 /* 親フォルダ配下に「管理番号」フォルダ（無ければ作成／あれば流用）を作り、写真を無劣化で書き込む。
@@ -15930,30 +16079,44 @@ async function bulkExportPhotosToFolders(){
   let caseOk = 0, totalPhotos = 0, failedPhotos = 0;
   let noMgmt = 0, noPhotos = 0, encSkipped = 0, thumbUsed = 0;
   const encList = [], seenMgmt = {};
-  for(let idx = 0; idx < rows.length; idx++){
-    const row = rows[idx];
-    const mgmtRaw = ((row.data && row.data.chosho_mgmt_no) || "").trim();
-    if(!mgmtRaw){ noMgmt++; continue; }
-    let mgmtNo = _sanitizeName(mgmtRaw);
-    // 同一管理番号が複数ある場合はフォルダ名を分ける（_2, _3…）
-    seenMgmt[mgmtNo] = (seenMgmt[mgmtNo] || 0) + 1;
-    if(seenMgmt[mgmtNo] > 1) mgmtNo = mgmtNo + "_" + seenMgmt[mgmtNo];
+  let aborted = false;
+  // 100件規模だと数分かかる。何件目を処理中か・止まっていないことを画面に出す（中止も可）。
+  bulkProgressOpen("📸 写真を一括書き出し中", rows.length);
+  try {
+    for(let idx = 0; idx < rows.length; idx++){
+      if(bulkProgressAborted()){ aborted = true; break; }
+      const row = rows[idx];
+      const mgmtRaw = ((row.data && row.data.chosho_mgmt_no) || "").trim();
+      // 進捗はスキップする戸別でも必ず進める（飛ばした分だけ表示が止まって見えないように）
+      bulkProgressUpdate(idx, "処理中: " + (mgmtRaw || "（管理番号なし）"),
+        "書き出し済み " + caseOk + " 件 / " + totalPhotos + " 枚");
+      await bulkProgressYield();
+      if(!mgmtRaw){ noMgmt++; bulkProgressUpdate(idx + 1); continue; }
+      let mgmtNo = _sanitizeName(mgmtRaw);
+      // 同一管理番号が複数ある場合はフォルダ名を分ける（_2, _3…）
+      seenMgmt[mgmtNo] = (seenMgmt[mgmtNo] || 0) + 1;
+      if(seenMgmt[mgmtNo] > 1) mgmtNo = mgmtNo + "_" + seenMgmt[mgmtNo];
 
-    let res;
-    try{ res = await _getCasePhotos(row, parent, pwCandidates); }
-    catch(err){ console.warn("get photos failed", mgmtNo, err); res = { photos: [] }; }
-    if(res.encrypted){ encSkipped++; encList.push(mgmtRaw); continue; }
-    const photos = (res.photos || []).filter(p => p && p.dataUri);
-    if(!photos.length){ noPhotos++; continue; }
-    if(res.thumbOnly) thumbUsed++;
-    try{
-      const r = await _writeCasePhotos(parent, mgmtNo, photos);
-      totalPhotos += r.written; failedPhotos += r.failed; caseOk++;
-    }catch(err){ console.warn("case export failed", mgmtNo, err); }
-    if(typeof toast === "function") toast("写真書き出し中… " + (idx + 1) + "/" + rows.length);
+      let res;
+      try{ res = await _getCasePhotos(row, parent, pwCandidates); }
+      catch(err){ console.warn("get photos failed", mgmtNo, err); res = { photos: [] }; }
+      if(res.encrypted){ encSkipped++; encList.push(mgmtRaw); bulkProgressUpdate(idx + 1); continue; }
+      const photos = (res.photos || []).filter(p => p && p.dataUri);
+      if(!photos.length){ noPhotos++; bulkProgressUpdate(idx + 1); continue; }
+      if(res.thumbOnly) thumbUsed++;
+      try{
+        const r = await _writeCasePhotos(parent, mgmtNo, photos);
+        totalPhotos += r.written; failedPhotos += r.failed; caseOk++;
+      }catch(err){ console.warn("case export failed", mgmtNo, err); }
+      bulkProgressUpdate(idx + 1, null, "書き出し済み " + caseOk + " 件 / " + totalPhotos + " 枚");
+    }
+  } finally {
+    bulkProgressClose();
   }
 
-  let msg = "📸 一括写真書き出しが完了しました。\n\n"
+  let msg = (aborted
+      ? "📸 一括写真書き出しを中止しました。\n（中止するまでに書き出した分はそのまま残っています）\n\n"
+      : "📸 一括写真書き出しが完了しました。\n\n")
     + "・書き出した戸別: " + caseOk + " 件\n"
     + "・写真合計: " + totalPhotos + " 枚（無劣化・原本のまま）\n";
   if(failedPhotos) msg += "・書込失敗: " + failedPhotos + " 枚\n";
@@ -15962,7 +16125,7 @@ async function bulkExportPhotosToFolders(){
   if(thumbUsed)    msg += "・原寸が見つからずサムネで書き出し: " + thumbUsed + " 件（工事フォルダを選ぶと原寸になります）\n";
   if(encSkipped)   msg += "・暗号化で鍵がなくスキップ: " + encSkipped + " 件（先に🔓一括復号でパスワードを記憶させてください）\n" + (encList.length ? ("　→ " + encList.slice(0,10).join("・") + (encList.length>10?" …":"") + "\n") : "");
   alert(msg);
-  if(typeof toast === "function") toast("一括書き出し完了：" + caseOk + "件 / " + totalPhotos + "枚");
+  uiToast((aborted ? "中止：" : "一括書き出し完了：") + caseOk + "件 / " + totalPhotos + "枚");
 }
 
 /* ============================================================
@@ -16018,7 +16181,7 @@ async function compressCurrentCasePhotos(){
     + "・縮小: " + changed + " / " + withImg.length + " 枚\n"
     + "・写真サイズ: 約 " + bMB(beforeBytes) + " MB → 約 " + bMB(afterBytes) + " MB\n\n"
     + "💾 上書き保存 / 保存でJSONに反映されます。");
-  if(typeof toast === "function") toast("写真を軽量化しました（約 " + bMB(beforeBytes) + "→" + bMB(afterBytes) + "MB）");
+  uiToast("写真を軽量化しました（約 " + bMB(beforeBytes) + "→" + bMB(afterBytes) + "MB）");
 }
 
 /* 入力 UI を再構築 */
@@ -19709,7 +19872,8 @@ function renderListLedgerMode(rows, container){
     + '<button id="lg-print-sel" title="左端のチェックを入れた戸別の工事調書を 1戸1ページ でまとめて印刷／PDF出力します"' + (selCount ? '' : ' disabled')
     + ' style="background:#7a4e1e;color:#fff;border:1px solid #5e3c16;padding:4px 12px;border-radius:3px;cursor:' + (selCount ? 'pointer' : 'not-allowed') + ';font-size:12px;opacity:' + (selCount ? '1' : '.5') + ';">🖨 選択印刷' + (selCount ? '（' + selCount + '件）' : '') + '</button>'
     + (selCount ? '<button id="lg-print-clear" title="工事調書の選択をすべて解除" style="background:#fff;color:#7a4e1e;border:1px solid #b08a55;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:12px;">選択解除</button>' : '')
-    + '<button id="lg-xlsx-import" title="Excel（.xlsx）のH列「管理番号」を読み込み、下三桁で突き合わせて台帳の管理番号を更新します。取込前に、住所や過去の情報のどちらを残すかを選べます。" style="background:#2e5488;color:#fff;border:1px solid #1e3a5f;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📗 Excelで管理番号を更新</button>'
+    + '<button id="lg-xlsx-import" title="Excel（.xlsx）のH列「管理番号」を読み込み、下三桁で突き合わせて台帳の管理番号を更新します。取込前に、住所や過去の情報のどちらを残すかを選べます。" style="background:#2e5488;color:#fff;border:1px solid #1e3a5f;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📗 Excelから管理番号を読取り</button>'
+    + '<button id="lg-xlsx-export" title="いまの受付台帳を Excel（.xlsx）へ書き出します。見出しは「管理番号」「住所」「備考」を使うので、Excelで直したあと左の「📗 Excelから管理番号を読取り」でそのまま読み戻せます。" style="background:#1b7a3d;color:#fff;border:1px solid #145c2e;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📘 Excelへ書き出し</button>'
     + '<span class="lg-xlsx-cols" title="1行目の見出し（管理番号／住所結合／過去の情報）から列を自動で探します。見出しが無い場合は H / E / F 列を使います。">'
     +   '読む列：<b>H</b>管理番号<span class="req">必須</span> ／ <b>E</b>住所 ／ <b>F</b>過去の情報→備考'
     +   '<span class="sub">（1行目の見出しから自動判別。上から下へ全行）</span></span>'
@@ -19858,6 +20022,169 @@ function refreshLedgerPrintSelUI(container){
     allBox.indeterminate = selN > 0 && selN < printable.length;
   }
 }
+/* ============================================================
+   📘 受付台帳を Excel（.xlsx）へ書き出し — 「Excelから管理番号を読取り」の逆向き
+   ・外部ライブラリ不要。xlsx は ZIP なので、ZIP を無圧縮(store)で自前に組み立てる。
+     読み取り側 xlsxReadSheet も method===0 をそのまま読むので、書き出した物をそのまま読み戻せる。
+   ・セルはすべて文字列(inlineStr)で書く。管理番号「2622MAT001」や電話「0176-53-0000」が
+     数値に化けたり、頭の 0 が落ちたりしない。
+   ============================================================ */
+const _CRC32_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for(let n = 0; n < 256; n++){
+    let c = n;
+    for(let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function _crc32(bytes){
+  let c = 0xFFFFFFFF;
+  for(let i = 0; i < bytes.length; i++) c = _CRC32_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+/* [{name, text}] を無圧縮ZIPのBlobにする。日時は固定(1980-01-01)＝同じ内容なら同じバイト列。 */
+function _zipStore(files, mime){
+  const enc = new TextEncoder();
+  const chunks = [], central = [];
+  let offset = 0;
+  files.forEach(f => {
+    const nameB = enc.encode(f.name), dataB = enc.encode(f.text);
+    const crc = _crc32(dataB);
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true);
+    lh.setUint16(4, 20, true);        // version needed
+    lh.setUint16(6, 0x0800, true);    // ファイル名は UTF-8
+    lh.setUint16(8, 0, true);         // method 0 = 無圧縮
+    lh.setUint16(12, 0x21, true);     // 日付 1980-01-01（時刻は 0）
+    lh.setUint32(14, crc, true);
+    lh.setUint32(18, dataB.length, true);
+    lh.setUint32(22, dataB.length, true);
+    lh.setUint16(26, nameB.length, true);
+    chunks.push(new Uint8Array(lh.buffer), nameB, dataB);
+    central.push({ nameB, crc, size: dataB.length, offset });
+    offset += 30 + nameB.length + dataB.length;
+  });
+  const cdStart = offset;
+  central.forEach(c => {
+    const h = new DataView(new ArrayBuffer(46));
+    h.setUint32(0, 0x02014b50, true);
+    h.setUint16(4, 20, true); h.setUint16(6, 20, true);
+    h.setUint16(8, 0x0800, true); h.setUint16(10, 0, true);
+    h.setUint16(14, 0x21, true);
+    h.setUint32(16, c.crc, true);
+    h.setUint32(20, c.size, true); h.setUint32(24, c.size, true);
+    h.setUint16(28, c.nameB.length, true);
+    h.setUint32(42, c.offset, true);
+    chunks.push(new Uint8Array(h.buffer), c.nameB);
+    offset += 46 + c.nameB.length;
+  });
+  const eo = new DataView(new ArrayBuffer(22));
+  eo.setUint32(0, 0x06054b50, true);
+  eo.setUint16(8, central.length, true); eo.setUint16(10, central.length, true);
+  eo.setUint32(12, offset - cdStart, true);
+  eo.setUint32(16, cdStart, true);
+  chunks.push(new Uint8Array(eo.buffer));
+  return new Blob(chunks, { type: mime || "application/octet-stream" });
+}
+function _xlsxEsc(s){
+  return String(s == null ? "" : s)
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "")   // XMLに入れられない制御文字は落とす
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function _xlsxColName(i){          // 0→A, 25→Z, 26→AA
+  let s = "", n = i + 1;
+  while(n > 0){ const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); }
+  return s;
+}
+/* 2次元配列（文字列の配列の配列）→ .xlsx の Blob。 */
+function buildXlsxBlob(aoa, sheetName){
+  const nm = _xlsxEsc(String(sheetName || "Sheet1").replace(/[\[\]:*?\/\\]/g, "").slice(0, 31)) || "Sheet1";
+  const rowsXml = (aoa || []).map((row, ri) => {
+    const cells = (row || []).map((v, ci) => {
+      const t = String(v == null ? "" : v);
+      if(!t) return "";
+      return '<c r="' + _xlsxColName(ci) + (ri + 1) + '" t="inlineStr"><is><t xml:space="preserve">' + _xlsxEsc(t) + '</t></is></c>';
+    }).join("");
+    return '<row r="' + (ri + 1) + '">' + cells + '</row>';
+  }).join("");
+  const X = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+  return _zipStore([
+    { name: "[Content_Types].xml", text: X
+      + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+      + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+      + '<Default Extension="xml" ContentType="application/xml"/>'
+      + '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+      + '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+      + '</Types>' },
+    { name: "_rels/.rels", text: X
+      + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+      + '</Relationships>' },
+    { name: "xl/workbook.xml", text: X
+      + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
+      + ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+      + '<sheets><sheet name="' + nm + '" sheetId="1" r:id="rId1"/></sheets></workbook>' },
+    { name: "xl/_rels/workbook.xml.rels", text: X
+      + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+      + '</Relationships>' },
+    { name: "xl/worksheets/sheet1.xml", text: X
+      + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+      + '<sheetData>' + rowsXml + '</sheetData></worksheet>' }
+  ], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+}
+/* 受付台帳を .xlsx へ書き出し。見出しは「管理番号」「住所」「備考」を使うので、
+   Excelで直したあと「📗 Excelから管理番号を読取り」でそのまま読み戻せる。 */
+async function exportReceptionLedgerToXlsx(){
+  const src = (typeof _listRows !== "undefined" && Array.isArray(_listRows)) ? _listRows : [];
+  const yn = b => (b ? "○" : "");
+  const head = ["管理番号", "状態", "名前", "施工会社", "住所", "電話番号",
+    "工事日程予定", "打合せ予定", "ビラ", "完了", "承諾書", "完了書", "備考"];
+  const body = src.map(r => {
+    const d = r.data || {};
+    const lg = (typeof getLedger === "function") ? (getLedger(subCaseKey(r)) || {}) : {};
+    const st = ({ provisional: "仮受付", in_progress: "未完了", completed: "完了" })[d.chosho_status] || "";
+    const date = (d.chosho_date || "") + (lg.time ? (" " + lg.time) : "");
+    const meet = String(lg.meetAt || "").replace("T", " ");
+    return [ (d.chosho_mgmt_no || "").trim(), st, d.chosho_cust_name || "",
+      (typeof rowContractor === "function") ? (rowContractor(r) || "") : "",
+      d.chosho_cust_addr || "", d.chosho_cust_tel || "", date, meet,
+      yn(lg.flyer), yn(d.chosho_status === "completed"), yn(lg.consent), yn(lg.compdoc), lg.note || "" ];
+  }).filter(a => a[0] || a[2] || a[4]);
+  if(!body.length){ alert("書き出す受付台帳の行がありません。先に戸別一覧を読み込むか、台帳に行を追加してください。"); return; }
+
+  const projName = (typeof _currentProject !== "undefined" && _currentProject && _currentProject.name) ? String(_currentProject.name) : "";
+  const blob = buildXlsxBlob([head].concat(body), "受付台帳");
+  const base = "受付台帳" + (projName ? ("_" + projName) : "") + "_" + new Date().toISOString().slice(0, 10);
+  const fname = ((typeof sanitizePrintFilename === "function") ? sanitizePrintFilename(base) : base) + ".xlsx";
+
+  if(window.showSaveFilePicker){
+    try {
+      const opts = { suggestedName: fname, types: [{ description: "Excel ブック", accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] } }] };
+      if(lastSaveDirHandle) opts.startIn = lastSaveDirHandle;
+      const handle = await window.showSaveFilePicker(opts);
+      const w = await handle.createWritable();
+      await w.write(blob);
+      await w.close();
+      try { lastSaveDirHandle = handle.getParent ? await handle.getParent() : lastSaveDirHandle; } catch(_){}
+      uiToast("受付台帳を Excel へ書き出しました（" + body.length + "件）");
+      alert("📘 受付台帳を Excel へ書き出しました（" + body.length + "件）。\n選んだ保存先に「" + fname + "」を作成しました。");
+      return;
+    } catch(err){
+      if(err && err.name === "AbortError") return;   // ユーザーがキャンセル
+      console.warn("showSaveFilePicker 失敗、ダウンロード方式にフォールバック:", err);
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = fname;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  uiToast("受付台帳を Excel へ書き出しました（" + body.length + "件）");
+  alert("📘 受付台帳を Excel へ書き出しました（" + body.length + "件）。\n保存先：ブラウザの「ダウンロード」フォルダ（ファイル名「" + fname + "」）。");
+}
+
 /* 受付台帳を「現場入力アプリ(genba)」用に1ファイル書き出し。
    genba側で取り込むと、一覧から選んで管理番号・氏名・住所入りの入力を開始できる。 */
 async function exportReceptionLedgerForGenba(){
@@ -20119,7 +20446,7 @@ function openXlsxPreview(){
   });
   bd.innerHTML =
     '<div class="photo-prev-panel" role="dialog" aria-modal="true" style="max-width:1000px;">'
-    + '<div class="photo-prev-head"><span>📗 Excelで管理番号を更新</span>'
+    + '<div class="photo-prev-head"><span>📗 Excelから管理番号を読取り</span>'
     +   '<span class="pp-sub">' + escapeHtml(P.fileName) + '</span>'
     +   '<button type="button" class="photo-prev-close" id="xlsx-close">✕ 閉じる</button></div>'
     + '<div class="photo-prev-body" style="display:block;background:#fff;">'
@@ -20239,6 +20566,7 @@ function bindLedgerHandlers(container){
     if(e.target.closest("#lg-print-sel")){ printSelectedChosho(); return; }
     if(e.target.closest("#lg-print-clear")){ _ledgerPrintSel.clear(); renderListTable(); return; }
     if(e.target.closest("#lg-xlsx-import")){ ledgerXlsxImportFlow(); return; }
+    if(e.target.closest("#lg-xlsx-export")){ exportReceptionLedgerToXlsx(); return; }
     if(e.target.closest("#lg-export-genba")){ exportReceptionLedgerForGenba(); return; }
     // 施工会社チップ：一発割当／会社名クリックで変更モード（セルのみ差し替え＝スクロール位置を保つ）
     const ctrEl = e.target.closest(".lg-ctr-cur, .lg-ctr-chip");
