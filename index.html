@@ -10445,6 +10445,26 @@ function applyPreset(name){
   if(!p) return;
   applyPresetData(p);
 }
+/* 「新規」用のまっさらな1戸分の状態。標準プリセットの工事構成に、前の戸別に属する情報
+   （お客様情報・写真・測定値・石綿・取付ガイド・赤文字・位置調整）の空値を重ねたもの。
+   ※ applyPresetData はプリセットに載っているキーしか触らないため、これらを空にしないと
+      前のお客様の氏名・住所・電話・管理番号・写真がそのまま残っていた。 */
+function blankCaseState(){
+  const s = Object.assign({}, PRESETS.standard);
+  // 工事調書・お客様情報
+  s.chosho_status = "provisional";
+  s.chosho_mgmt_no = ""; s.chosho_date = "";
+  s.chosho_cust_name = ""; s.chosho_cust_addr = ""; s.chosho_cust_tel = "";
+  s.chosho_photos = [];              // → 「施工前」「施工完了」の空枠だけに戻る
+  s.measurements = null;             // → 既定の測定値へ
+  s.asbestos = null;                 // → 既定値。担当者欄は事業所プリセットから入り直す
+  s.antenna_guide = null;            // → 取付ガイド未設定
+  // 図面側の手を入れた分（赤文字・線色・数量・位置・貼付）
+  s.text_annotations = [];
+  s.wire_overrides = {}; s.qty_overrides = {}; s.node_offsets = {};
+  s.meas_transforms = {}; s.node_existing_overrides = {}; s.ag_placement = null;
+  return s;
+}
 function applyUserPreset(name){
   const up = loadUserPresets();
   const p = up[name];
@@ -21994,7 +22014,15 @@ function init(){
 
   // ボタン
   document.getElementById("btn-reset").onclick = () => {
-    if(confirm("初期化しますか？")){ applyPreset("standard"); applyProjectEstimateDefaults(); }
+    // applyStateData を通す＝上書き保存の対象・受付台帳との連動・編集ロックまで解除して、
+    // 本当に「次のお客様の1戸目」から始められる状態にする（applyPresetData は画面の値しか戻さない）。
+    if(confirm("新しい戸別を始めます。\n\n"
+      + "お客様情報（管理番号・氏名・住所・電話・工事日）・写真・測定値・石綿の入力・図面の赤文字などを\n"
+      + "すべて空にして、工事内容を標準構成に戻します。保存していない内容は失われます。\n\n"
+      + "よろしいですか？")){
+      applyStateData(blankCaseState());
+      applyProjectEstimateDefaults();
+    }
   };
   document.getElementById("btn-save").onclick = saveState;
   document.getElementById("btn-save-overwrite").onclick = overwriteSaveCurrent;
