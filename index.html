@@ -3261,6 +3261,12 @@
   #map-link-search { font-size: 12px; padding: 6px; border: 1px solid #cdd3da; border-radius: 4px; font-family: inherit; }
   .map-jump-btn { background: #eef2f6; border: 1px solid #b8c2cc; border-radius: 3px; cursor: pointer; font-size: 12px; padding: 1px 5px; line-height: 1.4; }
   .map-jump-btn:hover { background: #dce6f1; }
+  /* 🧹 未施工に戻す（積算・図面を消す＝取り消せない操作なので、読込ボタンより控えめな警告色） */
+  .list-table .revert-btn, .folder-table .revert-btn {
+    background: #fff; color: #a5342b; border: 1px solid #d9a49e;
+    padding: 3px 8px; cursor: pointer; font-size: 11px; border-radius: 3px; white-space: nowrap;
+  }
+  .list-table .revert-btn:hover, .folder-table .revert-btn:hover { background: #fdecea; }
 
   /* ===== G2 縮小マップ（ミニマップ） ===== */
   #map-mini {
@@ -13761,7 +13767,9 @@ function renderListStandardMode(rows, tbl){
       + '<td>' + escapeHtml(LIST_WORK_LABELS[d.work_type] || d.work_type || "") + '</td>'
       + amtCell
       + '<td class="file-name no-print" title="' + escapeHtml(r._manual ? "受付台帳で作成（ファイル未保存）" : r.file) + '">' + escapeHtml(r._manual ? "（台帳で作成・未保存）" : r.file) + '</td>'
-      + '<td class="no-print"><button class="load-btn" data-list-load="' + i + '">読込</button> <button class="map-jump-btn" data-list-map="' + i + '" title="この戸別を地図で開く（該当建物へジャンプ）">🗺️</button></td>'
+      + '<td class="no-print"><button class="load-btn" data-list-load="' + i + '">読込</button> <button class="map-jump-btn" data-list-map="' + i + '" title="この戸別を地図で開く（該当建物へジャンプ）">🗺️</button>'
+        + (caseHasEstimate(r) ? ' <button class="revert-btn" data-list-revert="' + i + '" title="この戸別を「まだ工事していないこと」にします。積算と図面の内容を消して金額が付かない状態に戻します（お客様情報・写真・石綿・受付台帳の記入は残ります）">🧹 未施工</button>' : '')
+        + '</td>'
       + '</tr>';
   });
   html += '</tbody>';
@@ -13871,7 +13879,9 @@ function renderListByFolderMode(rows, container){
         + photoCell
         + '<td style="text-align:right;font-family:\'Consolas\',\'Menlo\',monospace;">' + amtStr + '</td>'
         + '<td>' + asbCell + '</td>'
-        + '<td class="no-print"><button class="load-btn" data-list-load="' + globalIdx + '">読込</button></td>'
+        + '<td class="no-print"><button class="load-btn" data-list-load="' + globalIdx + '">読込</button>'
+          + (caseHasEstimate(r) ? ' <button class="revert-btn" data-list-revert="' + globalIdx + '" title="この戸別を「まだ工事していないこと」にします。積算と図面の内容を消して金額が付かない状態に戻します（お客様情報・写真・石綿・受付台帳の記入は残ります）">🧹 未施工</button>' : '')
+          + '</td>'
         + '</tr>';
     });
     inner += '<tfoot><tr style="background:#eef3f9;font-weight:600;">'
@@ -15482,12 +15492,84 @@ function doSubFullPrint(){
   setTimeout(() => window.print(), 120);
 }
 
+/* ============================================================
+   「まだ工事していないこと」にする（未施工へ戻す）
+   ------------------------------------------------------------
+   その戸別から積算・図面の内容だけを取り除き、金額が付かない状態に戻す。
+   残すもの: お客様情報（管理番号・氏名・住所・電話・工事日・状態）／現地写真／
+             石綿（建物の事実。Excelの建築年もここ）／台帳・持出・確認・施工会社の割当
+             （これらは戸別JSONではなく別のマップなので、そもそも触らない）
+   消すもの: 工事構成一式・図面の手編集（赤文字/線色/数量/位置/貼付）・測定値・
+             取付ガイド・税/諸経費の設定
+   ※ 金額が出るかどうかは data.amplifier の有無で決まる（calcRowTotalExclMisc）。
+      個別に消すのではなく「残すものだけ拾う」方式にして、項目が増えても取りこぼさない。
+   ============================================================ */
+const CASE_KEEP_ON_REVERT = [
+  "chosho_mgmt_no", "chosho_cust_name", "chosho_cust_addr", "chosho_cust_tel",
+  "chosho_date", "chosho_status",
+  "chosho_photos", "chosho_photo_count", "chosho_photos_thumb", "_photosStripped",
+  "asbestos",
+  "_manual", "_origin", "_schemaVer"
+];
+/* この戸別に積算の中身が入っているか（＝「未施工に戻す」を出すか） */
+function caseHasEstimate(row){
+  return !!(row && row.data && row.data.amplifier);
+}
+function revertCaseToNotStarted(row){
+  if(!row || !row.data) return false;
+  if(row.fileType === "full" && !row.unlocked) return false;   // 全暗号化は中身を触れない
+  const src = row.data, next = {};
+  CASE_KEEP_ON_REVERT.forEach(k => { if(src[k] !== undefined) next[k] = src[k]; });
+  next.editedAt = nowIsoStamp();
+  row.data = next;
+  // ハイブリッド行は envelope.plain も作り直す（機微フィールドは暗号側のまま触らない）
+  if(row.fileType === "hybrid" && row.envelope && row.envelope.plain){
+    const sens = (row.envelope.meta && Array.isArray(row.envelope.meta.sensitive_fields))
+      ? row.envelope.meta.sensitive_fields : HYBRID_SENSITIVE_FIELDS;
+    const newPlain = {};
+    for(const k in next){ if(sens.indexOf(k) < 0) newPlain[k] = next[k]; }
+    row.envelope = Object.assign({}, row.envelope);
+    row.envelope.plain = newPlain;
+  }
+  row._amtCache = undefined; row._bomCache = undefined;
+  // この戸別をエディタで開いたままだと、戻った後の書き戻しで内容が復活してしまうので連動を切る
+  if(_editingRow === row){
+    _editingRow = null;
+    try { clearEditorDirty(); } catch(_){}
+    try { updateOverwriteSaveBtn(); } catch(_){}
+  }
+  try { markCaseEdited(row); } catch(_){}
+  return true;
+}
+/* 一覧の「🧹 未施工」ボタン：確認してから未施工へ戻し、再描画＋保存を予約する。 */
+function revertCaseFromList(row){
+  if(!row) return;
+  const mg = ((row.data && row.data.chosho_mgmt_no) || "").trim() || "（管理番号なし）";
+  const amt = calcRowTotalExclMisc(row);
+  if(!confirm("「" + mg + "」を まだ工事していないこと にします。\n\n"
+    + "・積算と図面の内容（工事構成・赤文字・線色・数量・位置・測定値・取付ガイド）を消します"
+    + (amt !== null ? ("\n・金額 " + yen(amt) + " は表示されなくなります") : "")
+    + "\n・お客様情報・現地写真・石綿（建築年）・受付台帳の記入はそのまま残ります\n\n"
+    + "元に戻せません。よろしいですか？")) return;
+  if(!revertCaseToNotStarted(row)){ alert("この戸別は中身を変更できません（全暗号化のままです）。先に🔓一括復号してください。"); return; }
+  try { renderListTable(); } catch(_){}
+  try { projTouch(); } catch(_){}
+  uiToast("「" + mg + "」を未施工に戻しました");
+}
+
 function attachListRowHandlers(rootEl, rows){
   rootEl.querySelectorAll("[data-list-load]").forEach(btn => {
     btn.addEventListener("click", e => {
       e.stopPropagation();
       const i = parseInt(btn.dataset.listLoad, 10);
       listLoadRow(rows[i]);
+    });
+  });
+  // 🧹 未施工ボタン：積算・図面の内容を消して「まだ工事していない」状態へ戻す
+  rootEl.querySelectorAll("[data-list-revert]").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      revertCaseFromList(rows[parseInt(btn.dataset.listRevert, 10)]);
     });
   });
   // 🗺️ 地図ボタン：該当戸別の建物へジャンプ（管理番号でリンク済みの建物を探す）
