@@ -11647,6 +11647,7 @@ function setLoadedOrigin(target){
   _editingRow = (target && target.data !== undefined) ? target : null;
   // リアルタイム：この戸別の編集ロックを取得（他端末が編集中なら閲覧のみになる）
   if(_editingRow){ try { rtClaimLock(_editingRow); } catch(_){} }
+  clearEditorDirty();   // 開いた直後＝まだ何も触っていない
   updateOverwriteSaveBtn();
 }
 function updateOverwriteSaveBtn(){
@@ -11736,7 +11737,7 @@ async function overwriteSaveCurrent(){
    共有ファイル(連動時)へ即保存する。未連動なら共有ファイルへの連動を促す。 */
 async function overwriteSaveCurrentToProject(){
   try {
-    if(typeof projSyncEditorToRow === "function") projSyncEditorToRow(); // 編集内容を行へ取り込み
+    if(typeof projSyncEditorToRow === "function") projSyncEditorToRow(true); // 明示保存＝無条件で行へ取り込み
     if(typeof projSaveNow === "function") await projSaveNow();            // 物件を保存（IndexedDB＋ハンドルあれば共有ファイル）
   } catch(err){
     alert("物件への保存に失敗しました: " + (err.message || err));
@@ -12112,6 +12113,7 @@ function applyStateData(s){
   if(antennaGuideActive(STATE.antennaGuide)) reflectGuideToFields(STATE.antennaGuide);
   refreshEditorContractor(); // 施工会社セレクトを現在の戸別に同期
   rebuild();
+  clearEditorDirty();        // 読み込み直後＝まだ何も触っていない
 }
 
 function loadState(){
@@ -21486,6 +21488,21 @@ function calExportICS(){
    仮受付・台帳起点の新規戸別・クイック仮入力・台帳⇄図面の双方向反映
    ============================================================ */
 let _editingRow = null;   // エディタ（積算・図面）で開いている一覧行（双方向反映の対象）
+/* エディタを開いてから実際に何か触ったか。
+   未着工の戸別を開くと、フォームには標準プリセットの工事構成が入る（openCaseInEditor）。
+   これを「見ただけで戻った」場合にも行へ書き戻していたため、触っていないのに金額が付いていた。
+   触っていなければ書き戻さない。明示保存(force)のときだけ無条件に書き戻す。 */
+let _editorDirty = false;
+function markEditorDirty(){ if(!_projLoading) _editorDirty = true; }
+function clearEditorDirty(){ _editorDirty = false; }
+/* 入力パネル・図面パネル全体の入力を拾って「触った」印にする（個別のフックの取りこぼし対策）。
+   applyStateData は値を代入で入れるだけでイベントを出さないので、読込では立たない。 */
+function bindEditorDirtyWatch(){
+  const m = document.querySelector("main");
+  if(!m || m._dirtyBound) return;
+  m._dirtyBound = true;
+  ["input", "change"].forEach(ev => m.addEventListener(ev, markEditorDirty, true));
+}
 const LG_EDITOR_FIELDS = ["chosho_mgmt_no", "chosho_date", "chosho_cust_name", "chosho_cust_addr", "chosho_cust_tel", "chosho_status"];
 
 /* 台帳起点の新規戸別行（ファイル未保存・積算/図面は未作成）。
@@ -21541,6 +21558,7 @@ async function openCaseInEditor(row, gotoDiagram){
     applyStateData(base);
     applyProjectEstimateDefaults(); // 物件時の新規戸別の既定：諸経費なし＋協力会社諸経費オン
     _editingRow = row;
+    clearEditorDirty();             // 標準プリセットを入れただけ＝まだ利用者は何も触っていない
     try { rtClaimLock(_editingRow); } catch(_){} // リアルタイム：新規/未作成戸別の編集ロック取得
     closeListView();
   }
@@ -21555,8 +21573,11 @@ async function openCaseInEditor(row, gotoDiagram){
    一覧へ戻る時・保存時に呼ばれ、台帳・物件自動保存へ編集内容を反映する。 */
 /* エディタの内容（図面・積算・写真）を、開いている一覧行データへ丸ごと取り込む（保存はしない）。
    保存直前(projSaveNow)・一覧へ戻る時・明示保存時に呼ぶ内部版。collectState を1回だけ実行。 */
-function syncEditorToRowData(){
+function syncEditorToRowData(force){
   if(!_editingRow || _listRows.indexOf(_editingRow) < 0) return;
+  // 開いてから何も触っていなければ書き戻さない（見ただけで工事内容・金額が入るのを防ぐ）。
+  // 保存ボタンなど明示操作のときは force=true で必ず書き戻す。
+  if(!force && !_editorDirty) return;
   try { markCaseEdited(_editingRow); } catch(_){} // Phase2: 開いている戸別をマージ上乗せ対象に
   try {
     const s = collectState();
@@ -21583,6 +21604,7 @@ function syncEditorToRowData(){
       _editingRow.envelope = Object.assign({}, _editingRow.envelope);
       _editingRow.envelope.plain = newPlain;
     }
+    clearEditorDirty();              // 行へ取り込んだ＝フォームと行が一致した状態
     _editingRow._photoCount = _photos.length;
     _editingRow._thumbs = undefined; // 旧サムネ破棄 → 保存時に最新写真から再生成
     _editingRow._amtCache = undefined;
@@ -21604,9 +21626,10 @@ function syncEditorToRowData(){
     console.warn("[台帳] エディタ内容の取り込みに失敗:", err);
   }
 }
-/* エディタ内容を行へ取り込み＋保存を予約（明示保存・一覧へ戻る時に使用）。 */
-function projSyncEditorToRow(){
-  syncEditorToRowData();
+/* エディタ内容を行へ取り込み＋保存を予約（明示保存・一覧へ戻る時に使用）。
+   force=true は保存ボタン等の明示操作。省略時は「触っていなければ何もしない」。 */
+function projSyncEditorToRow(force){
+  syncEditorToRowData(force);
   if(_editingRow && _listRows.indexOf(_editingRow) >= 0) projTouch();
 }
 /* 図面・積算・写真を編集した時のフック：物件の戸別を編集中なら保存を予約するだけ（軽量）。
@@ -21614,7 +21637,9 @@ function projSyncEditorToRow(){
    ・物件未オープン／読込中(applyStateData中は _editingRow=null)／フォルダのみ編集中 は何もしない。
    ・projTouch → projSaveNow（共有ファイル連動中は共有ファイルへも書き戻し）。 */
 function projAutoSaveEdit(){
-  if(!_currentProject || _projLoading) return;
+  if(_projLoading) return;
+  markEditorDirty();   // 図面ドラッグ・写真・測定値などフォーム外の編集もここを通る
+  if(!_currentProject) return;
   if(!_editingRow || _listRows.indexOf(_editingRow) < 0) return;
   try { markCaseEdited(_editingRow); } catch(_){} // Phase2: この戸別を編集済みに（マージ上乗せ対象）
   projTouch();
@@ -22214,8 +22239,9 @@ function initProjectFeatures(){
   // （既存の保存処理には触れず、後付けのリスナーで同期のみ行う）
   ["btn-save", "btn-save-overwrite", "btn-save-enc", "btn-save-hyb"].forEach(id => {
     const b = document.getElementById(id);
-    if(b) b.addEventListener("click", () => projSyncEditorToRow());
+    if(b) b.addEventListener("click", () => projSyncEditorToRow(true));   // 明示保存＝無条件で取り込む
   });
+  bindEditorDirtyWatch();   // 入力パネル・図面パネルの操作を「触った」印にする
   updateProjBar();
   // 起動時はメニュー画面から（M-1）。前回開いていた物件は自動で再開する。
   openMenuView();
