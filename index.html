@@ -26600,12 +26600,13 @@ window.addEventListener("DOMContentLoaded", init);
     current.view = { scale: view.scale, tx: view.tx, ty: view.ty, rot: (((view.rot || 0) % 360) + 360) % 360 };
     armSave(true);   // 表示(パン/ズーム)だけの変更＝物件の自動保存は予約しない
   }
+  /* 戻り値＝シートの書き込み完了を待てる Promise（地図を離れる時に物件保存の順番を守るため）。 */
   function flushSave(opts){
     if(_saveTimer){ clearTimeout(_saveTimer); _saveTimer = null; }
-    if(!current) return;
+    if(!current) return Promise.resolve();
     current.view = { scale: view.scale, tx: view.tx, ty: view.ty, rot: (((view.rot || 0) % 360) + 360) % 360 };
     current.updatedAt = nowISO();
-    sheetPut(current).then(function(){ setSaveState("保存済み"); }).catch(function(err){
+    var putP = sheetPut(current).then(function(){ setSaveState("保存済み"); }).catch(function(err){
       console.warn("[map] save failed", err); setSaveState("保存失敗");
     });
     // 地図の「内容」変更は、開いている物件の自動保存も予約する（共有ファイル・世代バックアップへ地図を反映）。
@@ -26616,6 +26617,7 @@ window.addEventListener("DOMContentLoaded", init);
       // この端末が地図を実編集したことを記録（merge時にeditedMaps判定へ使う）。view専用保存(パン/ズームのみ)では立てない。
       if(window.markMapsEdited) window.markMapsEdited();
     }
+    return putP;
   }
   function setSaveState(t){ var e2 = el("map-save-state"); if(e2) e2.textContent = t; }
 
@@ -28596,7 +28598,15 @@ window.addEventListener("DOMContentLoaded", init);
   function mapTeardown(){
     if(drawing) confirmDraw();
     _vecRect = null; renderVecRectOverlay();
-    flushSave();
+    // 地図を離れる時は、シートの書き込みを待ってから物件の保存も即座に走らせる。
+    // projTouch の 1.5 秒待ちのままだと、その間に物件を開き直した場合に、地図を含む
+    // 古いスナップショットが復元にかかって直前の編集（リンク解除など）が巻き戻る
+    // （applyProject は _merge でない時に mapRestoreFromSnapshot で地図DBを全置換するため）。
+    try {
+      Promise.resolve(flushSave()).then(function(){
+        try { if(typeof projSaveNow === "function") projSaveNow(); } catch(_e){}
+      });
+    } catch(_e){ }
     if(_zoomDashTimer){ clearTimeout(_zoomDashTimer); _zoomDashTimer = null; }
     if(stage) stage.classList.remove("zooming");
     revokeBgUrls();
