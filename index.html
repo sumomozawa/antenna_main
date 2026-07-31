@@ -743,8 +743,10 @@
     background: #fff;
     border-radius: 4px;
     margin-bottom: 14px;
-    overflow: hidden;
     box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    /* ※ overflow:hidden を置かないこと。ここに置くと工区の箱が sticky の基準になってしまい、
+       中の見出し行（position:sticky）が一覧の枠に対して固定されず、一緒に流れてしまう。
+       角丸は下の各パーツ側で付ける。 */
   }
   .folder-group-head {
     background: #1e3a5f;
@@ -755,7 +757,14 @@
     display: flex;
     align-items: center;
     gap: 10px;
+    border-radius: 4px 4px 0 0;   /* overflow:hidden を外した分、上の角丸はここで付ける */
   }
+  /* 工区ごとの表：工区名を上に貼り付け、見出し行はそのすぐ下に貼り付ける。
+     見出しの top はこの帯の高さと一致させる必要があるので、高さを 34px に固定し、
+     工区名が長くても折り返さず「…」で詰めるようにして、ずれ・重なりを防ぐ。 */
+  .folder-group-head { position: sticky; top: 0; z-index: 4; min-height: 34px; box-sizing: border-box; flex-wrap: nowrap; }
+  .folder-group-head > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .folder-table thead th { top: 34px; z-index: 3; }
   .folder-group-head .folder-stat {
     font-weight: normal;
     font-size: 11px;
@@ -1113,6 +1122,7 @@
     /* 印刷では sticky を解除（各ページの見出し再掲は display:table-header-group が担当） */
     body.list-print-mode .sub-table thead th,
     body.list-print-mode .cost-detail-section table thead th,
+    body.list-print-mode .folder-group-head,
     body.list-print-mode .list-table thead th { position: static !important; box-shadow: none !important; }
     /* ③ 受付台帳：状態セレクトの矢印と文字が重なるバグを解消（印刷ではプレーン表示）＋sticky見出しの重なり防止 */
     body.list-print-mode .ledger-controls { display: none !important; }
