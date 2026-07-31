@@ -145,6 +145,8 @@ svg#diagram{ cursor:default !important; }
 .vw-note{ font-size:11.5px; color:#5b6a76; line-height:1.65; margin-top:10px; }
 
 /* ---------- 地図：閲覧（見る・探す・印刷）だけ ---------- */
+/* 編集ロックのボタンも出さない：ビューアはそもそも編集できないので、解除できる見た目は紛らわしい */
+#map-lock,
 #map-new-sheet, #map-rename-sheet, #map-delete-sheet, #map-attach,
 #map-undo, #map-redo, #map-save-state,
 #map-marq-bar, #map-draw-bar{ display:none !important; }

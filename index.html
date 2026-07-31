@@ -464,11 +464,22 @@
     border-radius: 3px;
   }
   .list-view-actions button:hover { background: #3a6ba8; }
+  /* 一覧本体は縦に積む箱にして、表の枠(.list-table-wrap)へ残りの高さを渡す。
+     こうすると縦スクロールが表の枠の中で起きるので、見出し行の position:sticky が効く。
+     （以前は .list-table-wrap に overflow:auto があるだけで高さの制限が無く、実際に
+       スクロールしていたのは .list-view-body 側だったため、見出しが一緒に流れていた） */
   .list-view-body {
     flex: 1;
     overflow: auto;
     padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
   }
+  .list-view-body > .list-search-row,
+  .list-view-body > .list-mode-tabs,
+  .list-view-body > .list-base-preset-row,
+  .list-view-body > #list-status { flex: 0 0 auto; }
   .list-search-row { margin-bottom: 10px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
   .list-hide-dup-label { font-size: 13px; color: #33424f; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; white-space: nowrap; }
   .list-hide-dup-label .hd-sub { font-size: 10px; color: #7a8a99; }
@@ -494,6 +505,8 @@
     border-radius: 4px;
     overflow: auto;
     box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    flex: 1 1 auto;
+    min-height: 0;   /* flex子が中身の高さに引っぱられず、枠内でスクロールできるように */
   }
   .list-table {
     width: 100%;
@@ -781,6 +794,12 @@
     text-align: left;
   }
   .cost-detail-section th { background: #eef2f6; color: #1e3a5f; }
+  /* 受付台帳・協力会社請求内訳・全体費用詳細：下へスクロールしても見出し行を残す。
+     背景が不透明でないと行が透けるので、上の th 背景色と合わせて使う。 */
+  .ledger-table thead th, .sub-table thead th, .cost-detail-section table thead th {
+    position: sticky; top: 0; z-index: 3;
+    box-shadow: inset 0 -2px 0 #cdd3da;   /* border だと sticky 時に消えるので影で代用 */
+  }
   .cost-detail-section td.num,
   .cost-detail-section th.num { text-align: right; font-family: "Consolas","Menlo",monospace; }
   .cost-detail-section tr.sub-total td { background: #f7f9fb; font-weight: 600; border-top: 1px solid #cdd3da; }
@@ -1091,6 +1110,10 @@
     body.list-print-mode .sub-table tr { page-break-inside: avoid; }
     body.list-print-mode .sub-table thead { display: table-header-group; }
     body.list-print-mode .sub-table thead th { background: #eef2f6 !important; color: #000 !important; }
+    /* 印刷では sticky を解除（各ページの見出し再掲は display:table-header-group が担当） */
+    body.list-print-mode .sub-table thead th,
+    body.list-print-mode .cost-detail-section table thead th,
+    body.list-print-mode .list-table thead th { position: static !important; box-shadow: none !important; }
     /* ③ 受付台帳：状態セレクトの矢印と文字が重なるバグを解消（印刷ではプレーン表示）＋sticky見出しの重なり防止 */
     body.list-print-mode .ledger-controls { display: none !important; }
     body.list-print-mode .ledger-table thead th { position: static !important; }
@@ -3081,6 +3104,40 @@
   .map-hbtn:hover { background: #3a6ba8; }
   .map-close-btn { background: #9aa7b4; border-color: #7e8c99; }
   .map-close-btn:hover { background: #7e8c99; }
+  /* 編集ロック：地図を開いた直後は必ずロック。見る・探す・印刷はそのままできる。 */
+  .map-lock-btn {
+    font-weight: 700; font-size: 12.5px; padding: 6px 14px; border-radius: 3px; cursor: pointer;
+    border: 1px solid; flex: 0 0 auto; font-family: inherit; white-space: nowrap;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .map-lock-btn .mlk-ico { font-size: 15px; line-height: 1; display: inline-block; }
+  .map-lock-btn.locked   { background: #b3433a; border-color: #8f352e; color: #fff; }
+  .map-lock-btn.locked:hover { background: #c85a50; }
+  .map-lock-btn.unlocked { background: #1b7a3d; border-color: #145c2e; color: #fff; }
+  .map-lock-btn.unlocked:hover { background: #23934c; }
+  /* 解除の瞬間：錠が跳ねて開く＋枠が波打つ（押したことがはっきり分かるように） */
+  .map-lock-btn.just-unlocked { animation: mapLockGlow .85s ease-out 1; }
+  .map-lock-btn.just-unlocked .mlk-ico { animation: mapLockPop .85s cubic-bezier(.2,1.6,.4,1) 1; }
+  @keyframes mapLockPop {
+    0%   { transform: translateY(0) rotate(0) scale(1); }
+    35%  { transform: translateY(-7px) rotate(-18deg) scale(1.5); }
+    60%  { transform: translateY(-2px) rotate(8deg) scale(1.25); }
+    100% { transform: translateY(0) rotate(0) scale(1); }
+  }
+  @keyframes mapLockGlow {
+    0%   { box-shadow: 0 0 0 0 rgba(27,122,61,.85); }
+    100% { box-shadow: 0 0 0 16px rgba(27,122,61,0); }
+  }
+  /* ロック中はツール類を押せなくする（見た目でも分かるように） */
+  body.map-locked #map-tools .map-tool:not([data-tool="pan"]),
+  body.map-locked #map-undo, body.map-locked #map-redo,
+  body.map-locked #map-new-sheet, body.map-locked #map-rename-sheet, body.map-locked #map-delete-sheet {
+    opacity: .38; pointer-events: none;
+  }
+  body.map-locked .map-side-sec.map-edit-sec { opacity: .38; pointer-events: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .map-lock-btn.just-unlocked, .map-lock-btn.just-unlocked .mlk-ico { animation: none; }
+  }
 
   .map-main { flex: 1 1 auto; display: flex; min-height: 0; }
   .map-sidebar {
@@ -4737,6 +4794,7 @@
 <div class="map-view" id="map-view">
   <header class="map-header">
     <h1>🗺️ 地図</h1>
+    <button type="button" id="map-lock" class="map-lock-btn locked" title="地図を開いた直後は編集できないようにしてあります（誤操作防止）。見る・探す・印刷はそのままできます。クリックすると編集できるようになります。"><span class="mlk-ico">🔒</span><span class="mlk-txt">編集ロック中</span></button>
     <select id="map-sheet-select" class="map-sheet-select" title="シート切替"></select>
     <button type="button" id="map-new-sheet" class="map-hbtn" title="新しいシートを作成">＋ 新規シート</button>
     <button type="button" id="map-rename-sheet" class="map-hbtn" title="シート名を変更">✏️ 名称</button>
@@ -4773,7 +4831,7 @@
           <button type="button" class="map-tool" data-tool="delete">🗑 削除</button>
         </div>
       </div>
-      <div class="map-side-sec">
+      <div class="map-side-sec map-edit-sec">
         <div class="map-side-head">地図作成（国土地理院・無料）</div>
         <div class="map-gsi">
           <input type="text" id="map-gsi-addr" placeholder="住所（例: 青森県三沢市…）" autocomplete="off">
@@ -4816,25 +4874,25 @@
         <div class="map-side-note" id="map-bld-cmode-note">番号を付けた建物をオレンジ、その他を緑で表示します。</div>
         <div id="map-ctr-legend" class="map-ctr-legend"></div>
       </div>
-      <div class="map-side-sec">
+      <div class="map-side-sec map-edit-sec">
         <div class="map-side-head">下地</div>
         <div id="map-bg-controls">
           <button type="button" class="map-side-btn" id="map-bg-load" disabled>📂 下地を読み込み</button>
           <div class="map-side-note">F1 で有効化（JPG / PNG、PDFはF7）</div>
         </div>
       </div>
-      <div class="map-side-sec">
+      <div class="map-side-sec map-edit-sec">
         <div class="map-side-head">参照地図下地（トレース専用・出力非掲載）</div>
         <div id="map-zenrin-controls"></div>
       </div>
-      <div class="map-side-sec">
+      <div class="map-side-sec map-edit-sec">
         <div class="map-side-head">アンテナ図 仕上げ</div>
         <div class="map-gsi">
           <button type="button" class="map-side-btn" id="map-ctrlegend-add" style="background:#00695c;border-color:#004d40;">🎨 施工会社の色凡例</button>
           <div class="map-side-note">各社の色見本を載せた枠を配置します。<b>ドラッグで移動</b>でき、<b>印刷にも掲載</b>されます。中身は施工業者マスターに自動追従します。配置後に選択するとサイズ変更・削除ができます。</div>
         </div>
       </div>
-      <div class="map-side-sec">
+      <div class="map-side-sec map-edit-sec">
         <div class="map-side-head">道路ペイント（ラスター・任意）</div>
         <div class="map-bg-opacity-row">太さ <input type="range" id="map-brush" min="1" max="60" step="1"></div>
         <label class="map-layer-extra" style="margin:4px 0;display:flex;gap:5px;align-items:center;"><input type="checkbox" id="map-erase"> 消しゴム</label>
@@ -24027,6 +24085,13 @@ window.addEventListener("DOMContentLoaded", init);
       gesture = "drawpend";                 // pen/mouse + 作図ツール → タップで頂点
     } else {
       // 選択/移動ツール：pen/mouse は テキスト拡縮ハンドル → 頂点ドラッグ → 本体ドラッグ → 空きはパン
+      // ロック中は「クリック＝選択して詳細を見る／ドラッグ＝パン」だけにする（拡縮・頂点・移動はしない）。
+      if(_mapLocked){
+        var hitL = hitTest(e.clientX, e.clientY);
+        if(hitL){ selectObject(hitL.key, hitL.id); gesture = null; }
+        else { clearSelection(); gesture = "pan"; beginPan(e.pointerId); capturePointer(e.pointerId); }
+        updateCursor(); return;
+      }
       if(hitTextResizeHandle(e.clientX, e.clientY)){
         beginTxResize(e); updateCursor(); return;
       }
@@ -26537,7 +26602,54 @@ window.addEventListener("DOMContentLoaded", init);
   }
   function setSaveState(t){ var e2 = el("map-save-state"); if(e2) e2.textContent = t; }
 
+  /* ---------- 編集ロック ----------
+     地図を開いた直後は必ずロック。パン・ズーム・建物クリックでの閲覧・印刷はそのまま使えて、
+     作図・移動・削除など「図面を変える操作」だけを止める。解除はヘッダーの錠ボタン。 */
+  var _mapLocked = true;
+  function mapIsLocked(){ return !!_mapLocked; }
+  function renderMapLock(){
+    var b = el("map-lock");
+    document.body.classList.toggle("map-locked", _mapLocked);
+    if(!b) return;
+    b.classList.toggle("locked", _mapLocked);
+    b.classList.toggle("unlocked", !_mapLocked);
+    var ico = b.querySelector(".mlk-ico"), txt = b.querySelector(".mlk-txt");
+    if(ico) ico.textContent = _mapLocked ? "🔒" : "🔓";
+    if(txt) txt.textContent = _mapLocked ? "編集ロック中" : "編集できます";
+    b.title = _mapLocked
+      ? "編集できないようにしてあります（誤操作防止）。見る・探す・印刷はそのままできます。クリックすると編集できるようになります。"
+      : "編集できる状態です。クリックすると編集ロックに戻ります。";
+  }
+  function setMapLocked(on, quiet){
+    var was = _mapLocked;
+    _mapLocked = !!on;
+    if(_mapLocked){
+      // ロックへ戻す：作図中なら取り消し、選択も解除して「見るだけ」の状態にそろえる
+      if(drawing){ try { cancelDraw(); } catch(_e){} }
+      try { clearSelection(); } catch(_e){}
+      try { clearMarquee(); hideMarqBar(); } catch(_e){}
+      if(tool !== "pan") setTool("pan");
+    }
+    renderMapLock();
+    if(!quiet && was !== _mapLocked){
+      if(!_mapLocked){
+        var b = el("map-lock");
+        if(b){ b.classList.remove("just-unlocked"); void b.offsetWidth; b.classList.add("just-unlocked"); }
+        toast("編集できるようになりました。終わったらもう一度押してロックしてください。");
+      } else {
+        toast("編集をロックしました（見る・探す・印刷はできます）。");
+      }
+    }
+  }
+  /* 編集操作の入口で呼ぶ。ロック中なら false を返して、その操作をやめさせる。 */
+  function blockedByLock(){
+    if(!_mapLocked) return false;
+    toast("編集ロック中です。左上の 🔒 を押すと編集できます。");
+    return true;
+  }
   function setTool(t){
+    // ロック中は選択/移動（パン）以外のツールへ切り替えない
+    if(_mapLocked && t !== "pan"){ blockedByLock(); return; }
     if(drawing && t !== tool) confirmDraw();   // ツール切替時は作図中のパスを確定
     if(DRAW_TOOLS[t] || t === "delete" || t === "paint" || t === "vecrect") clearSelection();
     var leavingBgEdit = (tool === "bgedit" && t !== "bgedit");
@@ -27768,6 +27880,12 @@ window.addEventListener("DOMContentLoaded", init);
     if(!document.body.classList.contains("map-open")) return;
     var t = e.target;
     if(t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+    // ロック中は図面を変えるキー操作（元に戻す/やり直す/削除）を受け付けない
+    if(_mapLocked){
+      var edits = ((e.ctrlKey || e.metaKey) && /^[zZyY]$/.test(e.key)) || e.key === "Delete" || e.key === "Backspace";
+      if(edits){ e.preventDefault(); blockedByLock(); }
+      return;
+    }
     if((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z")){ e.preventDefault(); if(e.shiftKey) redo(); else undo(); return; }
     if((e.ctrlKey || e.metaKey) && (e.key === "y" || e.key === "Y")){ e.preventDefault(); redo(); return; }
     if(drawing){
@@ -28115,6 +28233,7 @@ window.addEventListener("DOMContentLoaded", init);
   /* ---------- イベント結線（初回のみ） ---------- */
   function bindOnce(){
     if(_bound) return; _bound = true;
+    on("map-lock", "click", function(){ setMapLocked(!_mapLocked); });
     on("map-close", "click", closeMapView);
     on("map-goto-ledger", "click", function(){ gotoLedgerFromMap(); });
     on("map-new-sheet", "click", onNewSheet);
@@ -28401,6 +28520,7 @@ window.addEventListener("DOMContentLoaded", init);
     document.body.classList.add("map-open");
     buildStageIfNeeded();
     bindOnce();
+    setMapLocked(true, true);   // 開いた直後は必ずロック（誤って図面を変えないように）
     renderProjName();
     setSaveState("");
     loadSheetsForContext().then(function(){
