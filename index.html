@@ -4885,10 +4885,10 @@
       <div class="map-side-sec">
         <div class="map-side-head">建物の色分け</div>
         <div class="map-gsi-seg" id="map-bld-colormode" title="番号を付けた建物の塗り分け方法を切り替えます">
-          <button type="button" data-cmode="link" class="active">番号色</button>
-          <button type="button" data-cmode="contractor">施工会社別</button>
+          <button type="button" data-cmode="link">番号色</button>
+          <button type="button" data-cmode="contractor" class="active">施工会社別</button>
         </div>
-        <div class="map-side-note" id="map-bld-cmode-note">番号を付けた建物をオレンジ、その他を緑で表示します。</div>
+        <div class="map-side-note" id="map-bld-cmode-note">番号を付けた建物を施工会社ごとの色で表示します（受付台帳の割当が無い建物は業者番号＝管理番号の左から4桁目で判定・どちらも無ければグレー／番号なしは緑）。</div>
         <div id="map-ctr-legend" class="map-ctr-legend"></div>
       </div>
       <div class="map-side-sec map-edit-sec">
@@ -23368,8 +23368,11 @@ window.addEventListener("DOMContentLoaded", init);
   var _marqFilter = "all";  // 範囲選択で対象にするレイヤー: all|building|road|boundary|label
   var _marqLastRect = null; // 直近に囲った範囲（フィルタ変更で選択し直すため）{x0,y0,x1,y1}
   var _vecImportMode = "both"; // ベクター化で取り込む対象: both|building|road
-  // 建物の塗り分けモード: "link"=番号色（番号ありオレンジ/なし緑・既定）／"contractor"=施工会社別
-  var _bldColorMode = "link";
+  // 建物の塗り分けモード: "contractor"=施工会社別（既定）／"link"=番号色（番号ありオレンジ/なし緑）
+  // ※ この設定は端末ごと（localStorage）。既定が「番号色」だったため、一度も切り替えていない
+  //    パソコンでは施工会社の色分けが出ず「色分けが効いていない」ように見えていた。
+  //    自分で「番号色」を選んだ端末は、その選択が localStorage に残るのでそのまま。
+  var _bldColorMode = "contractor";
   try { var _bcm = localStorage.getItem("antenna_map_bld_colormode"); if(_bcm === "contractor" || _bcm === "link") _bldColorMode = _bcm; } catch(_){}
 
   var sheets = [];          // 現在の文脈（物件 or 端末ローカル）のMapSheet配列
