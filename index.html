@@ -4816,6 +4816,7 @@
     <button type="button" id="map-new-sheet" class="map-hbtn" title="新しいシートを作成">＋ 新規シート</button>
     <button type="button" id="map-rename-sheet" class="map-hbtn" title="シート名を変更">✏️ 名称</button>
     <button type="button" id="map-delete-sheet" class="map-hbtn" title="このシートを削除">🗑 削除</button>
+    <button type="button" id="map-parked-clean" class="map-hbtn" style="display:none;background:#8a6d1f;border-color:#6b5416;" title="共有ファイルの競合で自動的に控えられたシート（⚠ 競合退避）を削除します。元シートの丸ごと複製なので、物件ファイルが大きくなる原因になります。中身を確認してから削除してください。">🧹 競合退避シートを削除</button>
     <span class="map-cur-proj" id="map-cur-proj"></span>
     <button type="button" id="map-attach" class="map-hbtn" style="display:none;background:#1b7a3d;border-color:#145c2e;" title="この端末ローカル地図を、開いている物件に紐付けます">📎 物件に紐付け</button>
     <button type="button" id="map-goto-ledger" class="map-hbtn" style="background:#1e3a5f;border-color:#16314f;" title="受付台帳（戸別一覧）を開きます">📋 受付台帳</button>
@@ -10477,6 +10478,18 @@ function loadUserPresets(){
   try { return JSON.parse(localStorage.getItem(USER_PRESET_KEY) || "{}"); }
   catch { return {}; }
 }
+/* プリセットとして保存する状態。
+   「物件の諸経費を使う」のチェックは、物件の諸経費が設定されている時だけ画面に出る
+   （syncOutsourceFeeDisabled）。未設定のときは非表示＝必ず未チェックなので、そのまま
+   保存すると outsource_fee_auto:false（＝個別上書き・物件の額に追従しない）が黙って
+   焼き付き、あとで物件の諸経費を設定してもこのプリセット由来の戸別は追従しなくなる。
+   出ていない時は値を持たせない（キーごと落とす）ことで、戸別側の既定に委ねる。 */
+function collectStateForPreset(){
+  const s = collectState();
+  const active = (typeof projOutsourceFeeActive === "function") && projOutsourceFeeActive();
+  if(!active) delete s.outsource_fee_auto;
+  return s;
+}
 function saveUserPresets(p){
   localStorage.setItem(USER_PRESET_KEY, JSON.stringify(p));
   // 物件に内包される設定：編集した端末を競合マージで優先させ、ついでに自動保存も予約する
@@ -10660,7 +10673,7 @@ function renderPresetButtons(){
       const name = b.dataset.presetOw;
       if(confirm("プリセット「"+name+"」を現在の設定で上書きしますか？")){
         const up = loadUserPresets();
-        up[name] = collectState();
+        up[name] = collectStateForPreset();
         saveUserPresets(up);
         renderPresetButtons();
         // 小さいトースト的な通知
@@ -10706,7 +10719,7 @@ function savePresetAs(){
   }
   const up = loadUserPresets();
   if(up[t] && !confirm("「"+t+"」は既存です。上書きしますか？")) return;
-  up[t] = collectState();
+  up[t] = collectStateForPreset();
   saveUserPresets(up);
   renderPresetButtons();
   alert("プリセット「"+t+"」を保存しました");
@@ -12638,7 +12651,7 @@ function saveCurrentAsBasePreset(){
   const name = prompt("基本工事プリセットの名前を入力してください（既存名を指定すると上書き）");
   if(!name) return;
   const up = loadUserPresets();
-  up[name] = collectState();
+  up[name] = collectStateForPreset();
   saveUserPresets(up);
   renderPresetButtons();
   _baseJobPresetKey = name;
@@ -18088,6 +18101,15 @@ function markProjMetaEdited(key){ if(key){ try { _editedProjMeta.add(key); } cat
 // （mapTxの読み書き全般では呼ばない＝閲覧/自動生成/uid書き戻しだけで他端末の地図が消えることを防ぐ・レビュー指摘#1/#4）。
 // window.__mapRestoring 中（復元/uid書き戻し中）は無視する。
 function markMapsEdited(){ if(window.__mapRestoring) return; _mapsEditSeq++; }
+/* 競合退避シートの名前につける印。退避シートは利用者が名前を変えることはまず無いので、
+   印（_mapConflictParked）が欠けた古いデータでも名前から判定できるようにしておく。 */
+const PARKED_NAME_MARK = "（競合退避 ";
+function isParkedSheet(s){
+  if(!s) return false;
+  if(s._mapConflictParked === true) return true;
+  return String(s.name || "").indexOf(PARKED_NAME_MARK) >= 0;
+}
+window.isParkedSheet = isParkedSheet;
 window.markMapsEdited = markMapsEdited;
 function markCaseDeleted(row){
   if(!row) return;
@@ -18166,12 +18188,12 @@ function mergeMapsSheets(diskMaps, localMaps, editedMaps){
     // 退避クローン自身が再び負け側になった場合、さらに退避クローンを作ると
     // "_conf_conf_conf..." と無限連鎖するため、退避済みシートは再退避しない
     // （その版はそのまま捨てる＝退避先1枚に集約。実データは常に win 側の u:<uid> キーで保持されるため消失にはならない）。
-    if(!_mapSheetIsEmpty(lose) && !lose._mapConflictParked){
+    if(!_mapSheetIsEmpty(lose) && !isParkedSheet(lose)){
       const clone = Object.assign({}, lose);
       // 退避uidは固定（updatedAtを混ぜない）にして冪等化する。負け続けても退避は同一キーに集約され、
       // 再マージのたびに退避シートが1枚ずつ純増する（地図シート増殖バグ）ことを防ぐ。
       clone.uid = (lose.uid ? lose.uid + "_conf" : null);
-      clone.name = (lose.name || "地図") + "（競合退避 " + (lose.updatedAt || "").slice(0, 16).replace("T", " ") + "）";
+      clone.name = (lose.name || "地図") + PARKED_NAME_MARK + (lose.updatedAt || "").slice(0, 16).replace("T", " ") + "）";
       // 退避クローンは「全体図」の代表収束(loadSheetsForContext)対象から外す。
       // _zentai を引き継ぐと収束処理が _dup_ シートへ変換し、それが新たな独立キーとして
       // 次回マージ以降も増殖し続けるため、退避クローンは常に非全体図として扱う。
@@ -26462,9 +26484,59 @@ window.addEventListener("DOMContentLoaded", init);
   function renderSheetSelect(){
     var sel = el("map-sheet-select"); if(!sel) return;
     sel.innerHTML = sheets.map(function(s){
-      return '<option value="' + esc(s.id) + '">' + esc(s.name || "(無題)") + '</option>';
+      // 競合退避シート（共有ファイルの取り合いで自動的に作られた控え）は一目で分かるようにする
+      return '<option value="' + esc(s.id) + '">' + (isParkedSheet(s) ? "⚠ " : "") + esc(s.name || "(無題)") + '</option>';
     }).join("");
     if(current) sel.value = current.id;
+    renderParkedCleanup();
+  }
+  /* ---------- 競合退避シートの掃除 ----------
+     共有ファイルを同時に保存して競合すると、負けた側の地図を捨てずに「（競合退避 …）」という
+     控えシートとして残す（mergeMapsSheets）。中身は元シートの丸ごと複製なので、確認して不要に
+     なったら消さないと物件ファイルが倍近くまで膨らむ。控えがある時だけボタンを出す。 */
+  function parkedSheets(){ return (sheets || []).filter(isParkedSheet); }
+  function renderParkedCleanup(){
+    var b = el("map-parked-clean"); if(!b) return;
+    var n = parkedSheets().length;
+    b.style.display = n ? "" : "none";
+    if(n) b.textContent = "🧹 競合退避シートを削除（" + n + "枚）";
+  }
+  function sheetObjCount(s){
+    var L = (s && s.layers) || {}, n = 0;
+    ["building", "road", "boundary", "chome", "label"].forEach(function(k){
+      n += (((L[k] || {}).objects) || []).length;
+    });
+    return n;
+  }
+  function onCleanParkedSheets(){
+    var list = parkedSheets();
+    if(!list.length){ toast("競合退避シートはありません。"); return; }
+    var lines = list.map(function(s){ return "・" + (s.name || "(無題)") + "（図形 " + sheetObjCount(s) + " 個）"; }).join("\n");
+    if(!confirm("共有ファイルの競合で自動的に控えられたシートを削除します。\n\n" + lines
+      + "\n\nこれらは競合したときの「負けた側の控え」です。中身を確認して不要な場合だけ削除してください。\n"
+      + "元に戻せません。削除しますか？")) return;
+    var ids = list.map(function(s){ return s.id; });
+    var keys = [];
+    list.forEach(function(s){
+      (sheetBgImagesRaw(s) || []).forEach(function(im){ if(im.blobKey) keys.push(im.blobKey); });
+      var z = (s.zenrin && s.zenrin.images) || [];
+      z.forEach(function(u){ if(u.blobKey) keys.push(u.blobKey); });
+      if(s.paint && s.paint.blobKey) keys.push(s.paint.blobKey);
+    });
+    var reopen = current && ids.indexOf(current.id) >= 0;   // 表示中の控えを消す場合は別シートへ移る
+    Promise.all(ids.map(function(id){ return sheetDelete(id); }))
+      .then(function(){ return Promise.all(keys.map(function(k){ return blobDelete(k).catch(function(){}); })); })
+      .then(function(){
+        sheets = sheets.filter(function(s){ return ids.indexOf(s.id) < 0; });
+        try { window.__mapsDirty = true; } catch(_e){}
+        try { if(window.markMapsEdited) window.markMapsEdited(); } catch(_e){}
+        if(!sheets.length) return loadSheetsForContext().then(function(){ openSheet(sheets[0]); });
+        if(reopen) openSheet(sheets[0]); else { renderSheetSelect(); }
+        // 物件ファイルからも消えるよう、その場で保存まで走らせる
+        try { if(typeof projSaveNow === "function") projSaveNow(); } catch(_e){}
+        uiToast("競合退避シートを " + ids.length + " 枚削除しました");
+      })
+      .catch(function(err){ console.warn("[map] parked cleanup failed", err); alert("削除に失敗しました：" + (err && err.message || err)); });
   }
   function renderProjName(){
     var e2 = el("map-cur-proj"); if(!e2) return;
@@ -27756,7 +27828,7 @@ window.addEventListener("DOMContentLoaded", init);
     arr.forEach(function(sh){
       // 競合マージで退避された控えシート(_conf)は「配置済み」に数えない。
       // 数えると、退避側に残った古いリンクのせいで、解除したはずの番号が候補に出てこなくなる。
-      if(sh && sh._mapConflictParked) return;
+      if(isParkedSheet(sh)) return;
       var bl = sh && sh.layers && sh.layers.building;
       if(!bl || !Array.isArray(bl.objects)) return;
       bl.objects.forEach(function(o){
@@ -28337,6 +28409,7 @@ window.addEventListener("DOMContentLoaded", init);
     on("map-new-sheet", "click", onNewSheet);
     on("map-rename-sheet", "click", onRenameSheet);
     on("map-delete-sheet", "click", onDeleteSheet);
+    on("map-parked-clean", "click", onCleanParkedSheets);
     on("map-zoom-in", "click", function(){ zoomCenter(1.2); });
     on("map-zoom-out", "click", function(){ zoomCenter(1 / 1.2); });
     on("map-zoom-100", "click", setZoom100);
