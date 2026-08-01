@@ -24161,7 +24161,7 @@ window.addEventListener("DOMContentLoaded", init);
       var mdx = wd.x - down.world.x, mdy = wd.y - down.world.y;
       _marqSel.forEach(function(s, i){ applyObjDelta(s.obj, _marqDragOrig[i], mdx, mdy); });
       _marqBBox = marqBBoxOf(_marqSel);
-      renderObjects(); renderMarqueeOverlay(); e.preventDefault(); return;
+      renderDragLive(_marqSel); renderMarqueeOverlay(); e.preventDefault(); return;
     }
     if(gesture === "bgcropdrag" && _bgCrop){
       if(_bgCropDrag){
@@ -24215,13 +24215,14 @@ window.addEventListener("DOMContentLoaded", init);
       if(otr){
         var dist = Math.hypot(e.clientX - _txResize.anchorScreen.x, e.clientY - _txResize.anchorScreen.y);
         otr.size = Math.max(4, Math.min(2000, Math.round(_txResize.size0 * (dist / _txResize.dist0))));
-        renderObjects(); renderSelectionOverlay();
+        if(typeof renderLabelLayer === "function") renderLabelLayer(); else renderObjects();
+        renderSelectionOverlay();
       }
       e.preventDefault(); return;
     }
     if(gesture === "vtxdrag"){
       var s1 = getSelected();
-      if(s1){ if(!_dragMoved){ pushUndo(); _dragMoved = true; } var w1 = screenToWorld(e.clientX, e.clientY); setObjPoint(s1.obj, vtxIndex, w1.x, w1.y); renderObjects(); renderSelectionOverlay(); }
+      if(s1){ if(!_dragMoved){ pushUndo(); _dragMoved = true; } var w1 = screenToWorld(e.clientX, e.clientY); setObjPoint(s1.obj, vtxIndex, w1.x, w1.y); renderDragLive([s1]); renderSelectionOverlay(); }
       e.preventDefault(); return;
     }
     if(gesture === "objpend" && down){
@@ -24233,7 +24234,7 @@ window.addEventListener("DOMContentLoaded", init);
     }
     if(gesture === "objdrag"){
       var s3 = getSelected();
-      if(s3 && objDragOrig){ var w3 = screenToWorld(e.clientX, e.clientY); var dx = w3.x - down.world.x, dy = w3.y - down.world.y; applyObjDelta(s3.obj, objDragOrig, dx, dy); renderObjects(); renderSelectionOverlay(); }
+      if(s3 && objDragOrig){ var w3 = screenToWorld(e.clientX, e.clientY); var dx = w3.x - down.world.x, dy = w3.y - down.world.y; applyObjDelta(s3.obj, objDragOrig, dx, dy); renderDragLive([s3]); renderSelectionOverlay(); }
       e.preventDefault(); return;
     }
     if(gesture === "drawpend" && e.pointerType === "mouse" && down){
@@ -26894,6 +26895,45 @@ window.addEventListener("DOMContentLoaded", init);
     renderPolyLayer("chome");
     if(typeof renderLabelLayer === "function") renderLabelLayer();  // F5
     if(typeof renderMini === "function") renderMini();              // G2: オブジェクト変更時にミニマップも更新
+  }
+  /* ---------- ドラッグ中の軽量描画 ----------
+     renderObjects() は全レイヤーのSVGを文字列から作り直す。数千棟の図面では1回で100ms超になり、
+     これをマウス移動のたびに呼ぶと図形の移動がカクついていた（実測: 2000棟で137ms/回）。
+     ドラッグ中は「動かしている図形のDOMだけ」を書き換え、全体の作り直しは指を離した時の1回に任せる。
+     書き換えられなかった場合（DOMに見つからない等）は安全側に倒して従来どおり全体を描き直す。 */
+  function updateObjGeometryInDom(key, o){
+    if(!o || !o.id || !Array.isArray(o.points)) return false;
+    var g = el("map-layer-" + key); if(!g) return false;
+    var sel = (window.CSS && CSS.escape) ? CSS.escape(o.id) : String(o.id).replace(/"/g, '\\"');
+    var node = g.querySelector('[data-obj-id="' + sel + '"]');
+    if(!node) return false;
+    node.setAttribute("points", o.points.map(function(p){ return p[0] + "," + p[1]; }).join(" "));
+    if(key === "building"){
+      // 建物は polygon の直後に管理番号ラベル(text)が並ぶ（renderBuildingLayer）。あれば中心へ追従させる
+      var lab = node.nextElementSibling;
+      if(lab && lab.tagName && lab.tagName.toLowerCase() === "text"){
+        var minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+        for(var i = 0; i < o.points.length; i++){
+          var pp = o.points[i];
+          if(pp[0] < minx) minx = pp[0]; if(pp[0] > maxx) maxx = pp[0];
+          if(pp[1] < miny) miny = pp[1]; if(pp[1] > maxy) maxy = pp[1];
+        }
+        lab.setAttribute("x", (minx + maxx) / 2);
+        lab.setAttribute("y", (miny + maxy) / 2);
+      }
+    }
+    return true;
+  }
+  /* 動かした図形の配列 [{key,obj}...] をその場で反映。1つでも当たらなければ全体描き直し。 */
+  function renderDragLive(list){
+    if(!list || !list.length){ renderObjects(); return; }
+    for(var i = 0; i < list.length; i++){
+      var it = list[i]; if(!it || !it.obj){ renderObjects(); return; }
+      var key = it.key || selectedLayer;
+      // ラベル層（テキスト・ピン・凡例）は点列ではないので、その層だけ作り直す（数が少なく軽い）
+      if(key === "label"){ if(typeof renderLabelLayer === "function") renderLabelLayer(); continue; }
+      if(!updateObjGeometryInDom(key, it.obj)){ renderObjects(); return; }
+    }
   }
   // 境界=点線、丁目境界=一点鎖線（画面px基準のdasharray文字列）。それ以外は実線
   function polyDashScreen(key){
