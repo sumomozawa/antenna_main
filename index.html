@@ -604,6 +604,13 @@
     padding: 4px 10px; font-size: 11px; border-radius: 3px; cursor: pointer;
   }
   .list-base-preset-row button:hover { background: #0d47a1; }
+  /* 📐 図面データありのみ（全体費用詳細の集計対象を図面済みの戸別だけに絞るチェック） */
+  .list-base-preset-row label.cd-only-dwg-label {
+    font-weight: 600; color: #2e7d32;
+    display: inline-flex; align-items: center; gap: 5px;
+    cursor: pointer; white-space: nowrap;
+  }
+  .list-base-preset-row label.cd-only-dwg-label .cd-sub { font-weight: normal; font-size: 10px; color: #7a8a99; }
   /* 一覧セルの折り返し防止 */
   .list-table td, .list-table th { white-space: nowrap; }
   .list-table td.wrap, .list-table th.wrap { white-space: normal; word-break: normal; overflow-wrap: break-word; }
@@ -4377,6 +4384,7 @@
       <select id="list-base-preset"><option value="">（なし）</option></select>
       <button id="btn-base-preset-use-current" title="現在の入力内容を『基本工事』用のプリセットとして保存（名前を指定）">＋現在の入力から作成</button>
       <span id="list-base-preset-status" style="font-size:11px;color:#555;"></span>
+      <label class="cd-only-dwg-label" title="図面（＝積算）が作られている戸別だけを集計対象にします。下見で仮図面を作った戸別ぶんの材料だけをまとめて注文したいときに使います。図面がまだ無い戸別は元から金額に入りませんが、ONにすると件数・一覧・材料集計のすべてが『図面データあり』だけになります。"><input type="checkbox" id="cd-only-dwg"> 📐 図面データありのみ <span class="cd-sub" id="cd-only-dwg-count"></span></label>
     </div>
     <div id="list-status" class="list-status">保存済のJSONファイルがあるフォルダを選択してください</div>
     <div class="list-table-wrap" id="list-content-wrap">
@@ -12529,6 +12537,10 @@ let _listMode = "standard"; // "standard" / "by_folder" / "cost_detail"
 let _listSelectedFolderName = ""; // 📁 フォルダ選択 で指定されたフォルダ名（印刷ヘッダに表示）
 let _listSearchTimer = null; // 絞り込み検索の debounce 用（100件規模で毎打鍵の全件再計算を防ぐ）
 let _hideDuplicates = false; // 重複を隠す（同一管理番号は最新ファイル日付の1件のみ表示・既定OFF）
+/* 全体費用詳細「📐 図面データありのみ」。図面（＝積算）が組まれている戸別だけを集計対象にする。
+   下見で仮図面を作った戸別ぶんの材料をまとめて発注する用途。表示上の絞り込みなので
+   「重複を隠す」と同じくセッション限り（既定OFF・物件にもlocalStorageにも保存しない）。 */
+let _costOnlyWithDrawing = false;
 
 /* 基本工事プリセット指定。localStorageに永続化。
    選択されたプリセットのBOMを『基本工事』として費用詳細モードに別枠表示し、
@@ -13727,6 +13739,14 @@ function renderListTable(){
       return best[m] === r;
     });
   }
+  // 📐 図面データありのみ（全体費用詳細モードのみ）: 図面＝積算が組まれている戸別だけを対象にする。
+  // 集計側は元から図面なしの戸別を金額に入れていないが、ONにすると件数・戸別一覧・材料集計の
+  // すべてが「図面データあり」だけを指していることが画面（と印刷物）の上で確定する。
+  const costDwgFilterOn = (_costOnlyWithDrawing && _listMode === "cost_detail");
+  if(costDwgFilterOn){
+    rows = rows.filter(caseHasDrawingData);
+  }
+  updateCostDwgFilterCount();
   // ソート: 未完了優先 → 管理番号 → 施工日
   rows.sort((a, b) => {
     const pa = (a.data.chosho_status === "completed") ? 1 : 0;
@@ -13743,7 +13763,7 @@ function renderListTable(){
 
   const dupCount = getDuplicateMgmtSet().size;
   count.innerHTML = _listRows.length > 0
-    ? "読込済: " + _listRows.length + " 件" + (keyword ? " / 表示: " + rows.length + " 件" : "")
+    ? "読込済: " + _listRows.length + " 件" + ((keyword || costDwgFilterOn) ? " / 表示: " + rows.length + " 件" : "")
       + (dupCount ? ' <span style="color:#ffd54f;font-weight:700;" title="管理番号が重複している戸別があります（採番をご確認ください）">⚠ 管理番号重複 ' + dupCount + ' 種</span>' : '')
     : "";
 
@@ -13760,7 +13780,9 @@ function renderListTable(){
     tbl.innerHTML = ""; custom.innerHTML = "";
     tbl.style.display = ""; custom.style.display = "none";
     status.style.display = "";
-    status.textContent = "該当する戸別が見つかりません (絞り込み条件を変更してください)";
+    status.textContent = costDwgFilterOn
+      ? "図面データがある戸別がありません（「📐 図面データありのみ」のチェックを外すと全戸別が対象になります）"
+      : "該当する戸別が見つかりません (絞り込み条件を変更してください)";
     return;
   }
   status.style.display = "none";
@@ -14095,11 +14117,16 @@ function renderListCostDetailMode(rows, container){
   let addMat = 0, addLab = 0;
   let baseMatTotal = 0, baseLabTotal = 0;
   let caseTotalMat = 0, caseTotalLab = 0;
-  let naCount = 0;
+  // 未集計の内訳。図面がまだ無い戸別と、全暗号化で中身が読めない戸別は原因が別なので分けて数える
+  // （まとめ発注の前に「何件ぶんの材料か」を判断できるようにするため）。
+  let naNoDwg = 0, naEnc = 0;
 
   rows.forEach(r => {
     const bom = costDetailFilterBom(getRowBomAggregate(r));   // 諸経費除外（キャッシュは無変更）
-    if(!bom){ naCount++; return; }
+    if(!bom){
+      if(r.fileType === "full" && !r.unlocked) naEnc++; else naNoDwg++;
+      return;
+    }
     // 戸別内の同ID項目を合算（ケーブルも通常項目として集約）
     const caseQtyById = {};
     bom.items.forEach(it => {
@@ -14198,12 +14225,17 @@ function renderListCostDetailMode(rows, container){
     ? "color:#1565c0;font-weight:600;"   // 削減（青）
     : (n > 0 ? "color:#c62828;font-weight:600;" : ""); // 追加（赤）
   const hasPreset = !!baseAgg;
+  // 「📐 図面データありのみ」で絞り込み中であることを金額・材料の見出しに明示する
+  // （まとめ発注の材料表がどの範囲を指しているか、印刷物でも分かるようにする）。
+  const onlyDwgBadge = _costOnlyWithDrawing
+    ? ' <span style="font-size:11px;color:#2e7d32;font-weight:normal;margin-left:8px;">📐 図面データありのみ</span>'
+    : '';
 
   let html = renderSelectedFolderBanner();
 
   // 戸別ごとの一覧（上部）
   html += '<div class="cost-detail-section">'
-    + '<h3>戸別ごとの金額一覧 <span style="font-size:11px;color:#555;font-weight:normal;">(' + perRowList.length + ' 件・諸経費/協力会社諸経費 含まず・税抜)</span>';
+    + '<h3>戸別ごとの金額一覧 <span style="font-size:11px;color:#555;font-weight:normal;">(' + perRowList.length + ' 件・諸経費/協力会社諸経費 含まず・税抜)</span>' + onlyDwgBadge;
   if(hasPreset){
     html += ' <span style="font-size:11px;color:#1565c0;font-weight:normal;margin-left:8px;">★ 基本工事プリセット: ' + escapeHtml(baseAgg.label) + '</span>';
   }
@@ -14245,8 +14277,12 @@ function renderListCostDetailMode(rows, container){
       + '<td class="num">' + yen(caseTotalMat) + '</td><td class="num">' + yen(caseTotalLab) + '</td></tr>';
   }
   html += '</tbody></table>';
-  if(naCount > 0){
-    html += '<div style="font-size:11px;color:#6c757d;margin-top:4px;">※ 全暗号化 ' + naCount + ' 件は未集計</div>';
+  // 以前は図面がまだ無いだけの戸別まで「全暗号化」と表示していたので、実態を分けて出す。
+  const naNotes = [];
+  if(naNoDwg > 0) naNotes.push('図面データなし（未作成） ' + naNoDwg + ' 件');
+  if(naEnc > 0)   naNotes.push('全暗号化（未復号） ' + naEnc + ' 件');
+  if(naNotes.length){
+    html += '<div style="font-size:11px;color:#6c757d;margin-top:4px;">※ ' + naNotes.join(' ／ ') + ' は集計に含まれていません</div>';
   }
   html += '</div>';
 
@@ -14306,7 +14342,7 @@ function renderListCostDetailMode(rows, container){
     ? "増減工事 型式別 詳細合計（プリセット想定との差分 ±）"
     : "増減工事 型式別 詳細合計";
   html += '<div class="cost-detail-section">'
-    + '<h3>' + escapeHtml(addTitle) + ' <span style="font-size:11px;color:#555;font-weight:normal;">(' + perRowList.length + ' 件・諸経費/協力会社諸経費 含まず・税抜)</span></h3>';
+    + '<h3>' + escapeHtml(addTitle) + ' <span style="font-size:11px;color:#555;font-weight:normal;">(' + perRowList.length + ' 件・諸経費/協力会社諸経費 含まず・税抜)</span>' + onlyDwgBadge + '</h3>';
   if(hasPreset){
     html += '<div style="font-size:11px;color:#555;margin-bottom:6px;">'
       + '<span style="color:#c62828;font-weight:600;">+ 赤字 = プリセット想定より多く使用（追加）</span> ／ '
@@ -15602,6 +15638,25 @@ const CASE_KEEP_ON_REVERT = [
 /* この戸別に積算の中身が入っているか（＝「未施工に戻す」を出すか） */
 function caseHasEstimate(row){
   return !!(row && row.data && row.data.amplifier);
+}
+/* 「図面データあり」＝増幅器が選ばれている＝図面と積算が組み上がっている戸別。
+   受付台帳の「図面未作成のみ」と全体費用詳細の「📐 図面データありのみ」で同じ判定を使う
+   （別々に書くと片方だけ条件が変わって食い違うため）。 */
+function caseHasDrawingData(row){
+  if(!row) return false;
+  if(row.fileType === "full" && !row.unlocked) return false;   // 全暗号化(未復号)は中身が読めない＝なし扱い
+  return !!(row.data && row.data.amplifier);
+}
+/* 「📐 図面データありのみ」チェックの横に出す件数（図面あり ○ / 読込 ○ 件）。
+   何件ぶんの材料を発注することになるのかを、チェックを入れる前に確認できるようにする。 */
+function updateCostDwgFilterCount(){
+  const box = document.getElementById("cd-only-dwg");
+  if(box && box.checked !== _costOnlyWithDrawing) box.checked = _costOnlyWithDrawing;
+  const span = document.getElementById("cd-only-dwg-count");
+  if(!span) return;
+  const total = _listRows.length;
+  if(!total){ span.textContent = ""; return; }
+  span.textContent = "(図面あり " + _listRows.filter(caseHasDrawingData).length + " / 読込 " + total + " 件)";
 }
 function revertCaseToNotStarted(row){
   if(!row || !row.data) return false;
@@ -19917,7 +19972,7 @@ let _ledgerPrintSel = new Set();  // 工事調書「選択印刷」でチェッ�
 
 /* 図面・積算データの有無（台帳起点の行は未作成。amplifier は積算の必須項目） */
 function lgHasDrawing(row){
-  return !!(row.data && row.data.amplifier);
+  return caseHasDrawingData(row);   // 全体費用詳細の「📐 図面データありのみ」と同じ判定を使う
 }
 
 function lgLedgerEnabled(row){
@@ -22750,6 +22805,14 @@ function init(){
     _hideDuplicates = e.target.checked;
     renderListTable();
   });
+  // 📐 図面データありのみ（全体費用詳細の集計対象を図面済みの戸別だけに絞る）
+  const cdOnlyDwg = document.getElementById("cd-only-dwg");
+  if(cdOnlyDwg){
+    cdOnlyDwg.addEventListener("change", e => {
+      _costOnlyWithDrawing = e.target.checked;
+      renderListTable();
+    });
+  }
   // 上部ボタン欄をスクロールバー無しで横スライド（PC=ドラッグ/ホイール・スマホ=スワイプ）
   enableDragScroll(document.querySelector("header .toolbar"));
   enableDragScroll(document.querySelector(".list-view-actions"));
