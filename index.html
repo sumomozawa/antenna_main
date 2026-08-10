@@ -604,6 +604,16 @@
     padding: 4px 10px; font-size: 11px; border-radius: 3px; cursor: pointer;
   }
   .list-base-preset-row button:hover { background: #0d47a1; }
+  /* 保存先の1行表示（メニュー最上部）。事故防止の要なので、色と文字だけで状態が分かるようにする */
+  .menu-savestate {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 9px 13px; border-radius: 6px; margin-bottom: 10px;
+    font-size: 13.5px; font-weight: 700; line-height: 1.5;
+  }
+  .menu-savestate .ss-sub { font-size: 11.5px; font-weight: normal; opacity: .9; }
+  .menu-savestate.ss-ok   { background: #e8f5e9; border: 1px solid #a5d6a7; color: #1b5e20; }
+  .menu-savestate.ss-warn { background: #fff3e0; border: 1px solid #ffcc80; color: #e65100; }
+  .menu-savestate.ss-none { background: #eceff1; border: 1px solid #cfd8dc; color: #37474f; }
   /* 📐 図面データありのみ（全体費用詳細の集計対象を図面済みの戸別だけに絞るチェック） */
   .list-base-preset-row label.cd-only-dwg-label {
     font-weight: 600; color: #2e7d32;
@@ -4689,6 +4699,7 @@
     <button id="menu-close" title="メニューを閉じて従来の画面（積算・図面編集）へ">✕ 閉じる（編集画面へ）</button>
   </header>
   <div class="menu-body">
+    <div class="menu-savestate ss-none" id="menu-savestate"></div>
     <section class="menu-sec">
       <div class="menu-summary" id="menu-summary"></div>
       <div class="menu-sec-head">機能 <span id="menu-feat-note" style="font-weight:normal;font-size:11px;color:#667482;"></span></div>
@@ -4704,20 +4715,25 @@
         </span>
       </div>
       <div class="menu-proj-note">
-        1物件 ＝ 戸別一覧の読み込み状態・受付台帳・予定・積算・図面データの保存単位です。開いている間の変更は自動保存されます。<br>
+        <b>1物件 ＝ ひとつの工事のデータ一式</b>（戸別一覧・受付台帳・予定・積算・図面・地図）。<b>開いている間の変更は自動で保存されます</b>（保存ボタンは押さなくて大丈夫です）。<br>
         📤 エクスポートしたJSONを別PCでインポートすると同じ状態を開けます（写真は<b>縮小サムネイル＋枚数</b>として物件に保存され、どの端末でも枚数表示・プレビュー・図面の写真欄に表示されます。原寸写真は工事フォルダ側。ハイブリッド暗号化戸別は暗号化されたまま保存されます）。
         <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
           <div style="flex:1;min-width:250px;background:#eaf3ec;border:1px solid #bfe0c2;border-radius:6px;padding:8px 11px;line-height:1.55;">
-            <b style="color:#1b5e20;">📂 共有ファイルを開く（推奨・みんなで共同運用）</b><br>
-            ドライブ上の物件JSONと<b>連動して開き</b>、以後の編集は<b>その共有ファイルへ自動保存</b>されます。だから他の端末とも<b>いつも最新が共有</b>されます（同じ戸別は1台だけ編集可・保存すると他端末へ更新通知）。<br>
-            <span style="color:#667482;">※ Chrome / Edge 推奨。次回起動時は自動で再接続します。</span>
+            <b style="color:#1b5e20;">📂 共有ファイルを開く（ふだんはこちら）</b><br>
+            ドライブのファイルとつながります。<b>以後の入力は、そのファイルへ自動で保存されます。</b><br>
+            <b style="color:#c62828;">⚠ 開くと、いまの画面の内容はファイルの中身に入れ替わります。</b>入力の途中で開かないでください。<br>
+            <span style="color:#667482;">※ Chrome / Edge 推奨。次回からは自動でつながります。</span>
           </div>
           <div style="flex:1;min-width:250px;background:#f2f5f8;border:1px solid #d3dfe8;border-radius:6px;padding:8px 11px;line-height:1.55;">
             <b style="color:#37474f;">📥 インポート（コピーを取り込むだけ）</b><br>
-            ファイルの<b>コピーをこの端末に取り込む</b>だけで、編集は<b>元の共有ファイルへは戻りません</b>。他の人へ反映するには「📤 出力」で共有ファイルへ<b>手動で上書き</b>してください。<br>
-            <span style="color:#667482;">※ どのブラウザでも使えます。共有ファイル非対応の端末（iPad等）では「共有ファイルを開く」も自動でこちら（読み取り）に切り替わります。</span>
+            この端末に<b>コピーを取り込むだけ</b>です。<b>入力しても元のファイルには戻りません。</b><br>
+            他の人へ渡すには「📤 出力/保存」で自分で上書きしてください。<br>
+            <span style="color:#667482;">※ どのブラウザでも使えます。iPad等では「共有ファイルを開く」も自動でこちらになります。</span>
           </div>
         </div>
+      </div>
+      <div class="menu-proj-note" style="background:#eef3f9;border:1px solid #cfdcea;border-radius:6px;padding:8px 11px;margin-bottom:8px;">
+        🕘 <b>入力したものが消えてしまったら</b> — 下の一覧のその物件の「<b>🕘 履歴</b>」を押すと、<b>約5分ごとの控え</b>から前の状態に戻せます（直近6時間はすべて残っています）。
       </div>
       <div id="menu-proj-list"></div>
     </section>
@@ -17675,12 +17691,37 @@ async function openBackupModal(pid){
 }
 /* 共有ファイルへ連動を確定：ファイルが端末内より新しければ取り込んで開き直し（他端末の更新を反映）、
    そうでなければハンドルだけ保持して連動再開。どちらも _projFileHandle がセットされる。 */
-async function connectHandleWithFreshness(handle, loadedProject){
+async function connectHandleWithFreshness(handle, loadedProject, opts){
+  opts = opts || {};
   let disk = null;
   try { const f = await handle.getFile(); const t = await f.text(); disk = t ? JSON.parse(t) : null; } catch(_){ disk = null; }
   if(disk && disk.schema === PROJ_SCHEMA && disk.id === (loadedProject && loadedProject.id)
      && disk.updatedAt && (!loadedProject.updatedAt || disk.updatedAt > loadedProject.updatedAt)){
-    // 共有ファイルが新しい＝他端末で更新済 → そちらを最新として開き直す
+    // 共有ファイルが新しい＝他端末で更新済 → そちらを最新として開き直す。
+    // ただし「開き直す」＝この端末の内容を捨てることなので、
+    //   1) 捨てる前に必ず1世代控える（🕘履歴からいつでも戻せる）
+    //   2) 手動の再接続では、捨ててよいか本人に確認する
+    // ※ 起動時の自動再接続(opts.confirmReplace 無し)は、まだ何も入力していない状態なので確認しない。
+    try { await createProjectBackup(loadedProject, "manual", "共有ファイル再接続で置き換える前の状態"); } catch(_){}
+    if(opts.confirmReplace){
+      const when = s => String(s || "").replace("T", " ").slice(0, 16) || "不明";
+      if(!confirm(
+        "⚠ 共有ファイルの方が新しいようです。\n\n"
+        + "　この端末　： " + when(loadedProject && loadedProject.updatedAt) + "\n"
+        + "　共有ファイル： " + when(disk.updatedAt) + "\n\n"
+        + "「OK」を押すと、いま画面にある内容は共有ファイルの内容に入れ替わります。\n"
+        + "この端末で入力したものは画面から消えます（🕘 履歴から戻せます）。\n\n"
+        + "共有ファイルの内容に入れ替えますか？"
+      )){
+        // 入れ替えない＝この端末の内容のまま連動を再開する。
+        // ここで _projLastWrittenUpdatedAt に disk.updatedAt を入れると「自分が最後に書いた版＝最新」
+        // と見なされ、次の保存が共有ファイルを丸ごと上書きしてしまう。そうならないよう端末側の版を
+        // 入れておき、次の保存を必ず戸別単位マージ（無損失）の経路へ通す。
+        _projFileHandle = handle;
+        _projLastWrittenUpdatedAt = (loadedProject && loadedProject.updatedAt) || "";
+        return "kept-local";
+      }
+    }
     try { await projIdbPut(disk); } catch(_){}
     await applyProject(disk, { silent: true, fileHandle: handle });
     _projLastWrittenUpdatedAt = disk.updatedAt;
@@ -17723,13 +17764,18 @@ async function reconnectSharedFileClick(){
   let perm = "prompt";
   try { perm = await handle.requestPermission({ mode: "readwrite" }); } catch(_){ perm = "prompt"; }
   if(perm !== "granted"){ alert("共有ファイルへのアクセスが許可されませんでした。"); return; }
+  // ★ 比べる前に、いま画面に入っている内容を端末内へ確定させる。
+  //   自動保存は少し間を置いてから走るので、入力直後に再接続すると
+  //   「端末内はまだ古い → 共有ファイルの方が新しい」と誤判定され、入力が消えていた。
+  try { await projSaveNow(); } catch(_){}
   const loaded = (await projIdbGet(_currentProject.id)) || { id: _currentProject.id };
-  const res = await connectHandleWithFreshness(handle, loaded);
+  const res = await connectHandleWithFreshness(handle, loaded, { confirmReplace: true });
   _projPendingHandle = null;
   updateProjBar();
   if(typeof renderMenuView === "function") renderMenuView();
   if(_projWriteWarn) alert("⚠ 再接続しましたが書き戻しに問題があります：\n" + _projWriteWarn);
-  else if(res === "loaded-newer") alert("✅ 共有ファイルに再接続しました。\n他の端末でより新しい内容が見つかったため、最新版を取り込みました。");
+  else if(res === "loaded-newer") alert("✅ 共有ファイルに再接続しました。\n他の端末でより新しい内容が見つかったため、最新版を取り込みました。\n（入れ替える前の状態は 🕘 履歴 に控えてあります）");
+  else if(res === "kept-local") alert("✅ 共有ファイルに再接続しました。\nこの端末の内容をそのまま残しました。次の保存で共有ファイルへ書き戻します。");
   else alert("✅ 共有ファイルに再接続しました。以後の変更は自動でこのファイルへ保存されます。");
 }
 function projIdbPut(obj){
@@ -18749,6 +18795,18 @@ async function projWriteFile(snap, marks){
 /* 物件JSONファイルを『書き戻し可』で開く（Chrome/Edge）。以後の編集はこの共有ファイルへ自動保存。
    非対応(Safari/iPad等)は従来のインポート（読み取りのみ・編集後は手動エクスポートで上書き）にフォールバック。 */
 async function openProjectFromFile(){
+  // 事故防止：ファイルを選ぶ前に、いまの入力を先に保存しておく。
+  // これで「入力直後に開いたので自動保存が間に合わず、警告も出ないまま消える」経路を塞ぐ。
+  if(_currentProject){
+    if(!confirm(
+      "📂 共有ファイルを開きます。\n\n"
+      + "いま画面に出ている内容は、選んだファイルの中身に入れ替わります。\n"
+      + "（受付台帳に書いた内容も入れ替わります）\n\n"
+      + "念のため、いまの内容は先に保存してから開きます。\n\n"
+      + "続けますか？"
+    )) return;
+    try { await projSaveNow(); } catch(_){}
+  }
   if(!window.showOpenFilePicker){
     alert("この端末（ブラウザ）は共有ファイルへの直接保存に対応していません。\n「📥 インポート」と同じ方法で取り込みます（読み取り専用）。編集後は各物件の「出力」でダウンロードして、ドライブ上の共有ファイルへ上書きしてください。");
     pickAndImportProject();
@@ -19695,7 +19753,35 @@ function updateProjBar(){
       pf.style.background = ""; pf.style.borderColor = "";
     }
   }
+  updateSaveStateBar();
   try { rtUpdatePresenceUI(); } catch(_){} // リアルタイム：接続台数表示をDOM更新のみで反映（ネットワーク処理はしない）
+}
+/* いま入力したものがどこに保存されているかを、メニュー最上部に1行で出す。
+   「保存ボタンを押さないと保存されない」という誤解と、連動が切れたまま入力し続ける
+   事故を防ぐのが目的なので、専門用語を使わず短い1文にする。 */
+function updateSaveStateBar(){
+  const b = document.getElementById("menu-savestate"); if(!b) return;
+  b.classList.remove("ss-ok", "ss-warn", "ss-none");
+  if(!_currentProject){
+    b.classList.add("ss-none");
+    b.innerHTML = '物件を開いていません <span class="ss-sub">下の「📂 共有ファイルを開く」から、いつも使っているファイルを開いてください。</span>';
+    return;
+  }
+  if(_projPendingHandle && !_projFileHandle){
+    b.classList.add("ss-warn");
+    b.innerHTML = '⚠ 共有ファイルとつながっていません（この端末の中だけに保存中）'
+      + '<span class="ss-sub">上の「🔗 共有ファイルを再接続」を押すと、また自動でファイルに保存されます。</span>';
+    return;
+  }
+  if(_projFileHandle){
+    b.classList.add("ss-ok");
+    b.innerHTML = '✅ いま入力したものは、共有ファイルに自動で保存されています'
+      + '<span class="ss-sub">保存ボタンを押す必要はありません。' + (_projLastSaved ? '（最後の保存 ' + escapeHtml(_projLastSaved) + '）' : '') + '</span>';
+    return;
+  }
+  b.classList.add("ss-warn");
+  b.innerHTML = '⚠ この端末の中だけに保存されています（共有ファイルには届きません）'
+    + '<span class="ss-sub">上の「🔗 共有ファイルに連動」を押すと、以後は自動でファイルにも保存されます。</span>';
 }
 async function renderMenuView(){
   // 機能カード
