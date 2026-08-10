@@ -604,6 +604,57 @@
     padding: 4px 10px; font-size: 11px; border-radius: 3px; cursor: pointer;
   }
   .list-base-preset-row button:hover { background: #0d47a1; }
+  /* ▼ 受付台帳「印刷レイアウト調整」：印刷時のレイアウトを画面上でそのまま見るためのCSS。
+     @media print の中の指定は画面には効かないので、レイアウトに効く分だけをここに写している。
+     列幅そのものは #lg-print-w（JSが書き出す）が担当し、印刷とプレビューの両方に同時に効く。 */
+  body.lg-print-preview .ledger-table { table-layout: fixed; width: 100%; }
+  body.lg-print-preview .ledger-table th,
+  body.lg-print-preview .ledger-table td { min-width: 0 !important; }
+  body.lg-print-preview .ledger-table td { white-space: normal; word-break: break-word; overflow-wrap: anywhere; }
+  body.lg-print-preview .ledger-table thead th:first-child,
+  body.lg-print-preview .ledger-table tbody td:first-child,
+  body.lg-print-preview .ledger-table thead th:last-child,
+  body.lg-print-preview .ledger-table tbody td:last-child { display: none !important; }
+  body.lg-print-preview .ledger-table input[type=date],
+  body.lg-print-preview .ledger-table input[type=time],
+  body.lg-print-preview .ledger-table input[type=datetime-local] { display: none !important; }
+  body.lg-print-preview .ledger-table .lg-dt-print { display: inline !important; white-space: nowrap; font-size: 10px; }
+  body.lg-print-preview .ledger-table tbody td[data-col="addr"] .lg-edit,
+  body.lg-print-preview .ledger-table tbody td[data-col="addr"] .lg-lock { display: none !important; }
+  body.lg-print-preview .ledger-table .lg-addr-print { display: inline !important; }
+  body.lg-print-preview .ledger-table .lg-prov-badge { display: none !important; }
+  body.lg-print-preview .ledger-table .lg-map-ind,
+  body.lg-print-preview .ledger-table .lg-dwg-ind { display: none !important; }
+  body.lg-print-preview .ledger-table th,
+  body.lg-print-preview .ledger-table td { padding: 1px 4px !important; line-height: 1.25 !important; font-size: 10px !important; }
+  body.lg-print-preview .ledger-table .lg-edit,
+  body.lg-print-preview .ledger-table .lg-lock { display: inline !important; min-height: 0 !important; padding: 0 !important; }
+  body.lg-print-preview .ledger-table input[type=checkbox] { width: 11px; height: 11px; margin: 0; }
+  body.lg-print-preview .ledger-table select.lg-st-sel { font-size: 10px !important; line-height: 1.2 !important; }
+  body.lg-print-preview .ledger-table .lg-note-input { display: none !important; }
+  body.lg-print-preview .ledger-table .lg-note-print { display: inline !important; }
+  /* 調整中の列を見分けやすくする（プレビューだけの色。印刷には出ない） */
+  body.lg-print-preview .ledger-table th.lgw-focus,
+  body.lg-print-preview .ledger-table th.lgw-focus ~ th { }
+  body.lg-print-preview .ledger-table thead th.lgw-focus { outline: 2px solid #1565c0; outline-offset: -2px; background: #d7e7fb !important; }
+
+  /* 調整パネル本体 */
+  .lgw-panel {
+    background: #fff; border: 1px solid #cfdcea; border-radius: 6px;
+    padding: 10px 12px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  }
+  .lgw-panel .lgw-head { font-weight: 700; color: #1e3a5f; font-size: 13px; margin-bottom: 2px; }
+  .lgw-panel .lgw-note { font-size: 11px; color: #667482; line-height: 1.6; margin-bottom: 8px; }
+  .lgw-rows { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+  .lgw-row { display: flex; align-items: center; gap: 6px; font-size: 12px; flex: 1 1 250px; }
+  .lgw-row > b { width: 6.5em; text-align: right; color: #33424f; font-weight: 600; }
+  .lgw-row input[type=range] { flex: 1; min-width: 90px; }
+  .lgw-row input[type=number] { width: 52px; font-size: 12px; padding: 2px 4px; border: 1px solid #cdd3da; border-radius: 3px; text-align: right; }
+  .lgw-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 9px; padding-top: 8px; border-top: 1px solid #e5e9ee; }
+  .lgw-total { font-size: 12px; font-weight: 700; }
+  .lgw-total.ok { color: #1b5e20; }
+  .lgw-total.ng { color: #c62828; }
+  .lgw-foot button { font-size: 12px; padding: 4px 12px; border-radius: 3px; cursor: pointer; }
   /* 保存先の1行表示（メニュー最上部）。事故防止の要なので、色と文字だけで状態が分かるようにする */
   .menu-savestate {
     display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
@@ -1155,23 +1206,18 @@
     body.list-print-mode .ledger-table thead th:last-child,
     body.list-print-mode .ledger-table tbody td:last-child { display: none !important; }
     body.list-print-mode .ledger-table { table-layout: fixed; width: 100%; }
+    /* 画面用の下限幅（住所170px・備考220px）は印刷では邪魔。指定した%どおりに配分させる */
+    body.list-print-mode .ledger-table th,
+    body.list-print-mode .ledger-table td { min-width: 0 !important; }
     body.list-print-mode .ledger-table td { white-space: normal; word-break: break-word; overflow-wrap: anywhere; }
-    /* チェック列(最左・選択印刷用)は印刷不要 → 列ごと(見出し＋セル)非表示 */
-    body.list-print-mode .ledger-table thead th:nth-child(1),
-    body.list-print-mode .ledger-table tbody td:nth-child(1) { display: none !important; }
-    body.list-print-mode .ledger-table thead th:nth-child(2) { width: 5%; }   /* 状態 */
-    body.list-print-mode .ledger-table thead th:nth-child(3) { width: 10%; }  /* 管理番号（番号の改行防止のため拡大） */
-    body.list-print-mode .ledger-table thead th:nth-child(4) { width: 9%; }   /* 名前 */
-    body.list-print-mode .ledger-table thead th:nth-child(5) { width: 12%; }  /* 施工会社 */
-    body.list-print-mode .ledger-table thead th:nth-child(6) { width: 15%; }  /* 住所（日付列を詰めた分を回す） */
-    body.list-print-mode .ledger-table thead th:nth-child(7) { width: 8%; }   /* 電話番号 */
-    body.list-print-mode .ledger-table thead th:nth-child(8) { width: 7%; }   /* 工事日程予定（8/1-10:00 表記で十分） */
-    body.list-print-mode .ledger-table thead th:nth-child(9) { width: 7%; }   /* 打合せ予定（同上） */
-    body.list-print-mode .ledger-table thead th:nth-child(10) { width: 3%; }  /* ビラ */
-    body.list-print-mode .ledger-table thead th:nth-child(11) { width: 3%; }  /* 完了 */
-    body.list-print-mode .ledger-table thead th:nth-child(12) { width: 3%; }  /* 承諾書 */
-    body.list-print-mode .ledger-table thead th:nth-child(13) { width: 3%; }  /* 完了書 */
-    body.list-print-mode .ledger-table thead th:nth-child(14) { width: 15%; } /* 備考（開く列＋日付列の分を吸収） */
+    /* チェック列(最左・選択印刷用)と「開く」列は印刷不要 → 列ごと(見出し＋セル)非表示。
+       ※ 列の増減で位置がずれない first-child / last-child で指定する。 */
+    body.list-print-mode .ledger-table thead th:first-child,
+    body.list-print-mode .ledger-table tbody td:first-child { display: none !important; }
+    /* 各列の幅は「列番号」ではなく data-col（列の名前）で指定し、JS が
+       #lg-print-w に書き出す（lgApplyPrintWidths）。列を1本足しても他の列の指定がずれない。
+       ここで nth-child を使っていたため、「保留」列を足したときに以降の指定が1つずつずれ、
+       完了書が備考の幅を取り、備考が0幅に潰れて1文字ずつ折り返していた。 */
     /* ▼ 行を詰める（縦の枚数を減らす） */
     /* 日付・時刻は入力欄を隠し、「8/1-10:00」の1行表示に置き換える（入力欄が縦に積まれて行が高くなるのを防ぐ） */
     body.list-print-mode .ledger-table input[type=date],
@@ -1179,8 +1225,8 @@
     body.list-print-mode .ledger-table input[type=datetime-local] { display: none !important; }
     body.list-print-mode .ledger-table .lg-dt-print { display: inline !important; white-space: nowrap; font-size: 10px; }
     /* 住所は印刷では半角数字で表示（全角は幅が2倍で折り返しやすいため）。データは全角のまま。 */
-    body.list-print-mode .ledger-table tbody td:nth-child(6) .lg-edit,
-    body.list-print-mode .ledger-table tbody td:nth-child(6) .lg-lock { display: none !important; }
+    body.list-print-mode .ledger-table tbody td[data-col="addr"] .lg-edit,
+    body.list-print-mode .ledger-table tbody td[data-col="addr"] .lg-lock { display: none !important; }
     body.list-print-mode .ledger-table .lg-addr-print { display: inline !important; }
     /* 「状態」列に仮受付と出るので、管理番号セルの「仮」バッジは印刷では重複 → 消す */
     body.list-print-mode .ledger-table .lg-prov-badge { display: none !important; }
@@ -2911,16 +2957,19 @@
   }
   table.ledger-table thead th .lg-arrow { font-size: 9px; color: #2e5488; }
   table.ledger-table td.num { text-align: right; }
-  /* 住所列（6列目）に幅を与え、余った横幅は住所ではなく備考列（可変）に持たせる。
+  /* 住所列に幅を与え、余った横幅は住所ではなく備考列（可変）に持たせる。
      住所がテーブルの余白を独り占めして異常に横に広がるのを防ぐ。日本語は文字間で自然に折り返す。 */
-  table.ledger-table th:nth-child(6),
-  table.ledger-table td:nth-child(6) { width: 210px; min-width: 170px; white-space: normal; word-break: break-word; }
-  /* 備考列（14列目）：下限幅を確保。他列は固定幅・住所は下限幅を持つため、表示幅が
+  table.ledger-table th[data-col="addr"],
+  table.ledger-table td[data-col="addr"] { width: 210px; min-width: 170px; white-space: normal; word-break: break-word; }
+  /* 備考列：下限幅を確保。他列は固定幅・住所は下限幅を持つため、表示幅が
      不足すると幅指定のない備考だけが1文字分まで潰れてしまう（Android高解像度など
      CSS上の表示幅が狭い端末で顕著）。最小幅を与え、足りない分は台帳全体を横スクロール
-     （.list-table-wrap の overflow:auto）で吸収する。 */
-  table.ledger-table th:nth-child(14),
-  table.ledger-table td:nth-child(14) { min-width: 220px; }
+     （.list-table-wrap の overflow:auto）で吸収する。
+     ※ ここは以前 nth-child(6) / nth-child(14) で書いていたため、「保留」列を足した時に
+        min-width:220px が備考ではなく完了書に当たり、完了書が巨大化・備考が潰れていた。
+        列を足しても崩れないよう data-col（列の名前）で指定する。 */
+  table.ledger-table th[data-col="note"],
+  table.ledger-table td[data-col="note"] { min-width: 220px; }
   /* 施工会社チップ：未割当＝業者チップを並べて一発選択／割当済み＝会社名チップのみ（クリックで変更） */
   table.ledger-table .lg-ctr-wrap { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; }
   table.ledger-table .lg-ctr-chip {
@@ -15980,6 +16029,10 @@ function setListMode(mode){
     b.classList.toggle("active", b.dataset.listMode === mode);
   });
   // モード別CSS適用（基本工事プリセットバーは費用詳細モードのみ表示）
+  if(_listMode !== "ledger" && _lgPrintPreview){
+    _lgPrintPreview = false;
+    document.body.classList.remove("lg-print-preview");
+  }
   document.body.classList.remove("list-mode-standard","list-mode-by_folder","list-mode-cost_detail","list-mode-subcontractor","list-mode-ledger","list-mode-calendar");
   document.body.classList.add("list-mode-" + mode);
   renderListTable();
@@ -20175,6 +20228,142 @@ function lgDateStrToday(offset){
   t.setDate(t.getDate() + (offset || 0));
   return t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") + "-" + String(t.getDate()).padStart(2, "0");
 }
+/* ============================================================
+   受付台帳の印刷レイアウト（列幅）
+   ------------------------------------------------------------
+   ・幅は「列の名前(data-col)」で持つ。列を足しても他の指定がずれない。
+   ・#lg-print-w に書き出し、印刷（@media print）と画面プレビューの両方へ同時に効かせる。
+   ・端末ごとに localStorage へ保存（物件ファイルには入れない＝共有ファイルを汚さない）。
+   ============================================================ */
+const LG_PRINT_W_KEY = "antenna_ledger_print_w_v1";
+const LG_PRINT_COLS = [
+  { key: "st",      label: "状態",     def: 5 },
+  { key: "mgmt",    label: "管理番号", def: 10 },
+  { key: "name",    label: "名前",     def: 9 },
+  { key: "ctr",     label: "施工会社", def: 9 },
+  { key: "addr",    label: "住所",     def: 15 },
+  { key: "tel",     label: "電話番号", def: 8 },
+  { key: "date",    label: "工事日程", def: 7 },
+  { key: "meet",    label: "打合せ",   def: 7 },
+  { key: "flyer",   label: "ビラ",     def: 3 },
+  { key: "done",    label: "完了",     def: 3 },
+  { key: "hold",    label: "保留",     def: 3 },
+  { key: "consent", label: "承諾書",   def: 3 },
+  { key: "compdoc", label: "完了書",   def: 3 },
+  { key: "note",    label: "備考",     def: 15 }
+];
+let _lgPrintW = (() => {
+  const w = {};
+  LG_PRINT_COLS.forEach(c => { w[c.key] = c.def; });
+  try {
+    const s = JSON.parse(localStorage.getItem(LG_PRINT_W_KEY) || "{}");
+    LG_PRINT_COLS.forEach(c => { const v = parseFloat(s[c.key]); if(isFinite(v) && v >= 0 && v <= 60) w[c.key] = v; });
+  } catch(_){}
+  return w;
+})();
+let _lgPrintPreview = false;
+function lgPrintWTotal(){ return LG_PRINT_COLS.reduce((a, c) => a + (_lgPrintW[c.key] || 0), 0); }
+/* 現在の幅を印刷用スタイルとして書き出す。印刷・画面プレビューの両方に効く。 */
+function lgApplyPrintWidths(){
+  let st = document.getElementById("lg-print-w");
+  if(!st){ st = document.createElement("style"); st.id = "lg-print-w"; document.head.appendChild(st); }
+  // !important 必須：見出しには画面用の style="width:104px" 等がインラインで付いており、
+  // それが印刷用の % 指定に勝ってしまう（完了書が 42px 指定のまま余白を吸って巨大化していた）。
+  st.textContent = LG_PRINT_COLS.map(c =>
+    'body.list-print-mode .ledger-table th[data-col="' + c.key + '"],'
+    + 'body.lg-print-preview .ledger-table th[data-col="' + c.key + '"]'
+    + '{width:' + (_lgPrintW[c.key] || 0) + '% !important;}'
+  ).join("\n");
+}
+lgApplyPrintWidths();
+function lgSavePrintWidths(){
+  try { localStorage.setItem(LG_PRINT_W_KEY, JSON.stringify(_lgPrintW)); } catch(_){}
+}
+/* 調整パネルのHTML（受付台帳モードの上部に差し込む） */
+function lgPrintWPanelHtml(){
+  if(!_lgPrintPreview) return "";
+  const total = lgPrintWTotal();
+  return '<div class="lgw-panel" id="lgw-panel">'
+    + '<div class="lgw-head">🖨 印刷レイアウト調整（プレビュー中）</div>'
+    + '<div class="lgw-note">下の表が<b>印刷したときの見た目</b>になっています。つまみを動かすと<b>その場で幅が変わります</b>。'
+    + '合計が100%になるように配分してください（100%からずれても印刷はできますが、はみ出したり余ったりします）。'
+    + 'この設定は<b>この端末だけ</b>に保存され、物件ファイルには入りません。</div>'
+    + '<div class="lgw-rows">'
+    + LG_PRINT_COLS.map(c =>
+        '<label class="lgw-row" data-lgw-col="' + c.key + '"><b>' + escapeHtml(c.label) + '</b>'
+        + '<input type="range" min="0" max="40" step="0.5" value="' + (_lgPrintW[c.key] || 0) + '" data-lgw="' + c.key + '">'
+        + '<input type="number" min="0" max="60" step="0.5" value="' + (_lgPrintW[c.key] || 0) + '" data-lgwn="' + c.key + '">%'
+        + '</label>').join("")
+    + '</div>'
+    + '<div class="lgw-foot">'
+    +   '<span class="lgw-total ' + (Math.abs(total - 100) < 0.01 ? "ok" : "ng") + '" id="lgw-total">合計 ' + (Math.round(total * 10) / 10) + '%'
+    +     (Math.abs(total - 100) < 0.01 ? "（ちょうど）" : "（100%にしてください）") + '</span>'
+    +   '<button id="lgw-fit" style="background:#1565c0;color:#fff;border:1px solid #0d47a1;">100%に自動調整</button>'
+    +   '<button id="lgw-reset" style="background:#fff;color:#7a4e1e;border:1px solid #b08a55;">既定に戻す</button>'
+    +   '<button id="lgw-print" style="background:#7a4e1e;color:#fff;border:1px solid #5e3c16;">🖨 このまま印刷</button>'
+    +   '<button id="lgw-close" style="background:#666;color:#fff;border:1px solid #444;">✕ 調整をやめる</button>'
+    + '</div></div>';
+}
+/* パネルの操作。表全体を作り直すと入力中のつまみが飛ぶので、幅の反映は
+   スタイルの書き換えだけで済ませ、再描画はしない。 */
+function lgBindPrintWPanel(container){
+  const panel = container.querySelector("#lgw-panel"); if(!panel) return;
+  const totalEl = panel.querySelector("#lgw-total");
+  const refreshTotal = () => {
+    const t = lgPrintWTotal(), ok = Math.abs(t - 100) < 0.01;
+    totalEl.className = "lgw-total " + (ok ? "ok" : "ng");
+    totalEl.textContent = "合計 " + (Math.round(t * 10) / 10) + "%" + (ok ? "（ちょうど）" : "（100%にしてください）");
+  };
+  const setW = (key, v, from) => {
+    v = Math.max(0, Math.min(60, parseFloat(v) || 0));
+    _lgPrintW[key] = v;
+    const r = panel.querySelector('[data-lgw="' + key + '"]'), n = panel.querySelector('[data-lgwn="' + key + '"]');
+    if(r && from !== "range") r.value = v;
+    if(n && from !== "num") n.value = v;
+    lgApplyPrintWidths(); lgSavePrintWidths(); refreshTotal();
+  };
+  const focusCol = key => {
+    container.querySelectorAll(".ledger-table thead th.lgw-focus").forEach(th => th.classList.remove("lgw-focus"));
+    const th = container.querySelector('.ledger-table thead th[data-col="' + key + '"]');
+    if(th) th.classList.add("lgw-focus");
+  };
+  panel.querySelectorAll("[data-lgw]").forEach(r => {
+    r.addEventListener("input", () => { focusCol(r.dataset.lgw); setW(r.dataset.lgw, r.value, "range"); });
+  });
+  panel.querySelectorAll("[data-lgwn]").forEach(n => {
+    n.addEventListener("input", () => { focusCol(n.dataset.lgwn); setW(n.dataset.lgwn, n.value, "num"); });
+  });
+  panel.querySelector("#lgw-fit").addEventListener("click", () => {
+    // 合計が100%になるよう、いまの比率を保ったまま全体を伸縮させる
+    const t = lgPrintWTotal();
+    if(t <= 0) return;
+    LG_PRINT_COLS.forEach(c => { _lgPrintW[c.key] = Math.round((_lgPrintW[c.key] || 0) * 100 / t * 10) / 10; });
+    // 端数で100%ちょうどにならない分は、いちばん広い列で吸収する
+    const diff = Math.round((100 - lgPrintWTotal()) * 10) / 10;
+    if(diff){
+      let big = LG_PRINT_COLS[0].key;
+      LG_PRINT_COLS.forEach(c => { if((_lgPrintW[c.key] || 0) > (_lgPrintW[big] || 0)) big = c.key; });
+      _lgPrintW[big] = Math.round((_lgPrintW[big] + diff) * 10) / 10;
+    }
+    LG_PRINT_COLS.forEach(c => {
+      const r = panel.querySelector('[data-lgw="' + c.key + '"]'), n = panel.querySelector('[data-lgwn="' + c.key + '"]');
+      if(r) r.value = _lgPrintW[c.key]; if(n) n.value = _lgPrintW[c.key];
+    });
+    lgApplyPrintWidths(); lgSavePrintWidths(); refreshTotal();
+  });
+  panel.querySelector("#lgw-reset").addEventListener("click", () => {
+    LG_PRINT_COLS.forEach(c => { _lgPrintW[c.key] = c.def; });
+    lgApplyPrintWidths(); lgSavePrintWidths(); renderListTable();
+  });
+  panel.querySelector("#lgw-print").addEventListener("click", () => {
+    const b = document.getElementById("btn-list-pdf"); if(b) b.click();
+  });
+  panel.querySelector("#lgw-close").addEventListener("click", () => {
+    _lgPrintPreview = false;
+    document.body.classList.remove("lg-print-preview");
+    renderListTable();
+  });
+}
 function renderListLedgerMode(rows, container){
   _ledgerShown = {};
   const todayS = lgDateStrToday(0), tomoS = lgDateStrToday(1);
@@ -20222,6 +20411,7 @@ function renderListLedgerMode(rows, container){
   rows.forEach(r => { if(lgLedgerEnabled(r) && _ledgerPrintSel.has(subCaseKey(r))) selCount++; });
   const arrow = k => (_ledgerSort.key === k ? '<span class="lg-arrow">' + (_ledgerSort.dir > 0 ? "▲" : "▼") + '</span>' : "");
   let html = renderSelectedFolderBanner();
+  html += lgPrintWPanelHtml();
   html += '<div class="ledger-controls cost-detail-section">'
     + '<button id="lg-add-row" title="台帳に新しい戸別行を追加（台帳が戸別作成の起点）" style="background:#1e3a5f;color:#fff;border:1px solid #16314f;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">＋ 新規行</button>'
     + '<label' + (prov > 0 ? ' style="background:#fff8d6;border-radius:3px;padding:2px 6px;"' : '') + '><input type="checkbox" id="lg-only-prov"' + (_ledgerOnlyProv ? " checked" : "") + '> 仮受付のみ' + (prov > 0 ? '（' + prov + '）' : '') + '</label>'
@@ -20229,6 +20419,7 @@ function renderListLedgerMode(rows, container){
     + '<label><input type="checkbox" id="lg-only-noflyer"' + (_ledgerOnlyNoFlyer ? " checked" : "") + '> ビラ未配布のみ</label>'
     + '<label><input type="checkbox" id="lg-only-nodwg"' + (_ledgerOnlyNoDwg ? " checked" : "") + '> 図面未作成のみ</label>'
     + '<label' + (held > 0 ? ' style="background:#ffe8cc;border-radius:3px;padding:2px 6px;"' : '') + ' title="着工を止めている戸別だけを表示します"><input type="checkbox" id="lg-only-hold"' + (_ledgerOnlyHold ? " checked" : "") + '> 保留のみ' + (held > 0 ? '（' + held + '）' : '') + '</label>'
+    + '<button id="lg-print-layout" title="印刷したときの見た目のまま、各列の幅をその場で調整できます（この端末だけの設定）" style="background:#37474f;color:#fff;border:1px solid #263238;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">🖨 印刷レイアウト調整</button>'
     + '<button id="lg-print-sel" title="左端のチェックを入れた戸別の工事調書を 1戸1ページ でまとめて印刷／PDF出力します"' + (selCount ? '' : ' disabled')
     + ' style="background:#7a4e1e;color:#fff;border:1px solid #5e3c16;padding:4px 12px;border-radius:3px;cursor:' + (selCount ? 'pointer' : 'not-allowed') + ';font-size:12px;opacity:' + (selCount ? '1' : '.5') + ';">🖨 選択印刷' + (selCount ? '（' + selCount + '件）' : '') + '</button>'
     + (selCount ? '<button id="lg-print-clear" title="工事調書の選択をすべて解除" style="background:#fff;color:#7a4e1e;border:1px solid #b08a55;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:12px;">選択解除</button>' : '')
@@ -20242,22 +20433,22 @@ function renderListLedgerMode(rows, container){
     + '<span class="lg-count">全 ' + rows.length + ' 件（仮 ' + prov + ' ／ 完了 ' + done + ' ／ ビラ済 ' + flyered + (held ? ' ／ 保留 ' + held : '') + '）' + (shown.length !== rows.length ? ' → 表示 ' + shown.length + ' 件' : '') + '</span>'
     + '</div>';
   html += '<div class="cost-detail-section"><table class="ledger-table"><thead><tr>'
-    + '<th class="lg-c" style="width:34px;" title="表示中の戸別をまとめて選択／解除（工事調書の選択印刷用）"><input type="checkbox" id="lg-print-all"></th>'
-    + '<th data-sort="st" style="width:74px;">状態 ' + arrow("st") + '</th>'
-    + '<th data-sort="mgmt" style="width:104px;">管理番号 ' + arrow("mgmt") + '</th>'
-    + '<th data-sort="name" style="width:124px;">名前 ' + arrow("name") + '</th>'
-    + '<th style="width:128px;" title="施工会社（物件の施工業者から選択）">施工会社</th>'
-    + '<th data-sort="addr">住所 ' + arrow("addr") + '</th>'
-    + '<th style="width:112px;">電話番号</th>'
-    + '<th data-sort="date" style="width:162px;">工事日程予定 ' + arrow("date") + '</th>'
-    + '<th data-sort="meet" style="width:172px;">打合せ予定 ' + arrow("meet") + '</th>'
-    + '<th data-sort="flyer" style="width:42px;" title="ビラ配布済み">ビラ ' + arrow("flyer") + '</th>'
-    + '<th data-sort="done" style="width:42px;" title="工事完了">完了 ' + arrow("done") + '</th>'
-    + '<th data-sort="hold" style="width:42px;" title="保留（着工を止めている戸別）。地図では管理番号の右肩に橙色の「保」マークが付きます">保留 ' + arrow("hold") + '</th>'
-    + '<th style="width:42px;" title="住民からの承諾書 受領済み">承諾書</th>'
-    + '<th style="width:42px;" title="完了書 受領／提出済み">完了書</th>'
-    + '<th>備考</th>'
-    + '<th style="width:140px;">開く</th>'
+    + '<th data-col="sel" class="lg-c" style="width:34px;" title="表示中の戸別をまとめて選択／解除（工事調書の選択印刷用）"><input type="checkbox" id="lg-print-all"></th>'
+    + '<th data-col="st" data-sort="st" style="width:74px;">状態 ' + arrow("st") + '</th>'
+    + '<th data-col="mgmt" data-sort="mgmt" style="width:104px;">管理番号 ' + arrow("mgmt") + '</th>'
+    + '<th data-col="name" data-sort="name" style="width:124px;">名前 ' + arrow("name") + '</th>'
+    + '<th data-col="ctr" style="width:128px;" title="施工会社（物件の施工業者から選択）">施工会社</th>'
+    + '<th data-col="addr" data-sort="addr">住所 ' + arrow("addr") + '</th>'
+    + '<th data-col="tel" style="width:112px;">電話番号</th>'
+    + '<th data-col="date" data-sort="date" style="width:162px;">工事日程予定 ' + arrow("date") + '</th>'
+    + '<th data-col="meet" data-sort="meet" style="width:172px;">打合せ予定 ' + arrow("meet") + '</th>'
+    + '<th data-col="flyer" data-sort="flyer" style="width:42px;" title="ビラ配布済み">ビラ ' + arrow("flyer") + '</th>'
+    + '<th data-col="done" data-sort="done" style="width:42px;" title="工事完了">完了 ' + arrow("done") + '</th>'
+    + '<th data-col="hold" data-sort="hold" style="width:42px;" title="保留（着工を止めている戸別）。地図では管理番号の右肩に橙色の「保」マークが付きます">保留 ' + arrow("hold") + '</th>'
+    + '<th data-col="consent" style="width:42px;" title="住民からの承諾書 受領済み">承諾書</th>'
+    + '<th data-col="compdoc" style="width:42px;" title="完了書 受領／提出済み">完了書</th>'
+    + '<th data-col="note">備考</th>'
+    + '<th data-col="open" style="width:140px;">開く</th>'
     + '</tr></thead><tbody>';
 
   shown.forEach((r, i) => {
@@ -20303,7 +20494,7 @@ function renderListLedgerMode(rows, container){
       + '<span class="lg-map-ind" title="' + (mapReg ? "地図に登録済み（建物にこの管理番号をリンク済み）" : "地図に未登録（地図で建物にこの管理番号をリンクすると🗺️になります）") + '">' + (mapReg ? "🗺️" : "－") + '</span></td>'
       + '<td>' + tCell("name", d.chosho_cust_name) + '</td>'
       + '<td class="lg-c lg-ctr-cell">' + lgContractorCellHtml(r, false) + '</td>'
-      + '<td>' + tCell("addr", d.chosho_cust_addr)
+      + '<td data-col="addr">' + tCell("addr", d.chosho_cust_addr)
       +   '<span class="lg-addr-print">' + escapeHtml(toHalfWidthNum(d.chosho_cust_addr || "")) + '</span></td>'
       + '<td>' + tCell("tel", d.chosho_cust_tel) + '</td>';
     // 工事日程予定（日付=chosho_date ＋ 時間=ledger.time）
@@ -20327,7 +20518,7 @@ function renderListLedgerMode(rows, container){
     html += '<td class="lg-c"><input type="checkbox" data-f="consent"' + (lg.consent ? " checked" : "") + (enabled ? "" : " disabled") + ' title="住民からの承諾書 受領済み"></td>';
     html += '<td class="lg-c"><input type="checkbox" data-f="compdoc"' + (lg.compdoc ? " checked" : "") + (enabled ? "" : " disabled") + ' title="完了書 受領／提出済み"></td>';
     // 備考
-    html += '<td><input type="text" class="lg-note-input" data-f="note" maxlength="200" value="' + escapeHtml(lg.note || "") + '" placeholder=""' + (enabled ? "" : " disabled") + '><span class="lg-note-print">' + escapeHtml(lg.note || "") + '</span></td>';
+    html += '<td data-col="note"><input type="text" class="lg-note-input" data-f="note" maxlength="200" value="' + escapeHtml(lg.note || "") + '" placeholder=""' + (enabled ? "" : " disabled") + '><span class="lg-note-print">' + escapeHtml(lg.note || "") + '</span></td>';
     // 開く
     html += '<td class="lg-open-btns">'
       + '<button data-open="cal" title="カレンダーで該当月を表示">📅</button>'
@@ -20343,6 +20534,7 @@ function renderListLedgerMode(rows, container){
   }
   html += '</tbody></table></div>';
   container.innerHTML = html;
+  lgBindPrintWPanel(container);
   bindLedgerHandlers(container);
   refreshLedgerPrintSelUI(container); // 選択印刷ボタン・件数・全選択チェックの状態を反映
   // ハイライト行へスクロール（カレンダーからのジャンプ・新規行追加）
@@ -21007,6 +21199,13 @@ function bindLedgerHandlers(container){
     if(e.target.closest("#lg-add-row")){
       const row = createManualRow({}, "manual");
       _ledgerHighlightKey = subCaseKey(row);
+      renderListTable();
+      return;
+    }
+    if(e.target.closest("#lg-print-layout")){
+      // 印刷レイアウト調整：画面を印刷時の見た目に切り替えて、その場で列幅を動かせるようにする
+      _lgPrintPreview = !_lgPrintPreview;
+      document.body.classList.toggle("lg-print-preview", _lgPrintPreview);
       renderListTable();
       return;
     }
