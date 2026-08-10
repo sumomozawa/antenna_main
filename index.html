@@ -4976,8 +4976,8 @@
         <div class="map-side-note" id="map-bld-cmode-note">番号を付けた建物を施工会社ごとの色で表示します（受付台帳の割当が無い建物は業者番号＝管理番号の左から4桁目で判定・どちらも無ければグレー／番号なしは緑）。</div>
         <label class="map-layer-extra" style="margin:6px 0 2px;display:flex;gap:5px;align-items:center;" title="管理番号をリンクしていない建物の塗りを消し、枠線だけで表示します。下地の住宅地図を隠さずに見たいときに使います。番号を付けた建物の色は変わりません。"><input type="checkbox" id="map-bld-nofill"> 番号なしの建物は背景なし（枠線だけ）</label>
         <div class="map-side-note">下地の地図が塗りで隠れて読みにくいときに。印刷・縮小マップにも同じように効きます（この設定はこの端末だけに保存されます）。</div>
-        <label class="map-layer-extra" style="margin:6px 0 2px;display:flex;gap:5px;align-items:center;" title="番号を付けた建物に出る「番地（丁目以降の数字）」を画面に出すかどうかを切り替えます。建物1つにつき文字がもう1つ増えるので、建物が多いシートではそのぶん地図の動きが重くなります。"><input type="checkbox" id="map-bld-banchi" checked> 番地（丁目以降の数字）を画面に表示</label>
-        <div class="map-side-note">建物が多くて地図の動きが重いときは、これを外すと軽くなります。<b>印刷にはこの設定に関わらず必ず番地が出ます。</b>（この設定はこの端末だけに保存されます）</div>
+        <label class="map-layer-extra" style="margin:6px 0 2px;display:flex;gap:5px;align-items:center;" title="番号を付けた建物に出る「番地（丁目以降の数字）」を出すかどうかを切り替えます。建物1つにつき文字がもう1つ増えるので、建物が多いシートではそのぶん地図の動きが重くなります。印刷にもそのまま反映されます。"><input type="checkbox" id="map-bld-banchi"> 番地（丁目以降の数字）を表示</label>
+        <div class="map-side-note">既定は<b>表示なし</b>です（建物1つにつき文字がもう1つ増えるぶん、地図の動きが重くなるため）。番地が要るときだけ入れてください。<b>入れれば印刷にも出ます／外せば印刷にも出ません</b>（画面の見たままが印刷されます）。この設定はこの端末だけに保存されます。</div>
         <div id="map-ctr-legend" class="map-ctr-legend"></div>
       </div>
       <div class="map-side-sec map-edit-sec">
@@ -23800,11 +23800,11 @@ window.addEventListener("DOMContentLoaded", init);
      色分けモードと同じく端末ごと（localStorage）。既定OFF＝従来どおり緑の塗りあり。 */
   var _bldNoFillUnlinked = false;
   try { _bldNoFillUnlinked = localStorage.getItem("antenna_map_bld_nofill") === "1"; } catch(_){}
-  // 番地（丁目以降の数字）を画面に出すか。建物1つにつき文字がもう1つ増えるので、
-  // 建物の多いシートではパン・ズームがそのぶん重くなる。重いときに切れるようにしておく。
-  // 印刷はこの設定に関わらず必ず番地を出す（doPrint が複製の直前だけ表示へ戻す）。
-  var _bldShowBanchi = true;
-  try { _bldShowBanchi = localStorage.getItem("antenna_map_bld_banchi") !== "0"; } catch(_){}
+  // 番地（丁目以降の数字）を出すか。建物1つにつき文字がもう1つ増え、建物の多いシートでは
+  // パン・ズームがそのぶん重くなるので、既定は「出さない」。必要なときだけ入れてもらう。
+  // 印刷は画面のDOMを複製して作るので、外していれば紙にも出ない（画面の見たままが印刷される）。
+  var _bldShowBanchi = false;
+  try { _bldShowBanchi = localStorage.getItem("antenna_map_bld_banchi") === "1"; } catch(_){}
 
   var sheets = [];          // 現在の文脈（物件 or 端末ローカル）のMapSheet配列
   var current = null;       // 現在開いているMapSheet
@@ -28902,11 +28902,7 @@ window.addEventListener("DOMContentLoaded", init);
       }).catch(function(){ return null; });
     }));
     bgReady.then(function(bgList){
-      // 画面で番地を隠していても、紙には必ず出す（DOMを複製する直前だけ表示に戻す）
-      var banchiWasHidden = !_bldShowBanchi;
-      if(banchiWasHidden){ _bldShowBanchi = true; renderBuildingLayer(); }
       var vecInner = clonePrintVectorSvg(pxPerWorld, (p.lineMul || 1)) + buildPrintScaleSvg(pp, d);   // 縮尺バー＋「縮尺 1:○○」（GSI下地から算出・原寸印刷時）
-      if(banchiWasHidden){ _bldShowBanchi = false; renderBuildingLayer(); }
       var vecSvg = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="' + d.wmm + 'mm" height="' + d.hmm + 'mm" viewBox="' + pp.x + ' ' + pp.y + ' ' + pp.w + ' ' + pp.h + '" preserveAspectRatio="none" style="position:absolute;left:0;top:0;width:' + d.wmm + 'mm;height:' + d.hmm + 'mm;">' + vecInner + '</svg>';
       var bgSvg = buildPrintBgSvg(pp, d, bgList, pxPerWorld);
       if(!bgSvg){ openPrintLayered(null, vecSvg, d.wmm, d.hmm, pw, p.paper); return; }
