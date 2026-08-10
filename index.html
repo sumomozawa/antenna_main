@@ -4976,6 +4976,8 @@
         <div class="map-side-note" id="map-bld-cmode-note">番号を付けた建物を施工会社ごとの色で表示します（受付台帳の割当が無い建物は業者番号＝管理番号の左から4桁目で判定・どちらも無ければグレー／番号なしは緑）。</div>
         <label class="map-layer-extra" style="margin:6px 0 2px;display:flex;gap:5px;align-items:center;" title="管理番号をリンクしていない建物の塗りを消し、枠線だけで表示します。下地の住宅地図を隠さずに見たいときに使います。番号を付けた建物の色は変わりません。"><input type="checkbox" id="map-bld-nofill"> 番号なしの建物は背景なし（枠線だけ）</label>
         <div class="map-side-note">下地の地図が塗りで隠れて読みにくいときに。印刷・縮小マップにも同じように効きます（この設定はこの端末だけに保存されます）。</div>
+        <label class="map-layer-extra" style="margin:6px 0 2px;display:flex;gap:5px;align-items:center;" title="番号を付けた建物に出る「番地（丁目以降の数字）」を画面に出すかどうかを切り替えます。建物1つにつき文字がもう1つ増えるので、建物が多いシートではそのぶん地図の動きが重くなります。"><input type="checkbox" id="map-bld-banchi" checked> 番地（丁目以降の数字）を画面に表示</label>
+        <div class="map-side-note">建物が多くて地図の動きが重いときは、これを外すと軽くなります。<b>印刷にはこの設定に関わらず必ず番地が出ます。</b>（この設定はこの端末だけに保存されます）</div>
         <div id="map-ctr-legend" class="map-ctr-legend"></div>
       </div>
       <div class="map-side-sec map-edit-sec">
@@ -23798,6 +23800,11 @@ window.addEventListener("DOMContentLoaded", init);
      色分けモードと同じく端末ごと（localStorage）。既定OFF＝従来どおり緑の塗りあり。 */
   var _bldNoFillUnlinked = false;
   try { _bldNoFillUnlinked = localStorage.getItem("antenna_map_bld_nofill") === "1"; } catch(_){}
+  // 番地（丁目以降の数字）を画面に出すか。建物1つにつき文字がもう1つ増えるので、
+  // 建物の多いシートではパン・ズームがそのぶん重くなる。重いときに切れるようにしておく。
+  // 印刷はこの設定に関わらず必ず番地を出す（doPrint が複製の直前だけ表示へ戻す）。
+  var _bldShowBanchi = true;
+  try { _bldShowBanchi = localStorage.getItem("antenna_map_bld_banchi") !== "0"; } catch(_){}
 
   var sheets = [];          // 現在の文脈（物件 or 端末ローカル）のMapSheet配列
   var current = null;       // 現在開いているMapSheet
@@ -27489,21 +27496,58 @@ window.addEventListener("DOMContentLoaded", init);
       + ' stroke="#ffffff" stroke-width="' + halo + '" paint-order="stroke" text-anchor="middle"'
       + ' dominant-baseline="central" font-family="sans-serif" font-weight="700" pointer-events="none">' + text + '</text>';
   }
+  /* 建物の管理番号・番地の「最低の文字サイズ」。
+     ワールド単位の大きさは下地画像の解像度で意味が変わるため、
+     読める・読めないの基準は「印刷したときの実寸(mm)」で決める。
+     印刷幅 p.w（ワールド）が用紙幅 d.wmm に出るので、1mm = p.w / d.wmm ワールド単位。 */
+  var MAP_MIN_NO_MM = 3.0;       // 管理番号（下3桁）… 約8.5pt相当
+  var MAP_MIN_BANCHI_MM = 2.6;   // 番地（住所）… 約7.5pt相当
+  function bldMinLabelWorld(mm){
+    var p = current && current.print;
+    if(!p || !(p.w > 0)) return 3;                 // 印刷枠が無いときは従来の下限
+    var d = paperDims(p.paper, p.orient);
+    if(!d || !(d.wmm > 0)) return 3;
+    return Math.max(3, mm * p.w / d.wmm);          // 従来より小さくはしない
+  }
+  /* 印刷枠（位置・大きさ・用紙）が変わると上の下限も変わるので、建物ラベルを描き直す。
+     下限が実際に変わった時だけ描き直して、枠のドラッグ中に重くならないようにする。 */
+  var _bldMinLabLast = null;
+  function refreshBldLabelsForPrint(){
+    var m = bldMinLabelWorld(MAP_MIN_NO_MM);
+    if(_bldMinLabLast !== null && Math.abs(m - _bldMinLabLast) < 1e-9) return;
+    _bldMinLabLast = m;
+    if(current && current.layers && current.layers.building) renderBuildingLayer();
+  }
+  /* 番地は建物ごとに受付台帳を引く。findRowByMgmtNo は先頭から順に探すので、
+     そのまま呼ぶと「建物の数 × 台帳の行数」の総当たりになり、再描画がはっきり重くなる。
+     描画の直前に「管理番号 → 行」の索引を1回だけ作って渡す。 */
+  function bldRowIndex(){
+    var idx = new Map();
+    var rows = (typeof _listRows !== "undefined" && _listRows) ? _listRows : [];
+    for(var i = 0; i < rows.length; i++){
+      var r = rows[i];
+      if(!r || !r.data) continue;
+      var k = String(r.data.chosho_mgmt_no || "").trim();
+      if(k && !idx.has(k)) idx.set(k, r);   // findRowByMgmtNo と同じく、同じ番号なら先頭の1件
+    }
+    return idx;
+  }
   /* 番号リンク済みの建物に出す番地表記。
      建物の「ラベル（番地・名称）」に手入力があればそれを、無ければリンク先の住所から
-     「丁目以降の数字」（例 3-12）を自動で作る。番号未リンクの建物には出さない。 */
-  function bldBanchiText(o){
+     「丁目以降の数字」（例 3-12）を自動で作る。番号未リンクの建物には出さない。
+     idx（bldRowIndex の戻り値）を渡すと台帳の総当たりをせずに引ける。 */
+  function bldBanchiText(o, idx){
     if(!o || !o.linkMgmtNo) return "";
     var manual = String(o.label || "").trim();
     if(manual) return manual;
-    var row = findRowByMgmtNo(o.linkMgmtNo);
+    var row = idx ? (idx.get(String(o.linkMgmtNo).trim()) || null) : findRowByMgmtNo(o.linkMgmtNo);
     var addr = (row && row.data) ? row.data.chosho_cust_addr : "";
     try { return (typeof addrChomeNumber === "function") ? addrChomeNumber(addr) : ""; } catch(_){ return ""; }
   }
   /* 番地の表示位置（建物中心からの相対）と文字サイズ。既定は管理番号の真下。
      ユーザーがドラッグすると o.banchiOff（ワールド単位）に控え、以後はそこに出す。 */
   function bldBanchiPos(o, cx, cy, fs){
-    var size = Math.max(2.4, fs * 0.62);
+    var size = Math.max(bldMinLabelWorld(MAP_MIN_BANCHI_MM), fs * 0.62);
     var off = o.banchiOff;
     var dx = (off && isFinite(off.dx)) ? off.dx : 0;
     var dy = (off && isFinite(off.dy)) ? off.dy : (fs * 0.82);
@@ -27516,6 +27560,9 @@ window.addEventListener("DOMContentLoaded", init);
   function renderBuildingLayer(){
     var g = el("map-layer-building"); if(!g || !current) return;
     var L = current.layers.building;
+    var minNo = bldMinLabelWorld(MAP_MIN_NO_MM);   // 管理番号の最低文字サイズ（印刷実寸から算出）
+    _bldMinLabLast = minNo;
+    var rowIdx = _bldShowBanchi ? bldRowIndex() : null;   // 台帳の総当たりを避ける（描画1回につき1回だけ作る）
     g.innerHTML = (L.objects || []).map(function(o){
       var bc = bldColors(o);
       var linked = bc.linked;
@@ -27529,11 +27576,12 @@ window.addEventListener("DOMContentLoaded", init);
       var lab = "";
       var l3 = linked ? mgmtLast3(o.linkMgmtNo) : "";
       var onHold = linked && bldOnHold(o.linkMgmtNo);
-      if(l3 || onHold || (linked && bldBanchiText(o))){
+      var bt = (linked && _bldShowBanchi) ? bldBanchiText(o, rowIdx) : "";   // 台帳引きは建物1つにつき1回だけ
+      if(l3 || onHold || bt){
         var minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
         for(var i = 0; i < o.points.length; i++){ var pp = o.points[i]; if(pp[0] < minx) minx = pp[0]; if(pp[0] > maxx) maxx = pp[0]; if(pp[1] < miny) miny = pp[1]; if(pp[1] > maxy) maxy = pp[1]; }
         var bw = maxx - minx, bh = maxy - miny, cx = (minx + maxx) / 2, cy = (miny + maxy) / 2;
-        var fs = Math.max(3, Math.min(bw * 0.42, bh * 0.7));   // 3桁が建物内に収まるサイズ
+        var fs = Math.max(minNo, Math.min(bw * 0.42, bh * 0.7));   // 3桁が建物内に収まるサイズ。ただし読める大きさは下回らない
         var halo = Math.max(0.4, fs * 0.16);
         if(l3) lab += bldLabelText(cx, cy, 0, 0, fs, halo, "#b3261e", esc(l3));
         if(onHold){
@@ -27542,7 +27590,6 @@ window.addEventListener("DOMContentLoaded", init);
           lab += bldLabelText(cx, cy, hdx, hdy, hfs, Math.max(0.4, hfs * 0.22), "#e65100", "保");
         }
         // 番地（丁目以降の数字）。管理番号とは別の文字色にし、ドラッグで好きな位置へ動かせる
-        var bt = bldBanchiText(o);
         if(bt){
           var bp = bldBanchiPos(o, cx, cy, fs);
           lab += bldLabelText(cx, cy, bp.dx, bp.dy, bp.size, Math.max(0.35, bp.size * 0.2), "#263238", esc(bt));
@@ -27561,6 +27608,8 @@ window.addEventListener("DOMContentLoaded", init);
     }
     var nf = el("map-bld-nofill");
     if(nf && nf.checked !== _bldNoFillUnlinked) nf.checked = _bldNoFillUnlinked;
+    var bn = el("map-bld-banchi");
+    if(bn && bn.checked !== _bldShowBanchi) bn.checked = _bldShowBanchi;
     var note = el("map-bld-cmode-note");
     if(note){
       note.textContent = (_bldColorMode === "contractor")
@@ -28054,6 +28103,7 @@ window.addEventListener("DOMContentLoaded", init);
   /* 選択中の建物の番地ラベルを掴んだか（テキスト拡縮ハンドルと同じく「選択中のみ」）。
      選択を条件にすることで、通常の建物の選択・移動の操作は今までどおりのまま。 */
   function hitBanchiLabel(cx, cy){
+    if(!_bldShowBanchi) return null;                              // 画面に出していない番地は掴めない
     var sel = getSelected();
     if(!sel || sel.layer !== "building") return null;
     var o = sel.obj;
@@ -28064,7 +28114,7 @@ window.addEventListener("DOMContentLoaded", init);
       if(pp[0] < minx) minx = pp[0]; if(pp[0] > maxx) maxx = pp[0];
       if(pp[1] < miny) miny = pp[1]; if(pp[1] > maxy) maxy = pp[1];
     }
-    var fs = Math.max(3, Math.min((maxx - minx) * 0.42, (maxy - miny) * 0.7));
+    var fs = Math.max(bldMinLabelWorld(MAP_MIN_NO_MM), Math.min((maxx - minx) * 0.42, (maxy - miny) * 0.7));
     var bp = bldBanchiPos(o, (minx + maxx) / 2, (miny + maxy) / 2, fs);
     var w = screenToWorld(cx, cy);
     var pad = 8 / view.scale;                                  // 指・ペン用の余白（画面8px相当）
@@ -28671,7 +28721,7 @@ window.addEventListener("DOMContentLoaded", init);
     document.removeEventListener("pointermove", onPrintDragMove, true);
     document.removeEventListener("pointerup", onPrintDragUp, true);
     document.removeEventListener("pointercancel", onPrintDragUp, true);
-    _printDrag = null; if(current && current.print) scheduleSave();
+    _printDrag = null; refreshBldLabelsForPrint(); if(current && current.print) scheduleSave();
   }
   function reaspectFrame(p){
     var asp = frameAspect(p.paper, p.orient), cx = p.x + p.w / 2, cy = p.y + p.h / 2;
@@ -28682,7 +28732,7 @@ window.addEventListener("DOMContentLoaded", init);
   function onPrintPaperChange(){
     var p = ensurePrint(); if(!p) return;
     var sel = el("map-print-paper"); if(sel) p.paper = sel.value || "A4";
-    reaspectFrame(p); renderPrintControls(); renderPrintOverlay(); scheduleSave();
+    reaspectFrame(p); renderPrintControls(); renderPrintOverlay(); refreshBldLabelsForPrint(); scheduleSave();
   }
   function onPrintLineWidthChange(){
     var p = ensurePrint(); if(!p) return;
@@ -28695,7 +28745,7 @@ window.addEventListener("DOMContentLoaded", init);
   function onPrintOrient(orient){
     var p = ensurePrint(); if(!p) return;
     p.orient = (orient === "landscape") ? "landscape" : "portrait";
-    reaspectFrame(p); renderPrintControls(); renderPrintOverlay(); scheduleSave();
+    reaspectFrame(p); renderPrintControls(); renderPrintOverlay(); refreshBldLabelsForPrint(); scheduleSave();
   }
   function onPrintShowToggle(){
     var chk = el("map-print-show"), p = ensurePrint(); if(!p) return;
@@ -28707,7 +28757,7 @@ window.addEventListener("DOMContentLoaded", init);
         if(!onScreen){ var f = defaultPrintFrame(p.paper, p.orient); p.x = f.x; p.y = f.y; p.w = f.w; p.h = f.h; }
       }
     }
-    renderPrintOverlay(); scheduleSave();
+    renderPrintOverlay(); refreshBldLabelsForPrint(); scheduleSave();
   }
   function mapPrintBlobToDataUri(blob){
     return new Promise(function(res, rej){ var r = new FileReader(); r.onload = function(){ res(r.result); }; r.onerror = function(){ rej(r.error); }; r.readAsDataURL(blob); });
@@ -28837,6 +28887,7 @@ window.addEventListener("DOMContentLoaded", init);
     try { pw = window.open("", "_blank"); } catch(_){}
     if(pw && pw.document){ try { pw.document.write('<!doctype html><meta charset="utf-8"><title>印刷準備中…</title><body style="font-family:sans-serif;padding:24px;color:#333;">印刷用画像を生成しています…</body>'); } catch(_){} }
     var d = paperDims(p.paper, p.orient);
+    refreshBldLabelsForPrint();   // 枠が動いたまま描き直していない場合に備え、印刷直前にも下限を反映
     // 印刷直前に枠の縦横比を用紙比へ自動補正（保険：画面の枠 current.print 自体は不変。中心を保持したまま高さのみ補正）
     var pp = { x: p.x, y: p.y, w: p.w, h: p.w * (d.hmm / d.wmm) };
     pp.y = p.y + (p.h - pp.h) / 2;
@@ -28851,7 +28902,11 @@ window.addEventListener("DOMContentLoaded", init);
       }).catch(function(){ return null; });
     }));
     bgReady.then(function(bgList){
+      // 画面で番地を隠していても、紙には必ず出す（DOMを複製する直前だけ表示に戻す）
+      var banchiWasHidden = !_bldShowBanchi;
+      if(banchiWasHidden){ _bldShowBanchi = true; renderBuildingLayer(); }
       var vecInner = clonePrintVectorSvg(pxPerWorld, (p.lineMul || 1)) + buildPrintScaleSvg(pp, d);   // 縮尺バー＋「縮尺 1:○○」（GSI下地から算出・原寸印刷時）
+      if(banchiWasHidden){ _bldShowBanchi = false; renderBuildingLayer(); }
       var vecSvg = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="' + d.wmm + 'mm" height="' + d.hmm + 'mm" viewBox="' + pp.x + ' ' + pp.y + ' ' + pp.w + ' ' + pp.h + '" preserveAspectRatio="none" style="position:absolute;left:0;top:0;width:' + d.wmm + 'mm;height:' + d.hmm + 'mm;">' + vecInner + '</svg>';
       var bgSvg = buildPrintBgSvg(pp, d, bgList, pxPerWorld);
       if(!bgSvg){ openPrintLayered(null, vecSvg, d.wmm, d.hmm, pw, p.paper); return; }
@@ -28965,6 +29020,12 @@ window.addEventListener("DOMContentLoaded", init);
     if(nofill) nofill.addEventListener("change", function(){
       _bldNoFillUnlinked = nofill.checked;
       try { localStorage.setItem("antenna_map_bld_nofill", _bldNoFillUnlinked ? "1" : "0"); } catch(_){}
+      renderObjects();   // 本図＋縮小マップを再描画
+    });
+    var banchiChk = el("map-bld-banchi");
+    if(banchiChk) banchiChk.addEventListener("change", function(){
+      _bldShowBanchi = banchiChk.checked;
+      try { localStorage.setItem("antenna_map_bld_banchi", _bldShowBanchi ? "1" : "0"); } catch(_){}
       renderObjects();   // 本図＋縮小マップを再描画
     });
     applyBldColorModeUI();   // 起動時の初期状態（保存済みモード・背景なし設定）を反映
