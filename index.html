@@ -20446,7 +20446,7 @@ function renderListLedgerMode(rows, container){
     + ' style="background:#7a4e1e;color:#fff;border:1px solid #5e3c16;padding:4px 12px;border-radius:3px;cursor:' + (selCount ? 'pointer' : 'not-allowed') + ';font-size:12px;opacity:' + (selCount ? '1' : '.5') + ';">🖨 選択印刷' + (selCount ? '（' + selCount + '件）' : '') + '</button>'
     + (selCount ? '<button id="lg-print-clear" title="工事調書の選択をすべて解除" style="background:#fff;color:#7a4e1e;border:1px solid #b08a55;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:12px;">選択解除</button>' : '')
     + '<button id="lg-import-ledger" title="受付台帳ソフトなど別のパソコンで作った「受付台帳ファイル（.json）」を読み込みます。いまの台帳と違うところだけを一覧で確認し、選んだ分だけ取り込みます。図面・積算には触りません。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📥 受付台帳を取り込む</button>'
-    + '<button id="lg-xlsx-import" title="Excel（.xlsx）のH列「管理番号」を読み込み、下三桁で突き合わせて台帳の管理番号を更新します。取込前に、住所や過去の情報のどちらを残すかを選べます。" style="background:#2e5488;color:#fff;border:1px solid #1e3a5f;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📗 Excelから管理番号を読取り</button>'
+    + '<button id="lg-xlsx-import" title="Excel（.xlsx）を読み取ります。受付台帳ソフトが書き出した Excel なら、名前・施工会社・状態・打合せ・備考まで全項目の違いを一覧で確認してから取り込めます。現場のExcelなら、H列「管理番号」を下三桁で突き合わせて台帳の管理番号を更新します。" style="background:#2e5488;color:#fff;border:1px solid #1e3a5f;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📗 Excelから読取り</button>'
     + '<button id="lg-xlsx-export" title="いまの受付台帳を Excel（.xlsx）へ書き出します。見出しは「管理番号」「住所」「備考」を使うので、Excelで直したあと左の「📗 Excelから管理番号を読取り」でそのまま読み戻せます。" style="background:#1b7a3d;color:#fff;border:1px solid #145c2e;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📘 Excelへ書き出し</button>'
     + '<span class="lg-xlsx-cols" title="1行目の見出し（管理番号／住所結合／過去の情報）から列を自動で探します。見出しが無い場合は H / E / F 列を使います。">'
     +   '読む列：<b>H</b>管理番号<span class="req">必須</span> ／ <b>E</b>住所 ／ <b>F</b>過去の情報→備考'
@@ -20840,6 +20840,7 @@ const LGIMP_FIELDS = [
   { f: "addr",    label: "住所",     kind: "case", key: "chosho_cust_addr" },
   { f: "tel",     label: "電話番号", kind: "case", key: "chosho_cust_tel" },
   { f: "date",    label: "工事日程", kind: "case", key: "chosho_date" },
+  { f: "status",  label: "状態",     kind: "case", key: "chosho_status", edit: "done", pick: "status" },
   { f: "time",    label: "受付時刻", kind: "lg",   key: "time" },
   { f: "meet",    label: "打合せ",   kind: "lg",   key: "meetAt" },
   { f: "flyer",   label: "ビラ",     kind: "lg",   key: "flyer",   bool: true },
@@ -20849,25 +20850,42 @@ const LGIMP_FIELDS = [
   { f: "note",    label: "備考",     kind: "lg",   key: "note" },
   { f: "contractor", label: "施工会社", kind: "ctr", key: "contractor" }
 ];
+const LGIMP_ST_NAME = { provisional: "仮受付", in_progress: "受付済", completed: "完了" };
 function lgimpShow(v, F){
   if(F && F.bool) return v ? "○" : "―";
   const s = String(v == null ? "" : v).trim();
   if(!s) return "―";
+  if(F && F.pick === "status") return LGIMP_ST_NAME[s] || s;
   if(F && F.f === "meet") return lgFmtMeetAt(s) || s;                       // 2026-08-25T13:30 → 8/25-13:30
   if(F && F.f === "date") return lgFmtDateTime(s, "") || s;                 // 2026-08-20 → 8/20
   return s;
 }
-/* ファイルの中身と、いまの台帳との違いを洗い出す。 */
+/* ファイルの中身と、いまの台帳との違いを洗い出す。
+   突き合わせは管理番号そのものが最優先。見つからないときだけ、数字の下三桁でも探す
+   （現場でよくある「1234HIN001」と「001」のような表記ゆれを拾うため）。
+   下三桁の候補が2つ以上ある場合は、取り違えると危ないので当てにいかない。 */
 function lgLedgerDiff(payload){
-  const byNo = new Map();
-  _listRows.forEach(r => { const k = ((r.data && r.data.chosho_mgmt_no) || "").trim(); if(k && !byNo.has(k)) byNo.set(k, r); });
-  const items = [];
+  const byNo = new Map(), by3 = new Map();
+  _listRows.forEach(r => {
+    const k = ((r.data && r.data.chosho_mgmt_no) || "").trim();
+    if(k && !byNo.has(k)) byNo.set(k, r);
+    const k3 = mgmtLast3Digits(k);
+    if(k3){ if(!by3.has(k3)) by3.set(k3, []); by3.get(k3).push(r); }
+  });
+  const items = [], seen = new Set();
+  let dup = 0;
   (payload.rows || []).forEach(x => {
     const no = String(x.mgmt_no || "").trim();
     if(!no) return;
-    const row = byNo.get(no);
+    if(seen.has(no)){ dup++; return; }                  // ファイル側に同じ管理番号が2度出てきた
+    seen.add(no);
+    let row = byNo.get(no), by = "no";
     if(!row){
-      items.push({ no, row: null, kind: "add", src: x,
+      const c = by3.get(mgmtLast3Digits(no)) || [];
+      if(c.length === 1){ row = c[0]; by = "last3"; }
+    }
+    if(!row){
+      items.push({ no, row: null, kind: "add", src: x, by: "",
                    summary: [x.name, x.addr, x.tel].filter(Boolean).join(" / ") || "（氏名・住所なし）" });
       return;
     }
@@ -20880,17 +20898,23 @@ function lgLedgerDiff(payload){
       if(F.kind === "ctr"){
         // 施工会社は「戸別の割当」＋「業者番号からの自動判定」の結果と比べる（メインの表示と同じ決め方）
         before = "";
-        try { before = String(contractorForMgmtNo(no) || "").trim(); } catch(_){ before = ""; }
+        try { before = String(contractorForMgmtNo(d.chosho_mgmt_no || no) || "").trim(); } catch(_){ before = ""; }
       } else {
         before = F.bool ? !!lg[F.key] : String((F.kind === "case" ? d[F.key] : lg[F.key]) || "").trim();
       }
       if(!F.bool && !after) return;                       // ファイル側が空の文字は「変更なし」扱い（消さない）
+      if(F.pick === "status" && !LGIMP_ST_NAME[after]) return;   // 知らない状態は無視
       if(String(before) === String(after)) return;
-      if(F.kind === "case" && !lgEditableField(row, F.f === "name" || F.f === "tel" || F.f === "addr" ? "addr" : F.f)) return; // 暗号化で書けない項目は出さない
+      if(F.kind === "case" && !lgEditableField(row, F.edit || (F.f === "name" || F.f === "tel" || F.f === "addr" ? "addr" : F.f))) return; // 暗号化で書けない項目は出さない
       diffs.push({ F, before, after });
     });
-    if(diffs.length) items.push({ no, row, kind: "update", src: x, diffs });
+    if(diffs.length) items.push({ no, row, kind: "update", src: x, diffs, by });
   });
+  items._dup = dup;
+  items._missing = _listRows.filter(r => {
+    const k = ((r.data && r.data.chosho_mgmt_no) || "").trim();
+    return k && !seen.has(k);
+  }).length;
   return items;
 }
 function lgPickLedgerFile(){
@@ -20916,14 +20940,18 @@ function lgPickLedgerFile(){
 /* 差分の一覧を出し、チェックしたものだけ取り込む。 */
 function lgShowLedgerDiffDialog(payload, items){
   const adds = items.filter(i => i.kind === "add"), upds = items.filter(i => i.kind === "update");
+  const nBy3 = items.filter(i => i.by === "last3").length;
+  const tag = it => (it.by === "last3" ? ' <span title="管理番号の下三桁で突き合わせました" style="color:#8a5a00;">🔎</span>' : "");
   const rowsHtml = items.map((it, i) => {
     if(it.kind === "add"){
-      return '<tr class="lgimp-add"><td><input type="checkbox" data-i="' + i + '" data-g="add" checked></td>'
+      return '<tr class="lgimp-add" data-key="' + escapeHtml(it.no + " 新規 追加 " + it.summary) + '">'
+        + '<td><input type="checkbox" data-i="' + i + '" data-g="add" checked></td>'
         + '<td><b>' + escapeHtml(it.no) + '</b></td><td colspan="3">新しく台帳へ追加：' + escapeHtml(it.summary) + '</td></tr>';
     }
     return it.diffs.map((d, j) =>
-      '<tr class="lgimp-upd"><td>' + (j === 0 ? '<input type="checkbox" data-i="' + i + '" data-g="' + (d.F.kind === "case" ? "case" : "lg") + '" data-j="' + j + '" checked>' : '<input type="checkbox" data-i="' + i + '" data-g="' + (d.F.kind === "case" ? "case" : "lg") + '" data-j="' + j + '" checked>') + "</td>"
-      + "<td>" + (j === 0 ? "<b>" + escapeHtml(it.no) + "</b>" : "") + "</td>"
+      '<tr class="lgimp-upd" data-key="' + escapeHtml(it.no + " " + d.F.label) + '">'
+      + '<td><input type="checkbox" data-i="' + i + '" data-g="' + (d.F.kind === "case" ? "case" : "lg") + '" data-j="' + j + '" checked></td>'
+      + "<td>" + (j === 0 ? "<b>" + escapeHtml(it.no) + "</b>" + tag(it) : "") + "</td>"
       + "<td>" + escapeHtml(d.F.label) + "</td>"
       + '<td class="lgimp-b">' + escapeHtml(lgimpShow(d.before, d.F)) + "</td>"
       + '<td class="lgimp-a">' + escapeHtml(lgimpShow(d.after, d.F)) + "</td></tr>").join("");
@@ -20931,14 +20959,22 @@ function lgShowLedgerDiffDialog(payload, items){
   const ov = document.createElement("div");
   ov.id = "lgimp-ov";
   ov.innerHTML =
-    '<div class="lgimp-box"><div class="lgimp-head">📥 受付台帳の取り込み（違うところだけ）</div>'
-    + '<div class="lgimp-sub">ファイル：' + escapeHtml(payload.project || "（物件名なし）") + "　"
+    '<div class="lgimp-box"><div class="lgimp-head">'
+    + (payload.fromXlsx ? "📗 Excel からの取り込み（違うところだけ）" : "📥 受付台帳の取り込み（違うところだけ）") + "</div>"
+    + '<div class="lgimp-sub">' + (payload.fromXlsx ? "Excel：" : "ファイル：") + escapeHtml(payload.project || "（物件名なし）") + "　"
     + escapeHtml(String(payload.exportedAt || "").replace("T", " ").slice(0, 16)) + "　" + (payload.rows || []).length + "件<br>"
     + "いまの受付台帳と<b>違うところだけ</b>を出しています。チェックを外したものは取り込みません。"
-    + "<b>戸別の図面・積算・写真には触りません。</b></div>"
+    + "<b>戸別の図面・積算・写真には触りません。</b>"
+    + (nBy3 ? '<br><span style="color:#8a5a00;">※ ' + nBy3 + " 件は管理番号の<b>下三桁</b>で突き合わせました（🔎 の行）。取り違えが無いかご確認ください。</span>" : "")
+    + (items._dup ? '<br><span style="color:#8a5a00;">※ ファイル側で管理番号が' + items._dup + "件重複していました。最初の1件だけを見ています。</span>" : "")
+    + (items._missing ? '<br><span style="color:#667482;">※ いまの台帳にあってファイルに無い戸別が' + items._missing + "件あります（そのまま残します）。</span>" : "")
+    + "</div>"
     + '<div class="lgimp-tog"><label><input type="checkbox" id="lgimp-all-add" checked> 新しい戸別を追加（' + adds.length + "件）</label>"
-    + '<label><input type="checkbox" id="lgimp-all-case" checked> 名前・住所・電話・工事日を更新</label>'
-    + '<label><input type="checkbox" id="lgimp-all-lg" checked> 台帳の項目（打合せ・ビラ・保留・承諾書・完了書・備考・施工会社）を更新</label></div>'
+    + '<label><input type="checkbox" id="lgimp-all-case" checked> 戸別の情報（名前・住所・電話・工事日・状態）を更新</label>'
+    + '<label><input type="checkbox" id="lgimp-all-lg" checked> 台帳の項目（受付時刻・打合せ・ビラ・保留・承諾書・完了書・備考・施工会社）を更新</label>'
+    + '<span style="flex:1 1 auto;"></span>'
+    + '<input type="search" id="lgimp-q" placeholder="管理番号・項目で絞り込み" style="font-family:inherit;font-size:12px;padding:3px 7px;border:1px solid #cdd3da;border-radius:3px;width:190px;">'
+    + "</div>"
     + '<div class="lgimp-scroll"><table class="lgimp-tbl"><thead><tr><th style="width:34px;"></th><th style="width:120px;">管理番号</th>'
     + '<th style="width:90px;">項目</th><th>いまの台帳</th><th>ファイル</th></tr></thead><tbody>' + rowsHtml + "</tbody></table></div>"
     + '<div class="lgimp-foot"><span id="lgimp-cnt"></span>'
@@ -20947,15 +20983,26 @@ function lgShowLedgerDiffDialog(payload, items){
   document.body.appendChild(ov);
   const boxes = () => Array.prototype.slice.call(ov.querySelectorAll("tbody input[type=checkbox]"));
   const refresh = () => {
-    const n = boxes().filter(b => b.checked).length;
-    ov.querySelector("#lgimp-cnt").textContent = "取り込む項目：" + n + " 件";
+    const all = boxes(), n = all.filter(b => b.checked).length;
+    ov.querySelector("#lgimp-cnt").textContent = "取り込む項目：" + n + " / " + all.length + " 件"
+      + "（追加 " + adds.length + " 件・更新 " + upds.length + " 戸別）";
+    ov.querySelector("#lgimp-ok").disabled = !n;
   };
+  // 一括切替は「いま表示している行」だけに効く（絞り込んでから一括で外せる）
+  const shownBoxes = () => boxes().filter(b => b.closest("tr").style.display !== "none");
   const bindAll = (id, g) => ov.querySelector(id).addEventListener("change", function(){
-    boxes().forEach(b => { if(b.dataset.g === g) b.checked = this.checked; });
+    shownBoxes().forEach(b => { if(b.dataset.g === g) b.checked = this.checked; });
     refresh();
   });
   bindAll("#lgimp-all-add", "add"); bindAll("#lgimp-all-case", "case"); bindAll("#lgimp-all-lg", "lg");
   ov.querySelector("tbody").addEventListener("change", refresh);
+  const q = ov.querySelector("#lgimp-q");
+  q.addEventListener("input", () => {
+    const t = (q.value || "").trim().toLowerCase();
+    Array.prototype.forEach.call(ov.querySelectorAll("tbody tr"), tr => {
+      tr.style.display = (!t || (tr.dataset.key || "").toLowerCase().indexOf(t) >= 0) ? "" : "none";
+    });
+  });
   refresh();
   const close = () => { if(ov.parentNode) ov.parentNode.removeChild(ov); };
   ov.querySelector("#lgimp-ng").addEventListener("click", close);
@@ -20986,7 +21033,10 @@ function lgShowLedgerDiffDialog(payload, items){
       }
       const d = it.diffs[parseInt(bx.dataset.j, 10)];
       if(!d) return;
-      if(d.F.kind === "case") lgWriteCaseField(it.row, d.F.f, d.after);
+      if(d.F.kind === "case"){
+        lgWriteCaseField(it.row, d.F.f, d.after);
+        if(d.F.pick === "status") it.row._amtCache = undefined;      // 完了かどうかで金額の出し方が変わる
+      }
       else if(d.F.kind === "ctr"){
         setContractor(subCaseKey(it.row), d.after);
         // 受け取った会社名が施工業者の一覧に無ければ足す（次から選択肢に出る）
@@ -21001,7 +21051,8 @@ function lgShowLedgerDiffDialog(payload, items){
     close();
     renderListTable();
     try { if(typeof window.__mapRefreshObjects === "function") window.__mapRefreshObjects(); } catch(_){}
-    alert("📥 受付台帳を取り込みました。\n\n新しく追加した戸別：" + added + " 件\n書き換えた項目：" + changed + " 件");
+    alert("📥 受付台帳を取り込みました。\n\n新しく追加した戸別：" + added + " 件\n書き換えた項目：" + changed + " 件"
+      + (items._missing ? "\n\nファイルに無かった戸別 " + items._missing + " 件は、そのまま残してあります。" : ""));
   });
 }
 /* --- 最小限の xlsx リーダ（ZIP → sharedStrings + 先頭シート） --- */
@@ -21137,12 +21188,137 @@ function mgmtContractorDigit(s){ const t = String(s == null ? "" : s).trim(); re
 /* 数字だけ抜いた末尾3桁（地図の建物表示と同じ規則） */
 function mgmtLast3Digits(s){ const d = String(s == null ? "" : s).replace(/[^0-9]/g, ""); return d.slice(-3); }
 
+/* =========================================================================
+   受付台帳ソフトが書き出した Excel を読む
+   「📗 Excelから読取り」で選ばれたシートが受付台帳ソフトの書き出しなら、
+   受付台帳ファイル（.json）と同じ形に組み直して、同じ差分ダイアログへ流す。
+   こうすると Excel 経由でも「違うところだけ確認して取り込む」が使える。
+   ========================================================================= */
+const LGX_ALIAS = {
+  mgmt:["管理番号","管理No","管理NO"],
+  name:["名前","氏名","お名前","入居者名"],
+  contractor:["施工会社","施工業者","担当会社"],
+  addr:["住所","住所結合","所在地"],
+  tel:["電話番号","電話","TEL","連絡先"],
+  status:["状態","ステータス","受付状態"],
+  date:["工事日程予定","工事日","工事日程","施工日"],
+  time:["受付時刻","受付時間"],
+  meet:["打合せ予定","打合せ","打ち合わせ予定","打ち合わせ"],
+  flyer:["ビラ","ビラ配布","チラシ"],
+  done:["完了","完了済"],
+  hold:["保留"],
+  consent:["承諾書"],
+  compdoc:["完了書","完了報告書"],
+  note:["備考","メモ"]
+};
+const LGX_ST_CODE = { "仮受付":"provisional", "受付":"in_progress", "受付済":"in_progress", "受付済み":"in_progress",
+                      "着工":"in_progress", "完了":"completed", "済":"completed" };
+/* 人が Excel に手で入れる「○」の書き方は揺れるので広めに拾う */
+function lgxYes(v){ return /^(○|◯|〇|●|✓|✔|レ|Ｖ|V|v|1|TRUE|true|True|はい|有|済|済み|OK|ok)$/.test(String(v == null ? "" : v).trim()); }
+/* Excel は日付を「2026/8/20」やシリアル値で返してくる。台帳が使う YYYY-MM-DD に寄せる */
+function lgxDate(v){
+  const t = String(v == null ? "" : v).trim();
+  if(!t) return "";
+  const m = /^(\d{4})[-\/年.](\d{1,2})[-\/月.](\d{1,2})/.exec(t);
+  if(m) return m[1] + "-" + String(m[2]).padStart(2, "0") + "-" + String(m[3]).padStart(2, "0");
+  if(/^\d{5}$/.test(t)){
+    const d = new Date(Date.UTC(1899, 11, 30) + parseInt(t, 10) * 86400000);
+    return d.getUTCFullYear() + "-" + String(d.getUTCMonth() + 1).padStart(2, "0") + "-" + String(d.getUTCDate()).padStart(2, "0");
+  }
+  return t;
+}
+function lgxTime(v){
+  const t = String(v == null ? "" : v).trim();
+  if(!t) return "";
+  const m = /^(\d{1,2})[:：時](\d{1,2})/.exec(t);
+  if(m) return String(m[1]).padStart(2, "0") + ":" + String(m[2]).padStart(2, "0");
+  const f = parseFloat(t);                       // Excel の時刻は 0〜1 の小数
+  if(isFinite(f) && f > 0 && f < 1){
+    const mins = Math.round(f * 24 * 60);
+    return String(Math.floor(mins / 60)).padStart(2, "0") + ":" + String(mins % 60).padStart(2, "0");
+  }
+  return t;
+}
+function lgxMeet(v){
+  const t = String(v == null ? "" : v).trim();
+  if(!t) return "";
+  const m = /^(\d{4})[-\/年.](\d{1,2})[-\/月.](\d{1,2})[日]?[\sT]*(\d{1,2})?[:：時]?(\d{1,2})?/.exec(t);
+  if(!m) return t;
+  const d = m[1] + "-" + String(m[2]).padStart(2, "0") + "-" + String(m[3]).padStart(2, "0");
+  if(m[4] == null) return d + "T00:00";
+  return d + "T" + String(m[4]).padStart(2, "0") + ":" + String(m[5] == null ? 0 : m[5]).padStart(2, "0");
+}
+/* シートが受付台帳ソフトの書き出しなら payload を返す。違えば null（＝従来の現場Excel取込へ） */
+function lgXlsxAsLedgerPayload(rows, fileName){
+  const norm = v => String(v == null ? "" : v).replace(/[\s　]/g, "");
+  let cols = null, headerIdx = -1, title = "";
+  for(let i = 0; i < Math.min(rows.length, 12); i++){
+    const r = rows[i], hit = {};
+    Object.keys(r).forEach(col => {                                   // まず完全一致
+      const v = norm(r[col]); if(!v) return;
+      Object.keys(LGX_ALIAS).forEach(k => { if(!hit[k] && LGX_ALIAS[k].indexOf(v) >= 0) hit[k] = col; });
+    });
+    // 管理番号に加えて、この台帳ならではの列が3つ以上あれば「受付台帳の書き出し」とみなす
+    const extras = ["name","contractor","status","meet","time","consent","compdoc","hold","flyer"].filter(k => hit[k]).length;
+    if(hit.mgmt && extras >= 3){ cols = hit; headerIdx = i; break; }
+  }
+  if(!cols) return null;
+  for(let i = 0; i < headerIdx; i++){                                  // 表題行があれば物件名として拾う
+    const vals = Object.keys(rows[i]).map(c => String(rows[i][c] || "")).join(" ");
+    const m = /物件[：:]\s*([^\s　]+)/.exec(vals);
+    if(m){ title = m[1]; break; }
+  }
+  const get = (x, k) => (cols[k] ? String(x[cols[k]] == null ? "" : x[cols[k]]).trim() : "");
+  const has = k => !!cols[k];
+  const out = [];
+  rows.slice(headerIdx + 1).forEach(x => {
+    const no = get(x, "mgmt");
+    if(!no) return;
+    const row = { mgmt_no: no };
+    // 列が無い項目は載せない。載せない＝差分に出ない＝いまの台帳の値をそのまま残す。
+    if(has("name")) row.name = get(x, "name");
+    if(has("addr")) row.addr = get(x, "addr");
+    if(has("tel")) row.tel = get(x, "tel");
+    if(has("date")) row.date = lgxDate(get(x, "date"));
+    if(has("time")) row.time = lgxTime(get(x, "time"));
+    if(has("meet")) row.meet = lgxMeet(get(x, "meet"));
+    if(has("contractor")) row.contractor = get(x, "contractor");
+    if(has("note")) row.note = get(x, "note");
+    if(has("flyer")) row.flyer = lgxYes(get(x, "flyer"));
+    if(has("hold")) row.hold = lgxYes(get(x, "hold"));
+    if(has("consent")) row.consent = lgxYes(get(x, "consent"));
+    if(has("compdoc")) row.compdoc = lgxYes(get(x, "compdoc"));
+    // 状態は「完了」欄が○なら完了。そうでなければ「状態」欄の文字を使う。
+    if(has("done") && lgxYes(get(x, "done"))) row.status = "completed";
+    else if(has("status")){
+      const st = LGX_ST_CODE[get(x, "status")];
+      if(st) row.status = st;
+    }
+    out.push(row);
+  });
+  if(!out.length) return null;
+  return { type: "antenna_reception_ledger", version: 2, fromXlsx: true,
+           project: title || String(fileName || "").replace(/\.xlsx$/i, ""),
+           exportedAt: "", count: out.length, rows: out };
+}
+
 let _xlsxPlan = null;   // 取込プレビューの状態 { entries:[...], fileName }
 function ledgerXlsxImportFlow(){
   pickFile({ accept: ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/octet-stream" }, async f => {
     let rows;
     try { rows = await xlsxReadSheet(f); }
     catch(err){ alert("Excelを読み込めませんでした：\n" + (err && err.message || err)); return; }
+    // 受付台帳ソフトが書き出した Excel なら、受付台帳ファイルと同じ差分の流れへ回す
+    const asLedger = lgXlsxAsLedgerPayload(rows, f.name || "");
+    if(asLedger){
+      const items = lgLedgerDiff(asLedger);
+      if(!items.length){
+        alert("違いはありませんでした（" + asLedger.rows.length + "件を確認）。\nいまの受付台帳は、この Excel と同じ内容です。");
+        return;
+      }
+      lgShowLedgerDiffDialog(asLedger, items);
+      return;
+    }
     const det = xlsxDetectCols(rows), C = det.cols;
     const data = rows.slice(det.headerIdx + 1).map(r => ({
       mgmt: String(r[C.mgmt] || "").trim(),
