@@ -3037,6 +3037,23 @@
   }
   table.ledger-table .lg-open-btns button:hover { background: #eef2f6; }
   .lg-note-input { color: #5d4037; }
+  /* 📥 受付台帳の差分取り込み */
+  #lgimp-ov { position: fixed; inset: 0; background: rgba(20,30,45,.55); z-index: 9000; display: flex; align-items: center; justify-content: center; }
+  #lgimp-ov .lgimp-box { background: #fff; border-radius: 8px; width: min(1040px, 94vw); max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 8px 30px rgba(0,0,0,.3); }
+  #lgimp-ov .lgimp-head { background: #00695c; color: #fff; font-weight: 700; padding: 10px 16px; border-radius: 8px 8px 0 0; }
+  #lgimp-ov .lgimp-sub { padding: 10px 16px 6px; font-size: 12px; color: #4a5560; line-height: 1.7; }
+  #lgimp-ov .lgimp-tog { padding: 4px 16px 10px; display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; }
+  #lgimp-ov .lgimp-tog label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+  #lgimp-ov .lgimp-scroll { overflow: auto; border-top: 1px solid #e0e5ea; border-bottom: 1px solid #e0e5ea; }
+  #lgimp-ov table.lgimp-tbl { border-collapse: collapse; width: 100%; font-size: 12px; }
+  #lgimp-ov table.lgimp-tbl th { background: #eef2f6; color: #1e3a5f; padding: 5px 8px; position: sticky; top: 0; text-align: left; }
+  #lgimp-ov table.lgimp-tbl td { padding: 4px 8px; border-top: 1px solid #eef1f4; vertical-align: top; }
+  #lgimp-ov tr.lgimp-add td { background: #e8f5e9; }
+  #lgimp-ov .lgimp-b { color: #8a94a0; }
+  #lgimp-ov .lgimp-a { color: #00695c; font-weight: 700; }
+  #lgimp-ov .lgimp-foot { padding: 10px 16px; display: flex; align-items: center; gap: 10px; }
+  #lgimp-ov .lgimp-foot span { margin-right: auto; font-size: 12px; color: #4a5560; }
+  #lgimp-ov .lgimp-foot button { font-size: 13px; padding: 6px 16px; border-radius: 4px; cursor: pointer; font-family: inherit; }
   .lg-note-print { display: none; }   /* 印刷時のみ折返しテキストで全文表示（画面はinput編集） */
   .lg-dt-print { display: none; }     /* 印刷時のみ「8/1-10:00」の短い1行表示（画面は日付/時刻の入力欄） */
   .lg-addr-print { display: none; }   /* 印刷時のみ住所を半角数字で表示（画面は入力値そのまま） */
@@ -20428,6 +20445,7 @@ function renderListLedgerMode(rows, container){
     + '<button id="lg-print-sel" title="左端のチェックを入れた戸別の工事調書を 1戸1ページ でまとめて印刷／PDF出力します"' + (selCount ? '' : ' disabled')
     + ' style="background:#7a4e1e;color:#fff;border:1px solid #5e3c16;padding:4px 12px;border-radius:3px;cursor:' + (selCount ? 'pointer' : 'not-allowed') + ';font-size:12px;opacity:' + (selCount ? '1' : '.5') + ';">🖨 選択印刷' + (selCount ? '（' + selCount + '件）' : '') + '</button>'
     + (selCount ? '<button id="lg-print-clear" title="工事調書の選択をすべて解除" style="background:#fff;color:#7a4e1e;border:1px solid #b08a55;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:12px;">選択解除</button>' : '')
+    + '<button id="lg-import-ledger" title="受付台帳ソフトなど別のパソコンで作った「受付台帳ファイル（.json）」を読み込みます。いまの台帳と違うところだけを一覧で確認し、選んだ分だけ取り込みます。図面・積算には触りません。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📥 受付台帳を取り込む</button>'
     + '<button id="lg-xlsx-import" title="Excel（.xlsx）のH列「管理番号」を読み込み、下三桁で突き合わせて台帳の管理番号を更新します。取込前に、住所や過去の情報のどちらを残すかを選べます。" style="background:#2e5488;color:#fff;border:1px solid #1e3a5f;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📗 Excelから管理番号を読取り</button>'
     + '<button id="lg-xlsx-export" title="いまの受付台帳を Excel（.xlsx）へ書き出します。見出しは「管理番号」「住所」「備考」を使うので、Excelで直したあと左の「📗 Excelから管理番号を読取り」でそのまま読み戻せます。" style="background:#1b7a3d;color:#fff;border:1px solid #145c2e;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📘 Excelへ書き出し</button>'
     + '<span class="lg-xlsx-cols" title="1行目の見出し（管理番号／住所結合／過去の情報）から列を自動で探します。見出しが無い場合は H / E / F 列を使います。">'
@@ -20811,6 +20829,158 @@ async function exportReceptionLedgerForGenba(){
    ・住所・過去の情報は「台帳の値」「Excelの値」を並べ、文字をクリックして残す方を選ぶ。
    ・施工会社は管理番号の左から4桁目（1〜4）で自動判別（対応表はメニューで設定）。
    ============================================================ */
+/* ============================================================
+   📥 受付台帳ファイル（antenna_reception_ledger）の差分取り込み
+   ・別のパソコン（受付台帳ソフト等）で作った台帳を、管理番号で突き合わせる。
+   ・いまの台帳と「違うところ」だけを一覧に出し、チェックしたものだけ反映する。
+   ・戸別の図面・積算・写真には一切触らない（台帳の項目と、氏名/住所/電話/工事日だけ）。
+   ============================================================ */
+const LGIMP_FIELDS = [
+  { f: "name",    label: "名前",     kind: "case", key: "chosho_cust_name" },
+  { f: "addr",    label: "住所",     kind: "case", key: "chosho_cust_addr" },
+  { f: "tel",     label: "電話番号", kind: "case", key: "chosho_cust_tel" },
+  { f: "date",    label: "工事日程", kind: "case", key: "chosho_date" },
+  { f: "time",    label: "受付時刻", kind: "lg",   key: "time" },
+  { f: "meet",    label: "打合せ",   kind: "lg",   key: "meetAt" },
+  { f: "flyer",   label: "ビラ",     kind: "lg",   key: "flyer",   bool: true },
+  { f: "hold",    label: "保留",     kind: "lg",   key: "hold",    bool: true },
+  { f: "consent", label: "承諾書",   kind: "lg",   key: "consent", bool: true },
+  { f: "compdoc", label: "完了書",   kind: "lg",   key: "compdoc", bool: true },
+  { f: "note",    label: "備考",     kind: "lg",   key: "note" }
+];
+function lgimpShow(v, F){
+  if(F && F.bool) return v ? "○" : "―";
+  const s = String(v == null ? "" : v).trim();
+  if(!s) return "―";
+  if(F && F.f === "meet") return lgFmtMeetAt(s) || s;                       // 2026-08-25T13:30 → 8/25-13:30
+  if(F && F.f === "date") return lgFmtDateTime(s, "") || s;                 // 2026-08-20 → 8/20
+  return s;
+}
+/* ファイルの中身と、いまの台帳との違いを洗い出す。 */
+function lgLedgerDiff(payload){
+  const byNo = new Map();
+  _listRows.forEach(r => { const k = ((r.data && r.data.chosho_mgmt_no) || "").trim(); if(k && !byNo.has(k)) byNo.set(k, r); });
+  const items = [];
+  (payload.rows || []).forEach(x => {
+    const no = String(x.mgmt_no || "").trim();
+    if(!no) return;
+    const row = byNo.get(no);
+    if(!row){
+      items.push({ no, row: null, kind: "add", src: x,
+                   summary: [x.name, x.addr, x.tel].filter(Boolean).join(" / ") || "（氏名・住所なし）" });
+      return;
+    }
+    const lg = getLedger(subCaseKey(row)), d = row.data || {};
+    const diffs = [];
+    LGIMP_FIELDS.forEach(F => {
+      if(x[F.f] === undefined) return;
+      const after = F.bool ? !!x[F.f] : String(x[F.f] == null ? "" : x[F.f]).trim();
+      const before = F.bool ? !!lg[F.key] : String((F.kind === "case" ? d[F.key] : lg[F.key]) || "").trim();
+      if(!F.bool && !after) return;                       // ファイル側が空の文字は「変更なし」扱い（消さない）
+      if(String(before) === String(after)) return;
+      if(F.kind === "case" && !lgEditableField(row, F.f === "name" || F.f === "tel" || F.f === "addr" ? "addr" : F.f)) return; // 暗号化で書けない項目は出さない
+      diffs.push({ F, before, after });
+    });
+    if(diffs.length) items.push({ no, row, kind: "update", src: x, diffs });
+  });
+  return items;
+}
+function lgPickLedgerFile(){
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = ".json,application/json";
+  inp.addEventListener("change", async () => {
+    const f = inp.files && inp.files[0]; if(!f) return;
+    let p;
+    try { p = JSON.parse(await f.text()); }
+    catch(_){ alert("ファイルを読み込めませんでした。"); return; }
+    if(!p || p.type !== "antenna_reception_ledger" || !Array.isArray(p.rows)){
+      alert("受付台帳ファイルではありません。\n受付台帳ソフトの「📤 台帳を書き出し」で作ったファイルを選んでください。"); return;
+    }
+    const items = lgLedgerDiff(p);
+    if(!items.length){
+      alert("違いはありませんでした（" + (p.rows || []).length + "件を確認）。\nいまの受付台帳はファイルと同じ内容です。");
+      return;
+    }
+    lgShowLedgerDiffDialog(p, items);
+  });
+  inp.click();
+}
+/* 差分の一覧を出し、チェックしたものだけ取り込む。 */
+function lgShowLedgerDiffDialog(payload, items){
+  const adds = items.filter(i => i.kind === "add"), upds = items.filter(i => i.kind === "update");
+  const rowsHtml = items.map((it, i) => {
+    if(it.kind === "add"){
+      return '<tr class="lgimp-add"><td><input type="checkbox" data-i="' + i + '" data-g="add" checked></td>'
+        + '<td><b>' + escapeHtml(it.no) + '</b></td><td colspan="3">新しく台帳へ追加：' + escapeHtml(it.summary) + '</td></tr>';
+    }
+    return it.diffs.map((d, j) =>
+      '<tr class="lgimp-upd"><td>' + (j === 0 ? '<input type="checkbox" data-i="' + i + '" data-g="' + (d.F.kind === "case" ? "case" : "lg") + '" data-j="' + j + '" checked>' : '<input type="checkbox" data-i="' + i + '" data-g="' + (d.F.kind === "case" ? "case" : "lg") + '" data-j="' + j + '" checked>') + "</td>"
+      + "<td>" + (j === 0 ? "<b>" + escapeHtml(it.no) + "</b>" : "") + "</td>"
+      + "<td>" + escapeHtml(d.F.label) + "</td>"
+      + '<td class="lgimp-b">' + escapeHtml(lgimpShow(d.before, d.F)) + "</td>"
+      + '<td class="lgimp-a">' + escapeHtml(lgimpShow(d.after, d.F)) + "</td></tr>").join("");
+  }).join("");
+  const ov = document.createElement("div");
+  ov.id = "lgimp-ov";
+  ov.innerHTML =
+    '<div class="lgimp-box"><div class="lgimp-head">📥 受付台帳の取り込み（違うところだけ）</div>'
+    + '<div class="lgimp-sub">ファイル：' + escapeHtml(payload.project || "（物件名なし）") + "　"
+    + escapeHtml(String(payload.exportedAt || "").replace("T", " ").slice(0, 16)) + "　" + (payload.rows || []).length + "件<br>"
+    + "いまの受付台帳と<b>違うところだけ</b>を出しています。チェックを外したものは取り込みません。"
+    + "<b>戸別の図面・積算・写真には触りません。</b></div>"
+    + '<div class="lgimp-tog"><label><input type="checkbox" id="lgimp-all-add" checked> 新しい戸別を追加（' + adds.length + "件）</label>"
+    + '<label><input type="checkbox" id="lgimp-all-case" checked> 名前・住所・電話・工事日を更新</label>'
+    + '<label><input type="checkbox" id="lgimp-all-lg" checked> 台帳の項目（打合せ・ビラ・保留・承諾書・完了書・備考）を更新</label></div>'
+    + '<div class="lgimp-scroll"><table class="lgimp-tbl"><thead><tr><th style="width:34px;"></th><th style="width:120px;">管理番号</th>'
+    + '<th style="width:90px;">項目</th><th>いまの台帳</th><th>ファイル</th></tr></thead><tbody>' + rowsHtml + "</tbody></table></div>"
+    + '<div class="lgimp-foot"><span id="lgimp-cnt"></span>'
+    + '<button id="lgimp-ok" style="background:#00695c;color:#fff;border:1px solid #004d40;">この内容で取り込む</button>'
+    + '<button id="lgimp-ng" style="background:#fff;color:#33414f;border:1px solid #cdd3da;">やめる</button></div></div>';
+  document.body.appendChild(ov);
+  const boxes = () => Array.prototype.slice.call(ov.querySelectorAll("tbody input[type=checkbox]"));
+  const refresh = () => {
+    const n = boxes().filter(b => b.checked).length;
+    ov.querySelector("#lgimp-cnt").textContent = "取り込む項目：" + n + " 件";
+  };
+  const bindAll = (id, g) => ov.querySelector(id).addEventListener("change", function(){
+    boxes().forEach(b => { if(b.dataset.g === g) b.checked = this.checked; });
+    refresh();
+  });
+  bindAll("#lgimp-all-add", "add"); bindAll("#lgimp-all-case", "case"); bindAll("#lgimp-all-lg", "lg");
+  ov.querySelector("tbody").addEventListener("change", refresh);
+  refresh();
+  const close = () => { if(ov.parentNode) ov.parentNode.removeChild(ov); };
+  ov.querySelector("#lgimp-ng").addEventListener("click", close);
+  ov.addEventListener("click", e => { if(e.target === ov) close(); });
+  ov.querySelector("#lgimp-ok").addEventListener("click", () => {
+    let added = 0, changed = 0;
+    boxes().forEach(bx => {
+      if(!bx.checked) return;
+      const it = items[parseInt(bx.dataset.i, 10)];
+      if(!it) return;
+      if(it.kind === "add"){
+        const x = it.src;
+        const row = createManualRow({ chosho_mgmt_no: it.no, chosho_cust_name: x.name || "",
+          chosho_cust_addr: toHalfWidthNum(x.addr || ""), chosho_cust_tel: toHalfWidthNum(x.tel || ""),
+          chosho_date: x.date || "", chosho_status: x.status || "provisional" }, "ledger-file");
+        const tk = subCaseKey(row);
+        setLedger(tk, { time: x.time || "", meetAt: x.meet || "", flyer: !!x.flyer, hold: !!x.hold,
+                        consent: !!x.consent, compdoc: !!x.compdoc, note: x.note || "" });
+        added++;
+        return;
+      }
+      const d = it.diffs[parseInt(bx.dataset.j, 10)];
+      if(!d) return;
+      if(d.F.kind === "case") lgWriteCaseField(it.row, d.F.f, d.after);
+      else setLedger(subCaseKey(it.row), { [d.F.key]: d.after });
+      changed++;
+    });
+    close();
+    renderListTable();
+    try { if(typeof window.__mapRefreshObjects === "function") window.__mapRefreshObjects(); } catch(_){}
+    alert("📥 受付台帳を取り込みました。\n\n新しく追加した戸別：" + added + " 件\n書き換えた項目：" + changed + " 件");
+  });
+}
 /* --- 最小限の xlsx リーダ（ZIP → sharedStrings + 先頭シート） --- */
 async function xlsxReadSheet(file){
   const buf = await file.arrayBuffer();
@@ -21216,6 +21386,7 @@ function bindLedgerHandlers(container){
     }
     if(e.target.closest("#lg-print-sel")){ printSelectedChosho(); return; }
     if(e.target.closest("#lg-print-clear")){ _ledgerPrintSel.clear(); renderListTable(); return; }
+    if(e.target.closest("#lg-import-ledger")){ lgPickLedgerFile(); return; }
     if(e.target.closest("#lg-xlsx-import")){ ledgerXlsxImportFlow(); return; }
     if(e.target.closest("#lg-xlsx-export")){ exportReceptionLedgerToXlsx(); return; }
     if(e.target.closest("#lg-export-genba")){ exportReceptionLedgerForGenba(); return; }
