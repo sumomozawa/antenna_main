@@ -20466,6 +20466,7 @@ async function exportReceptionLedgerForGenba(){
       meet:    lg.meetAt          || "",
       status:  d.chosho_status    || "",
       contractor: ctr,
+      hold:    !!lg.hold,          // 保留（現場入力アプリの一覧に「保」バッジを出す）
       note:    lg.note            || ""
     };
   }).filter(x => x.mgmt_no || x.name || x.addr);
