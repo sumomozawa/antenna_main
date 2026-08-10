@@ -1,0 +1,1529 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>受付台帳（専用）</title>
+<!--
+  受付台帳 専用ソフト（単体HTML・Chrome / Edge の Windows PC 用）
+
+  ・メイン（アンテナ工事 積算・図面）が使っている「物件ファイル」を、そのまま開いて読み書きします。
+    ファイル形式は変えていないので、メイン側の改造は不要です。
+  ・保存は必ず「共有ファイルの今の中身」を読み直してから、このソフトで触った戸別・台帳の項目だけを
+    上乗せして書き戻します（メインの戸別単位マージと同じ考え方）。触っていない部分＝図面・積算・地図・
+    単価などは、共有ファイルの内容がそのまま残ります。
+  ・上書きの直前に、書き換える前のファイル内容をこの端末に控えます（🕘 履歴）。取り違えても戻せます。
+-->
+<style>
+  :root{
+    --navy:#1e3a5f; --navy-d:#16314f; --line:#cdd3da; --ink:#33414f; --muted:#667482;
+    --bg:#eef1f4; --ok:#1b7a3d; --warn:#e8830c; --ng:#c62828;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0; font-family:"Meiryo","Hiragino Kaku Gothic ProN",sans-serif; color:var(--ink);
+    background:var(--bg); display:flex; flex-direction:column; font-size:13px;
+  }
+  /* ---------- 上部バー ---------- */
+  .top{ background:var(--navy); color:#fff; padding:8px 14px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .top h1{ font-size:16px; margin:0; font-weight:700; letter-spacing:.02em; }
+  .top .proj{ font-size:13px; opacity:.92; }
+  .top .proj b{ font-size:14px; }
+  .spacer{ flex:1 1 auto; }
+  button{ font-family:inherit; font-size:12px; padding:5px 12px; border-radius:3px; cursor:pointer; border:1px solid var(--line); background:#fff; color:var(--ink); }
+  button:disabled{ opacity:.45; cursor:not-allowed; }
+  button.pri{ background:var(--navy); color:#fff; border-color:var(--navy-d); }
+  button.grn{ background:var(--ok); color:#fff; border-color:#145c2e; }
+  button.brw{ background:#7a4e1e; color:#fff; border-color:#5e3c16; }
+  button.gry{ background:#546e7a; color:#fff; border-color:#3f5561; }
+  /* ---------- 保存先の1行表示（事故防止の要） ---------- */
+  .savestate{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:6px 14px; font-size:12px; border-bottom:1px solid var(--line); }
+  .savestate .ico{ font-size:14px; }
+  .savestate.ss-ok  { background:#e8f5e9; color:#1b5e20; }
+  .savestate.ss-warn{ background:#fff8e1; color:#8a5a00; }
+  .savestate.ss-none{ background:#fdecea; color:#a5342b; }
+  .savestate .path{ font-weight:700; }
+  .savestate .sub{ opacity:.85; }
+  /* ---------- 操作行 ---------- */
+  .bar{ background:#fff; border-bottom:1px solid var(--line); padding:7px 14px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .bar label{ display:inline-flex; align-items:center; gap:4px; cursor:pointer; white-space:nowrap; }
+  .bar input[type=search]{ font-family:inherit; font-size:13px; padding:4px 8px; border:1px solid var(--line); border-radius:3px; width:260px; }
+  .bar .count{ margin-left:auto; color:var(--muted); font-size:12px; }
+  .hint{ color:var(--muted); font-size:11px; }
+  /* ---------- 表 ---------- */
+  .wrap{ flex:1 1 auto; overflow:auto; padding:10px 14px 40px; }
+  table.lg{ border-collapse:collapse; width:100%; background:#fff; font-size:12px; }
+  table.lg th, table.lg td{ border:1px solid #dfe4e9; padding:3px 6px; vertical-align:middle; }
+  table.lg thead th{ background:#e8edf2; color:var(--navy); position:sticky; top:0; z-index:2; white-space:nowrap; font-size:11.5px; }
+  table.lg thead th[data-sort]{ cursor:pointer; user-select:none; }
+  table.lg thead th[data-sort]:hover{ background:#dbe4ee; }
+  .arrow{ color:var(--navy); font-size:10px; }
+  td.c{ text-align:center; }
+  table.lg input[type=text], table.lg input[type=date], table.lg input[type=time], table.lg input[type=datetime-local]{
+    font-family:inherit; font-size:12px; padding:2px 4px; border:1px solid var(--line); border-radius:3px; width:100%;
+  }
+  table.lg select{ font-family:inherit; font-size:12px; padding:2px 3px; border:1px solid var(--line); border-radius:3px; width:100%; }
+  table.lg select.st-prov{ background:#fdd835; border-color:#c6a700; font-weight:700; }
+  table.lg th[data-col="addr"], table.lg td[data-col="addr"]{ width:220px; min-width:170px; white-space:normal; word-break:break-word; }
+  table.lg th[data-col="note"], table.lg td[data-col="note"]{ min-width:220px; }
+  .edit{ display:inline-block; min-width:1.5em; min-height:1.25em; cursor:text; border-bottom:1px dotted #b8c2cc; }
+  .edit:hover{ background:#fffbe6; }
+  .lock{ color:var(--muted); }
+  .note-input{ color:#5d4037; }
+  .dt-print, .addr-print, .note-print, .ctr-print, .st-print{ display:none; }
+  td.ctr-cell select{ font-size:11.5px; }
+  td.ctr-auto select{ color:var(--muted); }
+  /* 行の状態色 */
+  tr.r-prov  td{ background:#fffde7; }
+  tr.r-done  td{ background:#eef7ee; color:#5c6b5c; }
+  tr.r-today td{ background:#e3f2fd; }
+  tr.r-tomo  td{ background:#f3e5f5; }
+  tr.r-hold  td{ background:#ffe8cc; }
+  tr.r-new   td{ box-shadow:inset 0 0 0 2px #ffb300; }
+  .badge{ display:inline-block; font-size:10px; line-height:1; padding:2px 4px; border-radius:3px; margin-left:4px; vertical-align:middle; color:#fff; }
+  .badge.prov{ background:#c6a700; }
+  .badge.hold{ background:#e65100; }
+  .empty{ padding:40px 10px; text-align:center; color:var(--muted); }
+  /* 施工会社の一覧編集 */
+  #ctr-ov{ position:fixed; inset:0; background:rgba(20,30,45,.5); z-index:900; display:flex; align-items:center; justify-content:center; }
+  #ctr-ov .ctr-box{ background:#fff; border-radius:8px; width:min(460px,92vw); max-height:86vh; display:flex; flex-direction:column; box-shadow:0 8px 30px rgba(0,0,0,.3); }
+  #ctr-ov .ctr-head{ background:var(--navy); color:#fff; font-weight:700; padding:10px 16px; border-radius:8px 8px 0 0; }
+  #ctr-ov .ctr-note{ padding:10px 16px 6px; font-size:11.5px; color:var(--muted); line-height:1.7; }
+  #ctr-ov .ctr-list{ overflow:auto; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+  #ctr-ov .ctr-row{ display:flex; align-items:center; gap:10px; padding:6px 16px; border-bottom:1px solid #eef1f4; }
+  #ctr-ov .ctr-row span{ flex:1; }
+  #ctr-ov .ctr-empty{ padding:18px 16px; color:var(--muted); font-size:12px; }
+  #ctr-ov .ctr-add{ display:flex; gap:8px; padding:10px 16px; }
+  #ctr-ov .ctr-add input{ flex:1; font-family:inherit; font-size:13px; padding:5px 8px; border:1px solid var(--line); border-radius:3px; }
+  #ctr-ov .ctr-foot{ padding:0 16px 12px; text-align:right; }
+  /* ---------- 印刷レイアウト調整パネル ---------- */
+  .lgw{ background:#fff; border:1px solid #cfdcea; border-radius:6px; padding:10px 12px 14px; margin:0 14px 10px; }
+  .lgw h2{ font-size:13px; color:var(--navy); margin:0 0 2px; }
+  .lgw .n{ font-size:11px; color:var(--muted); line-height:1.6; margin-bottom:8px; }
+  .lgw-rows{ display:flex; flex-wrap:wrap; gap:4px 14px; }
+  .lgw-row{ display:flex; align-items:center; gap:6px; font-size:12px; flex:1 1 250px; }
+  .lgw-row > b{ width:6.5em; text-align:right; color:var(--ink); font-weight:600; }
+  .lgw-row input[type=range]{ flex:1; min-width:90px; }
+  .lgw-row input[type=number]{ width:52px; font-size:12px; padding:2px 4px; border:1px solid var(--line); border-radius:3px; text-align:right; }
+  .lgw-foot{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:9px; padding-top:8px; border-top:1px solid #e5e9ee; }
+  .lgw-total{ font-size:12px; font-weight:700; }
+  .lgw-total.ok{ color:#1b5e20; } .lgw-total.ng{ color:var(--ng); }
+  /* 工事日の期間で絞り込む欄 */
+  .fdate{ display:inline-flex; align-items:center; gap:4px; white-space:nowrap; }
+  .fdate input[type=date]{ font-family:inherit; font-size:11.5px; padding:2px 4px; border:1px solid var(--line); border-radius:3px; }
+  .fdate .tilde{ color:var(--muted); }
+  /* ---------- 紙にだけ出る見出し ---------- */
+  .print-head{ display:none; }
+  body.pv .print-head, body.pm .print-head{ display:block; margin:0 0 4px; padding:0 0 3px; border-bottom:1.5px solid #333;
+    font-size:11px; line-height:1.5; color:#000; }
+  .print-head .ph-t{ font-weight:700; font-size:13px; margin-right:10px; }
+  .print-head .ph-p{ font-weight:700; margin-right:10px; }
+  .print-head .ph-f{ margin-right:10px; }
+  .print-head .ph-c{ font-weight:700; margin-right:10px; }
+  .print-head .ph-d{ color:#444; }
+  /* ---------- 印刷／印刷プレビュー ---------- */
+  body.pv .top, body.pv .savestate, body.pv .bar{ display:none !important; }
+  body.pv .wrap{ padding:0; }
+  body.pv thead th.focus{ outline:2px solid #1565c0; outline-offset:-2px; background:#d7e7fb !important; }
+  body.pv table.lg, body.pm table.lg{ table-layout:fixed; width:100%; }
+  body.pv table.lg th, body.pv table.lg td,
+  body.pm table.lg th, body.pm table.lg td{ min-width:0 !important; padding:1px 4px !important; line-height:1.25 !important; font-size:10px !important; }
+  body.pv table.lg td, body.pm table.lg td{ white-space:normal; word-break:break-word; overflow-wrap:anywhere; }
+  body.pv table.lg input[type=date], body.pv table.lg input[type=time], body.pv table.lg input[type=datetime-local],
+  body.pm table.lg input[type=date], body.pm table.lg input[type=time], body.pm table.lg input[type=datetime-local]{ display:none !important; }
+  body.pv table.lg .note-input, body.pm table.lg .note-input{ display:none !important; }
+  /* 状態と施工会社は、印刷では選択欄（ドロップダウンの枠）ではなく文字にする */
+  body.pv table.lg td.ctr-cell select, body.pm table.lg td.ctr-cell select,
+  body.pv table.lg td[data-col="st"] select, body.pm table.lg td[data-col="st"] select,
+  body.pv table.lg td[data-col="st"] .lock, body.pm table.lg td[data-col="st"] .lock{ display:none !important; }
+  body.pv table.lg .ctr-print, body.pm table.lg .ctr-print,
+  body.pv table.lg .st-print, body.pm table.lg .st-print{ display:inline !important; }
+  /* 住所は「入力用の表示」と「印刷用の半角表示」を両方持っているので、印刷では入力用を隠す
+     （隠さないと同じ住所が2回続けて出る） */
+  body.pv table.lg td[data-col="addr"] .edit, body.pv table.lg td[data-col="addr"] .lock,
+  body.pm table.lg td[data-col="addr"] .edit, body.pm table.lg td[data-col="addr"] .lock{ display:none !important; }
+  body.pv table.lg .dt-print, body.pv table.lg .addr-print, body.pv table.lg .note-print,
+  body.pm table.lg .dt-print, body.pm table.lg .addr-print, body.pm table.lg .note-print{ display:inline !important; white-space:nowrap; }
+  body.pv table.lg .note-print, body.pm table.lg .note-print{ white-space:normal; }
+  body.pv table.lg .badge, body.pm table.lg .badge{ display:none !important; }
+  body.pv table.lg input[type=checkbox], body.pm table.lg input[type=checkbox]{ width:11px; height:11px; margin:0; }
+  body.pv table.lg thead th, body.pm table.lg thead th{ position:static !important; }
+  @media print{
+    body{ background:#fff; }
+    body.pm .top, body.pm .savestate, body.pm .bar, body.pm .lgw{ display:none !important; }
+    body.pm .wrap{ padding:0; overflow:visible !important; height:auto !important; }
+    body.pm *{ color:#000 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    body.pm table.lg thead{ display:table-header-group; }
+    body.pm table.lg tr{ page-break-inside:avoid; }
+    @page{ size:A4 landscape; margin:8mm; }
+  }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <h1>📒 受付台帳</h1>
+  <span class="proj" id="proj">物件：<b>未接続</b></span>
+  <span class="spacer"></span>
+  <button class="brw" id="btn-export" title="この受付台帳を1つのファイルに書き出します。メインの受付台帳で「📥 受付台帳を取り込む」から、差分だけ取り込めます。">📤 台帳を書き出し</button>
+  <button id="btn-import" title="書き出した受付台帳ファイルを読み込みます（差分だけ取り込みます）。">📥 台帳を取り込み</button>
+  <button class="pri" id="btn-open" title="メインと同じ物件ファイルを開きます。以後の変更はこのファイルへ自動で保存されます。">📂 共有ファイルを開く</button>
+  <button id="btn-reconnect" title="前回開いたファイルにつなぎ直します。">🔗 再接続</button>
+  <button class="grn" id="btn-save" title="いまの内容を保存します（自動保存もされます）。">💾 今すぐ保存</button>
+  <button id="btn-history" title="上書きする前のファイル内容をこの端末に控えてあります。取り違えたときはここから戻せます。">🕘 履歴</button>
+</div>
+
+<div class="savestate ss-none" id="savestate"><span class="ico">⚠</span><span>共有ファイルに接続していません。「📂 共有ファイルを開く」から、メインと同じ物件ファイルを選んでください。</span></div>
+
+<div class="bar" id="bar">
+  <button class="pri" id="btn-add" title="台帳に新しい戸別の行を追加します（仮受付）。">＋ 新規行</button>
+  <input type="search" id="q" placeholder="管理番号 / 名前 / 住所 / 電話 / 備考 で検索" autocomplete="off">
+  <label><input type="checkbox" id="f-prov"> 仮受付のみ</label>
+  <label><input type="checkbox" id="f-pending"> 未完了のみ</label>
+  <label><input type="checkbox" id="f-noflyer"> ビラ未配布のみ</label>
+  <label><input type="checkbox" id="f-hold"> 保留のみ</label>
+  <select id="f-ctr" title="施工会社で絞り込みます。印刷にもそのまま効きます。"><option value="">施工会社：すべて</option></select>
+  <label class="fdate" title="工事日程予定がこの期間に入る行だけにします。片方だけの指定もできます。日程が未定の行は出ません。">工事日
+    <input type="date" id="f-d1"><span class="tilde">〜</span><input type="date" id="f-d2"></label>
+  <button id="btn-fclear" title="絞り込みをすべて解除して、全部の行を表示します。">✕ 絞り込み解除</button>
+  <button id="btn-ctr" title="施工会社の一覧（会社名）を編集します。ここで足した会社が各行の選択肢に出ます。">🏢 施工会社</button>
+  <button id="btn-xlsx-in"  title="Excel（.xlsx）から管理番号・住所・過去の情報を読み取り、下三桁で突き合わせて台帳を更新します。">📗 Excelから読取り</button>
+  <button class="grn" id="btn-xlsx-out" title="いま表示している行を Excel（.xlsx）へ書き出します。絞り込むと、絞り込んだ行だけを書き出します。">📘 Excelへ書き出し</button>
+  <button class="gry" id="btn-pv" title="印刷したときの見た目のまま、各列の幅をその場で調整できます（この端末だけの設定）。">🖨 印刷レイアウト調整</button>
+  <button class="brw" id="btn-print" title="いま表示している行を印刷します。上の絞り込みで、印刷したい行だけにしてから押してください。">🖨 印刷</button>
+  <span class="count" id="count"></span>
+</div>
+
+<div id="pvpanel"></div>
+<!-- 紙にだけ出る見出し。何で絞り込んだ台帳なのかが用紙から分かるようにする -->
+<div class="print-head" id="print-head"></div>
+<div class="wrap" id="wrap"><div class="empty">共有ファイルを開くと、ここに受付台帳が出ます。</div></div>
+
+<script>
+"use strict";
+/* =========================================================================
+   0. 定数・小道具（メインと同じ規則にそろえたもの）
+   ========================================================================= */
+const APP_NAME = "受付台帳（専用）";
+const APP_VERSION = "1.0.0";
+const PROJ_SCHEMA = "antenna_project_v1";          // メインの物件ファイルと同じ
+const FS_OK = !!(window.showOpenFilePicker && window.showSaveFilePicker);
+
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c]));
+/* 住所・電話の全角数字とハイフン類は半角へ（長音符「ー」は語を壊すので触らない）。メインと同じ規則。 */
+const toHalfWidthNum = s => String(s == null ? "" : s)
+  .replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+  .replace(/[－−‐‑]/g, "-");
+const newId = () => "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const el = id => document.getElementById(id);
+const todayStr = (off) => { const t = new Date(); t.setDate(t.getDate() + (off || 0));
+  return t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") + "-" + String(t.getDate()).padStart(2, "0"); };
+const fmtDateTime = (dateStr, timeStr) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dateStr || "")), t = String(timeStr || "").slice(0, 5);
+  if(!m) return t;
+  const md = parseInt(m[2], 10) + "/" + parseInt(m[3], 10);
+  return t ? (md + "-" + t) : md;
+};
+const fmtMeetAt = v => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(v || ""));
+  return m ? (parseInt(m[2], 10) + "/" + parseInt(m[3], 10) + "-" + m[4] + ":" + m[5]) : "";
+};
+/* 台帳キー。メインの subCaseKey と同じ：管理番号があれば "m:番号"、無ければ "f:ファイル名"。 */
+const subKeyOf = (mgmt, file) => {
+  const mg = String(mgmt == null ? "" : mgmt).trim();
+  return mg ? ("m:" + mg) : ("f:" + (file || ""));
+};
+/* 戸別ラッパ（ファイル内の cases[i]）から同じキーを得る。メインの caseSubKeyOf と同じ。 */
+const caseSubKeyOf = c => {
+  if(!c) return "f:";
+  const p = c.payload || {};
+  const mg = ((p.chosho_mgmt_no != null ? p.chosho_mgmt_no : (p.plain && p.plain.chosho_mgmt_no)) || "").toString().trim();
+  return mg ? ("m:" + mg) : ("f:" + (c.file || ""));
+};
+
+/* =========================================================================
+   1. この端末のデータベース（ファイルの記憶と、上書き前の控え）
+      メインの IndexedDB とは別物にしてある。同じDBを別バージョンで開くと
+      メイン側が壊れるおそれがあるため、絶対に共有しない。
+   ========================================================================= */
+const DB_NAME = "antenna_ledger_app_db";
+const ST_HANDLE = "handles";     // 開いたファイルの記憶（out-of-line key）
+const ST_BACKUP = "backups";     // 上書き前のファイル内容の控え（keyPath=bid）
+const ST_LOCAL  = "local";       // 共有ファイルを使わないときの台帳本体（out-of-line key="cur"）
+const BACKUP_KEEP = 200;         // 控えの保持件数（古い順に削除）
+const BACKUP_MIN_MS = 3 * 60 * 1000;   // 自動の控えは最短3分間隔（保存のたびに増やしすぎない）
+let _db = null;
+function openDb(){
+  return new Promise((res, rej) => {
+    if(_db) return res(_db);
+    const rq = indexedDB.open(DB_NAME, 1);
+    rq.onupgradeneeded = () => {
+      const db = rq.result;
+      if(!db.objectStoreNames.contains(ST_HANDLE)) db.createObjectStore(ST_HANDLE);
+      if(!db.objectStoreNames.contains(ST_BACKUP)){
+        const s = db.createObjectStore(ST_BACKUP, { keyPath: "bid" });
+        s.createIndex("byAt", "at", { unique:false });
+      }
+      if(!db.objectStoreNames.contains(ST_LOCAL)) db.createObjectStore(ST_LOCAL);
+    };
+    rq.onsuccess = () => { _db = rq.result; res(_db); };
+    rq.onerror = () => rej(rq.error);
+  });
+}
+function idb(store, mode, fn){
+  return openDb().then(db => new Promise((res, rej) => {
+    const tx = db.transaction(store, mode), r = fn(tx.objectStore(store));
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  }));
+}
+const handlePut = h => idb(ST_HANDLE, "readwrite", st => st.put(h, "last"));
+const handleGet = () => idb(ST_HANDLE, "readonly", st => st.get("last")).catch(() => null);
+const localPut = o => idb(ST_LOCAL, "readwrite", st => st.put(o, "cur"));
+const localGet = () => idb(ST_LOCAL, "readonly", st => st.get("cur")).catch(() => null);
+const backupPut = rec => idb(ST_BACKUP, "readwrite", st => st.put(rec));
+const backupAll = () => idb(ST_BACKUP, "readonly", st => st.getAll()).catch(() => []);
+const backupDel = bid => idb(ST_BACKUP, "readwrite", st => st.delete(bid)).catch(() => false);
+let _lastBackupAt = 0;
+/* 上書きする前のファイル内容を控える。取り違えたときはここから戻せる。 */
+async function takeBackup(snapText, snap, why){
+  const now = Date.now();
+  if(why === "auto" && now - _lastBackupAt < BACKUP_MIN_MS) return;
+  _lastBackupAt = now;
+  try {
+    await backupPut({ bid: "bk" + now.toString(36) + Math.random().toString(36).slice(2, 6),
+      at: new Date(now).toISOString(), why: why || "auto",
+      projectId: (snap && snap.id) || "", projectName: (snap && snap.name) || "",
+      updatedAt: (snap && snap.updatedAt) || "", caseCount: (snap && snap.cases || []).length,
+      text: snapText });
+    const all = (await backupAll()).sort((a, b) => (a.at < b.at ? 1 : -1));
+    for(let i = BACKUP_KEEP; i < all.length; i++) await backupDel(all[i].bid);
+  } catch(e){ console.warn("控えの保存に失敗", e); }
+}
+
+/* =========================================================================
+   2. 状態
+   ========================================================================= */
+/* 使い方は2通り。
+   "local" … 共有ファイルを使わない（別の場所で台帳だけ作る）。内容はこの端末に保存し、
+             「📤 台帳を書き出し」でファイルにしてメインへ渡す。
+   "file"  … メインと同じ物件ファイルを直接開く。保存すると相手にもそのまま届く。 */
+let _mode = "local";
+let _handle = null;          // 共有ファイル
+let _base = null;            // 直近に読み込んだファイル内容（土台）
+let _rows = [];              // 画面用の行（_base.cases から作る）
+let _ledger = {};            // 台帳の記入内容（キー→値）
+let _contractorAssign = {};  // 戸別→施工会社（管理番号キー）
+let _contractors = [];       // 施工会社マスター（物件ファイルの contractors）
+let _contractorDigits = {};  // 業者番号（管理番号の左から4桁目 1〜4）→会社名
+let _editedCtr = new Set();     // このソフトが設定・変更した施工会社の割当キー
+let _deletedCtr = new Set();    // このソフトが解除した施工会社の割当キー
+let _editedMeta = new Set();    // このソフトが変えた物件全体の設定（"contractors" など）
+let _removedCtrNames = new Set(); // このソフトが施工会社の一覧から外した会社名
+let _editedCases = new Set();   // このソフトが触った戸別（caseId）
+let _editedAnno = new Set();    // このソフトが設定・変更した台帳キー
+let _deletedAnno = new Set();   // このソフトが空にした台帳キー
+let _deletedCases = new Set();  // このソフトが消した戸別（caseId）
+let _dirty = false;             // 未保存の変更があるか
+let _saving = false, _saveQueued = false, _saveTimer = null;
+let _lastWrittenUpdatedAt = "";  // 自分が最後に書いた／読んだ版（他端末の更新検出に使う）
+let _sort = { key: "mgmt", dir: 1 };
+let _newKey = "";                // 追加直後の行を目立たせる
+let _err = "";
+
+/* =========================================================================
+   3. 共有ファイルの読み書き
+   ========================================================================= */
+function rowsFromSnapshot(p){
+  return (p.cases || []).map(c => {
+    const payload = c.payload || {};
+    const hybrid = !!payload.plain;                      // 一部暗号化。表示できる項目だけ持っている
+    const d = hybrid ? Object.assign({}, payload.plain) : Object.assign({}, payload);
+    delete d._manual; delete d._origin;
+    return {
+      caseId: c.caseId || "",
+      file: c.file || "",
+      lastModified: c.lastModified || 0,
+      prevSub: c.prevSub || "",
+      payload, hybrid, d,
+      manual: !!payload._manual,
+      origin: payload._origin || ""
+    };
+  });
+}
+function adoptSnapshot(p){
+  _base = p;
+  _rows = rowsFromSnapshot(p);
+  _ledger = Object.assign({}, p.ledger || {});
+  _contractorAssign = Object.assign({}, p.contractorAssign || {});
+  _contractors = Array.isArray(p.contractors) ? p.contractors.slice() : [];
+  _contractorDigits = Object.assign({}, p.contractorDigits || {});
+  _editedCases = new Set(); _editedAnno = new Set(); _deletedAnno = new Set(); _deletedCases = new Set();
+  _editedCtr = new Set(); _deletedCtr = new Set(); _editedMeta = new Set(); _removedCtrNames = new Set();
+  _dirty = false;
+  _lastWrittenUpdatedAt = p.updatedAt || "";
+}
+function isProjectFile(p){
+  return !!(p && p.schema === PROJ_SCHEMA && p.id && Array.isArray(p.cases));
+}
+async function readHandle(h){
+  const f = await h.getFile();
+  const t = await f.text();
+  return t ? JSON.parse(t) : null;
+}
+async function ensurePermission(h, mode){
+  try { if((await h.queryPermission({ mode })) === "granted") return true; } catch(_){}
+  try { return (await h.requestPermission({ mode })) === "granted"; } catch(_){ return false; }
+}
+/* 単体運用で作った台帳がある状態で共有ファイルを開くと、画面はファイルの内容に入れ替わる。
+   書き出さないまま切り替えると渡しそびれるので、必ず一度立ち止まる。 */
+function confirmLeaveLocal(){
+  if(_mode === "file" || !_rows.length) return true;
+  return confirm(
+    "いまこの端末で作っている受付台帳（" + _rows.length + "件）は、\n"
+    + "共有ファイルを開くと画面から入れ替わります。\n\n"
+    + "メインへ渡していない場合は、先に「📤 台帳を書き出し」でファイルにしてください。\n"
+    + "（この端末の内容自体は消えません。共有ファイルを閉じて開き直せば戻ります）\n\n"
+    + "続けますか？"
+  );
+}
+async function openSharedFile(){
+  if(!FS_OK){ alert("この端末（ブラウザ）は共有ファイルへの直接保存に対応していません。\nWindows の Chrome または Edge でお使いください。"); return; }
+  if(!confirmLeaveLocal()) return;
+  if(_dirty && !confirm("保存していない変更があります。\n先に保存せずに別のファイルを開くと、その変更は失われます。\n\n続けますか？")) return;
+  let h;
+  try {
+    const picked = await window.showOpenFilePicker({ multiple:false,
+      types:[{ description:"物件ファイル（JSON）", accept:{ "application/json":[".json"] } }] });
+    h = picked && picked[0];
+  } catch(e){ if(e && e.name === "AbortError") return; console.warn(e); return; }
+  if(!h) return;
+  await connectTo(h, true);
+}
+async function reconnect(){
+  const h = await handleGet();
+  if(!h){ alert("前に開いたファイルの記憶がありません。「📂 共有ファイルを開く」から選んでください。"); return; }
+  if(!confirmLeaveLocal()) return;
+  if(_dirty){
+    if(!confirm("保存していない変更があります。\n先に共有ファイルへ保存してから、つなぎ直します。\n\n続けますか？")) return;
+    try { await saveNow(true); } catch(_){}
+  }
+  await connectTo(h, true);
+}
+async function connectTo(h, announce){
+  if(!await ensurePermission(h, "readwrite")){ alert("共有ファイルへのアクセスが許可されませんでした。"); return; }
+  let p;
+  try { p = await readHandle(h); }
+  catch(e){ alert("ファイルを読み込めませんでした。\n" + (e && e.message ? e.message : "")); return; }
+  if(!isProjectFile(p)){ alert("物件ファイルではありません。\nメインで作った物件JSON（schema=antenna_project_v1）を選んでください。"); return; }
+  _handle = h; _mode = "file";
+  try { await handlePut(h); } catch(_){}
+  adoptSnapshot(p);
+  render();
+  if(announce) toast("📂 " + (p.name || "（名称未設定）") + " を開きました（" + (p.cases || []).length + "件）");
+}
+
+/* 保存：共有ファイルの「今の中身」を読み直し、このソフトが触った分だけを上乗せして書き戻す。
+   触っていない部分（図面・積算・地図・単価・施工会社マスターなど）はファイルの内容がそのまま残る。 */
+function markCase(row){ if(row && row.caseId) _editedCases.add(row.caseId); touch(); }
+function markAnno(k, removed){
+  if(!k) return;
+  if(removed){ _deletedAnno.add(k); _editedAnno.delete(k); }
+  else { _editedAnno.add(k); _deletedAnno.delete(k); }
+  touch();
+}
+function touch(){
+  _dirty = true; updateSaveState();
+  if(_saveTimer) clearTimeout(_saveTimer);
+  // この端末への保存は速いので短く待つ（不意に閉じても取りこぼしが少ない）。
+  // 共有ファイルは書き込みが重いので、少し間を置いてまとめて書く。
+  _saveTimer = setTimeout(() => { _saveTimer = null; saveNow(false); }, _mode === "file" ? 1200 : 300);
+}
+/* いまの画面の内容を、物件ファイルと同じ形にまとめる（単体運用の保存と書き出しで使う）。 */
+function snapshotLocal(){
+  const cases = _rows.map(r => ({ caseId: r.caseId, file: r.file, lastModified: r.lastModified || 0, payload: r.payload }));
+  return Object.assign({}, _base || {}, {
+    schema: PROJ_SCHEMA,
+    id: (_base && _base.id) || "ledger_local",
+    name: (_base && _base.name) || "（受付台帳のみ）",
+    createdAt: (_base && _base.createdAt) || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    cases, caseCount: cases.length,
+    ledger: Object.assign({}, _ledger),
+    contractorAssign: Object.assign({}, _contractorAssign),
+    contractors: _contractors.slice(),
+    contractorDigits: Object.assign({}, _contractorDigits)
+  });
+}
+function mergeOnto(disk){
+  // 戸別：このソフトが触った caseId だけ差し替え／追加。消した caseId は取り除く。
+  let cases = Array.isArray(disk.cases) ? disk.cases.slice() : [];
+  if(_deletedCases.size) cases = cases.filter(c => !(c && c.caseId && _deletedCases.has(c.caseId)));
+  const byId = new Map(), bySub = new Map();
+  cases.forEach((c, i) => {
+    if(!c) return;
+    if(c.caseId && !byId.has(c.caseId)) byId.set(c.caseId, i);
+    const sk = caseSubKeyOf(c); if(!bySub.has(sk)) bySub.set(sk, []); bySub.get(sk).push(i);
+  });
+  _rows.forEach(r => {
+    if(!r.caseId || !_editedCases.has(r.caseId)) return;
+    const wrapper = { caseId: r.caseId, file: r.file, lastModified: r.lastModified || Date.now(), payload: r.payload };
+    if(r.prevSub) wrapper.prevSub = r.prevSub;
+    let idx = -1;
+    if(byId.has(r.caseId)) idx = byId.get(r.caseId);
+    else {
+      // caseId が一致しない（古い形式など）→ 管理番号で突き合わせる。改番していれば旧キーも候補に。
+      const cands = Array.from(new Set((bySub.get(caseSubKeyOf(wrapper)) || []).concat(r.prevSub ? (bySub.get(r.prevSub) || []) : [])));
+      if(cands.length > 1) throw new Error("管理番号が重複していて、どの戸別に書き戻すか決められません：" + caseSubKeyOf(wrapper));
+      if(cands.length === 1) idx = cands[0];
+    }
+    if(idx >= 0) cases[idx] = wrapper;
+    else {
+      cases.push(wrapper);
+      byId.set(r.caseId, cases.length - 1);
+      const sk = caseSubKeyOf(wrapper); if(!bySub.has(sk)) bySub.set(sk, []); bySub.get(sk).push(cases.length - 1);
+    }
+  });
+  // 台帳：設定・変更したキーだけ上書き、空にしたキーだけ削除。触っていないキーはファイルのまま。
+  const ledger = Object.assign({}, disk.ledger || {});
+  _editedAnno.forEach(k => { if(_ledger[k] !== undefined) ledger[k] = _ledger[k]; });
+  _deletedAnno.forEach(k => { delete ledger[k]; });
+  // 施工会社の割当も同じ扱い（このソフトで割り当て／解除したキーだけ反映）
+  const contractorAssign = Object.assign({}, disk.contractorAssign || {});
+  _editedCtr.forEach(k => { if(_contractorAssign[k] !== undefined) contractorAssign[k] = _contractorAssign[k]; });
+  _deletedCtr.forEach(k => { delete contractorAssign[k]; });
+
+  const now = new Date().toISOString();
+  const out = Object.assign({}, disk, {
+    schema: PROJ_SCHEMA,
+    updatedAt: now,
+    cases, caseCount: cases.length,
+    ledger,
+    contractorAssign,
+    lastSavedBy: { company:"", device:"", at:now, app: APP_NAME + " " + APP_VERSION }
+  });
+  // 施工会社マスターは物件全体の設定。触っていなければ共有ファイルの内容をそのまま残す。
+  // 触った場合も丸ごと置き換えず、「共有ファイルの一覧 ＋ この端末で足した会社 －
+  // この端末で外した会社」にする（この間に他の端末が足した会社を消さないため）。
+  if(_editedMeta.has("contractors")){
+    const merged = [], seen = Object.create(null);
+    const add = n => {
+      n = String(n == null ? "" : n).trim();
+      if(n && !seen[n] && !_removedCtrNames.has(n)){ seen[n] = 1; merged.push(n); }
+    };
+    (Array.isArray(disk.contractors) ? disk.contractors : []).forEach(add);
+    _contractors.forEach(add);
+    out.contractors = merged;
+  }
+  const dby = disk.lastSavedBy || {};
+  out.mergedFrom = { company: dby.company || "", device: dby.device || "", at: dby.at || disk.updatedAt || "", updatedAt: disk.updatedAt || "" };
+  return out;
+}
+async function saveNow(force){
+  if(_saving){ _saveQueued = true; return false; }
+  if(!_dirty && !force) return true;
+  if(_mode !== "file" || !_handle){
+    // 単体運用：この端末に保存する（共有ファイルは使わない）
+    try {
+      const snap = snapshotLocal();
+      await localPut(snap);
+      _base = snap; _dirty = false; _err = "";
+      updateSaveState();
+      return true;
+    } catch(e){
+      _err = (e && e.message) ? e.message : String(e);
+      updateSaveState();
+      if(force) alert("この端末への保存に失敗しました。\n\n" + _err);
+      return false;
+    }
+  }
+  _saving = true; _err = ""; updateSaveState();
+  try {
+    if(!await ensurePermission(_handle, "readwrite")) throw new Error("共有ファイルへの書き込みが許可されていません");
+    const disk = await readHandle(_handle);
+    if(!isProjectFile(disk)) throw new Error("共有ファイルの中身が物件ファイルではありません");
+    const merged = mergeOnto(disk);
+    const text = JSON.stringify(merged);
+    await takeBackup(JSON.stringify(disk), disk, force ? "manual" : "auto");   // 上書き前の内容を控える
+    const w = await _handle.createWritable();
+    await w.write(text);
+    await w.close();
+    adoptSnapshot(merged);       // 書けた内容を土台に取り込み、印は全部おろす
+    render();
+    return true;
+  } catch(e){
+    console.warn("保存に失敗", e);
+    _err = (e && e.message) ? e.message : String(e);
+    updateSaveState();
+    if(force) alert("共有ファイルへ保存できませんでした。\n\n" + _err + "\n\n入力した内容は画面に残っています。原因を直してからもう一度「💾 今すぐ保存」を押してください。");
+    return false;
+  } finally {
+    _saving = false;
+    if(_saveQueued){ _saveQueued = false; setTimeout(() => saveNow(false), 0); }
+  }
+}
+
+/* =========================================================================
+   4. 台帳の値の読み書き
+   ========================================================================= */
+const LG_DEFAULT = { time:"", meetAt:"", flyer:false, consent:false, compdoc:false, hold:false, note:"" };
+function getLg(k){ return _ledger[k] || {}; }
+function setLg(k, patch){
+  const next = Object.assign({}, LG_DEFAULT, _ledger[k] || {}, patch);
+  const empty = !next.time && !next.meetAt && !next.flyer && !next.consent && !next.compdoc && !next.hold && !next.note;
+  if(empty){ delete _ledger[k]; markAnno(k, true); }
+  else { _ledger[k] = next; markAnno(k, false); }
+}
+/* ---------- 施工会社 ----------
+   メインと同じ決め方。戸別ごとの割当が最優先で、割当が無くても
+   業者番号（管理番号の左から4桁目 1〜4）の対応表があればそこから判定する。 */
+function ctrByDigit(mgmtNo){
+  const t = String(mgmtNo == null ? "" : mgmtNo).trim();
+  if(t.length < 4) return "";
+  return _contractorDigits[t.charAt(3)] || "";
+}
+/* { name: 会社名, auto: 業者番号から自動で判定した場合 true }。どちらも無ければ name は空。 */
+function ctrOf(row){
+  const k = subKeyOf(row.d.chosho_mgmt_no, row.file);
+  const a = String(_contractorAssign[k] || "").trim();
+  if(a) return { name: a, auto: false };
+  const d = ctrByDigit(row.d.chosho_mgmt_no);
+  return { name: d, auto: !!d };
+}
+function setCtr(row, name){
+  const k = subKeyOf(row.d.chosho_mgmt_no, row.file);
+  name = String(name || "").trim();
+  if(!name){ delete _contractorAssign[k]; _deletedCtr.add(k); _editedCtr.delete(k); }
+  else { _contractorAssign[k] = name; _editedCtr.add(k); _deletedCtr.delete(k); }
+  touch();
+}
+/* 選択肢に出す会社の並び。マスター＋実際に使われている会社（マスター外も拾う）。 */
+function ctrChoices(){
+  const out = [], seen = Object.create(null);
+  const add = n => { n = String(n == null ? "" : n).trim(); if(n && !seen[n]){ seen[n] = 1; out.push(n); } };
+  _contractors.forEach(add);
+  Object.keys(_contractorDigits).sort().forEach(k => add(_contractorDigits[k]));
+  Object.keys(_contractorAssign).forEach(k => add(_contractorAssign[k]));
+  return out;
+}
+/* 戸別の項目を書き換える。一部暗号化の行は、メインと同じく管理番号・工事日程・状態だけ触れる。 */
+const FIELD_MAP = { mgmt:"chosho_mgmt_no", name:"chosho_cust_name", addr:"chosho_cust_addr",
+                    tel:"chosho_cust_tel", date:"chosho_date", status:"chosho_status" };
+function canEdit(row, f){
+  if(!row.hybrid) return true;
+  return (f === "mgmt" || f === "date" || f === "status");
+}
+function writeField(row, f, v){
+  const key = FIELD_MAP[f] || f;
+  if(f === "addr" || f === "tel") v = toHalfWidthNum(v);
+  const oldKey = subKeyOf(row.d.chosho_mgmt_no, row.file);
+  row.d = Object.assign({}, row.d); row.d[key] = v;
+  // payload にも同じ値を入れる（一部暗号化の行は plain 側へ）
+  if(row.hybrid){
+    row.payload = Object.assign({}, row.payload);
+    row.payload.plain = Object.assign({}, row.payload.plain || {}, { [key]: v });
+  } else {
+    row.payload = Object.assign({}, row.payload, { [key]: v });
+  }
+  // 仮受付の行に名前・住所・電話のどれかが入ったら「受付済」へ上げる（メインと同じ）
+  if((f === "name" || f === "addr" || f === "tel") && String(v).trim() && row.d.chosho_status === "provisional"){
+    row.d.chosho_status = "in_progress";
+    if(row.hybrid) row.payload.plain.chosho_status = "in_progress";
+    else row.payload.chosho_status = "in_progress";
+  }
+  const newKey = subKeyOf(row.d.chosho_mgmt_no, row.file);
+  if(newKey !== oldKey){
+    // 管理番号を変えた＝台帳・施工会社のキーも変わる。中身を新しいキーへ移し、旧キーは消す。
+    if(!row.prevSub) row.prevSub = oldKey;
+    const had = _ledger[oldKey];
+    if(had){ _ledger[newKey] = had; delete _ledger[oldKey]; markAnno(newKey, false); markAnno(oldKey, true); }
+    const hadC = _contractorAssign[oldKey];
+    if(hadC){
+      _contractorAssign[newKey] = hadC; delete _contractorAssign[oldKey];
+      _editedCtr.add(newKey); _deletedCtr.delete(newKey);
+      _deletedCtr.add(oldKey); _editedCtr.delete(oldKey);
+    }
+  }
+  markCase(row);
+}
+function addRow(){
+  if(!_base){ alert("先に共有ファイルを開いてください。"); return; }
+  const payload = { chosho_mgmt_no:"", chosho_date:"", chosho_cust_name:"", chosho_cust_addr:"",
+                    chosho_cust_tel:"", chosho_status:"provisional", work_type:"",
+                    _manual:true, _origin:"ledger-app" };
+  const row = { caseId: newId(), file: "manual:" + newId(), lastModified: Date.now(), prevSub:"",
+                payload, hybrid:false, d: Object.assign({}, payload), manual:true, origin:"ledger-app" };
+  delete row.d._manual; delete row.d._origin;
+  _rows.unshift(row);
+  _newKey = subKeyOf("", row.file);
+  markCase(row);
+  render();
+  const inp = document.querySelector('tr.r-new [data-f="mgmt"]');
+  if(inp) inp.click();
+}
+function deleteRow(row){
+  if(!row.manual){ alert("ファイルから読み込んだ戸別は、このソフトからは消せません。\n（積算や図面が付いている可能性があるため、メイン側で操作してください）"); return; }
+  if(!confirm("この行を削除します。よろしいですか？\n\n" + (row.d.chosho_mgmt_no || "（管理番号なし）") + "　" + (row.d.chosho_cust_name || ""))) return;
+  const k = subKeyOf(row.d.chosho_mgmt_no, row.file);
+  _rows = _rows.filter(r => r !== row);
+  if(row.caseId) _deletedCases.add(row.caseId);
+  _editedCases.delete(row.caseId);
+  if(_ledger[k]){ delete _ledger[k]; markAnno(k, true); }
+  if(_contractorAssign[k]){ delete _contractorAssign[k]; _deletedCtr.add(k); _editedCtr.delete(k); }
+  touch(); render();
+}
+
+/* =========================================================================
+   5. 画面
+   ========================================================================= */
+function statusOf(row){ return row.d.chosho_status || "in_progress"; }
+/* いま効いている絞り込みを短い文にする。画面の表示と、紙の見出しの両方で使う。 */
+function filterSummary(){
+  const out = [];
+  const q = (el("q").value || "").trim();
+  if(q) out.push("検索「" + q + "」");
+  if(el("f-prov").checked) out.push("仮受付のみ");
+  if(el("f-pending").checked) out.push("未完了のみ");
+  if(el("f-noflyer").checked) out.push("ビラ未配布のみ");
+  if(el("f-hold").checked) out.push("保留のみ");
+  const c = el("f-ctr").value;
+  if(c) out.push("施工会社：" + (c === "__none__" ? "未割当" : c));
+  const d1 = el("f-d1").value, d2 = el("f-d2").value;
+  if(d1 || d2) out.push("工事日 " + (d1 || "指定なし") + " 〜 " + (d2 || "指定なし"));
+  return out;
+}
+function clearFilters(){
+  el("q").value = "";
+  ["f-prov", "f-pending", "f-noflyer", "f-hold"].forEach(id => { el(id).checked = false; });
+  el("f-ctr").value = ""; el("f-d1").value = ""; el("f-d2").value = "";
+  _newKey = ""; render();
+}
+function visibleRows(){
+  const q = (el("q").value || "").trim().toLowerCase();
+  const onlyProv = el("f-prov").checked, onlyPending = el("f-pending").checked;
+  const onlyNoFlyer = el("f-noflyer").checked, onlyHold = el("f-hold").checked;
+  const ctrSel = (el("f-ctr") && el("f-ctr").value) || "";
+  const d1 = (el("f-d1") && el("f-d1").value) || "", d2 = (el("f-d2") && el("f-d2").value) || "";
+  let out = _rows.filter(r => {
+    const k = subKeyOf(r.d.chosho_mgmt_no, r.file), lg = getLg(k), st = statusOf(r);
+    if(onlyProv && st !== "provisional") return false;
+    if(onlyPending && st === "completed") return false;
+    if(onlyNoFlyer && lg.flyer) return false;
+    if(onlyHold && !lg.hold) return false;
+    if(ctrSel){
+      const c = ctrOf(r).name;
+      if(ctrSel === "__none__" ? !!c : c !== ctrSel) return false;
+    }
+    if(d1 || d2){
+      // 工事日程予定は "YYYY-MM-DD"。そのまま文字として比べれば日付順になる。
+      const dv = String(r.d.chosho_date || "").slice(0, 10);
+      if(!dv) return false;                               // 日程が未定の行は期間に入らない
+      if(d1 && dv < d1) return false;
+      if(d2 && dv > d2) return false;
+    }
+    if(q){
+      const hay = [r.d.chosho_mgmt_no, r.d.chosho_cust_name, r.d.chosho_cust_addr, r.d.chosho_cust_tel, lg.note]
+        .map(v => String(v == null ? "" : v)).join(" ").toLowerCase();
+      if(hay.indexOf(q) < 0) return false;
+    }
+    return true;
+  });
+  const val = r => {
+    const k = subKeyOf(r.d.chosho_mgmt_no, r.file), lg = getLg(k);
+    switch(_sort.key){
+      case "st":    return ({ provisional:0, in_progress:1, completed:2 })[statusOf(r)] ?? 1;
+      case "mgmt":  return String(r.d.chosho_mgmt_no || "");
+      case "name":  return String(r.d.chosho_cust_name || "");
+      case "addr":  return String(r.d.chosho_cust_addr || "");
+      case "ctr":   return ctrOf(r).name;
+      case "date":  return String(r.d.chosho_date || "") + " " + String(lg.time || "");
+      case "meet":  return String(lg.meetAt || "");
+      case "flyer": return lg.flyer ? 1 : 0;
+      case "done":  return statusOf(r) === "completed" ? 1 : 0;
+      case "hold":  return lg.hold ? 1 : 0;
+      default:      return "";
+    }
+  };
+  out.sort((a, b) => {
+    const x = val(a), y = val(b);
+    if(x === y) return String(a.d.chosho_mgmt_no || "").localeCompare(String(b.d.chosho_mgmt_no || ""), "ja");
+    return (typeof x === "number" ? (x - y) : String(x).localeCompare(String(y), "ja")) * _sort.dir;
+  });
+  return out;
+}
+function render(){
+  el("proj").innerHTML = "物件：<b>" + esc(_base ? (_base.name || "（名称未設定）") : "未接続") + "</b>";
+  updateSaveState();
+  lgApplyPrintWidths();
+  el("pvpanel").innerHTML = _pv ? pvPanelHtml() : "";
+  if(_pv) bindPvPanel();
+  const wrap = el("wrap");
+  if(!_base){
+    wrap.innerHTML = '<div class="empty">共有ファイルを開くと、ここに受付台帳が出ます。</div>';
+    el("count").textContent = ""; el("print-head").innerHTML = "";
+    el("btn-fclear").disabled = true; el("btn-print").textContent = "🖨 印刷";
+    return;
+  }
+  const shown = visibleRows();
+  const held = _rows.filter(r => getLg(subKeyOf(r.d.chosho_mgmt_no, r.file)).hold).length;
+  const prov = _rows.filter(r => statusOf(r) === "provisional").length;
+  const filters = filterSummary();
+  el("count").textContent = "表示 " + shown.length + " / 全 " + _rows.length + " 件"
+    + (prov ? "　仮受付 " + prov : "") + (held ? "　保留 " + held : "")
+    + (filters.length ? "　絞り込み中" : "");
+  // 施工会社の絞り込み（選択中の値は保つ）
+  const fc = el("f-ctr");
+  if(fc){
+    const keep = fc.value;
+    fc.innerHTML = '<option value="">施工会社：すべて</option>'
+      + ctrChoices().map(c => '<option value="' + esc(c) + '">' + esc(c) + "</option>").join("")
+      + '<option value="__none__">（未割当）</option>';
+    fc.value = keep;
+    if(fc.value !== keep) fc.value = "";     // 選んでいた会社が無くなったら「すべて」に戻す
+  }
+  el("btn-fclear").disabled = !filters.length;
+  el("btn-print").textContent = "🖨 印刷（" + shown.length + "件）";
+  // 紙にだけ出る見出し（何で絞り込んだ台帳なのかを残す）
+  el("print-head").innerHTML = '<span class="ph-t">📒 受付台帳</span>'
+    + '<span class="ph-p">物件：' + esc(_base.name || "（名称未設定）") + "</span>"
+    + '<span class="ph-f">絞り込み：' + (filters.length ? esc(filters.join(" ／ ")) : "なし（全件）") + "</span>"
+    + '<span class="ph-c">' + shown.length + " 件</span>"
+    + '<span class="ph-d">' + todayStr(0) + " 現在</span>";
+  const arrow = k => (_sort.key === k ? '<span class="arrow">' + (_sort.dir > 0 ? "▲" : "▼") + "</span>" : "");
+  const t = todayStr(0), tomo = todayStr(1);
+  const choices = ctrChoices();
+  let h = '<table class="lg"><thead><tr>'
+    + '<th data-col="st"   data-sort="st"   style="width:90px;">状態 ' + arrow("st") + "</th>"
+    + '<th data-col="mgmt" data-sort="mgmt" style="width:110px;">管理番号 ' + arrow("mgmt") + "</th>"
+    + '<th data-col="name" data-sort="name" style="width:124px;">名前 ' + arrow("name") + "</th>"
+    + '<th data-col="ctr"  data-sort="ctr" style="width:150px;" title="この戸別を担当する施工会社。会社名の一覧は「🏢 施工会社」で編集できます。割り当てが無い行は、管理番号の左から4桁目（業者番号）から自動で判定します。">施工会社 ' + arrow("ctr") + "</th>"
+    + '<th data-col="addr" data-sort="addr">住所 ' + arrow("addr") + "</th>"
+    + '<th data-col="tel"  style="width:112px;">電話番号</th>'
+    + '<th data-col="date" data-sort="date" style="width:160px;">工事日程予定 ' + arrow("date") + "</th>"
+    + '<th data-col="meet" data-sort="meet" style="width:170px;">打合せ予定 ' + arrow("meet") + "</th>"
+    + '<th data-col="flyer" data-sort="flyer" style="width:42px;" title="ビラ配布済み">ビラ ' + arrow("flyer") + "</th>"
+    + '<th data-col="done"  data-sort="done"  style="width:42px;" title="工事完了">完了 ' + arrow("done") + "</th>"
+    + '<th data-col="hold"  data-sort="hold"  style="width:42px;" title="保留（着工を止めている戸別）">保留 ' + arrow("hold") + "</th>"
+    + '<th data-col="consent" style="width:42px;" title="住民からの承諾書 受領済み">承諾書</th>'
+    + '<th data-col="compdoc" style="width:42px;" title="完了書 受領／提出済み">完了書</th>'
+    + '<th data-col="note">備考</th>'
+    + '<th data-col="del" style="width:38px;"></th>'
+    + "</tr></thead><tbody>";
+  if(!shown.length){
+    h += '<tr><td colspan="15" class="empty">絞り込みに合う行がありません。条件を変えるか「✕ 絞り込み解除」を押してください。</td></tr>';
+  }
+  shown.forEach((r, i) => {
+    const k = subKeyOf(r.d.chosho_mgmt_no, r.file), lg = getLg(k), st = statusOf(r);
+    const isProv = st === "provisional", isDone = st === "completed";
+    const cls = [];
+    if(isProv) cls.push("r-prov");
+    else if(isDone) cls.push("r-done");
+    else if(r.d.chosho_date === t) cls.push("r-today");
+    else if(r.d.chosho_date === tomo) cls.push("r-tomo");
+    if(lg.hold) cls.push("r-hold");
+    if(_newKey && k === _newKey) cls.push("r-new");
+    const cell = (f, v) => canEdit(r, f)
+      ? '<span class="edit" data-f="' + f + '" title="クリックで編集">' + (esc(v) || "<span style='color:#b8c2cc;'>―</span>") + "</span>"
+      : '<span class="lock" title="暗号化された項目です（メイン側で戸別を開いて編集してください）">' + (esc(v) || "―") + " 🔒</span>";
+    const ctr = ctrOf(r);
+    // 自動判定の行は「会社名（自動）」を選択欄に出す。値は空のまま＝手動の割り当てはしていない。
+    const ctrOpts = ['<option value=""' + (ctr.auto || !ctr.name ? " selected" : "") + ">"
+      + esc(ctr.auto ? ctr.name + "（自動）" : "―") + "</option>"]
+      .concat(choices.map(c => '<option value="' + esc(c) + '"' + (!ctr.auto && ctr.name === c ? " selected" : "") + ">" + esc(c) + "</option>"))
+      .join("");
+    h += '<tr class="' + cls.join(" ") + '" data-i="' + i + '">'
+      + '<td class="c" data-col="st">' + (canEdit(r, "status")
+          ? '<select data-f="st" class="' + (isProv ? "st-prov" : "") + '">'
+            + '<option value="provisional"' + (isProv ? " selected" : "") + ">仮受付</option>"
+            + '<option value="in_progress"' + (!isProv && !isDone ? " selected" : "") + ">受付済</option>"
+            + '<option value="completed"' + (isDone ? " selected" : "") + ">完了</option></select>"
+          : '<span class="lock">' + (isDone ? "完了" : (isProv ? "仮受付" : "受付済")) + " 🔒</span>")
+        + '<span class="st-print">' + (isDone ? "完了" : (isProv ? "仮受付" : "受付済")) + "</span></td>"
+      + '<td data-col="mgmt">' + cell("mgmt", r.d.chosho_mgmt_no)
+        + (isProv ? '<span class="badge prov">仮</span>' : "")
+        + (lg.hold ? '<span class="badge hold">保</span>' : "") + "</td>"
+      + '<td data-col="name">' + cell("name", r.d.chosho_cust_name) + "</td>"
+      + '<td class="c ctr-cell' + (ctr.auto ? " ctr-auto" : "") + '" data-col="ctr" title="'
+        + esc((ctr.name ? ctr.name + "\n" : "")
+          + (ctr.auto ? "業者番号（管理番号の左から4桁目）から自動で判定しています。選び直すとこの戸別だけ手動の割り当てになります。"
+                      : "この戸別の施工会社")) + '">'
+        + '<select data-f="ctr">' + ctrOpts + "</select>"
+        + '<span class="ctr-print">' + esc(ctr.name) + "</span></td>"
+      + '<td data-col="addr">' + cell("addr", r.d.chosho_cust_addr)
+        + '<span class="addr-print">' + esc(toHalfWidthNum(r.d.chosho_cust_addr || "")) + "</span></td>"
+      + '<td data-col="tel">' + cell("tel", r.d.chosho_cust_tel) + "</td>"
+      + '<td class="c" data-col="date">' + (canEdit(r, "date")
+          ? '<input type="date" data-f="date" value="' + esc(r.d.chosho_date || "") + '">'
+            + '<input type="time" data-f="time" value="' + esc(lg.time || "") + '">'
+          : esc(r.d.chosho_date || "―") + (lg.time ? " " + esc(lg.time) : "") + " 🔒")
+        + '<span class="dt-print">' + esc(fmtDateTime(r.d.chosho_date, lg.time)) + "</span></td>"
+      + '<td class="c" data-col="meet"><input type="datetime-local" data-f="meet" value="' + esc(lg.meetAt || "") + '">'
+        + '<span class="dt-print">' + esc(fmtMeetAt(lg.meetAt)) + "</span></td>"
+      + '<td class="c" data-col="flyer"><input type="checkbox" data-f="flyer"'   + (lg.flyer   ? " checked" : "") + "></td>"
+      + '<td class="c" data-col="done"><input type="checkbox" data-f="done"'    + (isDone     ? " checked" : "") + (canEdit(r, "status") ? "" : " disabled") + "></td>"
+      + '<td class="c" data-col="hold"><input type="checkbox" data-f="hold"'    + (lg.hold    ? " checked" : "") + "></td>"
+      + '<td class="c" data-col="consent"><input type="checkbox" data-f="consent"' + (lg.consent ? " checked" : "") + "></td>"
+      + '<td class="c" data-col="compdoc"><input type="checkbox" data-f="compdoc"' + (lg.compdoc ? " checked" : "") + "></td>"
+      + '<td data-col="note"><input type="text" class="note-input" data-f="note" maxlength="200" value="' + esc(lg.note || "") + '">'
+        + '<span class="note-print">' + esc(lg.note || "") + "</span></td>"
+      + '<td class="c" data-col="del">' + (r.manual ? '<button data-f="del" title="この行を削除（この台帳で作った行のみ）" style="border-color:#c62828;color:#c62828;padding:2px 6px;">🗑</button>' : "") + "</td>"
+      + "</tr>";
+  });
+  h += "</tbody></table>";
+  wrap.innerHTML = h;
+  wrap._shown = shown;
+}
+function updateSaveState(){
+  const b = el("savestate");
+  if(_mode !== "file" || !_handle){
+    if(_err){
+      b.className = "savestate ss-none";
+      b.innerHTML = '<span class="ico">⚠</span><span>この端末に保存できていません：' + esc(_err) + "</span>";
+    } else if(_dirty){
+      b.className = "savestate ss-warn";
+      b.innerHTML = '<span class="ico">✎</span><span>入力中です。まもなく<b>この端末</b>に保存します。<span class="sub">　メインへ渡すときは「📤 台帳を書き出し」でファイルにしてください。</span></span>';
+    } else {
+      b.className = "savestate ss-ok";
+      b.innerHTML = '<span class="ico">✔</span><span><b>この端末に保存済み</b>です（共有ファイルは使っていません）。'
+        + '<span class="sub">　メインへ渡すときは「📤 台帳を書き出し」でファイルにして、メインの受付台帳で「📥 受付台帳を取り込む」を押してください。</span></span>';
+    }
+    return;
+  }
+  const name = esc(_handle.name || "共有ファイル");
+  if(_err){
+    b.className = "savestate ss-none";
+    b.innerHTML = '<span class="ico">⚠</span><span>保存できていません（<span class="path">' + name + "</span>）：" + esc(_err) + '　<b>「💾 今すぐ保存」でもう一度お試しください。</b></span>';
+  } else if(_saving){
+    b.className = "savestate ss-warn";
+    b.innerHTML = '<span class="ico">⏳</span><span>保存中…（<span class="path">' + name + "</span>）</span>";
+  } else if(_dirty){
+    b.className = "savestate ss-warn";
+    b.innerHTML = '<span class="ico">✎</span><span>入力中です。まもなく <span class="path">' + name + "</span> へ自動で保存します。<span class=\"sub\">（すぐ保存したいときは「💾 今すぐ保存」）</span></span>";
+  } else {
+    b.className = "savestate ss-ok";
+    b.innerHTML = '<span class="ico">✔</span><span>保存済みです。書き込み先：<span class="path">' + name + "</span><span class=\"sub\">　この画面の変更は自動でこのファイルへ保存されます（メインからも同じファイルが見えます）。</span></span>";
+  }
+}
+let _toastTimer = null;
+function toast(msg){
+  let t = el("toast");
+  if(!t){ t = document.createElement("div"); t.id = "toast";
+    t.style.cssText = "position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:rgba(30,58,95,.95);color:#fff;padding:9px 18px;border-radius:6px;font-size:13px;z-index:999;box-shadow:0 2px 10px rgba(0,0,0,.25);";
+    document.body.appendChild(t); }
+  t.textContent = msg; t.style.display = "block";
+  if(_toastTimer) clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { t.style.display = "none"; }, 2600);
+}
+
+/* ---------- 表の操作 ---------- */
+function rowOf(node){
+  const tr = node.closest("tr"); if(!tr) return null;
+  const shown = el("wrap")._shown || [];
+  return shown[parseInt(tr.dataset.i, 10)] || null;
+}
+el("wrap").addEventListener("click", e => {
+  const th = e.target.closest("th[data-sort]");
+  if(th){
+    const k = th.dataset.sort;
+    if(_sort.key === k) _sort.dir = -_sort.dir; else { _sort.key = k; _sort.dir = 1; }
+    render(); return;
+  }
+  const del = e.target.closest('button[data-f="del"]');
+  if(del){ const r = rowOf(del); if(r) deleteRow(r); return; }
+  const ed = e.target.closest("span.edit");
+  if(ed){
+    const r = rowOf(ed); if(!r) return;
+    const f = ed.dataset.f;
+    const cur = r.d[FIELD_MAP[f]] || "";
+    const inp = document.createElement("input");
+    inp.type = "text"; inp.value = cur; inp.style.width = "100%";
+    ed.replaceWith(inp); inp.focus(); inp.select();
+    const done = () => {
+      const v = inp.value;
+      if(v !== cur) writeField(r, f, v);
+      _newKey = "";
+      render();
+    };
+    inp.addEventListener("blur", done, { once:true });
+    inp.addEventListener("keydown", ev => {
+      if(ev.key === "Enter"){ ev.preventDefault(); inp.blur(); }
+      else if(ev.key === "Escape"){ ev.preventDefault(); inp.removeEventListener("blur", done); render(); }
+    });
+  }
+});
+el("wrap").addEventListener("change", e => {
+  const node = e.target.closest("[data-f]"); if(!node) return;
+  const r = rowOf(node); if(!r) return;
+  const f = node.dataset.f, k = subKeyOf(r.d.chosho_mgmt_no, r.file);
+  if(f === "ctr"){ setCtr(r, node.value); render(); return; }
+  if(f === "st"){ writeField(r, "status", node.value); render(); return; }
+  if(f === "done"){ writeField(r, "status", node.checked ? "completed" : "in_progress"); render(); return; }
+  if(f === "date"){ writeField(r, "date", node.value); render(); return; }
+  if(f === "time"){ setLg(k, { time: node.value }); return; }
+  if(f === "meet"){ setLg(k, { meetAt: node.value }); return; }
+  if(f === "flyer" || f === "hold" || f === "consent" || f === "compdoc"){
+    setLg(k, { [f]: node.checked });
+    if(f === "hold") render();
+    return;
+  }
+});
+el("wrap").addEventListener("input", e => {
+  const node = e.target.closest('[data-f="note"]'); if(!node) return;
+  const r = rowOf(node); if(!r) return;
+  setLg(subKeyOf(r.d.chosho_mgmt_no, r.file), { note: node.value });
+});
+
+/* =========================================================================
+   6. Excel（.xlsx）読み取り・書き出し
+      ZIP と xlsx の処理はメインと同じ実装（無圧縮ZIP生成／最小限のリーダ）。
+   ========================================================================= */
+const _CRC32_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for(let n = 0; n < 256; n++){ let c = n; for(let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); t[n] = c >>> 0; }
+  return t;
+})();
+function _crc32(bytes){ let c = 0xFFFFFFFF; for(let i = 0; i < bytes.length; i++) c = _CRC32_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function _zipStore(files, mime){
+  const enc = new TextEncoder(); const chunks = [], central = []; let offset = 0;
+  files.forEach(f => {
+    const nameB = enc.encode(f.name), dataB = enc.encode(f.text), crc = _crc32(dataB);
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true);
+    lh.setUint16(8, 0, true); lh.setUint16(12, 0x21, true); lh.setUint32(14, crc, true);
+    lh.setUint32(18, dataB.length, true); lh.setUint32(22, dataB.length, true); lh.setUint16(26, nameB.length, true);
+    chunks.push(new Uint8Array(lh.buffer), nameB, dataB);
+    central.push({ nameB, crc, size: dataB.length, offset });
+    offset += 30 + nameB.length + dataB.length;
+  });
+  const cdStart = offset;
+  central.forEach(c => {
+    const h = new DataView(new ArrayBuffer(46));
+    h.setUint32(0, 0x02014b50, true); h.setUint16(4, 20, true); h.setUint16(6, 20, true);
+    h.setUint16(8, 0x0800, true); h.setUint16(10, 0, true); h.setUint16(14, 0x21, true);
+    h.setUint32(16, c.crc, true); h.setUint32(20, c.size, true); h.setUint32(24, c.size, true);
+    h.setUint16(28, c.nameB.length, true); h.setUint32(42, c.offset, true);
+    chunks.push(new Uint8Array(h.buffer), c.nameB);
+    offset += 46 + c.nameB.length;
+  });
+  const eo = new DataView(new ArrayBuffer(22));
+  eo.setUint32(0, 0x06054b50, true); eo.setUint16(8, central.length, true); eo.setUint16(10, central.length, true);
+  eo.setUint32(12, offset - cdStart, true); eo.setUint32(16, cdStart, true);
+  chunks.push(new Uint8Array(eo.buffer));
+  return new Blob(chunks, { type: mime || "application/octet-stream" });
+}
+const _xEsc = s => String(s == null ? "" : s).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "")
+  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+function _xCol(i){ let s = "", n = i + 1; while(n > 0){ const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
+function buildXlsxBlob(aoa, sheetName){
+  const nm = _xEsc(String(sheetName || "Sheet1").replace(/[\[\]:*?\/\\]/g, "").slice(0, 31)) || "Sheet1";
+  const rowsXml = (aoa || []).map((row, ri) => '<row r="' + (ri + 1) + '">' + (row || []).map((v, ci) => {
+    const t = String(v == null ? "" : v);
+    return t ? ('<c r="' + _xCol(ci) + (ri + 1) + '" t="inlineStr"><is><t xml:space="preserve">' + _xEsc(t) + "</t></is></c>") : "";
+  }).join("") + "</row>").join("");
+  const X = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+  return _zipStore([
+    { name:"[Content_Types].xml", text: X + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+      + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+      + '<Default Extension="xml" ContentType="application/xml"/>'
+      + '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+      + '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>' },
+    { name:"_rels/.rels", text: X + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
+    { name:"xl/workbook.xml", text: X + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
+      + ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+      + '<sheets><sheet name="' + nm + '" sheetId="1" r:id="rId1"/></sheets></workbook>' },
+    { name:"xl/_rels/workbook.xml.rels", text: X + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>' },
+    { name:"xl/worksheets/sheet1.xml", text: X + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+      + "<sheetData>" + rowsXml + "</sheetData></worksheet>" }
+  ], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+}
+async function xlsxReadSheet(file){
+  const buf = await file.arrayBuffer(), dv = new DataView(buf);
+  let eocd = -1;
+  for(let i = buf.byteLength - 22; i >= 0; i--){ if(dv.getUint32(i, true) === 0x06054b50){ eocd = i; break; } }
+  if(eocd < 0) throw new Error("xlsxファイルとして読めません（ZIP構造が見つかりません）");
+  const cnt = dv.getUint16(eocd + 10, true), off = dv.getUint32(eocd + 16, true);
+  const files = {}; let q = off;
+  for(let i = 0; i < cnt; i++){
+    if(dv.getUint32(q, true) !== 0x02014b50) break;
+    const method = dv.getUint16(q + 10, true), csize = dv.getUint32(q + 20, true);
+    const nlen = dv.getUint16(q + 28, true), elen = dv.getUint16(q + 30, true), clen = dv.getUint16(q + 32, true);
+    const lho = dv.getUint32(q + 42, true);
+    files[new TextDecoder().decode(new Uint8Array(buf, q + 46, nlen))] = { method, csize, lho };
+    q += 46 + nlen + elen + clen;
+  }
+  async function readEntry(name){
+    const f = files[name]; if(!f) return null;
+    const ln = dv.getUint16(f.lho + 26, true), le = dv.getUint16(f.lho + 28, true);
+    const raw = new Uint8Array(buf, f.lho + 30 + ln + le, f.csize);
+    if(f.method === 0) return new TextDecoder().decode(raw);
+    if(typeof DecompressionStream !== "function") throw new Error("このブラウザは .xlsx の展開に対応していません（Chrome / Edge をご利用ください）");
+    return await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text();
+  }
+  let sheetPath = "xl/worksheets/sheet1.xml";
+  if(!files[sheetPath]){
+    const k = Object.keys(files).filter(n => /^xl\/worksheets\/.*\.xml$/.test(n)).sort()[0];
+    if(!k) throw new Error("シートが見つかりません");
+    sheetPath = k;
+  }
+  const ssXml = await readEntry("xl/sharedStrings.xml"), shXml = await readEntry(sheetPath);
+  const strs = [];
+  if(ssXml){
+    new DOMParser().parseFromString(ssXml, "application/xml").querySelectorAll("si").forEach(si => {
+      let t = "";
+      for(let n = si.firstElementChild; n; n = n.nextElementSibling){
+        if(n.localName === "t") t += n.textContent;                                   // ふりがな(rPh)は拾わない
+        else if(n.localName === "r"){ for(let c = n.firstElementChild; c; c = c.nextElementSibling){ if(c.localName === "t") t += c.textContent; } }
+      }
+      strs.push(t);
+    });
+  }
+  const rows = [];
+  new DOMParser().parseFromString(shXml, "application/xml").querySelectorAll("row").forEach(row => {
+    const obj = {};
+    row.querySelectorAll("c").forEach(c => {
+      const col = (c.getAttribute("r") || "").replace(/[0-9]/g, ""), t = c.getAttribute("t");
+      let val = "";
+      if(t === "inlineStr"){ const is = c.querySelector("is"); val = is ? is.textContent : ""; }
+      else { const v = c.querySelector("v"); val = v ? v.textContent : ""; if(t === "s") val = strs[parseInt(val, 10)] || ""; }
+      val = String(val == null ? "" : val).trim();
+      if(val !== "") obj[col] = val;
+    });
+    rows.push(obj);
+  });
+  return rows;
+}
+/* 見出し行から列を推定（列がずれても動くように）。見つからなければ既定の列（H/E/F）を使う。 */
+function xlsxDetectCols(rows){
+  const want = { mgmt:["管理番号"], addr:["住所結合","住所"], note:["過去の情報","備考"] };
+  const cols = { mgmt:"H", addr:"E", note:"F" };
+  let headerIdx = -1;
+  for(let i = 0; i < Math.min(rows.length, 10); i++){
+    const r = rows[i], hit = {};
+    Object.keys(r).forEach(col => {
+      const v = String(r[col] || "").replace(/\s+/g, "");
+      Object.keys(want).forEach(k => { if(!hit[k] && want[k].some(w => v === w || v.indexOf(w) >= 0)) hit[k] = col; });
+    });
+    if(hit.mgmt){ Object.assign(cols, hit); headerIdx = i; break; }
+  }
+  return { cols, headerIdx };
+}
+const last3 = s => String(s == null ? "" : s).replace(/[^0-9]/g, "").slice(-3);
+async function xlsxImport(file){
+  if(!_base){ alert("先に共有ファイルを開いてください。"); return; }
+  let rows;
+  try { rows = await xlsxReadSheet(file); }
+  catch(e){ alert("Excelを読み取れませんでした。\n" + (e && e.message ? e.message : "")); return; }
+  const { cols, headerIdx } = xlsxDetectCols(rows);
+  const body = rows.slice(headerIdx >= 0 ? headerIdx + 1 : 0);
+  // 台帳側の「管理番号の下三桁」→行 の索引（地図の建物表示と同じ突合規則）
+  const idx = new Map();
+  _rows.forEach(r => { const k = last3(r.d.chosho_mgmt_no); if(k && !idx.has(k)) idx.set(k, r); });
+  let updated = 0, added = 0, skipped = 0;
+  const changes = [];
+  body.forEach(x => {
+    const mg = String(x[cols.mgmt] || "").trim();
+    if(!mg){ return; }
+    const addr = String(x[cols.addr] || "").trim(), note = String(x[cols.note] || "").trim();
+    const hit = idx.get(last3(mg));
+    if(hit){
+      const before = { mgmt: hit.d.chosho_mgmt_no || "", addr: hit.d.chosho_cust_addr || "" };
+      changes.push({ row: hit, mgmt: mg, addr, note, before, kind: "update" });
+      updated++;
+    } else if(addr || note){
+      changes.push({ mgmt: mg, addr, note, kind: "add" });
+      added++;
+    } else skipped++;
+  });
+  if(!changes.length){ alert("読み取れる行がありませんでした。\n（1行目の見出しから列を判別します。見出しが無い場合は H列＝管理番号 / E列＝住所 / F列＝過去の情報 を使います）"); return; }
+  const keepAddr = confirm(
+    "Excel から " + changes.length + " 行を読み取りました。\n"
+    + "・既にある戸別の更新：" + updated + " 件（管理番号の下三桁で突き合わせ）\n"
+    + "・新しく追加する行　：" + added + " 件\n"
+    + (skipped ? "・住所も備考も空で見送り：" + skipped + " 件\n" : "")
+    + "\n【住所の扱い】\n"
+    + "　OK   … Excel の住所で上書きする\n"
+    + "　キャンセル … 台帳にすでに入っている住所を残す（空の行だけ Excel から入れる）"
+  );
+  changes.forEach(ch => {
+    if(ch.kind === "update"){
+      const r = ch.row;
+      if(String(r.d.chosho_mgmt_no || "").trim() !== ch.mgmt) writeField(r, "mgmt", ch.mgmt);
+      if(ch.addr && (keepAddr || !String(r.d.chosho_cust_addr || "").trim())) writeField(r, "addr", ch.addr);
+      if(ch.note){
+        const k = subKeyOf(r.d.chosho_mgmt_no, r.file), cur = getLg(k).note || "";
+        if(!cur) setLg(k, { note: ch.note });
+        else if(cur.indexOf(ch.note) < 0) setLg(k, { note: cur + " / " + ch.note });
+      }
+    } else {
+      const payload = { chosho_mgmt_no: ch.mgmt, chosho_date:"", chosho_cust_name:"", chosho_cust_addr: toHalfWidthNum(ch.addr),
+                        chosho_cust_tel:"", chosho_status:"provisional", work_type:"", _manual:true, _origin:"xlsx" };
+      const row = { caseId: newId(), file: "manual:" + newId(), lastModified: Date.now(), prevSub:"",
+                    payload, hybrid:false, d: Object.assign({}, payload), manual:true, origin:"xlsx" };
+      delete row.d._manual; delete row.d._origin;
+      _rows.push(row);
+      markCase(row);
+      if(ch.note) setLg(subKeyOf(ch.mgmt, row.file), { note: ch.note });
+    }
+  });
+  render();
+  toast("📗 Excelから取り込みました（更新 " + updated + " 件 / 追加 " + added + " 件）");
+}
+/* ファイルの書き出し。ローカルのHTMLから開いている場合、ダウンロード方式ではファイル名が
+   「download」になってしまうブラウザがあるため、保存先ダイアログを優先して使う。 */
+async function saveBlobAs(blob, fname, desc, accept){
+  if(window.showSaveFilePicker){
+    try {
+      const h = await window.showSaveFilePicker({ suggestedName: fname, types: [{ description: desc, accept }] });
+      const w = await h.createWritable();
+      await w.write(blob);
+      await w.close();
+      return true;
+    } catch(e){ if(e && e.name === "AbortError") return false; console.warn("保存先ダイアログが使えないためダウンロードします", e); }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = fname; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  return true;
+}
+async function xlsxExport(){
+  if(!_base){ alert("先に共有ファイルを開いてください。"); return; }
+  const shown = visibleRows();
+  if(!shown.length){ alert("書き出す行がありません。"); return; }
+  const head = ["管理番号","名前","施工会社","住所","電話番号","状態","工事日程予定","受付時刻","打合せ予定","ビラ","完了","保留","承諾書","完了書","備考"];
+  const yn = b => (b ? "○" : "");
+  const stName = s => ({ provisional:"仮受付", in_progress:"受付済", completed:"完了" })[s] || "受付済";
+  const aoa = [head].concat(shown.map(r => {
+    const lg = getLg(subKeyOf(r.d.chosho_mgmt_no, r.file)), st = statusOf(r);
+    return [ r.d.chosho_mgmt_no || "", r.d.chosho_cust_name || "", ctrOf(r).name, r.d.chosho_cust_addr || "", r.d.chosho_cust_tel || "",
+             stName(st), r.d.chosho_date || "", lg.time || "", lg.meetAt || "",
+             yn(lg.flyer), yn(st === "completed"), yn(lg.hold), yn(lg.consent), yn(lg.compdoc), lg.note || "" ];
+  }));
+  const blob = buildXlsxBlob(aoa, "受付台帳");
+  const name = "受付台帳" + (_base.name ? "_" + String(_base.name).replace(/[\\\/:*?"<>|]/g, "_") : "") + "_" + todayStr(0) + ".xlsx";
+  if(await saveBlobAs(blob, name, "Excel ブック", { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] })){
+    toast("📘 " + name + " を書き出しました（" + shown.length + "件）");
+  }
+}
+
+/* =========================================================================
+   7. 印刷と列幅調整（メインの受付台帳と同じ考え方。列は番号ではなく列名 data-col で指定する）
+   ========================================================================= */
+const PRINT_COLS = [
+  { key:"st",      label:"状態",     def:5 },
+  { key:"mgmt",    label:"管理番号", def:10 },
+  { key:"name",    label:"名前",     def:9 },
+  { key:"ctr",     label:"施工会社", def:9 },
+  { key:"addr",    label:"住所",     def:16 },
+  { key:"tel",     label:"電話番号", def:8 },
+  { key:"date",    label:"工事日程", def:7 },
+  { key:"meet",    label:"打合せ",   def:7 },
+  { key:"flyer",   label:"ビラ",     def:3 },
+  { key:"done",    label:"完了",     def:3 },
+  { key:"hold",    label:"保留",     def:3 },
+  { key:"consent", label:"承諾書",   def:3 },
+  { key:"compdoc", label:"完了書",   def:3 },
+  { key:"note",    label:"備考",     def:14 }
+];
+const PRINT_W_KEY = "antenna_ledger_app_print_w_v1";
+let _printW = (() => {
+  const w = {}; PRINT_COLS.forEach(c => { w[c.key] = c.def; });
+  try {
+    const s = JSON.parse(localStorage.getItem(PRINT_W_KEY) || "null");
+    if(s) PRINT_COLS.forEach(c => { const v = parseFloat(s[c.key]); if(isFinite(v) && v >= 0 && v <= 60) w[c.key] = v; });
+  } catch(_){}
+  return w;
+})();
+let _pv = false;
+const printWTotal = () => PRINT_COLS.reduce((a, c) => a + (_printW[c.key] || 0), 0);
+function lgApplyPrintWidths(){
+  let st = el("print-w");
+  if(!st){ st = document.createElement("style"); st.id = "print-w"; document.head.appendChild(st); }
+  // !important 必須：見出しには画面用の style="width:110px" 等がインラインで付いており、% 指定に勝ってしまう。
+  st.textContent = PRINT_COLS.map(c =>
+    'body.pm table.lg th[data-col="' + c.key + '"],body.pv table.lg th[data-col="' + c.key + '"]{width:' + (_printW[c.key] || 0) + "% !important;}"
+  ).join("\n")
+  // 削除欄は操作用なので紙には出さない
+  + '\nbody.pm table.lg th[data-col="del"],body.pv table.lg th[data-col="del"],'
+  + 'body.pm table.lg td[data-col="del"],body.pv table.lg td[data-col="del"]{display:none !important;}';
+}
+lgApplyPrintWidths();
+function savePrintW(){ try { localStorage.setItem(PRINT_W_KEY, JSON.stringify(_printW)); } catch(_){} }
+function pvPanelHtml(){
+  const total = printWTotal();
+  return '<div class="lgw" id="lgw"><h2>🖨 印刷レイアウト調整（プレビュー中）</h2>'
+    + '<div class="n">下の表が<b>印刷したときの見た目</b>になっています。つまみを動かすと<b>その場で幅が変わります</b>。'
+    + "合計が100%になるように配分してください。この設定は<b>この端末だけ</b>に保存され、物件ファイルには入りません。</div>"
+    + '<div class="lgw-rows">'
+    + PRINT_COLS.map(c => '<label class="lgw-row"><b>' + esc(c.label) + "</b>"
+        + '<input type="range" min="0" max="40" step="0.5" value="' + (_printW[c.key] || 0) + '" data-w="' + c.key + '">'
+        + '<input type="number" min="0" max="60" step="0.5" value="' + (_printW[c.key] || 0) + '" data-wn="' + c.key + '">%</label>').join("")
+    + "</div>"
+    + '<div class="lgw-foot"><span class="lgw-total ' + (Math.abs(total - 100) < 0.01 ? "ok" : "ng") + '" id="lgw-total">合計 '
+    + (Math.round(total * 10) / 10) + "%" + (Math.abs(total - 100) < 0.01 ? "（ちょうど）" : "（100%にしてください）") + "</span>"
+    + '<button class="pri" id="lgw-fit">100%に自動調整</button>'
+    + '<button id="lgw-reset">既定に戻す</button>'
+    + '<button class="brw" id="lgw-print">🖨 このまま印刷</button>'
+    + '<button class="gry" id="lgw-close">✕ 調整をやめる</button></div></div>';
+}
+function bindPvPanel(){
+  const p = el("lgw"); if(!p) return;
+  const totalEl = el("lgw-total");
+  const refresh = () => {
+    const t = printWTotal(), ok = Math.abs(t - 100) < 0.01;
+    totalEl.className = "lgw-total " + (ok ? "ok" : "ng");
+    totalEl.textContent = "合計 " + (Math.round(t * 10) / 10) + "%" + (ok ? "（ちょうど）" : "（100%にしてください）");
+  };
+  const focusCol = key => {
+    document.querySelectorAll("table.lg thead th.focus").forEach(th => th.classList.remove("focus"));
+    const th = document.querySelector('table.lg thead th[data-col="' + key + '"]');
+    if(th) th.classList.add("focus");
+  };
+  const setW = (key, v, from) => {
+    v = Math.max(0, Math.min(60, parseFloat(v) || 0));
+    _printW[key] = v;
+    const r = p.querySelector('[data-w="' + key + '"]'), n = p.querySelector('[data-wn="' + key + '"]');
+    if(r && from !== "range") r.value = v;
+    if(n && from !== "num") n.value = v;
+    lgApplyPrintWidths(); savePrintW(); refresh();
+  };
+  p.querySelectorAll("[data-w]").forEach(r => r.addEventListener("input", () => { focusCol(r.dataset.w); setW(r.dataset.w, r.value, "range"); }));
+  p.querySelectorAll("[data-wn]").forEach(n => n.addEventListener("input", () => { focusCol(n.dataset.wn); setW(n.dataset.wn, n.value, "num"); }));
+  el("lgw-fit").addEventListener("click", () => {
+    const t = printWTotal(); if(t <= 0) return;
+    PRINT_COLS.forEach(c => { _printW[c.key] = Math.round((_printW[c.key] || 0) * 100 / t * 10) / 10; });
+    const diff = Math.round((100 - printWTotal()) * 10) / 10;
+    if(diff){ let big = PRINT_COLS[0].key; PRINT_COLS.forEach(c => { if((_printW[c.key] || 0) > (_printW[big] || 0)) big = c.key; }); _printW[big] = Math.round((_printW[big] + diff) * 10) / 10; }
+    PRINT_COLS.forEach(c => {
+      const r = p.querySelector('[data-w="' + c.key + '"]'), n = p.querySelector('[data-wn="' + c.key + '"]');
+      if(r) r.value = _printW[c.key]; if(n) n.value = _printW[c.key];
+    });
+    lgApplyPrintWidths(); savePrintW(); refresh();
+  });
+  el("lgw-reset").addEventListener("click", () => { PRINT_COLS.forEach(c => { _printW[c.key] = c.def; }); lgApplyPrintWidths(); savePrintW(); render(); });
+  el("lgw-print").addEventListener("click", doPrint);
+  el("lgw-close").addEventListener("click", () => { _pv = false; document.body.classList.remove("pv"); render(); });
+}
+function doPrint(){
+  document.body.classList.add("pm");
+  const after = () => { document.body.classList.remove("pm"); window.removeEventListener("afterprint", after); };
+  window.addEventListener("afterprint", after);
+  setTimeout(() => { window.print(); }, 60);
+}
+
+/* =========================================================================
+   7.2 施工会社の一覧（マスター）の編集
+   ========================================================================= */
+function openCtrEditor(){
+  const ov = document.createElement("div");
+  ov.id = "ctr-ov";
+  ov.innerHTML = '<div class="ctr-box"><div class="ctr-head">🏢 施工会社</div>'
+    + '<div class="ctr-note">ここに登録した会社が、各行の「施工会社」の選択肢に出ます。'
+    + '物件ファイルを開いている場合は、その物件に保存されメイン側でも同じ一覧が使えます。<br>'
+    + '一覧から消しても、すでに割り当て済みの行はそのまま残ります。</div>'
+    + '<div class="ctr-list"></div>'
+    + '<div class="ctr-add"><input type="text" id="ctr-new" placeholder="会社名を入力" autocomplete="off">'
+    + '<button id="ctr-add" class="pri">追加</button></div>'
+    + '<div class="ctr-foot"><button id="ctr-close">閉じる</button></div></div>';
+  document.body.appendChild(ov);
+  const list = ov.querySelector(".ctr-list");
+  const paint = () => {
+    list.innerHTML = _contractors.length
+      ? _contractors.map((c, i) => '<div class="ctr-row"><span>' + esc(c) + "</span>"
+          + '<button data-del="' + i + '" title="一覧から外す（割り当て済みの行は残ります）">外す</button></div>').join("")
+      : '<div class="ctr-empty">まだ登録がありません。下の欄に会社名を入れて「追加」を押してください。</div>';
+  };
+  paint();
+  const add = () => {
+    const inp = ov.querySelector("#ctr-new");
+    const v = String(inp.value || "").trim();
+    if(!v) return;
+    if(_contractors.indexOf(v) >= 0){ alert("すでに登録されています。"); return; }
+    _removedCtrNames.delete(v);        // 外したあとで入れ直したら、外した記録は取り消す
+    _contractors.push(v);
+    _editedMeta.add("contractors"); touch();
+    inp.value = ""; inp.focus();
+    paint(); render();
+  };
+  ov.querySelector("#ctr-add").addEventListener("click", add);
+  ov.querySelector("#ctr-new").addEventListener("keydown", e => { if(e.key === "Enter"){ e.preventDefault(); add(); } });
+  list.addEventListener("click", e => {
+    const b = e.target.closest("[data-del]"); if(!b) return;
+    const i = parseInt(b.dataset.del, 10);
+    if(!(i >= 0 && i < _contractors.length)) return;
+    if(!confirm("「" + _contractors[i] + "」を一覧から外します。\n（すでに割り当てた行はそのまま残ります）")) return;
+    _removedCtrNames.add(_contractors[i]);
+    _contractors.splice(i, 1);
+    _editedMeta.add("contractors"); touch();
+    paint(); render();
+  });
+  const close = () => { if(ov.parentNode) ov.parentNode.removeChild(ov); };
+  ov.querySelector("#ctr-close").addEventListener("click", close);
+  ov.addEventListener("click", e => { if(e.target === ov) close(); });
+  ov.querySelector("#ctr-new").focus();
+}
+
+/* =========================================================================
+   7.5 受付台帳ファイルの受け渡し（別の場所で作った台帳をメインへ渡すための形）
+       メインの「📤 現場用に書き出し」と同じ type を使う。項目を足した v2 だが、
+       v1 しか読めない現場入力アプリでも従来どおり読める（増えた項目を無視するだけ）。
+   ========================================================================= */
+const LEDGER_FILE_TYPE = "antenna_reception_ledger";
+function buildLedgerFile(){
+  const rows = _rows.map(r => {
+    const lg = getLg(subKeyOf(r.d.chosho_mgmt_no, r.file));
+    return {
+      mgmt_no: String(r.d.chosho_mgmt_no || "").trim(),
+      name: r.d.chosho_cust_name || "", addr: r.d.chosho_cust_addr || "", tel: r.d.chosho_cust_tel || "",
+      date: r.d.chosho_date || "", time: lg.time || "", meet: lg.meetAt || "",
+      status: r.d.chosho_status || "", contractor: ctrOf(r).name,
+      flyer: !!lg.flyer, hold: !!lg.hold, consent: !!lg.consent, compdoc: !!lg.compdoc,
+      note: lg.note || ""
+    };
+  }).filter(x => x.mgmt_no || x.name || x.addr);
+  return { type: LEDGER_FILE_TYPE, version: 2, app: APP_NAME, appVersion: APP_VERSION,
+           exportedAt: new Date().toISOString(),
+           project: (_base && _base.name) || "", count: rows.length, rows };
+}
+async function exportLedgerFile(){
+  const payload = buildLedgerFile();
+  if(!payload.rows.length){ alert("書き出す行がありません。"); return; }
+  const fname = "受付台帳" + (payload.project ? "_" + String(payload.project).replace(/[\\\/:*?"<>|]/g, "_") : "") + "_" + todayStr(0) + ".json";
+  if(await saveBlobAs(new Blob([JSON.stringify(payload, null, 2)], { type:"application/json" }), fname, "JSON ファイル", { "application/json":[".json"] })){
+    alert("📤 受付台帳を書き出しました（" + payload.rows.length + "件）。\n\n"
+      + "このファイルをメインのパソコンに渡し、メインの 📒 受付台帳 で\n"
+      + "「📥 受付台帳を取り込む」を押してください。\n"
+      + "違いのある項目だけを一覧で確認してから取り込めます。");
+  }
+}
+/* 受付台帳ファイルを読み込む（管理番号で突き合わせ、違うところだけ入れる）。 */
+async function importLedgerFile(file){
+  let p;
+  try { p = JSON.parse(await file.text()); }
+  catch(e){ alert("ファイルを読み込めませんでした。"); return; }
+  if(!p || p.type !== LEDGER_FILE_TYPE || !Array.isArray(p.rows)){ alert("受付台帳ファイルではありません。"); return; }
+  const byNo = new Map();
+  _rows.forEach(r => { const k = String(r.d.chosho_mgmt_no || "").trim(); if(k && !byNo.has(k)) byNo.set(k, r); });
+  let upd = 0, add = 0;
+  p.rows.forEach(x => {
+    const no = String(x.mgmt_no || "").trim(); if(!no) return;
+    let r = byNo.get(no);
+    if(!r){
+      const payload = { chosho_mgmt_no: no, chosho_date: x.date || "", chosho_cust_name: x.name || "",
+        chosho_cust_addr: toHalfWidthNum(x.addr || ""), chosho_cust_tel: toHalfWidthNum(x.tel || ""),
+        chosho_status: x.status || "provisional", work_type:"", _manual:true, _origin:"ledger-file" };
+      r = { caseId: newId(), file: "manual:" + newId(), lastModified: Date.now(), prevSub:"",
+            payload, hybrid:false, d: Object.assign({}, payload), manual:true, origin:"ledger-file" };
+      delete r.d._manual; delete r.d._origin;
+      _rows.push(r); byNo.set(no, r); markCase(r); add++;
+    } else {
+      ["name","addr","tel","date"].forEach(f => {
+        const v = String(x[f] === undefined ? "" : x[f]);
+        const key = { name:"chosho_cust_name", addr:"chosho_cust_addr", tel:"chosho_cust_tel", date:"chosho_date" }[f];
+        if(v && String(r.d[key] || "") !== v && canEdit(r, f === "date" ? "date" : f)) writeField(r, f, v);
+      });
+      upd++;
+    }
+    setLg(subKeyOf(no, r.file), { time: x.time || "", meetAt: x.meet || "", flyer: !!x.flyer,
+      hold: !!x.hold, consent: !!x.consent, compdoc: !!x.compdoc, note: x.note || "" });
+    // 施工会社は、ファイル側に名前が入っていて今と違うときだけ入れ替える（空では解除しない）
+    const cn = String(x.contractor || "").trim();
+    if(cn && ctrOf(r).name !== cn){
+      if(_contractors.indexOf(cn) < 0){ _contractors.push(cn); _editedMeta.add("contractors"); }
+      setCtr(r, cn);
+    }
+  });
+  render();
+  toast("📥 受付台帳を取り込みました（更新 " + upd + " 件 / 追加 " + add + " 件）");
+}
+
+/* =========================================================================
+   8. 履歴（上書き前の控え）
+   ========================================================================= */
+async function showHistory(){
+  const all = (await backupAll()).sort((a, b) => (a.at < b.at ? -1 : 1)).reverse();
+  if(!all.length){ alert("控えはまだありません。\n共有ファイルへ保存すると、上書きする前の内容をここに控えます。"); return; }
+  const lines = all.slice(0, 30).map((b, i) =>
+    (i + 1) + ") " + b.at.replace("T", " ").slice(0, 16) + "　" + (b.projectName || "（名称未設定）")
+    + "　" + b.caseCount + "件" + (b.why === "manual" ? "（手動保存の直前）" : ""));
+  const ans = prompt(
+    "上書きする前のファイル内容を控えてあります。\n"
+    + "戻したい番号を入れて OK を押すと、その内容を .json ファイルとして書き出します。\n"
+    + "（この場でファイルを書き換えることはしません。書き出したファイルを確認してから差し替えてください）\n\n"
+    + lines.join("\n"), "");
+  if(!ans) return;
+  const n = parseInt(ans, 10);
+  if(!(n >= 1 && n <= Math.min(all.length, 30))){ alert("番号が正しくありません。"); return; }
+  const b = all[n - 1];
+  const fname = "控え_" + b.at.replace(/[:T]/g, "-").slice(0, 16) + ".json";
+  if(await saveBlobAs(new Blob([b.text], { type:"application/json" }), fname, "JSON ファイル", { "application/json": [".json"] })){
+    alert("控えを書き出しました。\n中身を確認したうえで、共有ファイルと差し替えてください。");
+  }
+}
+
+/* =========================================================================
+   9. 起動と配線
+   ========================================================================= */
+el("btn-open").addEventListener("click", openSharedFile);
+el("btn-reconnect").addEventListener("click", reconnect);
+el("btn-save").addEventListener("click", async () => { if(await saveNow(true)) toast("💾 共有ファイルへ保存しました"); });
+el("btn-history").addEventListener("click", showHistory);
+el("btn-add").addEventListener("click", addRow);
+el("btn-xlsx-out").addEventListener("click", xlsxExport);
+el("btn-xlsx-in").addEventListener("click", () => {
+  const f = document.createElement("input");
+  f.type = "file"; f.accept = ".xlsx";
+  f.addEventListener("change", () => { if(f.files && f.files[0]) xlsxImport(f.files[0]); });
+  f.click();
+});
+el("btn-export").addEventListener("click", exportLedgerFile);
+el("btn-import").addEventListener("click", () => {
+  const f = document.createElement("input");
+  f.type = "file"; f.accept = ".json";
+  f.addEventListener("change", () => { if(f.files && f.files[0]) importLedgerFile(f.files[0]); });
+  f.click();
+});
+el("btn-print").addEventListener("click", doPrint);
+el("btn-ctr").addEventListener("click", openCtrEditor);
+el("btn-fclear").addEventListener("click", clearFilters);
+el("btn-pv").addEventListener("click", () => { _pv = !_pv; document.body.classList.toggle("pv", _pv); render(); });
+["q","f-prov","f-pending","f-noflyer","f-hold","f-ctr","f-d1","f-d2"].forEach(id => {
+  el(id).addEventListener("input", () => { _newKey = ""; render(); });
+  el(id).addEventListener("change", () => { _newKey = ""; render(); });
+});
+window.addEventListener("beforeunload", e => {
+  if(_dirty){ e.preventDefault(); e.returnValue = ""; }
+});
+document.addEventListener("keydown", e => {
+  if((e.ctrlKey || e.metaKey) && e.key === "s"){ e.preventDefault(); saveNow(true).then(ok => { if(ok) toast("💾 共有ファイルへ保存しました"); }); }
+});
+(async function boot(){
+  // まずは単体運用で立ち上げる（共有ファイルが無くてもすぐ台帳を作れる）
+  let local = null;
+  try { local = await localGet(); } catch(_){}
+  adoptSnapshot(local && isProjectFile(local) ? local : {
+    schema: PROJ_SCHEMA, id: "ledger_local", name: "（受付台帳のみ）",
+    createdAt: new Date().toISOString(), updatedAt: "", cases: [], ledger: {}, contractorAssign: {}
+  });
+  _mode = "local";
+  render();
+  if(!FS_OK){
+    el("btn-open").disabled = true; el("btn-reconnect").disabled = true;
+    return;   // 単体運用（この端末に保存）はこのままでも使える
+  }
+  const h = await handleGet();
+  if(!h) return;
+  // 起動時は勝手に読み込まず、許可が残っている場合だけ静かにつなぎ直す
+  let granted = false;
+  try { granted = (await h.queryPermission({ mode:"readwrite" })) === "granted"; } catch(_){}
+  if(granted) await connectTo(h, true);
+  else {
+    el("savestate").className = "savestate ss-warn";
+    el("savestate").innerHTML = '<span class="ico">🔗</span><span>前に開いた物件ファイル（<b>' + esc(h.name || "") + "</b>）の記憶があります。<b>「🔗 再接続」</b>を押すとそのファイルへ直接保存する使い方に切り替わります。</span>";
+  }
+})();
+</script>
+</body>
+</html>
