@@ -4906,6 +4906,8 @@
           <button type="button" data-cmode="contractor" class="active">施工会社別</button>
         </div>
         <div class="map-side-note" id="map-bld-cmode-note">番号を付けた建物を施工会社ごとの色で表示します（受付台帳の割当が無い建物は業者番号＝管理番号の左から4桁目で判定・どちらも無ければグレー／番号なしは緑）。</div>
+        <label class="map-layer-extra" style="margin:6px 0 2px;display:flex;gap:5px;align-items:center;" title="管理番号をリンクしていない建物の塗りを消し、枠線だけで表示します。下地の住宅地図を隠さずに見たいときに使います。番号を付けた建物の色は変わりません。"><input type="checkbox" id="map-bld-nofill"> 番号なしの建物は背景なし（枠線だけ）</label>
+        <div class="map-side-note">下地の地図が塗りで隠れて読みにくいときに。印刷・縮小マップにも同じように効きます（この設定はこの端末だけに保存されます）。</div>
         <div id="map-ctr-legend" class="map-ctr-legend"></div>
       </div>
       <div class="map-side-sec map-edit-sec">
@@ -20053,6 +20055,20 @@ function toHalfWidthNum(s){
     // ※ 長音符「ー」(U+30FC) は「コーポ」等の語を壊すので対象にしない。
     .replace(/[－−‐‑]/g, "-");
 }
+/* 住所から「丁目以降の数字」を取り出す（地図の建物に出す番地表記）。
+   「三沢市中央町3丁目12番地」→「3-12」／「…3丁目12番地5」→「3-12-5」。
+   丁目が無い住所は数字のまとまりをそのまま使う（「中央町3-12」→「3-12」）。
+   部屋番号まで拾って長くならないよう、丁目・番地・号の3段までに切る。数字が無ければ空。 */
+function addrChomeNumber(addr){
+  const s = toHalfWidthNum(String(addr == null ? "" : addr)).trim();
+  if(!s) return "";
+  const m = /(\d+)\s*丁目\s*(.*)$/.exec(s);
+  const parts = [];
+  if(m){ parts.push(m[1]); }
+  const rest = m ? m[2] : s;
+  (rest.match(/\d+/g) || []).forEach(n => parts.push(n));
+  return parts.slice(0, 3).join("-");
+}
 /* 印刷用の短い日付表記。"2026-08-01"＋"10:00" → "8/1-10:00"（時刻が無ければ "8/1"）。
    入力欄を縦に積むと行が高くなり枚数が増えるため、印刷ではこの1行表示に置き換える。 */
 function lgFmtDateTime(dateStr, timeStr){
@@ -23490,6 +23506,10 @@ window.addEventListener("DOMContentLoaded", init);
   //    自分で「番号色」を選んだ端末は、その選択が localStorage に残るのでそのまま。
   var _bldColorMode = "contractor";
   try { var _bcm = localStorage.getItem("antenna_map_bld_colormode"); if(_bcm === "contractor" || _bcm === "link") _bldColorMode = _bcm; } catch(_){}
+  /* 番号なし（未リンク）の建物を塗りつぶさず枠線だけで描くか。下地の住宅地図を隠さないための表示設定。
+     色分けモードと同じく端末ごと（localStorage）。既定OFF＝従来どおり緑の塗りあり。 */
+  var _bldNoFillUnlinked = false;
+  try { _bldNoFillUnlinked = localStorage.getItem("antenna_map_bld_nofill") === "1"; } catch(_){}
 
   var sheets = [];          // 現在の文脈（物件 or 端末ローカル）のMapSheet配列
   var current = null;       // 現在開いているMapSheet
@@ -23531,6 +23551,7 @@ window.addEventListener("DOMContentLoaded", init);
   var MINI_PANEL_W = 180, MINI_BODY_H = 112, MINI_PAD = 4;   // viewBox 0 0 180 112 と一致
   var _txAngleCal = null;   // テキスト角度2点指定中の状態 { objId, stage:0|1, p1:{x,y}|null, hover:{x,y}|null }
   var _txResize = null;     // テキスト拡縮ドラッグ中の状態 { objId, size0, anchorScreen:{x,y}, dist0 }
+  var _banchiDrag = null;   // 番地ラベルのドラッグ中の状態 { objId, off0:{dx,dy}, w0 }
   var TEXT_STYLE_PRESETS = [
     { name: "大見出し", color: "#1e3a5f", bold: true,  sizeMul: 2.2 },
     { name: "見出し",   color: "#1e3a5f", bold: true,  sizeMul: 1.5 },
@@ -24102,7 +24123,7 @@ window.addEventListener("DOMContentLoaded", init);
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType });
     ensureDocListeners();
     // 2本目以降の指 → ピンチ（作図中でもパス自体は保持、頂点は置かない＝誤線防止）
-    if(pointers.size >= 2){ panState = null; if(_vecRect){ _vecRect = null; renderVecRectOverlay(); } if(_marq){ _marq = null; renderMarqueeOverlay(); } if(gesture === "bgcal"){ _bgCalDrag = null; loupeHide(); } if(gesture === "bgcropdrag"){ _bgCropDrag = null; } if(gesture === "txresize"){ _txResize = null; } gesture = "pinch"; beginPinch(); updateCursor(); return; }
+    if(pointers.size >= 2){ panState = null; if(_vecRect){ _vecRect = null; renderVecRectOverlay(); } if(_marq){ _marq = null; renderMarqueeOverlay(); } if(gesture === "bgcal"){ _bgCalDrag = null; loupeHide(); } if(gesture === "bgcropdrag"){ _bgCropDrag = null; } if(gesture === "txresize"){ _txResize = null; } if(gesture === "banchidrag"){ _banchiDrag = null; } gesture = "pinch"; beginPinch(); updateCursor(); return; }
     down = { id: e.pointerId, cx: e.clientX, cy: e.clientY, world: screenToWorld(e.clientX, e.clientY) };
     if(_txAngleCal){
       txAngleClick(down.world);
@@ -24231,6 +24252,8 @@ window.addEventListener("DOMContentLoaded", init);
       if(hitTextResizeHandle(e.clientX, e.clientY)){
         beginTxResize(e); updateCursor(); return;
       }
+      var bh = hitBanchiLabel(e.clientX, e.clientY);
+      if(bh){ beginBanchiDrag(e, bh); updateCursor(); return; }
       var vi = hitVertex(e.clientX, e.clientY);
       if(vi >= 0){ gesture = "vtxdrag"; vtxIndex = vi; _dragMoved = false; }
       else {
@@ -24336,6 +24359,16 @@ window.addEventListener("DOMContentLoaded", init);
       }
       e.preventDefault(); return;
     }
+    if(gesture === "banchidrag" && _banchiDrag){
+      var sb = getSelected();
+      if(sb && sb.layer === "building" && sb.obj.id === _banchiDrag.objId){
+        var wb = screenToWorld(e.clientX, e.clientY);
+        sb.obj.banchiOff = { dx: _banchiDrag.off0.dx + (wb.x - _banchiDrag.w0.x),
+                             dy: _banchiDrag.off0.dy + (wb.y - _banchiDrag.w0.y) };
+        renderBuildingLayer(); renderSelectionOverlay();
+      }
+      e.preventDefault(); return;
+    }
     if(gesture === "vtxdrag"){
       var s1 = getSelected();
       if(s1){ if(!_dragMoved){ pushUndo(); _dragMoved = true; } var w1 = screenToWorld(e.clientX, e.clientY); setObjPoint(s1.obj, vtxIndex, w1.x, w1.y); renderDragLive([s1]); renderSelectionOverlay(); }
@@ -24408,6 +24441,12 @@ window.addEventListener("DOMContentLoaded", init);
       var otr2 = _txResize && txObjById(_txResize.objId);
       gesture = null; _txResize = null; renderObjects(); renderSelectionOverlay(); flushSave();
       if(otr2) txRememberStyle(otr2);
+    } else if(gesture === "banchidrag"){
+      gesture = null; _banchiDrag = null; _dragMoved = false;
+      renderObjects(); renderSelectionOverlay();
+      var selB = getSelected();
+      if(selB) renderDetail(selB.obj);   // 「位置を戻す」ボタンの出し入れを反映
+      flushSave();
     } else if(gesture === "vtxdrag"){
       gesture = null; _dragMoved = false; renderObjects(); renderSelectionOverlay(); flushSave();
     } else if(gesture === "objdrag"){
@@ -27147,7 +27186,9 @@ window.addEventListener("DOMContentLoaded", init);
     } else if(linked){
       fill = LINKED_BLD_FILL; miniFill = LINKED_BLD_MINI; stroke = LINKED_BLD_STROKE;
     } else {
-      fill = "rgba(46,125,50,0.16)"; miniFill = "rgba(46,125,50,0.22)";
+      // 番号なし。「背景なし」設定のときは塗りを消して枠線だけにする（当たり判定は座標計算なので選択には影響しない）
+      fill = _bldNoFillUnlinked ? "none" : "rgba(46,125,50,0.16)";
+      miniFill = _bldNoFillUnlinked ? "none" : "rgba(46,125,50,0.22)";
       stroke = (current.layers.building && current.layers.building.color) || "#2e7d32";
     }
     return { fill: o.fill || fill, miniFill: o.fill || miniFill, stroke: o.stroke || stroke, linked: linked };
@@ -27159,6 +27200,26 @@ window.addEventListener("DOMContentLoaded", init);
       + ' x="' + (cx + dx) + '" y="' + (cy + dy) + '" font-size="' + fs + '" fill="' + color + '"'
       + ' stroke="#ffffff" stroke-width="' + halo + '" paint-order="stroke" text-anchor="middle"'
       + ' dominant-baseline="central" font-family="sans-serif" font-weight="700" pointer-events="none">' + text + '</text>';
+  }
+  /* 番号リンク済みの建物に出す番地表記。
+     建物の「ラベル（番地・名称）」に手入力があればそれを、無ければリンク先の住所から
+     「丁目以降の数字」（例 3-12）を自動で作る。番号未リンクの建物には出さない。 */
+  function bldBanchiText(o){
+    if(!o || !o.linkMgmtNo) return "";
+    var manual = String(o.label || "").trim();
+    if(manual) return manual;
+    var row = findRowByMgmtNo(o.linkMgmtNo);
+    var addr = (row && row.data) ? row.data.chosho_cust_addr : "";
+    try { return (typeof addrChomeNumber === "function") ? addrChomeNumber(addr) : ""; } catch(_){ return ""; }
+  }
+  /* 番地の表示位置（建物中心からの相対）と文字サイズ。既定は管理番号の真下。
+     ユーザーがドラッグすると o.banchiOff（ワールド単位）に控え、以後はそこに出す。 */
+  function bldBanchiPos(o, cx, cy, fs){
+    var size = Math.max(2.4, fs * 0.62);
+    var off = o.banchiOff;
+    var dx = (off && isFinite(off.dx)) ? off.dx : 0;
+    var dy = (off && isFinite(off.dy)) ? off.dy : (fs * 0.82);
+    return { dx: dx, dy: dy, size: size, x: cx + dx, y: cy + dy };
   }
   /* 受付台帳で「保留」にした戸別か。台帳側の isCaseOnHold（管理番号で判定）を参照する。 */
   function bldOnHold(mgmtNo){
@@ -27180,7 +27241,7 @@ window.addEventListener("DOMContentLoaded", init);
       var lab = "";
       var l3 = linked ? mgmtLast3(o.linkMgmtNo) : "";
       var onHold = linked && bldOnHold(o.linkMgmtNo);
-      if(l3 || onHold){
+      if(l3 || onHold || (linked && bldBanchiText(o))){
         var minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
         for(var i = 0; i < o.points.length; i++){ var pp = o.points[i]; if(pp[0] < minx) minx = pp[0]; if(pp[0] > maxx) maxx = pp[0]; if(pp[1] < miny) miny = pp[1]; if(pp[1] > maxy) maxy = pp[1]; }
         var bw = maxx - minx, bh = maxy - miny, cx = (minx + maxx) / 2, cy = (miny + maxy) / 2;
@@ -27191,6 +27252,12 @@ window.addEventListener("DOMContentLoaded", init);
           var hfs = fs * (l3 ? 0.78 : 1);                       // 番号があれば少し小さくして右肩に添える
           var hdx = l3 ? fs * 0.88 : 0, hdy = l3 ? -fs * 0.52 : 0;
           lab += bldLabelText(cx, cy, hdx, hdy, hfs, Math.max(0.4, hfs * 0.22), "#e65100", "保");
+        }
+        // 番地（丁目以降の数字）。管理番号とは別の文字色にし、ドラッグで好きな位置へ動かせる
+        var bt = bldBanchiText(o);
+        if(bt){
+          var bp = bldBanchiPos(o, cx, cy, fs);
+          lab += bldLabelText(cx, cy, bp.dx, bp.dy, bp.size, Math.max(0.35, bp.size * 0.2), "#263238", esc(bt));
         }
       }
       return poly + lab;
@@ -27204,6 +27271,8 @@ window.addEventListener("DOMContentLoaded", init);
       var btn = seg.querySelector('button[data-cmode="' + _bldColorMode + '"]');
       if(btn) segActivate(seg, btn);
     }
+    var nf = el("map-bld-nofill");
+    if(nf && nf.checked !== _bldNoFillUnlinked) nf.checked = _bldNoFillUnlinked;
     var note = el("map-bld-cmode-note");
     if(note){
       note.textContent = (_bldColorMode === "contractor")
@@ -27694,6 +27763,30 @@ window.addEventListener("DOMContentLoaded", init);
     var py = rect.top + ry * view.scale + view.ty;
     return Math.hypot(cx - px, cy - py) <= 20;                    // タッチ指向で20px（hitVertexは12）
   }
+  /* 選択中の建物の番地ラベルを掴んだか（テキスト拡縮ハンドルと同じく「選択中のみ」）。
+     選択を条件にすることで、通常の建物の選択・移動の操作は今までどおりのまま。 */
+  function hitBanchiLabel(cx, cy){
+    var sel = getSelected();
+    if(!sel || sel.layer !== "building") return null;
+    var o = sel.obj;
+    var t = bldBanchiText(o); if(!t || !Array.isArray(o.points) || o.points.length < 3) return null;
+    var minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+    for(var i = 0; i < o.points.length; i++){
+      var pp = o.points[i];
+      if(pp[0] < minx) minx = pp[0]; if(pp[0] > maxx) maxx = pp[0];
+      if(pp[1] < miny) miny = pp[1]; if(pp[1] > maxy) maxy = pp[1];
+    }
+    var fs = Math.max(3, Math.min((maxx - minx) * 0.42, (maxy - miny) * 0.7));
+    var bp = bldBanchiPos(o, (minx + maxx) / 2, (miny + maxy) / 2, fs);
+    var w = screenToWorld(cx, cy);
+    var pad = 8 / view.scale;                                  // 指・ペン用の余白（画面8px相当）
+    var halfW = mapCbTextW(t, bp.size) * 0.5 + pad, halfH = bp.size * 0.7 + pad;
+    return (Math.abs(w.x - bp.x) <= halfW && Math.abs(w.y - bp.y) <= halfH) ? { obj: o, off0: { dx: bp.dx, dy: bp.dy } } : null;
+  }
+  function beginBanchiDrag(e, hit){
+    _banchiDrag = { objId: hit.obj.id, off0: hit.off0, w0: screenToWorld(e.clientX, e.clientY) };
+    gesture = "banchidrag"; _dragMoved = false; capturePointer(e.pointerId); pushUndo();
+  }
   function beginTxResize(e){
     var sel = getSelected(); if(!sel) return;
     var rect = stage.getBoundingClientRect(), o = sel.obj;
@@ -27757,6 +27850,13 @@ window.addEventListener("DOMContentLoaded", init);
         '<div class="map-detail-head">🏠 建物 <button type="button" id="map-detail-close" title="閉じる">✕</button></div>'
         + '<div class="map-detail-body">'
         + '<label class="map-fld">ラベル（番地・名称）<input type="text" id="map-bld-label" value="' + esc(o.label || "") + '" placeholder="例）3-12 / ○○様邸"></label>'
+        + (o.linkMgmtNo
+            ? '<div class="map-detail-info" style="margin:-4px 0 8px;">地図には <b>' + esc(bldBanchiText(o) || "（番地なし）") + '</b> と出ます'
+              + (String(o.label || "").trim() ? '（このラベルを表示中）' : '（リンク先の住所の丁目以降から自動）')
+              + '。<b>この建物を選んだ状態で番地をドラッグ</b>すると好きな位置へ動かせます。'
+              + (o.banchiOff ? ' <button type="button" id="map-bld-banchi-reset" style="font-size:11px;padding:1px 6px;">位置を戻す</button>' : '')
+              + '</div>'
+            : '')
         + '<label class="map-fld">メモ<textarea id="map-bld-note" rows="3" placeholder="自由メモ">' + esc(o.note || "") + '</textarea></label>'
         + '<div id="map-bld-link-sec"></div>'
         + '<button type="button" class="map-side-btn" id="map-bld-delete" style="background:#b3433a;border-color:#8f352e;margin-top:12px;">🗑 この建物を削除</button>'
@@ -27766,6 +27866,9 @@ window.addEventListener("DOMContentLoaded", init);
       if(lab) lab.addEventListener("input", function(){ o.label = lab.value; renderObjects(); renderSelectionOverlay(); scheduleSave(); });
       var note = el("map-bld-note");
       if(note) note.addEventListener("input", function(){ o.note = note.value; scheduleSave(); });
+      on("map-bld-banchi-reset", "click", function(){
+        pushUndo(); delete o.banchiOff; renderObjects(); renderDetail(o); flushSave();
+      });
       on("map-bld-delete", "click", deleteSelected);
       if(typeof renderDetailLink === "function") renderDetailLink(o);   // F4: 管理番号リンク・写真
       return;
@@ -28570,7 +28673,13 @@ window.addEventListener("DOMContentLoaded", init);
       applyBldColorModeUI();
       renderObjects();   // 本図＋縮小マップを新しい色で再描画
     });
-    applyBldColorModeUI();   // 起動時の初期状態（保存済みモード）を反映
+    var nofill = el("map-bld-nofill");
+    if(nofill) nofill.addEventListener("change", function(){
+      _bldNoFillUnlinked = nofill.checked;
+      try { localStorage.setItem("antenna_map_bld_nofill", _bldNoFillUnlinked ? "1" : "0"); } catch(_){}
+      renderObjects();   // 本図＋縮小マップを再描画
+    });
+    applyBldColorModeUI();   // 起動時の初期状態（保存済みモード・背景なし設定）を反映
     var stageWrap = el("map-stage-wrap");
     if(stageWrap){
       // ステージへの画像ドロップ＝参照地図下地として追加（既存のwindow dropによる物件読込を奪わないようstopPropagation）
