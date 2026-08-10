@@ -4464,6 +4464,7 @@
       <button class="mode-tab" data-list-mode="subcontractor" title="協力会社→元請けへの請求内訳（労務費＋協力会社諸経費＋持出材料）。全体費用詳細の数値には一切影響しません。単価は標準単価（業者間の統一額）で計算し、物件用の単価変更（単価マスターの色付き行）は反映されません">🤝 協力会社請求内訳</button>
       <button class="mode-tab" data-list-mode="ledger" title="全戸別を1行ずつ一覧・セル直接編集（工事日程・打合せ・ビラ配布・完了・備考）。カレンダーと双方向連動">📒 受付台帳</button>
       <button class="mode-tab" data-list-mode="calendar" title="工事予定（青）と打合せ予定（緑）を月表示。受付台帳と双方向連動">📅 予定カレンダー</button>
+      <button class="mode-tab" data-list-mode="materials" title="現場入力で「下見完了」にした戸別の材料を、工事全体で合計します。まとめ発注の数量表（金額なし）">🧰 材料数量</button>
       <button class="list-pdf-btn" id="btn-list-pdf" title="現在のモードの内容をPDF/印刷ダイアログで出力">🖨 PDF出力</button>
     </div>
     <div class="list-base-preset-row">
@@ -13866,7 +13867,7 @@ function renderListTable(){
     : "";
 
   // 受付台帳・カレンダーは0件でも表示する（台帳の「＋新規行」／カレンダーのクイック仮入力が戸別作成の起点）
-  const zeroOk = (_listMode === "ledger" || _listMode === "calendar");
+  const zeroOk = (_listMode === "ledger" || _listMode === "calendar" || _listMode === "materials");
   if(_listRows.length === 0 && !zeroOk){
     tbl.innerHTML = ""; custom.innerHTML = "";
     tbl.style.display = ""; custom.style.display = "none";
@@ -13906,6 +13907,10 @@ function renderListTable(){
     tbl.style.display = "none";
     custom.style.display = "";
     renderListCalendarMode(rows, custom);
+  } else if(_listMode === "materials"){
+    tbl.style.display = "none";
+    custom.style.display = "";
+    renderListMaterialsMode(rows, custom);
   } else {
     tbl.style.display = "";
     custom.style.display = "none";
@@ -16055,7 +16060,7 @@ function setListMode(mode){
     _lgPrintPreview = false;
     document.body.classList.remove("lg-print-preview");
   }
-  document.body.classList.remove("list-mode-standard","list-mode-by_folder","list-mode-cost_detail","list-mode-subcontractor","list-mode-ledger","list-mode-calendar");
+  document.body.classList.remove("list-mode-standard","list-mode-by_folder","list-mode-cost_detail","list-mode-subcontractor","list-mode-ledger","list-mode-calendar","list-mode-materials");
   document.body.classList.add("list-mode-" + mode);
   renderListTable();
 }
@@ -19773,6 +19778,7 @@ const MENU_FEATS = [
   { icon: "📅", title: "予定カレンダー", desc: "工事予定（青）・打合せ予定（緑）を月表示で管理。1日4件の枠を確認しながら割り当て", mode: "calendar" },
   { icon: "📒", title: "受付台帳", desc: "全戸別を1行ずつ一覧。日程・打合せ・ビラ配布・完了・備考をその場で直接編集", mode: "ledger" },
   { icon: "📄", title: "戸別一覧（読込・積算）", desc: "保存済ファイルの一覧・検索・読込。フォルダからの取り込みもここから", mode: "standard" },
+  { icon: "🧰", title: "材料数量", desc: "現場入力で「下見完了」にした戸別の材料を工事全体で合計。まとめ発注用の数量表（金額なし）", mode: "materials" },
   { icon: "💴", title: "全体費用詳細", desc: "読み込んだ全戸別の材料費・労務費を工事全体で集計", mode: "cost_detail" },
   { icon: "🤝", title: "協力会社請求内訳", desc: "労務費＋協力会社諸経費＋持出材料の請求集計・明細PDF", mode: "subcontractor" },
   { icon: "✏️", title: "積算・図面編集", desc: "現在開いている戸別の積算入力と系統図（図面）の編集画面へ", mode: "" },
@@ -21710,6 +21716,133 @@ function bindLedgerHandlers(container){
   });
 }
 
+/* ============================================================
+   🧰 材料数量（一覧の第7モード）
+   現場入力で「下見完了」にした戸別の材料を、工事全体で合計する。
+   まとめ発注のときに「何をいくつ買えばよいか」だけを見るための画面。
+   金額は出さない（金額は「全体費用詳細」の役目）。
+   ============================================================ */
+let _matOnlyDone = true;     // 下見完了の戸別だけを数えるか
+function surveyDoneOf(row){ return !!(row && row.data && row.data.survey_done); }
+function surveyDoneAtOf(row){ return String((row && row.data && row.data.survey_done_at) || ""); }
+function renderListMaterialsMode(rows, container){
+  const target = _matOnlyDone ? rows.filter(surveyDoneOf) : rows.slice();
+  const doneN = rows.filter(surveyDoneOf).length;
+  const notDoneN = rows.length - doneN;
+  // 集計。同じ品番は戸別をまたいで足し合わせる。
+  const byId = {}, order = [];
+  let counted = 0, naNoDwg = 0, naEnc = 0;
+  target.forEach(r => {
+    const bom = getRowBomAggregate(r);
+    if(!bom){
+      if(r.fileType === "full" && !r.unlocked) naEnc++; else naNoDwg++;
+      return;
+    }
+    counted++;
+    const seenHere = {};
+    bom.items.forEach(it => {
+      if(!byId[it.id]){
+        byId[it.id] = { id: it.id, model: it.model || "", name: it.name || "", unit: it.unit || "", qty: 0, cases: 0 };
+        order.push(it.id);
+      }
+      byId[it.id].qty += it.qty;
+      if(!seenHere[it.id]){ seenHere[it.id] = 1; byId[it.id].cases++; }
+    });
+  });
+  order.sort((a, b) => {
+    const ka = byId[a].model || byId[a].name || "", kb = byId[b].model || byId[b].name || "";
+    return ka.localeCompare(kb, "ja");
+  });
+  const fmtQty = q => (Math.abs(q - Math.round(q)) < 1e-6) ? String(Math.round(q)) : q.toFixed(1);
+
+  let html = renderSelectedFolderBanner();
+  html += '<div class="cost-detail-section"><h3>🧰 材料数量'
+    + ' <span style="font-size:11px;color:#555;font-weight:normal;">('
+    + (_matOnlyDone ? "下見完了の戸別のみ" : "読み込んだ全戸別") + "・" + counted + " 件ぶん・金額なし)</span></h3>";
+  html += '<div class="mat-bar" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 0 10px;font-size:12px;">'
+    + '<label title="現場入力の「🔎下見完了」を押した戸別だけを数えます。外すと、読み込んだ全部の戸別を数えます。">'
+    +   '<input type="checkbox" id="mat-only-done"' + (_matOnlyDone ? " checked" : "") + '> 下見完了の戸別だけ数える</label>'
+    + '<span style="color:#2e7d32;font-weight:700;">✅ 下見完了 ' + doneN + " 件</span>"
+    + '<span style="color:#8a5a00;">未完了 ' + notDoneN + " 件</span>"
+    + (naNoDwg ? '<span style="color:#8a5a00;" title="図面（積算）がまだ入っていない戸別です。現場入力で内容を入れると数えられます。">📐 中身が無くて数えられない ' + naNoDwg + " 件</span>" : "")
+    + (naEnc ? '<span style="color:#8a5a00;" title="全暗号化の戸別です。解錠すると数えられます。">🔐 暗号化で数えられない ' + naEnc + " 件</span>" : "")
+    + '<span style="flex:1 1 auto;"></span>'
+    + '<button id="mat-copy" title="この表をタブ区切りでコピーします。Excel にそのまま貼り付けられます。" style="background:#2e5488;color:#fff;border:1px solid #1e3a5f;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📋 コピー</button>'
+    + '<button id="mat-xlsx" title="この材料数量を Excel（.xlsx）へ書き出します。" style="background:#1b7a3d;color:#fff;border:1px solid #145c2e;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📘 Excelへ書き出し</button>'
+    + "</div>";
+
+  if(!counted){
+    html += '<div style="padding:26px 10px;text-align:center;color:#667482;">'
+      + (_matOnlyDone
+          ? "下見完了の戸別がまだありません。<br>現場入力（スマホ）で戸別を開き、<b>「🔎下見完了」</b>を押してから戸別JSONを取り込んでください。"
+          : "数えられる戸別がありません。<br>図面（積算）の入っている戸別を読み込んでください。")
+      + "</div></div>";
+    container.innerHTML = html;
+    bindMaterialsMode(container, []);
+    return;
+  }
+  html += '<table class="cost-detail-table" style="width:100%;border-collapse:collapse;font-size:12px;">'
+    + '<thead><tr>'
+    + '<th style="width:34px;text-align:right;">#</th>'
+    + '<th style="width:150px;text-align:left;">型番</th>'
+    + '<th style="text-align:left;">品名</th>'
+    + '<th style="width:56px;text-align:center;">単位</th>'
+    + '<th style="width:90px;text-align:right;">数量</th>'
+    + '<th style="width:90px;text-align:right;" title="この材料を使う戸別の数">使う戸別</th>'
+    + "</tr></thead><tbody>";
+  order.forEach((id, i) => {
+    const it = byId[id];
+    html += "<tr>"
+      + '<td style="text-align:right;color:#8a94a0;">' + (i + 1) + "</td>"
+      + "<td>" + escapeHtml(it.model) + "</td>"
+      + "<td>" + escapeHtml(it.name) + "</td>"
+      + '<td style="text-align:center;">' + escapeHtml(it.unit) + "</td>"
+      + '<td style="text-align:right;font-weight:700;">' + fmtQty(it.qty) + "</td>"
+      + '<td style="text-align:right;color:#556;">' + it.cases + "</td></tr>";
+  });
+  html += "</tbody><tfoot><tr>"
+    + '<td colspan="4" style="text-align:right;font-weight:700;">品目数</td>'
+    + '<td style="text-align:right;font-weight:700;">' + order.length + "</td><td></td></tr></tfoot></table>";
+  html += '<div style="margin-top:8px;font-size:11px;color:#667482;">'
+    + "※ 数量は、下見で入力した内容から出した必要数です。予備・端数は含みません。<br>"
+    + "※ ケーブル類は長さ（m）、器具は台・個で出ています。単位の欄をご確認ください。</div>";
+  html += "</div>";
+  container.innerHTML = html;
+  bindMaterialsMode(container, order.map(id => byId[id]));
+}
+function bindMaterialsMode(container, items){
+  const chk = container.querySelector("#mat-only-done");
+  if(chk) chk.addEventListener("change", () => { _matOnlyDone = chk.checked; renderListTable(); });
+  const head = ["型番", "品名", "単位", "数量", "使う戸別"];
+  const aoa = () => [head].concat(items.map(it => [it.model, it.name, it.unit,
+    (Math.abs(it.qty - Math.round(it.qty)) < 1e-6) ? String(Math.round(it.qty)) : it.qty.toFixed(1), String(it.cases)]));
+  const cp = container.querySelector("#mat-copy");
+  if(cp) cp.addEventListener("click", async () => {
+    if(!items.length){ alert("コピーする材料がありません。"); return; }
+    const tsv = aoa().map(r => r.join("\t")).join("\n");
+    try { await navigator.clipboard.writeText(tsv); alert("材料数量をコピーしました（" + items.length + " 品目）。\nExcel に貼り付けてお使いください。"); }
+    catch(_){
+      // クリップボードが使えない環境（file:// の一部）では選択できる形で出す
+      const ta = document.createElement("textarea");
+      ta.value = tsv; ta.style.position = "fixed"; ta.style.left = "-9999px";
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); alert("材料数量をコピーしました（" + items.length + " 品目）。"); }
+      catch(__){ alert("コピーできませんでした。「📘 Excelへ書き出し」をお使いください。"); }
+      ta.remove();
+    }
+  });
+  const xl = container.querySelector("#mat-xlsx");
+  if(xl) xl.addEventListener("click", () => {
+    if(!items.length){ alert("書き出す材料がありません。"); return; }
+    const blob = buildXlsxBlob(aoa(), "材料数量");
+    const nm = "材料数量" + (_currentProject && _currentProject.name ? "_" + String(_currentProject.name).replace(/[\\\/:*?"<>|]/g, "_") : "")
+      + "_" + lgDateStrToday(0) + ".xlsx";
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = nm; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  });
+}
 /* ============================================================
    予定カレンダー（一覧の第6モード）
    工事予定＝chosho_date＋ledger.time（青）／打合せ＝ledger.meetAt（緑）
