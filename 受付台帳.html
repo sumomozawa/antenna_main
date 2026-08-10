@@ -71,7 +71,10 @@
   .edit:hover{ background:#fffbe6; }
   .lock{ color:var(--muted); }
   .note-input{ color:#5d4037; }
-  .dt-print, .addr-print, .note-print{ display:none; }
+  .dt-print, .addr-print, .note-print, .ctr-print{ display:none; }
+  td.ctr-cell select{ font-size:11.5px; }
+  td.ctr-auto select{ color:var(--muted); }
+  .ctr-auto-tag{ font-size:9px; color:#8a94a0; margin-left:2px; vertical-align:middle; }
   /* 行の状態色 */
   tr.r-prov  td{ background:#fffde7; }
   tr.r-done  td{ background:#eef7ee; color:#5c6b5c; }
@@ -83,6 +86,18 @@
   .badge.prov{ background:#c6a700; }
   .badge.hold{ background:#e65100; }
   .empty{ padding:40px 10px; text-align:center; color:var(--muted); }
+  /* 施工会社の一覧編集 */
+  #ctr-ov{ position:fixed; inset:0; background:rgba(20,30,45,.5); z-index:900; display:flex; align-items:center; justify-content:center; }
+  #ctr-ov .ctr-box{ background:#fff; border-radius:8px; width:min(460px,92vw); max-height:86vh; display:flex; flex-direction:column; box-shadow:0 8px 30px rgba(0,0,0,.3); }
+  #ctr-ov .ctr-head{ background:var(--navy); color:#fff; font-weight:700; padding:10px 16px; border-radius:8px 8px 0 0; }
+  #ctr-ov .ctr-note{ padding:10px 16px 6px; font-size:11.5px; color:var(--muted); line-height:1.7; }
+  #ctr-ov .ctr-list{ overflow:auto; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+  #ctr-ov .ctr-row{ display:flex; align-items:center; gap:10px; padding:6px 16px; border-bottom:1px solid #eef1f4; }
+  #ctr-ov .ctr-row span{ flex:1; }
+  #ctr-ov .ctr-empty{ padding:18px 16px; color:var(--muted); font-size:12px; }
+  #ctr-ov .ctr-add{ display:flex; gap:8px; padding:10px 16px; }
+  #ctr-ov .ctr-add input{ flex:1; font-family:inherit; font-size:13px; padding:5px 8px; border:1px solid var(--line); border-radius:3px; }
+  #ctr-ov .ctr-foot{ padding:0 16px 12px; text-align:right; }
   /* ---------- 印刷レイアウト調整パネル ---------- */
   .lgw{ background:#fff; border:1px solid #cfdcea; border-radius:6px; padding:10px 12px 14px; margin:0 14px 10px; }
   .lgw h2{ font-size:13px; color:var(--navy); margin:0 0 2px; }
@@ -106,6 +121,10 @@
   body.pv table.lg input[type=date], body.pv table.lg input[type=time], body.pv table.lg input[type=datetime-local],
   body.pm table.lg input[type=date], body.pm table.lg input[type=time], body.pm table.lg input[type=datetime-local]{ display:none !important; }
   body.pv table.lg .note-input, body.pm table.lg .note-input{ display:none !important; }
+  /* 施工会社は印刷では選択欄ではなく文字にする */
+  body.pv table.lg td.ctr-cell select, body.pm table.lg td.ctr-cell select,
+  body.pv table.lg .ctr-auto-tag, body.pm table.lg .ctr-auto-tag{ display:none !important; }
+  body.pv table.lg .ctr-print, body.pm table.lg .ctr-print{ display:inline !important; }
   /* 住所は「入力用の表示」と「印刷用の半角表示」を両方持っているので、印刷では入力用を隠す
      （隠さないと同じ住所が2回続けて出る） */
   body.pv table.lg td[data-col="addr"] .edit, body.pv table.lg td[data-col="addr"] .lock,
@@ -150,6 +169,10 @@
   <label><input type="checkbox" id="f-pending"> 未完了のみ</label>
   <label><input type="checkbox" id="f-noflyer"> ビラ未配布のみ</label>
   <label><input type="checkbox" id="f-hold"> 保留のみ</label>
+  <select id="f-ctr" title="施工会社で絞り込みます"><option value="">施工会社：すべて</option></select>
+  <button id="btn-ctr" title="施工会社の一覧（会社名）を編集します。ここで足した会社が各行の選択肢に出ます。">🏢 施工会社</button>
+  <button id="btn-print-sel" title="チェックを付けた行だけを印刷します。">🖨 選択した行を印刷</button>
+  <button id="btn-sel-clear" title="行の選択をすべて解除します。">選択解除</button>
   <button id="btn-xlsx-in"  title="Excel（.xlsx）から管理番号・住所・過去の情報を読み取り、下三桁で突き合わせて台帳を更新します。">📗 Excelから読取り</button>
   <button class="grn" id="btn-xlsx-out" title="いまの受付台帳を Excel（.xlsx）へ書き出します。">📘 Excelへ書き出し</button>
   <button class="gry" id="btn-pv" title="印刷したときの見た目のまま、各列の幅をその場で調整できます（この端末だけの設定）。">🖨 印刷レイアウト調整</button>
@@ -273,7 +296,15 @@ let _handle = null;          // 共有ファイル
 let _base = null;            // 直近に読み込んだファイル内容（土台）
 let _rows = [];              // 画面用の行（_base.cases から作る）
 let _ledger = {};            // 台帳の記入内容（キー→値）
-let _contractorAssign = {};  // 戸別→施工会社（表示のみ・このソフトでは変更しない）
+let _contractorAssign = {};  // 戸別→施工会社（管理番号キー）
+let _contractors = [];       // 施工会社マスター（物件ファイルの contractors）
+let _contractorDigits = {};  // 業者番号（管理番号の左から4桁目 1〜4）→会社名
+let _editedCtr = new Set();     // このソフトが設定・変更した施工会社の割当キー
+let _deletedCtr = new Set();    // このソフトが解除した施工会社の割当キー
+let _editedMeta = new Set();    // このソフトが変えた物件全体の設定（"contractors" など）
+let _removedCtrNames = new Set(); // このソフトが施工会社の一覧から外した会社名
+let _printSel = new Set();      // 選択印刷でチェックした行のキー
+let _selOnly = false;           // 印刷・プレビューを選択した行だけに絞るか
 let _editedCases = new Set();   // このソフトが触った戸別（caseId）
 let _editedAnno = new Set();    // このソフトが設定・変更した台帳キー
 let _deletedAnno = new Set();   // このソフトが空にした台帳キー
@@ -310,7 +341,11 @@ function adoptSnapshot(p){
   _rows = rowsFromSnapshot(p);
   _ledger = Object.assign({}, p.ledger || {});
   _contractorAssign = Object.assign({}, p.contractorAssign || {});
+  _contractors = Array.isArray(p.contractors) ? p.contractors.slice() : [];
+  _contractorDigits = Object.assign({}, p.contractorDigits || {});
   _editedCases = new Set(); _editedAnno = new Set(); _deletedAnno = new Set(); _deletedCases = new Set();
+  _editedCtr = new Set(); _deletedCtr = new Set(); _editedMeta = new Set(); _removedCtrNames = new Set();
+  _printSel = new Set(); _selOnly = false;
   _dirty = false;
   _lastWrittenUpdatedAt = p.updatedAt || "";
 }
@@ -401,7 +436,9 @@ function snapshotLocal(){
     updatedAt: new Date().toISOString(),
     cases, caseCount: cases.length,
     ledger: Object.assign({}, _ledger),
-    contractorAssign: Object.assign({}, _contractorAssign)
+    contractorAssign: Object.assign({}, _contractorAssign),
+    contractors: _contractors.slice(),
+    contractorDigits: Object.assign({}, _contractorDigits)
   });
 }
 function mergeOnto(disk){
@@ -437,6 +474,10 @@ function mergeOnto(disk){
   const ledger = Object.assign({}, disk.ledger || {});
   _editedAnno.forEach(k => { if(_ledger[k] !== undefined) ledger[k] = _ledger[k]; });
   _deletedAnno.forEach(k => { delete ledger[k]; });
+  // 施工会社の割当も同じ扱い（このソフトで割り当て／解除したキーだけ反映）
+  const contractorAssign = Object.assign({}, disk.contractorAssign || {});
+  _editedCtr.forEach(k => { if(_contractorAssign[k] !== undefined) contractorAssign[k] = _contractorAssign[k]; });
+  _deletedCtr.forEach(k => { delete contractorAssign[k]; });
 
   const now = new Date().toISOString();
   const out = Object.assign({}, disk, {
@@ -444,8 +485,22 @@ function mergeOnto(disk){
     updatedAt: now,
     cases, caseCount: cases.length,
     ledger,
+    contractorAssign,
     lastSavedBy: { company:"", device:"", at:now, app: APP_NAME + " " + APP_VERSION }
   });
+  // 施工会社マスターは物件全体の設定。触っていなければ共有ファイルの内容をそのまま残す。
+  // 触った場合も丸ごと置き換えず、「共有ファイルの一覧 ＋ この端末で足した会社 －
+  // この端末で外した会社」にする（この間に他の端末が足した会社を消さないため）。
+  if(_editedMeta.has("contractors")){
+    const merged = [], seen = Object.create(null);
+    const add = n => {
+      n = String(n == null ? "" : n).trim();
+      if(n && !seen[n] && !_removedCtrNames.has(n)){ seen[n] = 1; merged.push(n); }
+    };
+    (Array.isArray(disk.contractors) ? disk.contractors : []).forEach(add);
+    _contractors.forEach(add);
+    out.contractors = merged;
+  }
   const dby = disk.lastSavedBy || {};
   out.mergedFrom = { company: dby.company || "", device: dby.device || "", at: dby.at || disk.updatedAt || "", updatedAt: disk.updatedAt || "" };
   return out;
@@ -505,6 +560,38 @@ function setLg(k, patch){
   if(empty){ delete _ledger[k]; markAnno(k, true); }
   else { _ledger[k] = next; markAnno(k, false); }
 }
+/* ---------- 施工会社 ----------
+   メインと同じ決め方。戸別ごとの割当が最優先で、割当が無くても
+   業者番号（管理番号の左から4桁目 1〜4）の対応表があればそこから判定する。 */
+function ctrByDigit(mgmtNo){
+  const t = String(mgmtNo == null ? "" : mgmtNo).trim();
+  if(t.length < 4) return "";
+  return _contractorDigits[t.charAt(3)] || "";
+}
+/* { name: 会社名, auto: 業者番号から自動で判定した場合 true }。どちらも無ければ name は空。 */
+function ctrOf(row){
+  const k = subKeyOf(row.d.chosho_mgmt_no, row.file);
+  const a = String(_contractorAssign[k] || "").trim();
+  if(a) return { name: a, auto: false };
+  const d = ctrByDigit(row.d.chosho_mgmt_no);
+  return { name: d, auto: !!d };
+}
+function setCtr(row, name){
+  const k = subKeyOf(row.d.chosho_mgmt_no, row.file);
+  name = String(name || "").trim();
+  if(!name){ delete _contractorAssign[k]; _deletedCtr.add(k); _editedCtr.delete(k); }
+  else { _contractorAssign[k] = name; _editedCtr.add(k); _deletedCtr.delete(k); }
+  touch();
+}
+/* 選択肢に出す会社の並び。マスター＋実際に使われている会社（マスター外も拾う）。 */
+function ctrChoices(){
+  const out = [], seen = Object.create(null);
+  const add = n => { n = String(n == null ? "" : n).trim(); if(n && !seen[n]){ seen[n] = 1; out.push(n); } };
+  _contractors.forEach(add);
+  Object.keys(_contractorDigits).sort().forEach(k => add(_contractorDigits[k]));
+  Object.keys(_contractorAssign).forEach(k => add(_contractorAssign[k]));
+  return out;
+}
 /* 戸別の項目を書き換える。一部暗号化の行は、メインと同じく管理番号・工事日程・状態だけ触れる。 */
 const FIELD_MAP = { mgmt:"chosho_mgmt_no", name:"chosho_cust_name", addr:"chosho_cust_addr",
                     tel:"chosho_cust_tel", date:"chosho_date", status:"chosho_status" };
@@ -532,10 +619,17 @@ function writeField(row, f, v){
   }
   const newKey = subKeyOf(row.d.chosho_mgmt_no, row.file);
   if(newKey !== oldKey){
-    // 管理番号を変えた＝台帳のキーも変わる。中身を新しいキーへ移し、旧キーは消す。
+    // 管理番号を変えた＝台帳・施工会社のキーも変わる。中身を新しいキーへ移し、旧キーは消す。
     if(!row.prevSub) row.prevSub = oldKey;
     const had = _ledger[oldKey];
     if(had){ _ledger[newKey] = had; delete _ledger[oldKey]; markAnno(newKey, false); markAnno(oldKey, true); }
+    const hadC = _contractorAssign[oldKey];
+    if(hadC){
+      _contractorAssign[newKey] = hadC; delete _contractorAssign[oldKey];
+      _editedCtr.add(newKey); _deletedCtr.delete(newKey);
+      _deletedCtr.add(oldKey); _editedCtr.delete(oldKey);
+    }
+    if(_printSel.has(oldKey)){ _printSel.delete(oldKey); _printSel.add(newKey); }
   }
   markCase(row);
 }
@@ -562,6 +656,8 @@ function deleteRow(row){
   if(row.caseId) _deletedCases.add(row.caseId);
   _editedCases.delete(row.caseId);
   if(_ledger[k]){ delete _ledger[k]; markAnno(k, true); }
+  if(_contractorAssign[k]){ delete _contractorAssign[k]; _deletedCtr.add(k); _editedCtr.delete(k); }
+  _printSel.delete(k);
   touch(); render();
 }
 
@@ -573,12 +669,18 @@ function visibleRows(){
   const q = (el("q").value || "").trim().toLowerCase();
   const onlyProv = el("f-prov").checked, onlyPending = el("f-pending").checked;
   const onlyNoFlyer = el("f-noflyer").checked, onlyHold = el("f-hold").checked;
+  const ctrSel = (el("f-ctr") && el("f-ctr").value) || "";
   let out = _rows.filter(r => {
     const k = subKeyOf(r.d.chosho_mgmt_no, r.file), lg = getLg(k), st = statusOf(r);
+    if(_selOnly && !_printSel.has(k)) return false;       // 印刷時：選んだ行だけに絞る
     if(onlyProv && st !== "provisional") return false;
     if(onlyPending && st === "completed") return false;
     if(onlyNoFlyer && lg.flyer) return false;
     if(onlyHold && !lg.hold) return false;
+    if(ctrSel){
+      const c = ctrOf(r).name;
+      if(ctrSel === "__none__" ? !!c : c !== ctrSel) return false;
+    }
     if(q){
       const hay = [r.d.chosho_mgmt_no, r.d.chosho_cust_name, r.d.chosho_cust_addr, r.d.chosho_cust_tel, lg.note]
         .map(v => String(v == null ? "" : v)).join(" ").toLowerCase();
@@ -593,6 +695,7 @@ function visibleRows(){
       case "mgmt":  return String(r.d.chosho_mgmt_no || "");
       case "name":  return String(r.d.chosho_cust_name || "");
       case "addr":  return String(r.d.chosho_cust_addr || "");
+      case "ctr":   return ctrOf(r).name;
       case "date":  return String(r.d.chosho_date || "") + " " + String(lg.time || "");
       case "meet":  return String(lg.meetAt || "");
       case "flyer": return lg.flyer ? 1 : 0;
@@ -620,14 +723,31 @@ function render(){
   const held = _rows.filter(r => getLg(subKeyOf(r.d.chosho_mgmt_no, r.file)).hold).length;
   const prov = _rows.filter(r => statusOf(r) === "provisional").length;
   el("count").textContent = "表示 " + shown.length + " / 全 " + _rows.length + " 件"
-    + (prov ? "　仮受付 " + prov : "") + (held ? "　保留 " + held : "");
+    + (prov ? "　仮受付 " + prov : "") + (held ? "　保留 " + held : "")
+    + (_printSel.size ? "　選択 " + _printSel.size : "");
+  // 施工会社の絞り込み（選択中の値は保つ）
+  const fc = el("f-ctr");
+  if(fc){
+    const keep = fc.value;
+    fc.innerHTML = '<option value="">施工会社：すべて</option>'
+      + ctrChoices().map(c => '<option value="' + esc(c) + '">' + esc(c) + "</option>").join("")
+      + '<option value="__none__">（未割当）</option>';
+    fc.value = keep;
+    if(fc.value !== keep) fc.value = "";     // 選んでいた会社が無くなったら「すべて」に戻す
+  }
+  el("btn-print-sel").disabled = !_printSel.size;
+  el("btn-print-sel").textContent = "🖨 選択した行を印刷" + (_printSel.size ? "（" + _printSel.size + "件）" : "");
+  el("btn-sel-clear").disabled = !_printSel.size;
   const arrow = k => (_sort.key === k ? '<span class="arrow">' + (_sort.dir > 0 ? "▲" : "▼") + "</span>" : "");
   const t = todayStr(0), tomo = todayStr(1);
+  const choices = ctrChoices();
   let h = '<table class="lg"><thead><tr>'
+    + '<th data-col="sel" style="width:32px;" title="印刷したい行にチェックを付けます。ここを押すと表示中の行をまとめて選択／解除できます。">'
+    +   '<input type="checkbox" id="sel-all"' + (shown.length && shown.every(r => _printSel.has(subKeyOf(r.d.chosho_mgmt_no, r.file))) ? " checked" : "") + "></th>"
     + '<th data-col="st"   data-sort="st"   style="width:90px;">状態 ' + arrow("st") + "</th>"
     + '<th data-col="mgmt" data-sort="mgmt" style="width:110px;">管理番号 ' + arrow("mgmt") + "</th>"
     + '<th data-col="name" data-sort="name" style="width:124px;">名前 ' + arrow("name") + "</th>"
-    + '<th data-col="ctr"  style="width:120px;" title="施工会社の割り当てはメイン側で行います（ここは表示のみ）">施工会社</th>'
+    + '<th data-col="ctr"  data-sort="ctr" style="width:130px;" title="この戸別を担当する施工会社。会社名の一覧は「🏢 施工会社」で編集できます。割り当てが無い行は、管理番号の左から4桁目（業者番号）から自動で判定します。">施工会社 ' + arrow("ctr") + "</th>"
     + '<th data-col="addr" data-sort="addr">住所 ' + arrow("addr") + "</th>"
     + '<th data-col="tel"  style="width:112px;">電話番号</th>'
     + '<th data-col="date" data-sort="date" style="width:160px;">工事日程予定 ' + arrow("date") + "</th>"
@@ -641,7 +761,7 @@ function render(){
     + '<th data-col="del" style="width:38px;"></th>'
     + "</tr></thead><tbody>";
   if(!shown.length){
-    h += '<tr><td colspan="15" class="empty">該当する行がありません。</td></tr>';
+    h += '<tr><td colspan="16" class="empty">該当する行がありません。</td></tr>';
   }
   shown.forEach((r, i) => {
     const k = subKeyOf(r.d.chosho_mgmt_no, r.file), lg = getLg(k), st = statusOf(r);
@@ -656,8 +776,12 @@ function render(){
     const cell = (f, v) => canEdit(r, f)
       ? '<span class="edit" data-f="' + f + '" title="クリックで編集">' + (esc(v) || "<span style='color:#b8c2cc;'>―</span>") + "</span>"
       : '<span class="lock" title="暗号化された項目です（メイン側で戸別を開いて編集してください）">' + (esc(v) || "―") + " 🔒</span>";
-    const ctr = _contractorAssign[k] || "";
+    const ctr = ctrOf(r);
+    const ctrOpts = ['<option value=""' + (ctr.name ? "" : " selected") + ">―</option>"]
+      .concat(choices.map(c => '<option value="' + esc(c) + '"' + (!ctr.auto && ctr.name === c ? " selected" : "") + ">" + esc(c) + "</option>"))
+      .join("");
     h += '<tr class="' + cls.join(" ") + '" data-i="' + i + '">'
+      + '<td class="c" data-col="sel"><input type="checkbox" data-f="sel"' + (_printSel.has(k) ? " checked" : "") + ' title="印刷する行として選ぶ"></td>'
       + '<td class="c">' + (canEdit(r, "status")
           ? '<select data-f="st" class="' + (isProv ? "st-prov" : "") + '">'
             + '<option value="provisional"' + (isProv ? " selected" : "") + ">仮受付</option>"
@@ -668,7 +792,13 @@ function render(){
         + (isProv ? '<span class="badge prov">仮</span>' : "")
         + (lg.hold ? '<span class="badge hold">保</span>' : "") + "</td>"
       + "<td>" + cell("name", r.d.chosho_cust_name) + "</td>"
-      + '<td class="c">' + (ctr ? esc(ctr) : '<span style="color:#b8c2cc;">―</span>') + "</td>"
+      + '<td class="c ctr-cell' + (ctr.auto ? " ctr-auto" : "") + '" title="'
+        + esc((ctr.name ? ctr.name + "\n" : "")
+          + (ctr.auto ? "業者番号（管理番号の左から4桁目）から自動で判定しています。選び直すとこの戸別だけ手動の割り当てになります。"
+                      : "この戸別の施工会社")) + '">'
+        + '<select data-f="ctr">' + ctrOpts + "</select>"
+        + (ctr.auto ? '<span class="ctr-auto-tag">自動</span>' : "")
+        + '<span class="ctr-print">' + esc(ctr.name) + "</span></td>"
       + '<td data-col="addr">' + cell("addr", r.d.chosho_cust_addr)
         + '<span class="addr-print">' + esc(toHalfWidthNum(r.d.chosho_cust_addr || "")) + "</span></td>"
       + "<td>" + cell("tel", r.d.chosho_cust_tel) + "</td>"
@@ -686,7 +816,7 @@ function render(){
       + '<td class="c"><input type="checkbox" data-f="compdoc"' + (lg.compdoc ? " checked" : "") + "></td>"
       + '<td data-col="note"><input type="text" class="note-input" data-f="note" maxlength="200" value="' + esc(lg.note || "") + '">'
         + '<span class="note-print">' + esc(lg.note || "") + "</span></td>"
-      + '<td class="c">' + (r.manual ? '<button data-f="del" title="この行を削除（この台帳で作った行のみ）" style="border-color:#c62828;color:#c62828;padding:2px 6px;">🗑</button>' : "") + "</td>"
+      + '<td class="c" data-col="del">' + (r.manual ? '<button data-f="del" title="この行を削除（この台帳で作った行のみ）" style="border-color:#c62828;color:#c62828;padding:2px 6px;">🗑</button>' : "") + "</td>"
       + "</tr>";
   });
   h += "</tbody></table>";
@@ -742,6 +872,13 @@ function rowOf(node){
   return shown[parseInt(tr.dataset.i, 10)] || null;
 }
 el("wrap").addEventListener("click", e => {
+  const all = e.target.closest("#sel-all");
+  if(all){
+    const shown = el("wrap")._shown || [];
+    shown.forEach(r => { const k = subKeyOf(r.d.chosho_mgmt_no, r.file);
+      if(all.checked) _printSel.add(k); else _printSel.delete(k); });
+    render(); return;
+  }
   const th = e.target.closest("th[data-sort]");
   if(th){
     const k = th.dataset.sort;
@@ -775,6 +912,8 @@ el("wrap").addEventListener("change", e => {
   const node = e.target.closest("[data-f]"); if(!node) return;
   const r = rowOf(node); if(!r) return;
   const f = node.dataset.f, k = subKeyOf(r.d.chosho_mgmt_no, r.file);
+  if(f === "sel"){ if(node.checked) _printSel.add(k); else _printSel.delete(k); render(); return; }
+  if(f === "ctr"){ setCtr(r, node.value); render(); return; }
   if(f === "st"){ writeField(r, "status", node.value); render(); return; }
   if(f === "done"){ writeField(r, "status", node.checked ? "completed" : "in_progress"); render(); return; }
   if(f === "date"){ writeField(r, "date", node.value); render(); return; }
@@ -1011,12 +1150,12 @@ async function xlsxExport(){
   if(!_base){ alert("先に共有ファイルを開いてください。"); return; }
   const shown = visibleRows();
   if(!shown.length){ alert("書き出す行がありません。"); return; }
-  const head = ["管理番号","名前","住所","電話番号","状態","工事日程予定","受付時刻","打合せ予定","ビラ","完了","保留","承諾書","完了書","備考"];
+  const head = ["管理番号","名前","施工会社","住所","電話番号","状態","工事日程予定","受付時刻","打合せ予定","ビラ","完了","保留","承諾書","完了書","備考"];
   const yn = b => (b ? "○" : "");
   const stName = s => ({ provisional:"仮受付", in_progress:"受付済", completed:"完了" })[s] || "受付済";
   const aoa = [head].concat(shown.map(r => {
     const lg = getLg(subKeyOf(r.d.chosho_mgmt_no, r.file)), st = statusOf(r);
-    return [ r.d.chosho_mgmt_no || "", r.d.chosho_cust_name || "", r.d.chosho_cust_addr || "", r.d.chosho_cust_tel || "",
+    return [ r.d.chosho_mgmt_no || "", r.d.chosho_cust_name || "", ctrOf(r).name, r.d.chosho_cust_addr || "", r.d.chosho_cust_tel || "",
              stName(st), r.d.chosho_date || "", lg.time || "", lg.meetAt || "",
              yn(lg.flyer), yn(st === "completed"), yn(lg.hold), yn(lg.consent), yn(lg.compdoc), lg.note || "" ];
   }));
@@ -1064,8 +1203,11 @@ function lgApplyPrintWidths(){
   st.textContent = PRINT_COLS.map(c =>
     'body.pm table.lg th[data-col="' + c.key + '"],body.pv table.lg th[data-col="' + c.key + '"]{width:' + (_printW[c.key] || 0) + "% !important;}"
   ).join("\n")
+  // 選択欄と削除欄は操作用なので紙には出さない
   + '\nbody.pm table.lg th[data-col="del"],body.pv table.lg th[data-col="del"],'
-  + 'body.pm table.lg td[data-col="del"],body.pv table.lg td[data-col="del"]{display:none !important;}';
+  + 'body.pm table.lg td[data-col="del"],body.pv table.lg td[data-col="del"],'
+  + 'body.pm table.lg th[data-col="sel"],body.pv table.lg th[data-col="sel"],'
+  + 'body.pm table.lg td[data-col="sel"],body.pv table.lg td[data-col="sel"]{display:none !important;}';
 }
 lgApplyPrintWidths();
 function savePrintW(){ try { localStorage.setItem(PRINT_W_KEY, JSON.stringify(_printW)); } catch(_){} }
@@ -1132,6 +1274,58 @@ function doPrint(){
 }
 
 /* =========================================================================
+   7.2 施工会社の一覧（マスター）の編集
+   ========================================================================= */
+function openCtrEditor(){
+  const ov = document.createElement("div");
+  ov.id = "ctr-ov";
+  ov.innerHTML = '<div class="ctr-box"><div class="ctr-head">🏢 施工会社</div>'
+    + '<div class="ctr-note">ここに登録した会社が、各行の「施工会社」の選択肢に出ます。'
+    + '物件ファイルを開いている場合は、その物件に保存されメイン側でも同じ一覧が使えます。<br>'
+    + '一覧から消しても、すでに割り当て済みの行はそのまま残ります。</div>'
+    + '<div class="ctr-list"></div>'
+    + '<div class="ctr-add"><input type="text" id="ctr-new" placeholder="会社名を入力" autocomplete="off">'
+    + '<button id="ctr-add" class="pri">追加</button></div>'
+    + '<div class="ctr-foot"><button id="ctr-close">閉じる</button></div></div>';
+  document.body.appendChild(ov);
+  const list = ov.querySelector(".ctr-list");
+  const paint = () => {
+    list.innerHTML = _contractors.length
+      ? _contractors.map((c, i) => '<div class="ctr-row"><span>' + esc(c) + "</span>"
+          + '<button data-del="' + i + '" title="一覧から外す（割り当て済みの行は残ります）">外す</button></div>').join("")
+      : '<div class="ctr-empty">まだ登録がありません。下の欄に会社名を入れて「追加」を押してください。</div>';
+  };
+  paint();
+  const add = () => {
+    const inp = ov.querySelector("#ctr-new");
+    const v = String(inp.value || "").trim();
+    if(!v) return;
+    if(_contractors.indexOf(v) >= 0){ alert("すでに登録されています。"); return; }
+    _removedCtrNames.delete(v);        // 外したあとで入れ直したら、外した記録は取り消す
+    _contractors.push(v);
+    _editedMeta.add("contractors"); touch();
+    inp.value = ""; inp.focus();
+    paint(); render();
+  };
+  ov.querySelector("#ctr-add").addEventListener("click", add);
+  ov.querySelector("#ctr-new").addEventListener("keydown", e => { if(e.key === "Enter"){ e.preventDefault(); add(); } });
+  list.addEventListener("click", e => {
+    const b = e.target.closest("[data-del]"); if(!b) return;
+    const i = parseInt(b.dataset.del, 10);
+    if(!(i >= 0 && i < _contractors.length)) return;
+    if(!confirm("「" + _contractors[i] + "」を一覧から外します。\n（すでに割り当てた行はそのまま残ります）")) return;
+    _removedCtrNames.add(_contractors[i]);
+    _contractors.splice(i, 1);
+    _editedMeta.add("contractors"); touch();
+    paint(); render();
+  });
+  const close = () => { if(ov.parentNode) ov.parentNode.removeChild(ov); };
+  ov.querySelector("#ctr-close").addEventListener("click", close);
+  ov.addEventListener("click", e => { if(e.target === ov) close(); });
+  ov.querySelector("#ctr-new").focus();
+}
+
+/* =========================================================================
    7.5 受付台帳ファイルの受け渡し（別の場所で作った台帳をメインへ渡すための形）
        メインの「📤 現場用に書き出し」と同じ type を使う。項目を足した v2 だが、
        v1 しか読めない現場入力アプリでも従来どおり読める（増えた項目を無視するだけ）。
@@ -1144,7 +1338,7 @@ function buildLedgerFile(){
       mgmt_no: String(r.d.chosho_mgmt_no || "").trim(),
       name: r.d.chosho_cust_name || "", addr: r.d.chosho_cust_addr || "", tel: r.d.chosho_cust_tel || "",
       date: r.d.chosho_date || "", time: lg.time || "", meet: lg.meetAt || "",
-      status: r.d.chosho_status || "", contractor: _contractorAssign[subKeyOf(r.d.chosho_mgmt_no, r.file)] || "",
+      status: r.d.chosho_status || "", contractor: ctrOf(r).name,
       flyer: !!lg.flyer, hold: !!lg.hold, consent: !!lg.consent, compdoc: !!lg.compdoc,
       note: lg.note || ""
     };
@@ -1194,6 +1388,12 @@ async function importLedgerFile(file){
     }
     setLg(subKeyOf(no, r.file), { time: x.time || "", meetAt: x.meet || "", flyer: !!x.flyer,
       hold: !!x.hold, consent: !!x.consent, compdoc: !!x.compdoc, note: x.note || "" });
+    // 施工会社は、ファイル側に名前が入っていて今と違うときだけ入れ替える（空では解除しない）
+    const cn = String(x.contractor || "").trim();
+    if(cn && ctrOf(r).name !== cn){
+      if(_contractors.indexOf(cn) < 0){ _contractors.push(cn); _editedMeta.add("contractors"); }
+      setCtr(r, cn);
+    }
   });
   render();
   toast("📥 受付台帳を取り込みました（更新 " + upd + " 件 / 追加 " + add + " 件）");
@@ -1246,8 +1446,18 @@ el("btn-import").addEventListener("click", () => {
   f.click();
 });
 el("btn-print").addEventListener("click", doPrint);
+el("btn-ctr").addEventListener("click", openCtrEditor);
+el("btn-sel-clear").addEventListener("click", () => { _printSel = new Set(); render(); });
+/* 選んだ行だけを印刷。表を選択行だけに絞ってから印刷し、終わったら元に戻す。 */
+el("btn-print-sel").addEventListener("click", () => {
+  if(!_printSel.size){ alert("印刷する行が選ばれていません。\n一覧の左端のチェックで、印刷したい行を選んでください。"); return; }
+  _selOnly = true; render();
+  const restore = () => { _selOnly = false; render(); window.removeEventListener("afterprint", restore); };
+  window.addEventListener("afterprint", restore);
+  doPrint();
+});
 el("btn-pv").addEventListener("click", () => { _pv = !_pv; document.body.classList.toggle("pv", _pv); render(); });
-["q","f-prov","f-pending","f-noflyer","f-hold"].forEach(id => {
+["q","f-prov","f-pending","f-noflyer","f-hold","f-ctr"].forEach(id => {
   el(id).addEventListener("input", () => { _newKey = ""; render(); });
   el(id).addEventListener("change", () => { _newKey = ""; render(); });
 });

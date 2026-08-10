@@ -20846,7 +20846,8 @@ const LGIMP_FIELDS = [
   { f: "hold",    label: "保留",     kind: "lg",   key: "hold",    bool: true },
   { f: "consent", label: "承諾書",   kind: "lg",   key: "consent", bool: true },
   { f: "compdoc", label: "完了書",   kind: "lg",   key: "compdoc", bool: true },
-  { f: "note",    label: "備考",     kind: "lg",   key: "note" }
+  { f: "note",    label: "備考",     kind: "lg",   key: "note" },
+  { f: "contractor", label: "施工会社", kind: "ctr", key: "contractor" }
 ];
 function lgimpShow(v, F){
   if(F && F.bool) return v ? "○" : "―";
@@ -20875,7 +20876,14 @@ function lgLedgerDiff(payload){
     LGIMP_FIELDS.forEach(F => {
       if(x[F.f] === undefined) return;
       const after = F.bool ? !!x[F.f] : String(x[F.f] == null ? "" : x[F.f]).trim();
-      const before = F.bool ? !!lg[F.key] : String((F.kind === "case" ? d[F.key] : lg[F.key]) || "").trim();
+      let before;
+      if(F.kind === "ctr"){
+        // 施工会社は「戸別の割当」＋「業者番号からの自動判定」の結果と比べる（メインの表示と同じ決め方）
+        before = "";
+        try { before = String(contractorForMgmtNo(no) || "").trim(); } catch(_){ before = ""; }
+      } else {
+        before = F.bool ? !!lg[F.key] : String((F.kind === "case" ? d[F.key] : lg[F.key]) || "").trim();
+      }
       if(!F.bool && !after) return;                       // ファイル側が空の文字は「変更なし」扱い（消さない）
       if(String(before) === String(after)) return;
       if(F.kind === "case" && !lgEditableField(row, F.f === "name" || F.f === "tel" || F.f === "addr" ? "addr" : F.f)) return; // 暗号化で書けない項目は出さない
@@ -20930,7 +20938,7 @@ function lgShowLedgerDiffDialog(payload, items){
     + "<b>戸別の図面・積算・写真には触りません。</b></div>"
     + '<div class="lgimp-tog"><label><input type="checkbox" id="lgimp-all-add" checked> 新しい戸別を追加（' + adds.length + "件）</label>"
     + '<label><input type="checkbox" id="lgimp-all-case" checked> 名前・住所・電話・工事日を更新</label>'
-    + '<label><input type="checkbox" id="lgimp-all-lg" checked> 台帳の項目（打合せ・ビラ・保留・承諾書・完了書・備考）を更新</label></div>'
+    + '<label><input type="checkbox" id="lgimp-all-lg" checked> 台帳の項目（打合せ・ビラ・保留・承諾書・完了書・備考・施工会社）を更新</label></div>'
     + '<div class="lgimp-scroll"><table class="lgimp-tbl"><thead><tr><th style="width:34px;"></th><th style="width:120px;">管理番号</th>'
     + '<th style="width:90px;">項目</th><th>いまの台帳</th><th>ファイル</th></tr></thead><tbody>' + rowsHtml + "</tbody></table></div>"
     + '<div class="lgimp-foot"><span id="lgimp-cnt"></span>'
@@ -20966,12 +20974,27 @@ function lgShowLedgerDiffDialog(payload, items){
         const tk = subCaseKey(row);
         setLedger(tk, { time: x.time || "", meetAt: x.meet || "", flyer: !!x.flyer, hold: !!x.hold,
                         consent: !!x.consent, compdoc: !!x.compdoc, note: x.note || "" });
+        if(String(x.contractor || "").trim()){
+          setContractor(tk, String(x.contractor).trim());
+          try {
+            const list = getContractorList();
+            if(list.indexOf(String(x.contractor).trim()) < 0) setContractorList(list.concat([String(x.contractor).trim()]));
+          } catch(_){}
+        }
         added++;
         return;
       }
       const d = it.diffs[parseInt(bx.dataset.j, 10)];
       if(!d) return;
       if(d.F.kind === "case") lgWriteCaseField(it.row, d.F.f, d.after);
+      else if(d.F.kind === "ctr"){
+        setContractor(subCaseKey(it.row), d.after);
+        // 受け取った会社名が施工業者の一覧に無ければ足す（次から選択肢に出る）
+        try {
+          const list = getContractorList();
+          if(d.after && list.indexOf(d.after) < 0) setContractorList(list.concat([d.after]));
+        } catch(_){}
+      }
       else setLedger(subCaseKey(it.row), { [d.F.key]: d.after });
       changed++;
     });
