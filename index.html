@@ -2933,9 +2933,17 @@
   table.ledger-table tr.lg-today td { background: #fff8e1; }
   table.ledger-table tr.lg-tomorrow td { background: #fffdf0; }
   table.ledger-table tr.lg-prov td { background: #fff5c2; }
+  /* 保留：完了・仮受付より後に置くことで、重なったときは保留の色を優先させる（着工を止めている印なので目立たせる） */
+  table.ledger-table tr.lg-hold td { background: #ffe8cc; }
   table.ledger-table tr.lg-hl td { background: #e3f2fd !important; }
   .lg-prov-badge {
     display: inline-block; background: #fdd835; color: #5d4037;
+    font-size: 9px; font-weight: 700; padding: 0 5px; border-radius: 7px;
+    margin-left: 4px; vertical-align: 1px; white-space: nowrap;
+  }
+  /* 保留バッジ。地図の「保」マークと同じ橙色。印刷でも残す（紙の台帳でも保留が分かるように） */
+  .lg-hold-badge {
+    display: inline-block; background: #e65100; color: #fff;
     font-size: 9px; font-weight: 700; padding: 0 5px; border-radius: 7px;
     margin-left: 4px; vertical-align: 1px; white-space: nowrap;
   }
@@ -4932,6 +4940,7 @@
           <select id="map-print-paper" title="用紙サイズ">
             <option value="A4">A4</option>
             <option value="A3">A3</option>
+            <option value="A2">A2</option>
             <option value="B4">B4</option>
           </select>
           <span class="map-print-orient" id="map-print-orient">
@@ -17738,7 +17747,7 @@ function projNewId(){
 }
 
 /* ---------- 受付台帳の追加フィールド（caseKey単位・localStorage） ----------
-   { time:"HH:MM", meetAt:"YYYY-MM-DDTHH:MM", flyer:bool, note:"" }
+   { time:"HH:MM", meetAt:"YYYY-MM-DDTHH:MM", flyer:bool, hold:bool, note:"" }
    既定値のみのエントリは保存しない（肥大化防止・takeout/review と同パターン） */
 let _ledgerMap = (() => {
   try { return JSON.parse(localStorage.getItem(LEDGER_KEY)) || {}; }
@@ -17750,10 +17759,17 @@ function saveLedgerMap(){
 function getLedger(tk){
   return _ledgerMap[tk] || {};
 }
+/* 受付台帳で「保留」にした戸別か（管理番号で判定）。地図の「保」マークがこれを参照する。
+   台帳のキーは subCaseKey と同じ "m:<管理番号>" 形式（管理番号なしの行は地図にリンクできないので対象外）。 */
+function isCaseOnHold(mgmtNo){
+  const mg = String(mgmtNo == null ? "" : mgmtNo).trim();
+  if(!mg) return false;
+  return !!getLedger("m:" + mg).hold;
+}
 function setLedger(tk, patch){
-  const next = Object.assign({ time: "", meetAt: "", flyer: false, consent: false, compdoc: false, note: "" }, _ledgerMap[tk] || {}, patch);
+  const next = Object.assign({ time: "", meetAt: "", flyer: false, consent: false, compdoc: false, hold: false, note: "" }, _ledgerMap[tk] || {}, patch);
   let removed = false;
-  if(!next.time && !next.meetAt && !next.flyer && !next.consent && !next.compdoc && !next.note){ delete _ledgerMap[tk]; removed = true; }
+  if(!next.time && !next.meetAt && !next.flyer && !next.consent && !next.compdoc && !next.hold && !next.note){ delete _ledgerMap[tk]; removed = true; }
   else _ledgerMap[tk] = next;
   saveLedgerMap();
   try { removed ? markAnnoDeleted(tk) : markAnnoEdited(tk); } catch(_){} // Phase2: 設定/削除を区別してマージ対象に
@@ -19966,6 +19982,7 @@ let _ledgerOnlyPending = false;
 let _ledgerOnlyNoFlyer = false;
 let _ledgerOnlyProv = false;     // 仮受付のみ（電話後の清書作業用）
 let _ledgerOnlyNoDwg = false;    // 図面未作成のみ
+let _ledgerOnlyHold = false;     // 保留のみ
 let _ledgerHighlightKey = null;
 let _ledgerShown = {};   // uid → row
 let _ledgerPrintSel = new Set();  // 工事調書「選択印刷」でチェック中の戸別（subCaseKey）。再描画やモード切替を跨いで保持
@@ -20071,6 +20088,7 @@ function renderListLedgerMode(rows, container){
     if(sk === "date") return (d.chosho_date || "9999") + " " + (lg.time || "");
     if(sk === "meet") return lg.meetAt || "9999";
     if(sk === "flyer") return lg.flyer ? 1 : 0;
+    if(sk === "hold") return lg.hold ? 1 : 0;
     if(sk === "done") return (d.chosho_status === "completed") ? 1 : 0;
     return "";
   };
@@ -20085,13 +20103,16 @@ function renderListLedgerMode(rows, container){
     if(_ledgerOnlyPending && r.data && r.data.chosho_status === "completed") return false;
     if(_ledgerOnlyNoFlyer && getLedger(subCaseKey(r)).flyer) return false;
     if(_ledgerOnlyNoDwg && lgHasDrawing(r)) return false;
+    if(_ledgerOnlyHold && !getLedger(subCaseKey(r)).hold) return false;
     return true;
   });
-  let done = 0, flyered = 0, prov = 0;
+  let done = 0, flyered = 0, prov = 0, held = 0;
   rows.forEach(r => {
     if(r.data && r.data.chosho_status === "completed") done++;
     if(r.data && r.data.chosho_status === "provisional") prov++;
-    if(getLedger(subCaseKey(r)).flyer) flyered++;
+    const lgc = getLedger(subCaseKey(r));
+    if(lgc.flyer) flyered++;
+    if(lgc.hold) held++;
   });
 
   // 工事調書「選択印刷」のチェック数（読み込み済かつ印刷可能な戸別のみ計上）
@@ -20105,6 +20126,7 @@ function renderListLedgerMode(rows, container){
     + '<label><input type="checkbox" id="lg-only-pending"' + (_ledgerOnlyPending ? " checked" : "") + '> 未完了のみ</label>'
     + '<label><input type="checkbox" id="lg-only-noflyer"' + (_ledgerOnlyNoFlyer ? " checked" : "") + '> ビラ未配布のみ</label>'
     + '<label><input type="checkbox" id="lg-only-nodwg"' + (_ledgerOnlyNoDwg ? " checked" : "") + '> 図面未作成のみ</label>'
+    + '<label' + (held > 0 ? ' style="background:#ffe8cc;border-radius:3px;padding:2px 6px;"' : '') + ' title="着工を止めている戸別だけを表示します"><input type="checkbox" id="lg-only-hold"' + (_ledgerOnlyHold ? " checked" : "") + '> 保留のみ' + (held > 0 ? '（' + held + '）' : '') + '</label>'
     + '<button id="lg-print-sel" title="左端のチェックを入れた戸別の工事調書を 1戸1ページ でまとめて印刷／PDF出力します"' + (selCount ? '' : ' disabled')
     + ' style="background:#7a4e1e;color:#fff;border:1px solid #5e3c16;padding:4px 12px;border-radius:3px;cursor:' + (selCount ? 'pointer' : 'not-allowed') + ';font-size:12px;opacity:' + (selCount ? '1' : '.5') + ';">🖨 選択印刷' + (selCount ? '（' + selCount + '件）' : '') + '</button>'
     + (selCount ? '<button id="lg-print-clear" title="工事調書の選択をすべて解除" style="background:#fff;color:#7a4e1e;border:1px solid #b08a55;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:12px;">選択解除</button>' : '')
@@ -20115,7 +20137,7 @@ function renderListLedgerMode(rows, container){
     +   '<span class="sub">（1行目の見出しから自動判別。上から下へ全行）</span></span>'
     + '<button id="lg-export-genba" title="この受付台帳を1ファイル（受付台帳.json）に書き出します。スマホの現場入力アプリで取り込むと、一覧から選んで入力を開始できます（管理番号・氏名・住所が入った状態）。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📤 現場用に書き出し</button>'
     + '<span style="font-size:11px;color:#667482;">セルをクリックで直接編集。日程・打合せはカレンダーに、名前・住所等は図面に即反映されます</span>'
-    + '<span class="lg-count">全 ' + rows.length + ' 件（仮 ' + prov + ' ／ 完了 ' + done + ' ／ ビラ済 ' + flyered + '）' + (shown.length !== rows.length ? ' → 表示 ' + shown.length + ' 件' : '') + '</span>'
+    + '<span class="lg-count">全 ' + rows.length + ' 件（仮 ' + prov + ' ／ 完了 ' + done + ' ／ ビラ済 ' + flyered + (held ? ' ／ 保留 ' + held : '') + '）' + (shown.length !== rows.length ? ' → 表示 ' + shown.length + ' 件' : '') + '</span>'
     + '</div>';
   html += '<div class="cost-detail-section"><table class="ledger-table"><thead><tr>'
     + '<th class="lg-c" style="width:34px;" title="表示中の戸別をまとめて選択／解除（工事調書の選択印刷用）"><input type="checkbox" id="lg-print-all"></th>'
@@ -20129,6 +20151,7 @@ function renderListLedgerMode(rows, container){
     + '<th data-sort="meet" style="width:172px;">打合せ予定 ' + arrow("meet") + '</th>'
     + '<th data-sort="flyer" style="width:42px;" title="ビラ配布済み">ビラ ' + arrow("flyer") + '</th>'
     + '<th data-sort="done" style="width:42px;" title="工事完了">完了 ' + arrow("done") + '</th>'
+    + '<th data-sort="hold" style="width:42px;" title="保留（着工を止めている戸別）。地図では管理番号の右肩に橙色の「保」マークが付きます">保留 ' + arrow("hold") + '</th>'
     + '<th style="width:42px;" title="住民からの承諾書 受領済み">承諾書</th>'
     + '<th style="width:42px;" title="完了書 受領／提出済み">完了書</th>'
     + '<th>備考</th>'
@@ -20149,6 +20172,7 @@ function renderListLedgerMode(rows, container){
     else if(isDone) cls.push("lg-done");
     else if(d.chosho_date === todayS) cls.push("lg-today");
     else if(d.chosho_date === tomoS) cls.push("lg-tomorrow");
+    if(lg.hold) cls.push("lg-hold");   // 完了・仮受付と重なっても保留の色を出す（CSS側で後勝ち）
     if(_ledgerHighlightKey && tk === _ledgerHighlightKey) cls.push("lg-hl");
     const tCell = (f, v) => lgEditableField(r, f)
       ? '<span class="lg-edit" data-f="' + f + '" title="クリックで編集">' + (escapeHtml(v || "") || "<span style='color:#b8c2cc;'>―</span>") + '</span>'
@@ -20172,6 +20196,7 @@ function renderListLedgerMode(rows, container){
     const mapReg = isMapRegistered(d.chosho_mgmt_no);
     html += '<td>' + tCell("mgmt", d.chosho_mgmt_no)
       + (isProv ? '<span class="lg-prov-badge">仮</span>' : '')
+      + (lg.hold ? '<span class="lg-hold-badge" title="保留（地図でも管理番号の右肩に「保」マークが付きます）">保</span>' : '')
       + '<span class="lg-dwg-ind" title="' + (lgHasDrawing(r) ? "図面・積算データあり" : "図面未作成（📐ボタンで台帳の情報を流し込んで新規作成）") + '">' + (lgHasDrawing(r) ? "📄" : "－") + '</span>'
       + '<span class="lg-map-ind" title="' + (mapReg ? "地図に登録済み（建物にこの管理番号をリンク済み）" : "地図に未登録（地図で建物にこの管理番号をリンクすると🗺️になります）") + '">' + (mapReg ? "🗺️" : "－") + '</span></td>'
       + '<td>' + tCell("name", d.chosho_cust_name) + '</td>'
@@ -20194,6 +20219,8 @@ function renderListLedgerMode(rows, container){
     // ビラ・完了
     html += '<td class="lg-c"><input type="checkbox" data-f="flyer"' + (lg.flyer ? " checked" : "") + (enabled ? "" : " disabled") + ' title="ビラ配布済み"></td>';
     html += '<td class="lg-c"><input type="checkbox" data-f="done"' + (isDone ? " checked" : "") + (lgEditableField(r, "done") ? "" : " disabled") + ' title="工事完了"></td>';
+    // 保留（着工を止める印）。地図側は管理番号でこの値を見て「保」マークを出す
+    html += '<td class="lg-c"><input type="checkbox" data-f="hold"' + (lg.hold ? " checked" : "") + (enabled ? "" : " disabled") + ' title="保留（地図の管理番号の右肩に「保」マークを表示）"></td>';
     // 承諾書・完了書
     html += '<td class="lg-c"><input type="checkbox" data-f="consent"' + (lg.consent ? " checked" : "") + (enabled ? "" : " disabled") + ' title="住民からの承諾書 受領済み"></td>';
     html += '<td class="lg-c"><input type="checkbox" data-f="compdoc"' + (lg.compdoc ? " checked" : "") + (enabled ? "" : " disabled") + ' title="完了書 受領／提出済み"></td>';
@@ -20210,7 +20237,7 @@ function renderListLedgerMode(rows, container){
     html += '</tr>';
   });
   if(shown.length === 0){
-    html += '<tr><td colspan="15" style="text-align:center;color:#667482;padding:14px;">表示できる戸別がありません（「＋ 新規行」で台帳から戸別を作成できます）</td></tr>';
+    html += '<tr><td colspan="16" style="text-align:center;color:#667482;padding:14px;">表示できる戸別がありません（「＋ 新規行」で台帳から戸別を作成できます）</td></tr>';
   }
   html += '</tbody></table></div>';
   container.innerHTML = html;
@@ -20977,6 +21004,7 @@ function bindLedgerHandlers(container){
     if(t.id === "lg-only-pending"){ _ledgerOnlyPending = t.checked; renderListTable(); return; }
     if(t.id === "lg-only-noflyer"){ _ledgerOnlyNoFlyer = t.checked; renderListTable(); return; }
     if(t.id === "lg-only-nodwg"){ _ledgerOnlyNoDwg = t.checked; renderListTable(); return; }
+    if(t.id === "lg-only-hold"){ _ledgerOnlyHold = t.checked; renderListTable(); return; }
     if(t.id === "lg-print-all"){
       // 表示中の印刷可能な戸別をまとめて選択／解除（絞り込み中はその範囲のみ）
       const printable = Object.values(_ledgerShown).filter(r => lgLedgerEnabled(r));
@@ -20997,6 +21025,8 @@ function bindLedgerHandlers(container){
     else if(f === "flyer"){ setLedger(tk, { flyer: t.checked }); renderListTable(); }
     else if(f === "consent"){ setLedger(tk, { consent: t.checked }); renderListTable(); }
     else if(f === "compdoc"){ setLedger(tk, { compdoc: t.checked }); renderListTable(); }
+    // 保留は地図の「保」マークに直結するので、地図を開いたままでも即座に描き直す
+    else if(f === "hold"){ setLedger(tk, { hold: t.checked }); try { if(window.__mapRefreshObjects) window.__mapRefreshObjects(); } catch(_){} renderListTable(); }
     else if(f === "done"){ lgWriteCaseField(row, "status", t.checked ? "completed" : "in_progress"); row._amtCache = undefined; renderListTable(); }
     else if(f === "note"){ setLedger(tk, { note: t.value.trim() }); }
     else if(f === "contractor"){ setContractor(tk, t.value); }
@@ -23441,7 +23471,7 @@ window.addEventListener("DOMContentLoaded", init);
                             // 広げるほど確定しやすいが、素早く近接2頂点を打つ操作と競合しうる（主に時間窓DBLTAP_MS=200msで区別）。現場調整可。
   var mapSnapTarget = null; // 直近のスナップ先 {x,y,kind:'endpoint'|'segment'} or null（インジケータ描画用）
   // G3 印刷範囲枠
-  var PAPER_MM = { A4: [210, 297], A3: [297, 420], B4: [257, 364] };  // [短辺mm, 長辺mm]（縦基準）
+  var PAPER_MM = { A4: [210, 297], A3: [297, 420], A2: [420, 594], B4: [257, 364] };  // [短辺mm, 長辺mm]（縦基準）
   var PRINT_DPI = 200;      // 印刷ラスタライズ解像度
   var _printDrag = null;    // 印刷枠ドラッグ中 {mode,corner,sx,sy,ox,oy,ow,oh}
   var _vecRect = null;      // 範囲指定ベクター：ドラッグ中の範囲枠（ワールド座標）{x0,y0,x1,y1}
@@ -27044,17 +27074,20 @@ window.addEventListener("DOMContentLoaded", init);
     if(!node) return false;
     node.setAttribute("points", o.points.map(function(p){ return p[0] + "," + p[1]; }).join(" "));
     if(key === "building"){
-      // 建物は polygon の直後に管理番号ラベル(text)が並ぶ（renderBuildingLayer）。あれば中心へ追従させる
+      // 建物は polygon の直後に管理番号ラベル／保留マーク(text)が並ぶ（renderBuildingLayer）。
+      // 各テキストは中心からの相対位置を data-dx/dy に持たせてあるので、まとめて中心へ追従させる。
+      var minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+      for(var i = 0; i < o.points.length; i++){
+        var pp = o.points[i];
+        if(pp[0] < minx) minx = pp[0]; if(pp[0] > maxx) maxx = pp[0];
+        if(pp[1] < miny) miny = pp[1]; if(pp[1] > maxy) maxy = pp[1];
+      }
+      var bcx = (minx + maxx) / 2, bcy = (miny + maxy) / 2;
       var lab = node.nextElementSibling;
-      if(lab && lab.tagName && lab.tagName.toLowerCase() === "text"){
-        var minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
-        for(var i = 0; i < o.points.length; i++){
-          var pp = o.points[i];
-          if(pp[0] < minx) minx = pp[0]; if(pp[0] > maxx) maxx = pp[0];
-          if(pp[1] < miny) miny = pp[1]; if(pp[1] > maxy) maxy = pp[1];
-        }
-        lab.setAttribute("x", (minx + maxx) / 2);
-        lab.setAttribute("y", (miny + maxy) / 2);
+      while(lab && lab.getAttribute && lab.getAttribute("data-bld-lab")){
+        lab.setAttribute("x", bcx + (parseFloat(lab.getAttribute("data-dx")) || 0));
+        lab.setAttribute("y", bcy + (parseFloat(lab.getAttribute("data-dy")) || 0));
+        lab = lab.nextElementSibling;
       }
     }
     return true;
@@ -27118,6 +27151,18 @@ window.addEventListener("DOMContentLoaded", init);
     }
     return { fill: o.fill || fill, miniFill: o.fill || miniFill, stroke: o.stroke || stroke, linked: linked };
   }
+  /* 建物に重ねる文字（管理番号の下3桁・保留マーク）。中心からの相対位置 dx,dy を data 属性に残し、
+     ドラッグ中の軽量描画（updateObjGeometryInDom）が図形の移動に追従できるようにしておく。 */
+  function bldLabelText(cx, cy, dx, dy, fs, halo, color, text){
+    return '<text data-bld-lab="1" data-dx="' + dx + '" data-dy="' + dy + '"'
+      + ' x="' + (cx + dx) + '" y="' + (cy + dy) + '" font-size="' + fs + '" fill="' + color + '"'
+      + ' stroke="#ffffff" stroke-width="' + halo + '" paint-order="stroke" text-anchor="middle"'
+      + ' dominant-baseline="central" font-family="sans-serif" font-weight="700" pointer-events="none">' + text + '</text>';
+  }
+  /* 受付台帳で「保留」にした戸別か。台帳側の isCaseOnHold（管理番号で判定）を参照する。 */
+  function bldOnHold(mgmtNo){
+    try { return !!(typeof isCaseOnHold === "function" && isCaseOnHold(mgmtNo)); } catch(_){ return false; }
+  }
   function renderBuildingLayer(){
     var g = el("map-layer-building"); if(!g || !current) return;
     var L = current.layers.building;
@@ -27130,15 +27175,22 @@ window.addEventListener("DOMContentLoaded", init);
       var focus = (o.id === _focusBuildingId) ? ' class="map-bld-focus"' : "";
       var poly = '<polygon' + focus + ' data-obj-id="' + esc(o.id) + '" data-layer="building" points="' + pts + '" fill="' + esc(fill) + '" stroke="' + esc(stroke) + '" stroke-width="' + (linked ? 2.4 : 1.6) + '" stroke-dasharray="' + (linked ? "0" : "5 3") + '" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>';
       // 戸別にリンク（登録）済みの建物は、中心に管理番号の下3桁を表示（白フチ付き・印刷にも出る）
+      // 受付台帳で「保留」にした戸別は、その番号の右肩に橙色の「保」マークを添える（番号が無い場合は中心）
       var lab = "";
       var l3 = linked ? mgmtLast3(o.linkMgmtNo) : "";
-      if(l3){
+      var onHold = linked && bldOnHold(o.linkMgmtNo);
+      if(l3 || onHold){
         var minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
         for(var i = 0; i < o.points.length; i++){ var pp = o.points[i]; if(pp[0] < minx) minx = pp[0]; if(pp[0] > maxx) maxx = pp[0]; if(pp[1] < miny) miny = pp[1]; if(pp[1] > maxy) maxy = pp[1]; }
         var bw = maxx - minx, bh = maxy - miny, cx = (minx + maxx) / 2, cy = (miny + maxy) / 2;
         var fs = Math.max(3, Math.min(bw * 0.42, bh * 0.7));   // 3桁が建物内に収まるサイズ
         var halo = Math.max(0.4, fs * 0.16);
-        lab = '<text x="' + cx + '" y="' + cy + '" font-size="' + fs + '" fill="#b3261e" stroke="#ffffff" stroke-width="' + halo + '" paint-order="stroke" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-weight="700" pointer-events="none">' + esc(l3) + '</text>';
+        if(l3) lab += bldLabelText(cx, cy, 0, 0, fs, halo, "#b3261e", esc(l3));
+        if(onHold){
+          var hfs = fs * (l3 ? 0.78 : 1);                       // 番号があれば少し小さくして右肩に添える
+          var hdx = l3 ? fs * 0.88 : 0, hdy = l3 ? -fs * 0.52 : 0;
+          lab += bldLabelText(cx, cy, hdx, hdy, hfs, Math.max(0.4, hfs * 0.22), "#e65100", "保");
+        }
       }
       return poly + lab;
     }).join("");
@@ -28429,7 +28481,10 @@ window.addEventListener("DOMContentLoaded", init);
       // 用紙キーワード指定：仮想プリンタ/ドライバの用紙・向き設定と一致させ、カスタムmm指定が無視される問題を回避
       pageSize = paperKey + (landscape ? " landscape" : " portrait");
     } else {
-      // B4等（JIS B4=257×364mmはCSSキーワードのISO B4と寸法が異なるため）はミリ指定を維持
+      // B4・A2 はミリ指定を維持。
+      //  ・JIS B4=257×364mm は CSSキーワードの ISO B4 と寸法が違う
+      //  ・A2 は CSS の用紙キーワードに存在しない（A5/A4/A3/B5/B4 等のみ）
+      // どちらも印刷ダイアログ側で用紙を選ぶ必要があるため、下のバーに用紙名を出している。
       pageSize = wmm + 'mm ' + hmm + 'mm';
     }
     var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>印刷</title><style>'
@@ -28440,7 +28495,9 @@ window.addEventListener("DOMContentLoaded", init);
       + '@media print{.bar{display:none;}}'
       + '</style></head><body' + (pngDataUri ? '' : ' onload="setTimeout(function(){try{window.focus();window.print();}catch(e){}},200);"') + '>'
       + '<div class="bar"><button onclick="window.print()">🖨 印刷</button><button onclick="window.close()">閉じる</button>'
-      + '<span style="font-size:12px;color:#555;margin-left:10px;">印刷設定: 用紙 ' + esc(paperKey || "A4") + '・向き ' + (landscape ? "横" : "縦") + '・倍率 100%・余白 なし</span>'
+      + '<span style="font-size:12px;color:#555;margin-left:10px;">印刷設定: 用紙 ' + esc(paperKey || "A4") + '・向き ' + (landscape ? "横" : "縦") + '・倍率 100%・余白 なし'
+      + ((paperKey === "A4" || paperKey === "A3") ? '' : '<b style="color:#c62828;">（印刷ダイアログで用紙 ' + esc(paperKey) + ' を選んでください）</b>')
+      + '</span>'
       + '</div>'
       + '<div class="stage">'
       + (pngDataUri ? '<img class="bglayer" src="' + pngDataUri + '" onload="setTimeout(function(){try{window.focus();window.print();}catch(e){}},150);">' : '')
@@ -28874,6 +28931,8 @@ window.addEventListener("DOMContentLoaded", init);
   window.openMapView = openMapView;
   window.closeMapView = closeMapView;
   window.__mapLinkedMgmtSet = mapLinkedMgmtSet;   // 受付台帳の🗺️登録済み判定に使用
+  // 受付台帳の「保留」チェックから呼ぶ再描画。地図データは一切変更しないので保存・競合マージには影響しない。
+  window.__mapRefreshObjects = function(){ try { if(current) renderObjects(); } catch(_){} };
   window.mapCollectForExport = mapCollectForExport;     // 物件エクスポートに地図を内包
   window.mapRestoreFromSnapshot = mapRestoreFromSnapshot; // 物件インポートで地図を復元
 })();
