@@ -23847,6 +23847,7 @@ window.addEventListener("DOMContentLoaded", init);
   var _txAngleCal = null;   // テキスト角度2点指定中の状態 { objId, stage:0|1, p1:{x,y}|null, hover:{x,y}|null }
   var _txResize = null;     // テキスト拡縮ドラッグ中の状態 { objId, size0, anchorScreen:{x,y}, dist0 }
   var _banchiDrag = null;   // 番地ラベルのドラッグ中の状態 { objId, off0:{dx,dy}, w0 }
+  var _noDrag = null;       // 管理番号ラベルのドラッグ中の状態 { objId, off0:{dx,dy}, w0 }
   var TEXT_STYLE_PRESETS = [
     { name: "大見出し", color: "#1e3a5f", bold: true,  sizeMul: 2.2 },
     { name: "見出し",   color: "#1e3a5f", bold: true,  sizeMul: 1.5 },
@@ -24418,7 +24419,7 @@ window.addEventListener("DOMContentLoaded", init);
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType });
     ensureDocListeners();
     // 2本目以降の指 → ピンチ（作図中でもパス自体は保持、頂点は置かない＝誤線防止）
-    if(pointers.size >= 2){ panState = null; if(_vecRect){ _vecRect = null; renderVecRectOverlay(); } if(_marq){ _marq = null; renderMarqueeOverlay(); } if(gesture === "bgcal"){ _bgCalDrag = null; loupeHide(); } if(gesture === "bgcropdrag"){ _bgCropDrag = null; } if(gesture === "txresize"){ _txResize = null; } if(gesture === "banchidrag"){ _banchiDrag = null; } gesture = "pinch"; beginPinch(); updateCursor(); return; }
+    if(pointers.size >= 2){ panState = null; if(_vecRect){ _vecRect = null; renderVecRectOverlay(); } if(_marq){ _marq = null; renderMarqueeOverlay(); } if(gesture === "bgcal"){ _bgCalDrag = null; loupeHide(); } if(gesture === "bgcropdrag"){ _bgCropDrag = null; } if(gesture === "txresize"){ _txResize = null; } if(gesture === "banchidrag"){ _banchiDrag = null; } if(gesture === "nodrag"){ _noDrag = null; } gesture = "pinch"; beginPinch(); updateCursor(); return; }
     down = { id: e.pointerId, cx: e.clientX, cy: e.clientY, world: screenToWorld(e.clientX, e.clientY) };
     if(_txAngleCal){
       txAngleClick(down.world);
@@ -24547,6 +24548,8 @@ window.addEventListener("DOMContentLoaded", init);
       if(hitTextResizeHandle(e.clientX, e.clientY)){
         beginTxResize(e); updateCursor(); return;
       }
+      var nh = hitNoHandle(e.clientX, e.clientY);
+      if(nh){ beginNoDrag(e, nh); updateCursor(); return; }
       var bh = hitBanchiLabel(e.clientX, e.clientY);
       if(bh){ beginBanchiDrag(e, bh); updateCursor(); return; }
       var vi = hitVertex(e.clientX, e.clientY);
@@ -24654,6 +24657,16 @@ window.addEventListener("DOMContentLoaded", init);
       }
       e.preventDefault(); return;
     }
+    if(gesture === "nodrag" && _noDrag){
+      var sn = getSelected();
+      if(sn && sn.layer === "building" && sn.obj.id === _noDrag.objId){
+        var wn = screenToWorld(e.clientX, e.clientY);
+        sn.obj.noOff = { dx: _noDrag.off0.dx + (wn.x - _noDrag.w0.x),
+                         dy: _noDrag.off0.dy + (wn.y - _noDrag.w0.y) };
+        renderBuildingLayer(); renderSelectionOverlay();
+      }
+      e.preventDefault(); return;
+    }
     if(gesture === "banchidrag" && _banchiDrag){
       var sb = getSelected();
       if(sb && sb.layer === "building" && sb.obj.id === _banchiDrag.objId){
@@ -24736,8 +24749,8 @@ window.addEventListener("DOMContentLoaded", init);
       var otr2 = _txResize && txObjById(_txResize.objId);
       gesture = null; _txResize = null; renderObjects(); renderSelectionOverlay(); flushSave();
       if(otr2) txRememberStyle(otr2);
-    } else if(gesture === "banchidrag"){
-      gesture = null; _banchiDrag = null; _dragMoved = false;
+    } else if(gesture === "banchidrag" || gesture === "nodrag"){
+      gesture = null; _banchiDrag = null; _noDrag = null; _dragMoved = false;
       renderObjects(); renderSelectionOverlay();
       var selB = getSelected();
       if(selB) renderDetail(selB.obj);   // 「位置を戻す」ボタンの出し入れを反映
@@ -27544,13 +27557,37 @@ window.addEventListener("DOMContentLoaded", init);
     var addr = (row && row.data) ? row.data.chosho_cust_addr : "";
     try { return (typeof addrChomeNumber === "function") ? addrChomeNumber(addr) : ""; } catch(_){ return ""; }
   }
+  /* 建物の外接矩形。ラベルの位置計算で何度も使うのでまとめておく。 */
+  function bldBBox(o){
+    if(!o || !Array.isArray(o.points) || o.points.length < 3) return null;
+    var minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+    for(var i = 0; i < o.points.length; i++){
+      var pp = o.points[i];
+      if(pp[0] < minx) minx = pp[0]; if(pp[0] > maxx) maxx = pp[0];
+      if(pp[1] < miny) miny = pp[1]; if(pp[1] > maxy) maxy = pp[1];
+    }
+    return { w: maxx - minx, h: maxy - miny, cx: (minx + maxx) / 2, cy: (miny + maxy) / 2 };
+  }
+  /* 管理番号（下3桁）の文字サイズ。3桁が建物内に収まる大きさ。ただし読める大きさは下回らない。 */
+  function bldNoSize(bb){
+    return Math.max(bldMinLabelWorld(MAP_MIN_NO_MM), Math.min(bb.w * 0.42, bb.h * 0.7));
+  }
+  /* 管理番号の表示位置（建物中心からの相対）。既定は建物の中心。
+     ユーザーがハンドルをドラッグすると o.noOff（ワールド単位）に控え、以後はそこに出す。
+     「保」マークと、まだ位置を動かしていない番地は、この番号にくっついて動く。 */
+  function bldNoPos(o){
+    var off = o && o.noOff;
+    return { dx: (off && isFinite(off.dx)) ? off.dx : 0,
+             dy: (off && isFinite(off.dy)) ? off.dy : 0 };
+  }
   /* 番地の表示位置（建物中心からの相対）と文字サイズ。既定は管理番号の真下。
      ユーザーがドラッグすると o.banchiOff（ワールド単位）に控え、以後はそこに出す。 */
-  function bldBanchiPos(o, cx, cy, fs){
+  function bldBanchiPos(o, cx, cy, fs, noOff){
     var size = Math.max(bldMinLabelWorld(MAP_MIN_BANCHI_MM), fs * 0.62);
+    var n = noOff || bldNoPos(o);
     var off = o.banchiOff;
-    var dx = (off && isFinite(off.dx)) ? off.dx : 0;
-    var dy = (off && isFinite(off.dy)) ? off.dy : (fs * 0.82);
+    var dx = (off && isFinite(off.dx)) ? off.dx : n.dx;
+    var dy = (off && isFinite(off.dy)) ? off.dy : (n.dy + fs * 0.82);
     return { dx: dx, dy: dy, size: size, x: cx + dx, y: cy + dy };
   }
   /* 受付台帳で「保留」にした戸別か。台帳側の isCaseOnHold（管理番号で判定）を参照する。 */
@@ -27583,15 +27620,16 @@ window.addEventListener("DOMContentLoaded", init);
         var bw = maxx - minx, bh = maxy - miny, cx = (minx + maxx) / 2, cy = (miny + maxy) / 2;
         var fs = Math.max(minNo, Math.min(bw * 0.42, bh * 0.7));   // 3桁が建物内に収まるサイズ。ただし読める大きさは下回らない
         var halo = Math.max(0.4, fs * 0.16);
-        if(l3) lab += bldLabelText(cx, cy, 0, 0, fs, halo, "#b3261e", esc(l3));
+        var np = bldNoPos(o);                                   // 管理番号はハンドルで好きな位置へ動かせる
+        if(l3) lab += bldLabelText(cx, cy, np.dx, np.dy, fs, halo, "#b3261e", esc(l3));
         if(onHold){
           var hfs = fs * (l3 ? 0.78 : 1);                       // 番号があれば少し小さくして右肩に添える
-          var hdx = l3 ? fs * 0.88 : 0, hdy = l3 ? -fs * 0.52 : 0;
+          var hdx = np.dx + (l3 ? fs * 0.88 : 0), hdy = np.dy + (l3 ? -fs * 0.52 : 0);   // 番号に付いて動く
           lab += bldLabelText(cx, cy, hdx, hdy, hfs, Math.max(0.4, hfs * 0.22), "#e65100", "保");
         }
         // 番地（丁目以降の数字）。管理番号とは別の文字色にし、ドラッグで好きな位置へ動かせる
         if(bt){
-          var bp = bldBanchiPos(o, cx, cy, fs);
+          var bp = bldBanchiPos(o, cx, cy, fs, np);
           lab += bldLabelText(cx, cy, bp.dx, bp.dy, bp.size, Math.max(0.35, bp.size * 0.2), "#263238", esc(bt));
         }
       }
@@ -28107,15 +28145,10 @@ window.addEventListener("DOMContentLoaded", init);
     var sel = getSelected();
     if(!sel || sel.layer !== "building") return null;
     var o = sel.obj;
-    var t = bldBanchiText(o); if(!t || !Array.isArray(o.points) || o.points.length < 3) return null;
-    var minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
-    for(var i = 0; i < o.points.length; i++){
-      var pp = o.points[i];
-      if(pp[0] < minx) minx = pp[0]; if(pp[0] > maxx) maxx = pp[0];
-      if(pp[1] < miny) miny = pp[1]; if(pp[1] > maxy) maxy = pp[1];
-    }
-    var fs = Math.max(bldMinLabelWorld(MAP_MIN_NO_MM), Math.min((maxx - minx) * 0.42, (maxy - miny) * 0.7));
-    var bp = bldBanchiPos(o, (minx + maxx) / 2, (miny + maxy) / 2, fs);
+    var t = bldBanchiText(o); if(!t) return null;
+    var bb = bldBBox(o); if(!bb) return null;
+    var fs = bldNoSize(bb);
+    var bp = bldBanchiPos(o, bb.cx, bb.cy, fs);
     var w = screenToWorld(cx, cy);
     var pad = 8 / view.scale;                                  // 指・ペン用の余白（画面8px相当）
     var halfW = mapCbTextW(t, bp.size) * 0.5 + pad, halfH = bp.size * 0.7 + pad;
@@ -28124,6 +28157,33 @@ window.addEventListener("DOMContentLoaded", init);
   function beginBanchiDrag(e, hit){
     _banchiDrag = { objId: hit.obj.id, off0: hit.off0, w0: screenToWorld(e.clientX, e.clientY) };
     gesture = "banchidrag"; _dragMoved = false; capturePointer(e.pointerId); pushUndo();
+  }
+  /* 管理番号を動かすためのハンドルの位置（ワールド座標）。番号の左上に、画面上で一定の距離だけ離して置く。
+     描画（renderSelectionOverlay）と当たり判定（hitNoHandle）で同じ関数を使い、ズレないようにする。 */
+  function bldNoHandlePos(o){
+    if(!o || !o.linkMgmtNo) return null;
+    if(!mgmtLast3(o.linkMgmtNo)) return null;                   // 番号が出ていない建物にはハンドルも出さない
+    var bb = bldBBox(o); if(!bb) return null;
+    var fs = bldNoSize(bb), np = bldNoPos(o), gap = 9 / view.scale;
+    return { x: bb.cx + np.dx - fs * 0.85 - gap, y: bb.cy + np.dy - fs * 0.55 - gap,
+             off0: { dx: np.dx, dy: np.dy } };
+  }
+  /* 管理番号の移動ハンドルを掴んだか（選択中の建物のみ。テキスト拡縮ハンドルと同じ判定の仕方）。
+     番号の文字そのものは掴めるようにしていない。番号は建物の中央に出るので、文字を掴める形にすると
+     「建物を真ん中からドラッグして動かす」という今までの操作を奪ってしまうため。 */
+  function hitNoHandle(cx, cy){
+    var sel = getSelected();
+    if(!sel || sel.layer !== "building") return null;
+    var h = bldNoHandlePos(sel.obj); if(!h) return null;
+    var rect = stage.getBoundingClientRect();
+    var rr = (view.rot || 0) * Math.PI / 180, rc = Math.cos(rr), rs = Math.sin(rr);
+    var rx = h.x * rc - h.y * rs, ry = h.x * rs + h.y * rc;
+    var px = rect.left + rx * view.scale + view.tx, py = rect.top + ry * view.scale + view.ty;
+    return (Math.hypot(cx - px, cy - py) <= 20) ? { obj: sel.obj, off0: h.off0 } : null;   // タッチ指向で20px
+  }
+  function beginNoDrag(e, hit){
+    _noDrag = { objId: hit.obj.id, off0: hit.off0, w0: screenToWorld(e.clientX, e.clientY) };
+    gesture = "nodrag"; _dragMoved = false; capturePointer(e.pointerId); pushUndo();
   }
   function beginTxResize(e){
     var sel = getSelected(); if(!sel) return;
@@ -28174,6 +28234,14 @@ window.addEventListener("DOMContentLoaded", init);
       ? '<polygon points="' + s + '" fill="rgba(255,152,0,0.10)" stroke="#ff9800" stroke-width="2.4" vector-effect="non-scaling-stroke" stroke-dasharray="6 3"/>'
       : '<polyline points="' + s + '" fill="none" stroke="#ff9800" stroke-width="2.4" vector-effect="non-scaling-stroke" stroke-dasharray="6 3"/>';
     html += pts.map(function(p){ return '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="' + (5 / view.scale) + '" fill="#fff" stroke="#ff9800" stroke-width="' + (1.6 / view.scale) + '"/>'; }).join("");
+    if(sel.layer === "building"){
+      // 管理番号を動かすハンドル。頂点ハンドル（橙）と見分けられるよう青にする。
+      var nhp = bldNoHandlePos(o);
+      if(nhp){
+        html += '<circle cx="' + nhp.x + '" cy="' + nhp.y + '" r="' + (6 / view.scale) + '" fill="#fff" stroke="#1565c0" stroke-width="' + (1.6 / view.scale) + '"/>'
+          + '<circle cx="' + nhp.x + '" cy="' + nhp.y + '" r="' + (2.6 / view.scale) + '" fill="#1565c0"/>';
+      }
+    }
     g.innerHTML = html;
   }
 
@@ -28194,6 +28262,9 @@ window.addEventListener("DOMContentLoaded", init);
               + '。<b>この建物を選んだ状態で番地をドラッグ</b>すると好きな位置へ動かせます。'
               + (o.banchiOff ? ' <button type="button" id="map-bld-banchi-reset" style="font-size:11px;padding:1px 6px;">位置を戻す</button>' : '')
               + '</div>'
+              + '<div class="map-detail-info" style="margin:-4px 0 8px;">管理番号（下3桁）は、<b>この建物を選ぶと番号の左上に出る青い丸</b>をドラッグすると好きな位置へ動かせます（「保」マークも一緒に動きます）。'
+              + (o.noOff ? ' <button type="button" id="map-bld-no-reset" style="font-size:11px;padding:1px 6px;">位置を戻す</button>' : '')
+              + '</div>'
             : '')
         + '<label class="map-fld">メモ<textarea id="map-bld-note" rows="3" placeholder="自由メモ">' + esc(o.note || "") + '</textarea></label>'
         + '<div id="map-bld-link-sec"></div>'
@@ -28206,6 +28277,9 @@ window.addEventListener("DOMContentLoaded", init);
       if(note) note.addEventListener("input", function(){ o.note = note.value; scheduleSave(); });
       on("map-bld-banchi-reset", "click", function(){
         pushUndo(); delete o.banchiOff; renderObjects(); renderDetail(o); flushSave();
+      });
+      on("map-bld-no-reset", "click", function(){
+        pushUndo(); delete o.noOff; renderObjects(); renderSelectionOverlay(); renderDetail(o); flushSave();
       });
       on("map-bld-delete", "click", deleteSelected);
       if(typeof renderDetailLink === "function") renderDetailLink(o);   // F4: 管理番号リンク・写真
