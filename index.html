@@ -23764,6 +23764,9 @@ window.addEventListener("DOMContentLoaded", init);
   var LINKED_BLD_FILL   = "rgba(230,81,0,0.18)";   // 薄いオレンジの塗り
   var LINKED_BLD_STROKE = "#e65100";                // オレンジの枠線
   var LINKED_BLD_MINI   = "rgba(230,81,0,0.30)";   // 縮小マップ用（やや濃いめ）
+  var BLD_NO_COLOR      = "#b3261e";                // 管理番号の文字色（「番号色」モードのとき）
+  var BLD_NO_NOCTR      = "#546e7a";                // 同上・施工会社別モードで会社が未割当のとき
+                                                    // 建物の枠線(#78828c)より少し濃い灰。細い文字でも読めるようにするため
   var DRAW_TOOLS = { road: 1, boundary: 1, building: 1, chome: 1, text: 1, pin: 1, signal: 1 };  // 作図系ツール
   var _txPlaceType = "generic";   // テキスト配置時の種類（generic/addr/bldg）・ツール切替をまたいで保持
   var CLICK_THRESH = 5;     // クリック/タップ判定の許容移動量（クライアントpx）
@@ -27483,14 +27486,15 @@ window.addEventListener("DOMContentLoaded", init);
   // 返り値: { fill(本図用), miniFill(縮小マップ用・やや濃い), stroke, linked }
   function bldColors(o){
     var linked = !!o.linkMgmtNo;
-    var fill, miniFill, stroke;
+    var fill, miniFill, stroke, noColor = BLD_NO_COLOR;
     if(_bldColorMode === "contractor" && linked){
       // 番号→施工会社 の色。戸別の割当が最優先、未割当でも業者番号（管理番号の左から4桁目）から判定する。
       var nm = "", cc = "";
       try { if(typeof contractorForMgmtNo === "function") nm = contractorForMgmtNo(o.linkMgmtNo); } catch(_){}
       try { if(nm && typeof calContractorColor === "function") cc = calContractorColor(nm); } catch(_){}
-      if(cc){ fill = hexToRgba(cc, 0.20); miniFill = hexToRgba(cc, 0.34); stroke = cc; }
-      else { fill = "rgba(120,130,140,0.16)"; miniFill = "rgba(120,130,140,0.30)"; stroke = "#78828c"; } // 番号あり・施工会社未割当＝グレー
+      // 管理番号の文字も同じ色にする。枠線が細くて色が見分けにくい縮尺でも、番号の色で会社が分かる。
+      if(cc){ fill = hexToRgba(cc, 0.20); miniFill = hexToRgba(cc, 0.34); stroke = cc; noColor = cc; }
+      else { fill = "rgba(120,130,140,0.16)"; miniFill = "rgba(120,130,140,0.30)"; stroke = "#78828c"; noColor = BLD_NO_NOCTR; } // 番号あり・施工会社未割当＝グレー
     } else if(linked){
       fill = LINKED_BLD_FILL; miniFill = LINKED_BLD_MINI; stroke = LINKED_BLD_STROKE;
     } else {
@@ -27499,7 +27503,7 @@ window.addEventListener("DOMContentLoaded", init);
       miniFill = _bldNoFillUnlinked ? "none" : "rgba(46,125,50,0.22)";
       stroke = (current.layers.building && current.layers.building.color) || "#2e7d32";
     }
-    return { fill: o.fill || fill, miniFill: o.fill || miniFill, stroke: o.stroke || stroke, linked: linked };
+    return { fill: o.fill || fill, miniFill: o.fill || miniFill, stroke: o.stroke || stroke, linked: linked, noColor: noColor };
   }
   /* 建物に重ねる文字（管理番号の下3桁・保留マーク）。中心からの相対位置 dx,dy を data 属性に残し、
      ドラッグ中の軽量描画（updateObjGeometryInDom）が図形の移動に追従できるようにしておく。 */
@@ -27621,7 +27625,7 @@ window.addEventListener("DOMContentLoaded", init);
         var fs = Math.max(minNo, Math.min(bw * 0.42, bh * 0.7));   // 3桁が建物内に収まるサイズ。ただし読める大きさは下回らない
         var halo = Math.max(0.4, fs * 0.16);
         var np = bldNoPos(o);                                   // 管理番号はハンドルで好きな位置へ動かせる
-        if(l3) lab += bldLabelText(cx, cy, np.dx, np.dy, fs, halo, "#b3261e", esc(l3));
+        if(l3) lab += bldLabelText(cx, cy, np.dx, np.dy, fs, halo, bc.noColor, esc(l3));
         if(onHold){
           var hfs = fs * (l3 ? 0.78 : 1);                       // 番号があれば少し小さくして右肩に添える
           var hdx = np.dx + (l3 ? fs * 0.88 : 0), hdy = np.dy + (l3 ? -fs * 0.52 : 0);   // 番号に付いて動く
@@ -27651,8 +27655,8 @@ window.addEventListener("DOMContentLoaded", init);
     var note = el("map-bld-cmode-note");
     if(note){
       note.textContent = (_bldColorMode === "contractor")
-        ? "番号を付けた建物を施工会社ごとの色で表示します（受付台帳の割当が無い建物は業者番号＝管理番号の左から4桁目で判定・どちらも無ければグレー／番号なしは緑）。"
-        : "番号を付けた建物をオレンジ、その他を緑で表示します。";
+        ? "番号を付けた建物を施工会社ごとの色で表示します。管理番号の文字も同じ色になるので、番号だけでどの会社の担当か分かります（受付台帳の割当が無い建物は業者番号＝管理番号の左から4桁目で判定・どちらも無ければグレー／番号なしは緑）。"
+        : "番号を付けた建物をオレンジ、その他を緑で表示します。管理番号の文字は赤です。";
     }
     renderCtrLegend();
   }
