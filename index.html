@@ -1061,6 +1061,9 @@
   body.list-print-mode .list-search-row,
   body.list-print-mode .sub-controls,
   body.list-print-mode .list-mode-tabs { display: none !important; }
+  /* 印刷レイアウト調整パネルは操作用UIなので、印刷モードでは画面上でも紙でも出さない
+     （.ledger-controls と違ってパネルは別の要素なので、個別に消す必要がある） */
+  body.list-print-mode .lgw-panel { display: none !important; }
   /* 印刷では高さ制限・スクロールを外す（overflow:auto のままだと、環境によっては
      表示領域から溢れた分が切れて印刷されない・スクロールバーが紙に写る恐れがある） */
   body.list-print-mode .list-view-body { padding: 0; background: #fff; overflow: visible !important; height: auto !important; max-height: none !important; }
