@@ -22176,6 +22176,9 @@ function bindLedgerHandlers(container){
 let _matOnlyDone = true;     // 下見完了の戸別だけを数えるか
 function surveyDoneOf(row){ return !!(row && row.data && row.data.survey_done); }
 function surveyDoneAtOf(row){ return String((row && row.data && row.data.survey_done_at) || ""); }
+/* 発注材料数量に出さない単位。「式」＝工事一式、「h」＝時間あたりの作業費で、
+   どちらも発注する“もの”ではない（金額の集計には引き続き入る）。 */
+const MAT_NON_MATERIAL_UNITS = ["式", "h"];
 function renderListMaterialsMode(rows, container){
   const target = _matOnlyDone ? rows.filter(surveyDoneOf) : rows.slice();
   const doneN = rows.filter(surveyDoneOf).length;
@@ -22183,6 +22186,7 @@ function renderListMaterialsMode(rows, container){
   // 集計。同じ品番は戸別をまたいで足し合わせる。
   const byId = {}, order = [];
   let counted = 0, naNoDwg = 0, naEnc = 0;
+  const excluded = {};   // 材料ではないので外した行（品名→件数）。下に注記として出す。
   target.forEach(r => {
     const bom = getRowBomAggregate(r);
     if(!bom){
@@ -22192,6 +22196,12 @@ function renderListMaterialsMode(rows, container){
     counted++;
     const seenHere = {};
     bom.items.forEach(it => {
+      // 単位が「式」「h」＝工事費・作業費。材料ではないので発注の表からは外す
+      if(MAT_NON_MATERIAL_UNITS.indexOf(String(it.unit || "").trim()) >= 0){
+        const nm = it.name || it.model || "";
+        if(nm) excluded[nm] = (excluded[nm] || 0) + 1;
+        return;
+      }
       if(!byId[it.id]){
         byId[it.id] = { id: it.id, model: it.model || "", name: it.name || "", unit: it.unit || "", qty: 0, cases: 0 };
         order.push(it.id);
@@ -22254,9 +22264,13 @@ function renderListMaterialsMode(rows, container){
   html += "</tbody><tfoot><tr>"
     + '<td colspan="4" style="text-align:right;font-weight:700;">品目数</td>'
     + '<td style="text-align:right;font-weight:700;">' + order.length + "</td><td></td></tr></tfoot></table>";
+  const exNames = Object.keys(excluded);
   html += '<div style="margin-top:8px;font-size:11px;color:#667482;">'
     + "※ 数量は、下見で入力した内容から出した必要数です。予備・端数は含みません。<br>"
-    + "※ ケーブル類は長さ（m）、器具は台・個で出ています。単位の欄をご確認ください。</div>";
+    + "※ ケーブル類は長さ（m）、器具は台・個で出ています。単位の欄をご確認ください。<br>"
+    + "※ 単位が「式」「h」の行（工事費・作業費）は材料ではないため、この表には出しません"
+    + (exNames.length ? "（" + exNames.map(escapeHtml).join("・") + "）" : "")
+    + "。金額の集計には今までどおり入っています。</div>";
   html += "</div>";
   container.innerHTML = html;
   bindMaterialsMode(container, order.map(id => byId[id]));
