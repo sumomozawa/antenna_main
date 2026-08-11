@@ -4465,6 +4465,7 @@
       <span id="rt-locks-list" class="rt-locks" style="display:none;"></span>
       <button id="btn-list-select-folder" title="フォルダ内のファイルをサブフォルダ含めて再帰的に読込 (Chrome/Edge)">📁 フォルダ選択(再帰)</button>
       <button id="btn-list-select-files" title="JSON/.hyb/.encファイルを個別/複数選択">📄 ファイル選択</button>
+      <button id="btn-list-dup" title="同じ管理番号のファイルが重なっているところ（iPad/iPhoneで保存すると増える「◯◯ 2.json」など）を探し、残す方を選んで「管理番号.json」にまとめます。フォルダ選択で読み込んだ後に使えます。" style="background:#00838f;">🧹 重複ファイルを整理</button>
       <button id="btn-list-unlock" title="ハイブリッド(.hyb)は氏名・電話・住所・写真を、全暗号化(.enc)は本体をまとめて復号" style="background:#8e24aa;">🔓 一括復号</button>
       <button id="btn-list-bulk-reenc" title="選択した複数ファイルを一括で別パスワード／別方式に再暗号化して上書き保存" style="background:#e65100;">🔄 一括再暗号化</button>
       <button id="btn-list-bulk-plain" title="暗号化ファイル(.hyb/.enc)を一括で復号し、暗号化なしの平文(.json)として保存し直す（個人情報が平文になります）" style="background:#546e7a;">📄 一括平文化</button>
@@ -5106,6 +5107,26 @@
 <!-- 地図の下地/参照地図取込は pickFile() 経由（静的inputはAndroid/DropboxのSAFで壊れるため廃止） -->
 
 <!-- 📒 フォルダ読み込み時の台帳マージ確認ダイアログ（管理番号重複・件ごと） -->
+<style>
+#dup-modal .modal{min-width:640px;max-width:900px;max-height:82vh;overflow:auto;}
+#dup-modal .dup-grp{border:1px solid #dde3ea;border-radius:5px;margin:8px 0;overflow:hidden;}
+#dup-modal .dup-grp-h{background:#eef6f7;padding:5px 9px;font-weight:600;font-size:12px;color:#00575f;}
+#dup-modal table.dup-tbl{width:100%;border-collapse:collapse;font-size:11.5px;}
+#dup-modal table.dup-tbl th,#dup-modal table.dup-tbl td{border:1px solid #e3e7eb;padding:3px 7px;text-align:left;white-space:nowrap;}
+#dup-modal table.dup-tbl th{background:#f4f7fa;color:#1e3a5f;}
+#dup-modal table.dup-tbl tr.dup-keep td{background:#e8f5e9;font-weight:600;}
+</style>
+<div class="modal-backdrop" id="dup-modal">
+  <div class="modal">
+    <h3>🧹 同じ管理番号のファイルが重なっています</h3>
+    <div id="dup-body"></div>
+    <div style="display:flex;gap:6px;margin-top:10px;justify-content:flex-end;">
+      <button id="dup-ok" style="background:#00838f;color:#fff;border:1px solid #00666f;padding:6px 14px;border-radius:3px;cursor:pointer;font-size:12px;">選んだ方を残して整理する</button>
+      <button id="dup-cancel" style="background:#666;color:#fff;border:1px solid #444;padding:6px 14px;border-radius:3px;cursor:pointer;font-size:12px;">何もしない</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="ledger-merge-modal">
   <div class="modal" style="min-width:520px;max-width:680px;">
     <h3>📒 台帳の行と読み込んだファイルが重複しています</h3>
@@ -13223,13 +13244,199 @@ async function scanDirRecursive(dirHandle, pathPrefix, rows, stats){
         let data;
         try { data = JSON.parse(text); } catch(_){ stats.skipped++; continue; }
         const row = buildListRow(pathPrefix + name, file.lastModified, data, handle);
-        if(row){ slimListRow(row, true); rows.push(row); }
+        if(row){
+          // 重複ファイルの整理で使う：置かれているフォルダ・そこでの名前・大きさ
+          row._dir = dirHandle; row._name = name; row._dirPath = pathPrefix; row._size = file.size;
+          slimListRow(row, true); rows.push(row);
+        }
         else stats.skipped++;
       } catch(err){
         stats.skipped++;
       }
     }
   }
+}
+
+/* ============================================================
+   重複ファイルの整理（iPad/iPhone の「◯◯ 2.json」対策）
+   iOSでは「ファイル」アプリに同じ名前で保存すると、勝手に「 2」が付いた別ファイルになる。
+   ブラウザからは保存先を覗けないので端末側では防げない。PCはフォルダを掴めるので、
+   ここで「中の管理番号」ごとにまとめ、新しい方を残して 管理番号.json に付け直す。
+
+   ・どれが新しいかは、ファイルの中の editedAt を第一に見る
+     （ファイル名の「2」は当てにならず、サイズは写真が大半なのでKBでは差が出ない。
+      更新日時はコピーで変わることがある）
+   ・消す操作なので、必ず一覧を見せて選ばせてから実行する
+   ・書き込み許可は、整理を押した時にだけ求める（読むだけの時は求めない）
+   ============================================================ */
+let _listDirHandle = null;        // 最後にフォルダ選択で読んだフォルダ（整理に使う）
+
+function dupWhenMs(row){
+  const t = Date.parse(String((row.data && row.data.editedAt) || "").trim());
+  return isFinite(t) ? t : 0;
+}
+function dupSizeLabel(n){
+  if(!isFinite(n) || n <= 0) return "";
+  return (n >= 1024 * 1024) ? (Math.round(n / 1024 / 1024 * 10) / 10 + " MB")
+       : (Math.round(n / 1024) + " KB");
+}
+function dupWhen(ms){
+  if(!ms) return "";
+  const d = new Date(ms), p = n => String(n).padStart(2, "0");
+  return d.getFullYear() + "/" + p(d.getMonth() + 1) + "/" + p(d.getDate())
+    + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+}
+/* 同じフォルダの中で、中の管理番号が同じファイルが2つ以上ある組を探す。
+   別フォルダに同じ管理番号がある場合は「別の工事」の可能性があるので触らない。 */
+function dupFindGroups(rows){
+  const by = new Map();
+  (rows || []).forEach(r => {
+    if(!r || !r._dir || !r._name) return;
+    if(r.fileType !== "plain") return;                       // 暗号化ファイルは中身を読めないので対象外
+    const no = String((r.data && r.data.chosho_mgmt_no) || "").trim();
+    if(!no) return;
+    const key = (r._dirPath || "") + " " + no;
+    if(!by.has(key)) by.set(key, { no, dir: r._dir, dirPath: r._dirPath || "", items: [] });
+    by.get(key).items.push(r);
+  });
+  const groups = [];
+  by.forEach(g => {
+    if(g.items.length < 2) return;
+    // 新しい順：中の editedAt → ファイルの更新日時 → 大きい方（写真が多い）
+    g.items.sort((a, b) => (dupWhenMs(b) - dupWhenMs(a))
+      || ((b.lastModified || 0) - (a.lastModified || 0))
+      || ((b._size || 0) - (a._size || 0)));
+    g.canon = g.no + ".json";
+    g.pick = g.items[0]._name;                               // 既定は先頭（いちばん新しい）
+    groups.push(g);
+  });
+  return groups;
+}
+/* 書き込み許可を取る（読むだけで開いたフォルダを、この操作の時だけ書けるようにする） */
+async function dupEnsureWritable(dir){
+  if(!dir || !dir.queryPermission) return false;
+  try{
+    if(await dir.queryPermission({ mode: "readwrite" }) === "granted") return true;
+    return (await dir.requestPermission({ mode: "readwrite" })) === "granted";
+  }catch(_){ return false; }
+}
+/* 整理の内容を見せて選ばせる。OKなら {groupIndex: 残すファイル名} を返す。取り消しなら null。 */
+function dupDialog(groups){
+  return new Promise(resolve => {
+    const back = document.getElementById("dup-modal");
+    const body = document.getElementById("dup-body");
+    const total = groups.reduce((a, g) => a + g.items.length - 1, 0);
+    let html = '<div style="font-size:12px;margin-bottom:8px;">'
+      + '同じ管理番号のファイルが <b>' + groups.length + '</b> 組（余分な <b>' + total + '</b> ファイル）見つかりました。<br>'
+      + '<b>残す</b>を選んだファイルの中身を <b>管理番号.json</b> という名前で書き直し、同じ組の他のファイルは削除します。'
+      + '<span style="color:#c62828;font-weight:600;">削除したファイルは元に戻せません。</span><br>'
+      + '<span style="color:#555;">※ 既定では「ファイルの中に記録された更新日時（中の更新）」がいちばん新しいものを選んでいます。'
+      + 'サイズは写真が大半のため、少しの違いではKB表示が変わりません。</span></div>';
+    groups.forEach((g, gi) => {
+      html += '<div class="dup-grp"><div class="dup-grp-h">📄 ' + escapeHtml(g.no)
+        + (g.dirPath ? ' <span style="color:#777;font-weight:400;">（' + escapeHtml(g.dirPath) + '）</span>' : '')
+        + ' → <b>' + escapeHtml(g.canon) + '</b> にまとめます</div>'
+        + '<table class="dup-tbl"><tr><th style="width:52px;">残す</th><th>ファイル名</th>'
+        + '<th>中の更新</th><th>ファイルの更新日時</th><th>サイズ</th><th>写真</th></tr>';
+      g.items.forEach(it => {
+        const on = it._name === g.pick;
+        html += '<tr' + (on ? ' class="dup-keep"' : '') + '>'
+          + '<td style="text-align:center;"><input type="radio" name="dup' + gi + '" value="' + escapeHtml(it._name) + '"' + (on ? ' checked' : '') + '></td>'
+          + '<td>' + escapeHtml(it._name) + '</td>'
+          + '<td>' + escapeHtml(dupWhen(dupWhenMs(it)) || "―") + '</td>'
+          + '<td>' + escapeHtml(dupWhen(it.lastModified) || "―") + '</td>'
+          + '<td>' + escapeHtml(dupSizeLabel(it._size)) + '</td>'
+          + '<td>' + (it._photoCount > 0 ? (it._photoCount + "枚") : "なし") + '</td></tr>';
+      });
+      html += '</table></div>';
+    });
+    body.innerHTML = html;
+    body.querySelectorAll('input[type=radio]').forEach(r => r.addEventListener("change", () => {
+      const tbl = r.closest("table");
+      tbl.querySelectorAll("tr").forEach(tr => tr.classList.remove("dup-keep"));
+      r.closest("tr").classList.add("dup-keep");
+    }));
+    back.classList.add("open");
+    const done = ok => {
+      back.classList.remove("open");
+      document.getElementById("dup-ok").onclick = null;
+      document.getElementById("dup-cancel").onclick = null;
+      if(!ok){ resolve(null); return; }
+      resolve(groups.map((g, gi) => {
+        const r = body.querySelector('input[name="dup' + gi + '"]:checked');
+        return r ? r.value : g.pick;
+      }));
+    };
+    document.getElementById("dup-ok").onclick = () => done(true);
+    document.getElementById("dup-cancel").onclick = () => done(false);
+  });
+}
+/* 選んだとおりに書き直して、余分なファイルを消す */
+async function dupApply(groups, picks){
+  let renamed = 0, done = 0, dropped = 0; const fails = [];
+  for(let gi = 0; gi < groups.length; gi++){
+    const g = groups[gi];
+    const keepName = picks[gi];
+    const keep = g.items.find(x => x._name === keepName) || g.items[0];
+    const dir = g.dir;
+    try{
+      if(!(await dupEnsureWritable(dir))){ fails.push(g.no + "：書き込みを許可されませんでした"); continue; }
+      // 正式な名前でないなら、中身を 管理番号.json へ書き直す（先に書いてから消す）
+      if(keep._name !== g.canon){
+        const text = await (await keep.fileHandle.getFile()).text();
+        if(!text){ fails.push(g.no + "：中身を読めませんでした"); continue; }
+        const fh = await dir.getFileHandle(g.canon, { create: true });
+        const w = await fh.createWritable();
+        await w.write(text); await w.close();
+        await dir.removeEntry(keep._name);                  // 元の「 2」付きを消す（中身は残っている）
+        renamed++;
+      }
+      for(const it of g.items){
+        if(it === keep) continue;
+        if(it._name === g.canon) continue;                  // 正式名は上書き済みなので消さない
+        await dir.removeEntry(it._name);
+      }
+      done++;
+      dropped += g.items.length - 1;                        // この組で減ったファイル数
+    }catch(err){
+      console.warn("[重複整理] 失敗", g.no, err);
+      fails.push(g.no + "：" + (err && err.message ? err.message : err));
+    }
+  }
+  return { renamed, done, dropped, fails };
+}
+/* 入口：フォルダを読んだ後の自動確認からも、ツールバーのボタンからも呼ぶ */
+async function dupCleanupFlow(rows, quietIfNone){
+  const groups = dupFindGroups(rows && rows.length ? rows : _listRows);
+  if(!groups.length){
+    if(!quietIfNone) alert("同じ管理番号のファイルが重なっているところはありませんでした。");
+    return false;
+  }
+  const picks = await dupDialog(groups);
+  if(!picks) return false;
+  const res = await dupApply(groups, picks);
+  alert("🧹 重複ファイルの整理が終わりました。\n\n"
+    + res.done + " 組をまとめました（余分な " + res.dropped + " ファイルが減りました）\n"
+    + "うち名前を付け直した: " + res.renamed + " 件"
+    + (res.fails.length ? ("\n\n⚠ できなかったもの:\n" + res.fails.join("\n")) : "")
+    + "\n\n一覧を読み直します。");
+  return true;
+}
+async function dupCleanupButton(){
+  if(!_listDirHandle){
+    alert("先に「📁 フォルダ選択(再帰)」でフォルダを読み込んでください。\n（重複の整理には、そのフォルダを掴んでいる必要があります）");
+    return;
+  }
+  if(await dupCleanupFlow(_listRows, false)) await listReloadFolder();
+}
+/* 整理のあと、同じフォルダを読み直して一覧を作り直す */
+async function listReloadFolder(){
+  if(!_listDirHandle) return;
+  const rows = [];
+  const stats = { dirs: 0, files: 0, skipped: 0 };
+  await scanDirRecursive(_listDirHandle, "", rows, stats);
+  _listRows = await mergeRowsWithManual(rows);
+  renderListTable();
 }
 
 /* 物件を開いたままフォルダ/ファイルを読み込む時の挙動を選択。
@@ -13266,6 +13473,7 @@ async function listSelectFolder(){
   if(loadMode === "cancel") return;
   try {
     const dirHandle = await window.showDirectoryPicker();
+    _listDirHandle = dirHandle;          // 重複ファイルの整理に使う
     const rows = [];
     const stats = { dirs: 0, files: 0, skipped: 0 };
     const status = document.getElementById("list-status");
@@ -13274,6 +13482,18 @@ async function listSelectFolder(){
       status.textContent = "📁 サブフォルダを再帰スキャン中...";
     }
     await scanDirRecursive(dirHandle, "", rows, stats);
+    // 同じ管理番号のファイルが重なっていたら（iPadの「◯◯ 2.json」など）、先に整理を提案する
+    {
+      const dg = dupFindGroups(rows);
+      if(dg.length && confirm("同じ管理番号のファイルが " + dg.length + " 組見つかりました。\n"
+          + "（iPad/iPhoneで保存すると「◯◯ 2.json」のように増えることがあります）\n\n"
+          + "どれを残すか選んで整理しますか？")){
+        if(await dupCleanupFlow(rows, true)){
+          rows.length = 0;
+          await scanDirRecursive(dirHandle, "", rows, { dirs:0, files:0, skipped:0 });
+        }
+      }
+    }
     // 台帳起点の行（仮受付・手入力）は保持し、管理番号重複は件ごとに確認してマージ
     _listRows = await mergeRowsWithManual(rows);
     _listSelectedFolderName = dirHandle.name || "";
@@ -23395,27 +23615,78 @@ function genbaImportFlow(){
    台帳起点の行（_manual）を保持し、同じ管理番号のファイルが読み込まれたら
    件ごとに確認ダイアログ（台帳優先／読み込み値で上書き／スキップ＋以降すべて適用）
    ============================================================ */
+/* 保存値 → 画面で使っている日本語ラベル。フォームの <select> をそのまま引くので、
+   選択肢を増やしてもここを直す必要がない。 */
+function lgOptLabel(id, v){
+  v = (v == null) ? "" : String(v);
+  if(!v) return "";
+  const el = document.getElementById(id);
+  if(el && el.options){
+    for(let i = 0; i < el.options.length; i++){
+      if(el.options[i].value === v) return (el.options[i].textContent || "").trim();
+    }
+  }
+  return v;
+}
+/* この戸別に入っている写真の枚数（実体が無いスナップショット行は保存された件数を使う） */
+function lgPhotoCount(d){
+  if(!d) return 0;
+  if(Array.isArray(d.chosho_photos)) return d.chosho_photos.filter(p => p && p.dataUri).length;
+  if(typeof d.chosho_photo_count === "number") return d.chosho_photo_count;
+  if(Array.isArray(d.chosho_photos_thumb)) return d.chosho_photos_thumb.length;
+  return 0;
+}
+/* 最終更新（editedAt）を読みやすく。どちらが新しいかを見比べるための項目。 */
+function lgWhenLabel(iso){
+  const s = String(iso || "").trim();
+  if(!s) return "";
+  const d = new Date(s);
+  if(isNaN(d.getTime())) return s;
+  const p = n => String(n).padStart(2, "0");
+  return d.getFullYear() + "/" + p(d.getMonth() + 1) + "/" + p(d.getDate())
+    + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+}
 function lgMergeDialog(manualRow, fileRow){
   return new Promise(resolve => {
     const md = document.getElementById("ledger-merge-modal");
     const body = document.getElementById("lg-merge-body");
-    const fields = [
-      ["管理番号", "chosho_mgmt_no"], ["名前", "chosho_cust_name"], ["住所", "chosho_cust_addr"],
-      ["電話番号", "chosho_cust_tel"], ["施工日", "chosho_date"],
-      ["状態", "chosho_status"]
-    ];
     const stLabel = v => v === "completed" ? "完了" : (v === "provisional" ? "仮受付" : (v ? "受付済" : ""));
+    // どちらを使うかは工事の中身を見ないと決められないので、お客様情報だけでなく
+    // 写真枚数・取付方式・アンテナ・増幅器・図面の有無・最終更新まで並べて比べる。
+    // always:true の項目は、両方とも空でも必ず出す（見当たらないこと自体が判断材料になる）。
+    const fields = [
+      { label:"管理番号",   always:true, get:d => d.chosho_mgmt_no  || "" },
+      { label:"名前",       always:true, get:d => d.chosho_cust_name || "" },
+      { label:"住所",       always:true, get:d => d.chosho_cust_addr || "" },
+      { label:"電話番号",   get:d => d.chosho_cust_tel || "" },
+      { label:"施工日",     get:d => d.chosho_date     || "" },
+      { label:"状態",       get:d => stLabel(d.chosho_status) },
+      { label:"備考",       get:d => String(d.chosho_note || "").replace(/\s+/g, " ").trim() },
+      { label:"写真",       always:true, get:d => { const n = lgPhotoCount(d); return n ? (n + "枚") : "なし"; } },
+      { label:"工事種別",   get:d => lgOptLabel("work_type",    d.work_type) },
+      { label:"取付方式",   always:true, get:d => lgOptLabel("mount_type", d.mount_type) },
+      { label:"主アンテナ", get:d => lgOptLabel("antenna_main", d.antenna_main) },
+      { label:"増幅器",     get:d => lgOptLabel("amplifier",    d.amplifier) },
+      { label:"図面・積算", always:true, get:d => d.amplifier ? "あり" : "なし" },
+      { label:"下見完了",   get:d => d.survey_done ? ("済 " + String(d.survey_done_at || "").slice(0, 10)) : "" },
+      { label:"最終更新",   get:d => lgWhenLabel(d.editedAt) },
+    ];
+    const dLg = manualRow.data || {}, dFile = fileRow.data || {};   // md はモーダル要素なので使わない
     let rows = '<tr><th style="width:90px;"></th><th>📒 台帳の現在値</th><th>📁 読み込んだ値</th></tr>';
-    fields.forEach(([label, k]) => {
-      let mv = (manualRow.data && manualRow.data[k]) || "";
-      let fv = (fileRow.data && fileRow.data[k]) || "";
-      if(k === "chosho_status"){ mv = stLabel(mv); fv = stLabel(fv); }
-      const diff = mv && fv && mv !== fv;
-      rows += '<tr' + (diff ? ' class="lg-merge-diff"' : '') + '><th>' + label + '</th>'
+    let diffCount = 0;
+    fields.forEach(f => {
+      const mv = String(f.get(dLg) == null ? "" : f.get(dLg));
+      const fv = String(f.get(dFile) == null ? "" : f.get(dFile));
+      if(!f.always && !mv && !fv) return;                 // 両方とも空の項目は出さない（表が長くなるだけ）
+      const diff = mv !== fv;
+      if(diff) diffCount++;
+      rows += '<tr' + (diff ? ' class="lg-merge-diff"' : '') + '><th>' + f.label + '</th>'
         + '<td>' + (escapeHtml(mv) || '<span style="color:#b8c2cc;">（空欄）</span>') + '</td>'
         + '<td>' + (escapeHtml(fv) || '<span style="color:#b8c2cc;">（空欄）</span>') + '</td></tr>';
     });
-    body.innerHTML = '<div style="font-size:12px;margin-bottom:6px;">管理番号 <b>' + escapeHtml((manualRow.data.chosho_mgmt_no || "").trim()) + '</b> は台帳に既にあります。どちらを使いますか？</div>'
+    body.innerHTML = '<div style="font-size:12px;margin-bottom:6px;">管理番号 <b>' + escapeHtml((manualRow.data.chosho_mgmt_no || "").trim()) + '</b> は台帳に既にあります。どちらを使いますか？'
+      + (diffCount ? ' <span style="color:#ad6800;font-weight:600;">違いのある項目 ' + diffCount + '（黄色の行）</span>'
+                   : ' <span style="color:#2e7d32;font-weight:600;">内容は同じです</span>') + '</div>'
       + '<table class="lg-merge-table">' + rows + '</table>';
     document.getElementById("lg-merge-all").checked = false;
     md.classList.add("open");
@@ -23815,6 +24086,7 @@ function init(){
   });
   document.getElementById("btn-list-close").onclick = closeListView;
   document.getElementById("btn-list-select-folder").onclick = listSelectFolder;
+  { const b = document.getElementById("btn-list-dup"); if(b) b.onclick = dupCleanupButton; }
   document.getElementById("btn-list-select-files").onclick = listSelectFiles;
   document.getElementById("btn-list-unlock").onclick = () => unlockListView();
   document.getElementById("btn-list-bulk-reenc").onclick = openBulkReencModal;
