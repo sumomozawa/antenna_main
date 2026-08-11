@@ -1338,8 +1338,17 @@ async function importLedgerFile(file){
       });
       upd++;
     }
-    setLg(subKeyOf(no, r.file), { time: x.time || "", meetAt: x.meet || "", flyer: !!x.flyer,
-      hold: !!x.hold, consent: !!x.consent, compdoc: !!x.compdoc, note: x.note || "" });
+    // ファイルに入っていない項目は触らない。古い版のメインが書き出したファイルには
+    // ビラ・承諾書・完了書 が入っておらず、まとめて入れるとチェックが外れてしまうため。
+    const patch = {};
+    if("time" in x) patch.time = x.time || "";
+    if("meet" in x) patch.meetAt = x.meet || "";
+    if("flyer" in x) patch.flyer = !!x.flyer;
+    if("hold" in x) patch.hold = !!x.hold;
+    if("consent" in x) patch.consent = !!x.consent;
+    if("compdoc" in x) patch.compdoc = !!x.compdoc;
+    if("note" in x) patch.note = x.note || "";
+    if(Object.keys(patch).length) setLg(subKeyOf(no, r.file), patch);
     // 施工会社は、ファイル側に名前が入っていて今と違うときだけ入れ替える（空では解除しない）
     const cn = String(x.contractor || "").trim();
     if(cn && ctrOf(r).name !== cn){
