@@ -20480,12 +20480,13 @@ function renderListLedgerMode(rows, container){
     + '</div>'
     // ④ 取り込む（外から中へ）
     + '<div class="lgc-grp"><span class="lgc-ttl">取り込み</span>'
-    +   '<button id="lg-import-ledger" title="受付台帳ソフトなど別のパソコンで作った「受付台帳ファイル（.json）」を読み込みます。いまの台帳と違うところだけを一覧で確認し、選んだ分だけ取り込みます。図面・積算には触りません。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📥 受付台帳ファイル</button>'
+    +   '<button id="lg-import-ledger" title="受付台帳ソフトなど別のパソコンで作った「受付台帳ファイル（.json）」を読み込みます。いまの台帳と違うところだけを一覧で確認し、選んだ分だけ取り込みます。図面・積算には触りません。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📥 受付台帳</button>'
     +   '<button id="lg-xlsx-import" title="Excel（.xlsx）を読み取ります。受付台帳ソフトが書き出した Excel なら、名前・施工会社・状態・打合せ・備考まで全項目の違いを一覧で確認してから取り込めます。見出しの無い現場のExcelなら、H列「管理番号」を下三桁で突き合わせて台帳の管理番号・住所・過去の情報を更新します。" style="background:#2e5488;color:#fff;border:1px solid #1e3a5f;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📗 Excel</button>'
     + '</div>'
     // ⑤ 書き出す（中から外へ）
     + '<div class="lgc-grp"><span class="lgc-ttl">書き出し</span>'
-    +   '<button id="lg-export-genba" title="この受付台帳を1ファイル（受付台帳_物件名_日付.json）に書き出します。スマホの現場入力アプリの「🗒台帳」と、受付台帳ソフトの「📥 台帳を取り込み」の、どちらでもそのまま読めます。左の「📥 受付台帳ファイル」で戻せます。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📤 受付台帳ファイル</button>'
+    +   '<button id="lg-export-set" title="受付台帳と地図をひとまとめにして1ファイルで書き出します。スマホへ渡すのはこれ1つで済み、現場入力アプリの「台帳」か「地図」から取り込むと、受付台帳と地図の両方がいっぺんに入ります。" style="background:#7a4e1e;color:#fff;border:1px solid #5e3c16;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📦 現場用</button>'
+    +   '<button id="lg-export-genba" title="受付台帳だけを1ファイルに書き出します（地図は入りません）。スマホの現場入力アプリの「台帳」と、受付台帳ソフトの「📥 台帳を取り込み」の、どちらでもそのまま読めます。左の「📥 受付台帳」で戻せます。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📤 受付台帳</button>'
     +   '<button id="lg-xlsx-export" title="いまの受付台帳を Excel（.xlsx）へ書き出します。Excelで直したあと、左の「📗 Excel」でそのまま読み戻せます。" style="background:#1b7a3d;color:#fff;border:1px solid #145c2e;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📘 Excel</button>'
     + '</div>'
     + '<span class="lg-count">全 ' + rows.length + ' 件（仮 ' + prov + ' ／ 完了 ' + done + ' ／ ビラ済 ' + flyered + (held ? ' ／ 保留 ' + held : '') + '）' + (shown.length !== rows.length ? ' → 表示 ' + shown.length + ' 件' : '') + '</span>'
@@ -20803,7 +20804,66 @@ async function exportReceptionLedgerToXlsx(){
 
 /* 受付台帳を「現場入力アプリ(genba)」用に1ファイル書き出し。
    genba側で取り込むと、一覧から選んで管理番号・氏名・住所入りの入力を開始できる。 */
-async function exportReceptionLedgerForGenba(){
+/* この受付台帳を「現場用ひとまとめ」で書き出す。
+   受付台帳と地図を1つのファイルに入れるので、スマホへ渡すのはこの1つで済む。
+   現場入力アプリは、取り込んだときに台帳と地図の両方をいっぺんに受け取る。 */
+async function exportGenbaSet(){
+  const ledger = buildReceptionLedgerPayload();
+  if(!ledger.rows.length){
+    alert("書き出す受付台帳の行がありません。\n先に戸別一覧を読み込むか、台帳に行を追加してください。"); return;
+  }
+  let map = null;
+  try {
+    if(typeof window.mapCollectViewerPack === "function"){
+      const sheets = await window.mapCollectViewerPack();
+      if(sheets && sheets.length){
+        map = { type: "antenna_map_pack", version: 1, project: ledger.project,
+                exportedAt: ledger.exportedAt, sheetCount: sheets.length,
+                markCount: sheets.reduce((a, s) => a + s.markCount, 0), sheets };
+      }
+    }
+  } catch(e){ console.warn("[現場用] 地図の採取に失敗", e); }
+  if(!map){
+    if(!confirm("この物件には、書き出せる地図がありません。\n（地図を描いていないか、建物に管理番号が付いていません）\n\n受付台帳だけを書き出しますか？")) return;
+  }
+  const payload = { type: "antenna_genba_set", version: 1, app: APP_VERSION,
+                    project: ledger.project, exportedAt: ledger.exportedAt,
+                    caseCount: ledger.rows.length,
+                    mapSheetCount: map ? map.sheetCount : 0,
+                    mapMarkCount: map ? map.markCount : 0,
+                    ledger, map };
+  const text = JSON.stringify(payload);
+  const base = "現場用" + (ledger.project ? ("_" + ledger.project) : "") + "_" + new Date().toISOString().slice(0, 10);
+  const fname = ((typeof sanitizePrintFilename === "function") ? sanitizePrintFilename(base) : base).replace(/\.json$/i, "") + ".json";
+  const mb = text.length / 1024 / 1024;
+  const done = () => {
+    alert("現場用にひとまとめで書き出しました。\n\n"
+      + "受付台帳：" + ledger.rows.length + " 件\n"
+      + (map ? ("地図：" + map.sheetCount + " 枚（管理番号のついた建物 " + map.markCount + " 件）\n") : "地図：なし\n")
+      + "大きさ：約 " + (mb < 1 ? (Math.round(mb * 1024) + " KB") : (mb.toFixed(1) + " MB")) + "\n\n"
+      + "このファイルをスマホへ移し、現場入力アプリの「台帳」か「地図」から取り込んでください。\n"
+      + "1回の取り込みで、受付台帳と地図の両方が入ります。");
+  };
+  if(window.showSaveFilePicker){
+    try {
+      const opts = { suggestedName: fname, types: [{ description: "JSON ファイル", accept: { "application/json": [".json"] } }] };
+      if(lastSaveDirHandle) opts.startIn = lastSaveDirHandle;
+      const h = await window.showSaveFilePicker(opts);
+      const w = await h.createWritable();
+      await w.write(text); await w.close();
+      try { lastSaveDirHandle = h.getParent ? await h.getParent() : lastSaveDirHandle; } catch(_){}
+      done(); return;
+    } catch(err){ if(err && err.name === "AbortError") return; }
+  }
+  const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = fname; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  done();
+}
+/* 受付台帳ファイルの中身を作る（単独の書き出しと、現場用ひとまとめの両方で使う）。
+   version 2＝ビラ・承諾書・完了書 を含む。増えた項目を読まない現場入力アプリでも従来どおり読める。 */
+function buildReceptionLedgerPayload(){
   const src = (typeof _listRows !== "undefined" && Array.isArray(_listRows)) ? _listRows : [];
   const rows = src.map(r => {
     const d = r.data || {};
@@ -20826,10 +20886,14 @@ async function exportReceptionLedgerForGenba(){
       note:    lg.note            || ""
     };
   }).filter(x => x.mgmt_no || x.name || x.addr);
-  if(!rows.length){ alert("書き出す受付台帳の行がありません。先に戸別一覧を読み込むか、台帳に行を追加してください。"); return; }
   const projName = (typeof _currentProject !== "undefined" && _currentProject && _currentProject.name) ? String(_currentProject.name) : "";
-  // version 2＝ビラ・承諾書・完了書 を含む。増えた項目を読まない現場入力アプリでも従来どおり読める。
-  const payload = { type: "antenna_reception_ledger", version: 2, appVersion: APP_VERSION, exportedAt: new Date().toISOString(), project: projName, count: rows.length, rows };
+  return { type: "antenna_reception_ledger", version: 2, appVersion: APP_VERSION,
+           exportedAt: new Date().toISOString(), project: projName, count: rows.length, rows };
+}
+async function exportReceptionLedgerForGenba(){
+  const payload = buildReceptionLedgerPayload();
+  const rows = payload.rows, projName = payload.project;
+  if(!rows.length){ alert("書き出す受付台帳の行がありません。先に戸別一覧を読み込むか、台帳に行を追加してください。"); return; }
   const content = JSON.stringify(payload, null, 2);
   const base = "受付台帳" + (projName ? ("_" + projName) : "") + "_" + new Date().toISOString().slice(0, 10);
   const defaultBase = ((typeof sanitizePrintFilename === "function") ? sanitizePrintFilename(base) : base).replace(/\.json$/i, "");
@@ -21628,6 +21692,7 @@ function bindLedgerHandlers(container){
     if(e.target.closest("#lg-import-ledger")){ lgPickLedgerFile(); return; }
     if(e.target.closest("#lg-xlsx-import")){ ledgerXlsxImportFlow(); return; }
     if(e.target.closest("#lg-xlsx-export")){ exportReceptionLedgerToXlsx(); return; }
+    if(e.target.closest("#lg-export-set")){ exportGenbaSet(); return; }
     if(e.target.closest("#lg-export-genba")){ exportReceptionLedgerForGenba(); return; }
     // 施工会社チップ：一発割当／会社名クリックで変更モード（セルのみ差し替え＝スクロール位置を保つ）
     const ctrEl = e.target.closest(".lg-ctr-cur, .lg-ctr-chip");
@@ -30101,6 +30166,18 @@ window.addEventListener("DOMContentLoaded", init);
   }
   var _mapExportBtn = el("map-export-genba");
   if(_mapExportBtn) _mapExportBtn.addEventListener("click", mapExportForGenba);
+  /* 受付台帳の「現場用」からも地図を採れるようにする。地図画面をまだ開いていない場合は
+     先にシートを読み込む。採り終わったら、開いていたシートへ戻す。 */
+  window.mapCollectViewerPack = async function(){
+    if(!sheets || !sheets.length){
+      try { await loadSheetsForContext(); } catch(e){ console.warn("[map] シートの読み込みに失敗", e); return null; }
+    }
+    if(!sheets || !sheets.length) return null;
+    var keep = current;
+    var out = await mapCollectViewerPack();
+    if(!keep && sheets.length) openSheet(sheets[0]);   // 一度も開いていなかった場合の後始末
+    return out;
+  };
 
   window.mapRelinkByLast3 = mapRelinkByLast3;   // 受付台帳の管理番号更新に地図を追従させる
   window.openMapView = openMapView;
