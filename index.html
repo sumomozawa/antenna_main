@@ -3718,8 +3718,8 @@
             <select id="case_contractor"></select>
           </div>
           <div class="field field-area">
-            <label><span data-tip="この戸別の自由記入メモ。スマホ「現場入力」の備考欄に書いた内容が、現場JSNの取込でここへ入ります（改行もそのまま）。受付台帳の「備考」とは別枠なので、事務所側の備考が上書きされることはありません。">備考（現場メモ）</span></label>
-            <textarea id="chosho_note" rows="3" placeholder="現場で気付いたこと（留守・犬あり・隣家の許可が必要 など）"></textarea>
+            <label><span data-tip="受付台帳の「備考」と同じ欄です。ここ・受付台帳の備考列・スマホ「現場入力」の備考のどこで書いても同じ内容になります（改行もそのまま）。現場用の書き出しで現場へ渡り、現場JSNの取込で現場の内容が戻ります。">備考</span></label>
+            <textarea id="chosho_note" rows="3" placeholder="留守・犬あり・隣家の許可が必要 など（受付台帳の備考と共通）"></textarea>
           </div>
           <div style="font-size:11px;color:#444;margin:6px 0 2px 0;font-weight:600;">📷 写真（複数登録可）</div>
           <div id="photo-list" style="display:flex;flex-direction:column;gap:6px;"></div>
@@ -21006,7 +21006,7 @@ function buildReceptionLedgerPayload(){
       hold:    !!lg.hold,          // 保留（現場入力アプリの一覧に「保」バッジを出す）
       consent: !!lg.consent,       // 承諾書 受領済み
       compdoc: !!lg.compdoc,       // 完了書 受領／提出済み
-      note:    lg.note            || ""
+      note:    lg.note            || d.chosho_note || ""
     };
   }).filter(x => x.mgmt_no || x.name || x.addr);
   const projName = (typeof _currentProject !== "undefined" && _currentProject && _currentProject.name) ? String(_currentProject.name) : "";
@@ -22456,10 +22456,8 @@ function renderCalPanel(byDate){
         : '<span class="cal-ctr-tag cal-ctr-none">未割当</span>') + '<br>'
     + '住所： ' + escapeHtml(d.chosho_cust_addr || "―") + '<br>'
     + '電話： ' + escapeHtml(d.chosho_cust_tel || "―") + '<br>'
-    + '備考： ' + escapeHtml(lg.note || "―")
-    + (String(d.chosho_note || "").trim()
-        ? '<br>現場メモ： <span style="white-space:pre-wrap;">' + escapeHtml(String(d.chosho_note).trim()) + '</span>'
-        : '')
+    + '備考： <span style="white-space:pre-wrap;">'
+    + escapeHtml(String(lg.note || d.chosho_note || "").trim() || "―") + '</span>'
     + '</div>';
   // 削除ボタン：打合せ＝予定削除／仮登録の仮予定＝台帳行ごと削除／この戸別の工事予定＝日付クリア（戸別は残す）
   let delBtn = '';
@@ -22862,12 +22860,24 @@ async function openCaseInEditor(row, gotoDiagram){
     try { rtClaimLock(_editingRow); } catch(_){} // リアルタイム：新規/未作成戸別の編集ロック取得
     closeListView();
   }
+  noteSyncToEditor(row);          // 備考は台帳と共通の1つの欄
   if(gotoDiagram){
     const mt = document.querySelector('#mobile-tabs button[data-mobile-tab="diagram"]');
     if(document.body.classList.contains("mobile-layout") && mt) mt.click();
     const dp = document.querySelector(".diagram-panel");
     if(dp) dp.scrollIntoView({ behavior: "smooth" });
   }
+}
+/* 備考は「受付台帳の備考」と同じ1つの欄。戸別を開いた時に、台帳側の内容へ合わせる。
+   （台帳の備考列・この戸別の備考欄・スマホ現場入力の備考が食い違わないようにする） */
+function noteSyncToEditor(row){
+  try{
+    const el = document.getElementById("chosho_note"); if(!el || !row) return;
+    const tk = subCaseKey(row); if(!tk) return;
+    const lgNote = String((getLedger(tk) || {}).note || "");
+    if(lgNote){ el.value = lgNote; if(row.data) row.data.chosho_note = lgNote; }
+    else if(el.value) setLedger(tk, { note: el.value });   // 台帳が空なら戸別側を台帳へ
+  }catch(_){}
 }
 /* エディタの内容（積算・図面・写真除く）を、開いた元の一覧行へ丸ごと取り込む。
    一覧へ戻る時・保存時に呼ばれ、台帳・物件自動保存へ編集内容を反映する。 */
@@ -22904,6 +22914,9 @@ function syncEditorToRowData(force){
       _editingRow.envelope = Object.assign({}, _editingRow.envelope);
       _editingRow.envelope.plain = newPlain;
     }
+    // 備考は台帳と共通の1つの欄なので、受付台帳の備考列へも同じ内容を書く
+    try{ const ntk = subCaseKey(_editingRow);
+         if(ntk) setLedger(ntk, { note: String(s.chosho_note || "") }); }catch(_){}
     clearEditorDirty();              // 行へ取り込んだ＝フォームと行が一致した状態
     _editingRow._photoCount = _photos.length;
     _editingRow._thumbs = undefined; // 旧サムネ破棄 → 保存時に最新写真から再生成
@@ -23322,6 +23335,10 @@ async function applyGenbaMergeToRow(row, genbaData, opts){
   row._photoCount = Array.isArray(merged.chosho_photos)?merged.chosho_photos.filter(p=>p&&p.dataUri).length:0;
   try { resolveRowOutsourceFee(row); } catch(_){}  // 物件の協力会社諸経費を auto 行へ再適用
   try { markCaseEdited(row); } catch(_){}
+  if(genbaData && ("chosho_note" in genbaData)){
+    try{ const ntk = subCaseKey(row);
+         if(ntk) setLedger(ntk, { note: String(merged.chosho_note || "") }); }catch(_){}
+  }
   const note = await _genbaWriteRowIndividual(row);  // 原寸写真は温存して個別JSONへ書戻し
   try { projTouch(); } catch(_){}
   if(wasEditing){ try { applyStateData(row.data); _editingRow=row; try{ rtClaimLock(row); }catch(_){} } catch(_){} }
