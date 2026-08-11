@@ -5025,6 +5025,14 @@
         <div class="map-side-note">既定は<b>表示なし</b>です（建物1つにつき文字がもう1つ増えるぶん、地図の動きが重くなるため）。番地が要るときだけ入れてください。<b>入れれば印刷にも出ます／外せば印刷にも出ません</b>（画面の見たままが印刷されます）。この設定はこの端末だけに保存されます。</div>
         <div id="map-ctr-legend" class="map-ctr-legend"></div>
       </div>
+      <div class="map-side-sec">
+        <div class="map-side-head">建物に付ける印</div>
+        <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="受付台帳で「保留」にした戸別に付きます"><input type="checkbox" id="map-mark-hold"> <b style="color:#e65100;">保</b> 保留</label>
+        <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="スマホ現場入力で「下見完了」にした戸別に付きます"><input type="checkbox" id="map-mark-surv"> <b style="color:#00838f;">下</b> 下見済み</label>
+        <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="工事状態が「工事完了」の戸別に付きます"><input type="checkbox" id="map-mark-done"> <b style="color:#2e7d32;">完</b> 工事完了</label>
+        <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="工事状態が「未完了」の戸別に付きます。着工前（仮受付）には付きません。数が多くなるので既定は表示なしです。"><input type="checkbox" id="map-mark-undone"> <b style="color:#1565c0;">未</b> 未完了</label>
+        <div class="map-side-note">管理番号の右肩に出ます（番号が無い建物は中心）。<b>入れれば印刷にも出ます／外せば印刷にも出ません</b>。この設定はこの端末だけに保存されます。</div>
+      </div>
       <div class="map-side-sec map-edit-sec">
         <div class="map-side-head">下地</div>
         <div id="map-bg-controls">
@@ -28522,7 +28530,9 @@ window.addEventListener("DOMContentLoaded", init);
       miniFill = _bldNoFillUnlinked ? "none" : "rgba(46,125,50,0.22)";
       stroke = (current.layers.building && current.layers.building.color) || "#2e7d32";
     }
-    return { fill: o.fill || fill, miniFill: o.fill || miniFill, stroke: o.stroke || stroke, linked: linked, noColor: noColor };
+    // 管理番号の文字は、色分けの意味はそのままに濃くして読みやすくする（塗り・枠線は変えない）
+    return { fill: o.fill || fill, miniFill: o.fill || miniFill, stroke: o.stroke || stroke,
+             linked: linked, noColor: mapDarken(noColor, 0.72) };
   }
   /* 建物に重ねる文字（管理番号の下3桁・保留マーク）。中心からの相対位置 dx,dy を data 属性に残し、
      ドラッグ中の軽量描画（updateObjGeometryInDom）が図形の移動に追従できるようにしておく。 */
@@ -28617,12 +28627,61 @@ window.addEventListener("DOMContentLoaded", init);
   function bldOnHold(mgmtNo){
     try { return !!(typeof isCaseOnHold === "function" && isCaseOnHold(mgmtNo)); } catch(_){ return false; }
   }
+  /* 同じ色のまま、濃くする（管理番号の文字を読みやすくする用）。
+     色分けの意味は変えたくないので、色相はそのままに明るさだけ落とす。 */
+  function mapDarken(hex, k){
+    var s = String(hex || "").trim();
+    var m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(s);
+    if(!m) return s;                                  // rgba() 等はそのまま
+    var h = m[1];
+    if(h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    var f = isFinite(k) ? k : 0.75;
+    var v = [0, 2, 4].map(function(i){
+      return Math.max(0, Math.min(255, Math.round(parseInt(h.substr(i, 2), 16) * f)));
+    });
+    return "#" + v.map(function(n){ return ("0" + n.toString(16)).slice(-2); }).join("");
+  }
+  /* 建物に添える状態の印。管理番号の右肩に、保留の「保」と同じ流儀で並べる。
+     どれを出すかは端末ごとに切り替えられる（印刷にもそのまま出る）。 */
+  var MAP_MARK_DEFS = [
+    { key: "hold",   ch: "保", color: "#e65100", id: "map-mark-hold",   def: true  },
+    { key: "surv",   ch: "下", color: "#00838f", id: "map-mark-surv",   def: true  },
+    { key: "done",   ch: "完", color: "#2e7d32", id: "map-mark-done",   def: true  },
+    { key: "undone", ch: "未", color: "#1565c0", id: "map-mark-undone", def: false },
+  ];
+  var _bldMarkOn = {};
+  MAP_MARK_DEFS.forEach(function(m){
+    _bldMarkOn[m.key] = m.def;
+    try {
+      var v = localStorage.getItem("antenna_map_bld_mark_" + m.key);
+      if(v === "1" || v === "0") _bldMarkOn[m.key] = (v === "1");
+    } catch(_){}
+  });
+  /* この建物に付ける印を並び順で返す。idx（bldRowIndex の戻り値）を渡して台帳の総当たりを避ける。 */
+  function bldMarksOf(mgmtNo, idx){
+    var out = [];
+    var mg = String(mgmtNo || "").trim();
+    if(!mg) return out;
+    if(_bldMarkOn.hold && bldOnHold(mg)) out.push(MAP_MARK_DEFS[0]);
+    if(!_bldMarkOn.surv && !_bldMarkOn.done && !_bldMarkOn.undone) return out;
+    var row = idx ? idx.get(mg) : findRowByMgmtNo(mg);
+    var d = (row && row.data) || null;
+    if(!d) return out;
+    if(_bldMarkOn.surv && d.survey_done) out.push(MAP_MARK_DEFS[1]);
+    var st = String(d.chosho_status || "");
+    if(_bldMarkOn.done && st === "completed") out.push(MAP_MARK_DEFS[2]);
+    if(_bldMarkOn.undone && st === "in_progress") out.push(MAP_MARK_DEFS[3]);   // 仮受付は工事前なので付けない
+    return out;
+  }
+
   function renderBuildingLayer(){
     var g = el("map-layer-building"); if(!g || !current) return;
     var L = current.layers.building;
     var minNo = bldMinLabelWorld(MAP_MIN_NO_MM);   // 管理番号の最低文字サイズ（印刷実寸から算出）
     _bldMinLabLast = minNo;
-    var rowIdx = _bldShowBanchi ? bldRowIndex() : null;   // 台帳の総当たりを避ける（描画1回につき1回だけ作る）
+    // 台帳の総当たりを避ける（描画1回につき1回だけ作る）。番地にも状態の印にも使う。
+    var needIdx = _bldShowBanchi || _bldMarkOn.surv || _bldMarkOn.done || _bldMarkOn.undone;
+    var rowIdx = needIdx ? bldRowIndex() : null;
     g.innerHTML = (L.objects || []).map(function(o){
       var bc = bldColors(o);
       var linked = bc.linked;
@@ -28635,9 +28694,9 @@ window.addEventListener("DOMContentLoaded", init);
       // 受付台帳で「保留」にした戸別は、その番号の右肩に橙色の「保」マークを添える（番号が無い場合は中心）
       var lab = "";
       var l3 = linked ? mgmtLast3(o.linkMgmtNo) : "";
-      var onHold = linked && bldOnHold(o.linkMgmtNo);
+      var marks = linked ? bldMarksOf(o.linkMgmtNo, rowIdx) : [];            // 保・下・完・未
       var bt = (linked && _bldShowBanchi) ? bldBanchiText(o, rowIdx) : "";   // 台帳引きは建物1つにつき1回だけ
-      if(l3 || onHold || bt){
+      if(l3 || marks.length || bt){
         var minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
         for(var i = 0; i < o.points.length; i++){ var pp = o.points[i]; if(pp[0] < minx) minx = pp[0]; if(pp[0] > maxx) maxx = pp[0]; if(pp[1] < miny) miny = pp[1]; if(pp[1] > maxy) maxy = pp[1]; }
         var bw = maxx - minx, bh = maxy - miny, cx = (minx + maxx) / 2, cy = (miny + maxy) / 2;
@@ -28645,10 +28704,18 @@ window.addEventListener("DOMContentLoaded", init);
         var halo = Math.max(0.4, fs * 0.16);
         var np = bldNoPos(o);                                   // 管理番号はハンドルで好きな位置へ動かせる
         if(l3) lab += bldLabelText(cx, cy, np.dx, np.dy, fs, halo, bc.noColor, esc(l3));
-        if(onHold){
-          var hfs = fs * (l3 ? 0.78 : 1);                       // 番号があれば少し小さくして右肩に添える
-          var hdx = np.dx + (l3 ? fs * 0.88 : 0), hdy = np.dy + (l3 ? -fs * 0.52 : 0);   // 番号に付いて動く
-          lab += bldLabelText(cx, cy, hdx, hdy, hfs, Math.max(0.4, hfs * 0.22), "#e65100", "保");
+        if(marks.length){
+          // 番号があれば少し小さくして右肩へ。2つを超えたら下へ折り返す
+          // （横一列に伸ばすと、建物が密なところで隣の建物にかかってしまうため）。
+          // いずれも番号に付いて動く。
+          var hfs = fs * (l3 ? 0.70 : 1);
+          // 3桁の番号は横幅がおよそ 1.7fs あるので、その右端（0.85fs）より外から始める
+          var hx0 = np.dx + (l3 ? fs * 1.16 : 0), hy0 = np.dy + (l3 ? -fs * 0.50 : 0);
+          for(var mi = 0; mi < marks.length; mi++){
+            var hdx = hx0 + (mi % 2) * hfs * 0.98;
+            var hdy = hy0 + Math.floor(mi / 2) * hfs * 0.98;
+            lab += bldLabelText(cx, cy, hdx, hdy, hfs, Math.max(0.4, hfs * 0.22), marks[mi].color, marks[mi].ch);
+          }
         }
         // 番地（丁目以降の数字）。管理番号とは別の文字色にし、ドラッグで好きな位置へ動かせる
         if(bt){
@@ -28671,6 +28738,9 @@ window.addEventListener("DOMContentLoaded", init);
     if(nf && nf.checked !== _bldNoFillUnlinked) nf.checked = _bldNoFillUnlinked;
     var bn = el("map-bld-banchi");
     if(bn && bn.checked !== _bldShowBanchi) bn.checked = _bldShowBanchi;
+    MAP_MARK_DEFS.forEach(function(m){
+      var c = el(m.id); if(c && c.checked !== _bldMarkOn[m.key]) c.checked = _bldMarkOn[m.key];
+    });
     var note = el("map-bld-cmode-note");
     if(note){
       note.textContent = (_bldColorMode === "contractor")
@@ -30120,6 +30190,14 @@ window.addEventListener("DOMContentLoaded", init);
       _bldShowBanchi = banchiChk.checked;
       try { localStorage.setItem("antenna_map_bld_banchi", _bldShowBanchi ? "1" : "0"); } catch(_){}
       renderObjects();   // 本図＋縮小マップを再描画
+    });
+    MAP_MARK_DEFS.forEach(function(m){
+      var c = el(m.id); if(!c) return;
+      c.addEventListener("change", function(){
+        _bldMarkOn[m.key] = c.checked;
+        try { localStorage.setItem("antenna_map_bld_mark_" + m.key, c.checked ? "1" : "0"); } catch(_){}
+        renderObjects();   // 本図＋縮小マップを再描画
+      });
     });
     applyBldColorModeUI();   // 起動時の初期状態（保存済みモード・背景なし設定）を反映
     var stageWrap = el("map-stage-wrap");
