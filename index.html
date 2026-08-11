@@ -4477,7 +4477,7 @@
       <button class="mode-tab" data-list-mode="subcontractor" title="協力会社→元請けへの請求内訳（労務費＋協力会社諸経費＋持出材料）。全体費用詳細の数値には一切影響しません。単価は標準単価（業者間の統一額）で計算し、物件用の単価変更（単価マスターの色付き行）は反映されません">🤝 協力会社請求内訳</button>
       <button class="mode-tab" data-list-mode="ledger" title="全戸別を1行ずつ一覧・セル直接編集（工事日程・打合せ・ビラ配布・完了・備考）。カレンダーと双方向連動">📒 受付台帳</button>
       <button class="mode-tab" data-list-mode="calendar" title="工事予定（青）と打合せ予定（緑）を月表示。受付台帳と双方向連動">📅 予定カレンダー</button>
-      <button class="mode-tab" data-list-mode="materials" title="現場入力で「下見完了」にした戸別の材料を、工事全体で合計します。まとめ発注の数量表（金額なし）">🧰 材料数量</button>
+      <button class="mode-tab" data-list-mode="materials" title="現場入力で「下見完了」にした戸別の材料を、工事全体で合計します。まとめ発注の数量表（金額なし）">🧰 発注材料数量</button>
       <button class="list-pdf-btn" id="btn-list-pdf" title="現在のモードの内容をPDF/印刷ダイアログで出力">🖨 PDF出力</button>
     </div>
     <div class="list-base-preset-row">
@@ -19791,7 +19791,7 @@ const MENU_FEATS = [
   { icon: "📅", title: "予定カレンダー", desc: "工事予定（青）・打合せ予定（緑）を月表示で管理。1日4件の枠を確認しながら割り当て", mode: "calendar" },
   { icon: "📒", title: "受付台帳", desc: "全戸別を1行ずつ一覧。日程・打合せ・ビラ配布・完了・備考をその場で直接編集", mode: "ledger" },
   { icon: "📄", title: "戸別一覧（読込・積算）", desc: "保存済ファイルの一覧・検索・読込。フォルダからの取り込みもここから", mode: "standard" },
-  { icon: "🧰", title: "材料数量", desc: "現場入力で「下見完了」にした戸別の材料を工事全体で合計。まとめ発注用の数量表（金額なし）", mode: "materials" },
+  { icon: "🧰", title: "発注材料数量", desc: "現場入力で「下見完了」にした戸別の材料を工事全体で合計。まとめ発注用の数量表（金額なし）", mode: "materials" },
   { icon: "💴", title: "全体費用詳細", desc: "読み込んだ全戸別の材料費・労務費を工事全体で集計", mode: "cost_detail" },
   { icon: "🤝", title: "協力会社請求内訳", desc: "労務費＋協力会社諸経費＋持出材料の請求集計・明細PDF", mode: "subcontractor" },
   { icon: "✏️", title: "積算・図面編集", desc: "現在開いている戸別の積算入力と系統図（図面）の編集画面へ", mode: "" },
@@ -20484,8 +20484,8 @@ function renderListLedgerMode(rows, container){
     + '</div>'
     // ⑤ 書き出す（中から外へ）
     + '<div class="lgc-grp"><span class="lgc-ttl">書き出し</span>'
+    +   '<button id="lg-export-genba" title="この受付台帳を1ファイル（受付台帳_物件名_日付.json）に書き出します。スマホの現場入力アプリの「🗒台帳」と、受付台帳ソフトの「📥 台帳を取り込み」の、どちらでもそのまま読めます。左の「📥 受付台帳ファイル」で戻せます。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📤 受付台帳ファイル</button>'
     +   '<button id="lg-xlsx-export" title="いまの受付台帳を Excel（.xlsx）へ書き出します。Excelで直したあと、左の「📗 Excel」でそのまま読み戻せます。" style="background:#1b7a3d;color:#fff;border:1px solid #145c2e;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📘 Excel</button>'
-    +   '<button id="lg-export-genba" title="この受付台帳を1ファイル（受付台帳.json）に書き出します。スマホの現場入力アプリで取り込むと、一覧から選んで入力を開始できます（管理番号・氏名・住所が入った状態）。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📤 現場用</button>'
     + '</div>'
     + '<span class="lg-count">全 ' + rows.length + ' 件（仮 ' + prov + ' ／ 完了 ' + done + ' ／ ビラ済 ' + flyered + (held ? ' ／ 保留 ' + held : '') + '）' + (shown.length !== rows.length ? ' → 表示 ' + shown.length + ' 件' : '') + '</span>'
     + '<div class="lgc-note">セルをクリックすると直接編集できます。工事日程・打合せ予定は 📅 予定カレンダーに、名前・住所などは図面にそのまま反映されます。</div>'
@@ -20818,13 +20818,17 @@ async function exportReceptionLedgerForGenba(){
       meet:    lg.meetAt          || "",
       status:  d.chosho_status    || "",
       contractor: ctr,
+      flyer:   !!lg.flyer,         // ビラ配布済み
       hold:    !!lg.hold,          // 保留（現場入力アプリの一覧に「保」バッジを出す）
+      consent: !!lg.consent,       // 承諾書 受領済み
+      compdoc: !!lg.compdoc,       // 完了書 受領／提出済み
       note:    lg.note            || ""
     };
   }).filter(x => x.mgmt_no || x.name || x.addr);
   if(!rows.length){ alert("書き出す受付台帳の行がありません。先に戸別一覧を読み込むか、台帳に行を追加してください。"); return; }
   const projName = (typeof _currentProject !== "undefined" && _currentProject && _currentProject.name) ? String(_currentProject.name) : "";
-  const payload = { type: "antenna_reception_ledger", version: 1, appVersion: APP_VERSION, exportedAt: new Date().toISOString(), project: projName, count: rows.length, rows };
+  // version 2＝ビラ・承諾書・完了書 を含む。増えた項目を読まない現場入力アプリでも従来どおり読める。
+  const payload = { type: "antenna_reception_ledger", version: 2, appVersion: APP_VERSION, exportedAt: new Date().toISOString(), project: projName, count: rows.length, rows };
   const content = JSON.stringify(payload, null, 2);
   const base = "受付台帳" + (projName ? ("_" + projName) : "") + "_" + new Date().toISOString().slice(0, 10);
   const defaultBase = ((typeof sanitizePrintFilename === "function") ? sanitizePrintFilename(base) : base).replace(/\.json$/i, "");
@@ -20840,7 +20844,7 @@ async function exportReceptionLedgerForGenba(){
       await writable.write(content);
       await writable.close();
       try { lastSaveDirHandle = handle.getParent ? await handle.getParent() : lastSaveDirHandle; } catch(_){}
-      alert("受付台帳を保存しました（" + rows.length + "件）。\n選んだ保存先に「" + fname + "」を書き出しました。\nこのファイルをスマホに移し、現場入力アプリの「🗒 受付台帳」から取り込んでください。");
+      alert("受付台帳ファイルを保存しました（" + rows.length + "件）。\n選んだ保存先に「" + fname + "」を書き出しました。\n\nこのファイルは次のどちらでも読めます。\n・スマホの現場入力アプリ →「🗒台帳」から取り込む\n・受付台帳ソフト →「📥 台帳を取り込み」から取り込む");
       return;
     } catch(err){
       if(err && err.name === "AbortError") return;   // ユーザーがキャンセル
@@ -21746,7 +21750,7 @@ function bindLedgerHandlers(container){
 }
 
 /* ============================================================
-   🧰 材料数量（一覧の第7モード）
+   🧰 発注材料数量（一覧の第7モード）
    現場入力で「下見完了」にした戸別の材料を、工事全体で合計する。
    まとめ発注のときに「何をいくつ買えばよいか」だけを見るための画面。
    金額は出さない（金額は「全体費用詳細」の役目）。
@@ -21785,7 +21789,7 @@ function renderListMaterialsMode(rows, container){
   const fmtQty = q => (Math.abs(q - Math.round(q)) < 1e-6) ? String(Math.round(q)) : q.toFixed(1);
 
   let html = renderSelectedFolderBanner();
-  html += '<div class="cost-detail-section"><h3>🧰 材料数量'
+  html += '<div class="cost-detail-section"><h3>🧰 発注材料数量'
     + ' <span style="font-size:11px;color:#555;font-weight:normal;">('
     + (_matOnlyDone ? "下見完了の戸別のみ" : "読み込んだ全戸別") + "・" + counted + " 件ぶん・金額なし)</span></h3>";
   html += '<div class="mat-bar" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 0 10px;font-size:12px;">'
@@ -21797,7 +21801,7 @@ function renderListMaterialsMode(rows, container){
     + (naEnc ? '<span style="color:#8a5a00;" title="全暗号化の戸別です。解錠すると数えられます。">🔐 暗号化で数えられない ' + naEnc + " 件</span>" : "")
     + '<span style="flex:1 1 auto;"></span>'
     + '<button id="mat-copy" title="この表をタブ区切りでコピーします。Excel にそのまま貼り付けられます。" style="background:#2e5488;color:#fff;border:1px solid #1e3a5f;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📋 コピー</button>'
-    + '<button id="mat-xlsx" title="この材料数量を Excel（.xlsx）へ書き出します。" style="background:#1b7a3d;color:#fff;border:1px solid #145c2e;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📘 Excelへ書き出し</button>'
+    + '<button id="mat-xlsx" title="この発注材料数量を Excel（.xlsx）へ書き出します。" style="background:#1b7a3d;color:#fff;border:1px solid #145c2e;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📘 Excelへ書き出し</button>'
     + "</div>";
 
   if(!counted){
@@ -21849,13 +21853,13 @@ function bindMaterialsMode(container, items){
   if(cp) cp.addEventListener("click", async () => {
     if(!items.length){ alert("コピーする材料がありません。"); return; }
     const tsv = aoa().map(r => r.join("\t")).join("\n");
-    try { await navigator.clipboard.writeText(tsv); alert("材料数量をコピーしました（" + items.length + " 品目）。\nExcel に貼り付けてお使いください。"); }
+    try { await navigator.clipboard.writeText(tsv); alert("発注材料数量をコピーしました（" + items.length + " 品目）。\nExcel に貼り付けてお使いください。"); }
     catch(_){
       // クリップボードが使えない環境（file:// の一部）では選択できる形で出す
       const ta = document.createElement("textarea");
       ta.value = tsv; ta.style.position = "fixed"; ta.style.left = "-9999px";
       document.body.appendChild(ta); ta.select();
-      try { document.execCommand("copy"); alert("材料数量をコピーしました（" + items.length + " 品目）。"); }
+      try { document.execCommand("copy"); alert("発注材料数量をコピーしました（" + items.length + " 品目）。"); }
       catch(__){ alert("コピーできませんでした。「📘 Excelへ書き出し」をお使いください。"); }
       ta.remove();
     }
@@ -21863,8 +21867,8 @@ function bindMaterialsMode(container, items){
   const xl = container.querySelector("#mat-xlsx");
   if(xl) xl.addEventListener("click", () => {
     if(!items.length){ alert("書き出す材料がありません。"); return; }
-    const blob = buildXlsxBlob(aoa(), "材料数量");
-    const nm = "材料数量" + (_currentProject && _currentProject.name ? "_" + String(_currentProject.name).replace(/[\\\/:*?"<>|]/g, "_") : "")
+    const blob = buildXlsxBlob(aoa(), "発注材料数量");
+    const nm = "発注材料数量" + (_currentProject && _currentProject.name ? "_" + String(_currentProject.name).replace(/[\\\/:*?"<>|]/g, "_") : "")
       + "_" + lgDateStrToday(0) + ".xlsx";
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
