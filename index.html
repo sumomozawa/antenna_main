@@ -4463,7 +4463,7 @@
       <span id="proj-ind-list" class="proj-ind" title="現在開いている物件"></span>
       <span id="rt-ind-list" class="rt-ind" style="display:none;" title="リアルタイム同期"></span>
       <span id="rt-locks-list" class="rt-locks" style="display:none;"></span>
-      <button id="btn-list-select-folder" title="フォルダ内のファイルをサブフォルダ含めて再帰的に読込 (Chrome/Edge)">📁 フォルダ選択(再帰)</button>
+      <button id="btn-list-select-folder" title="フォルダ内のファイルをサブフォルダ含めて再帰的に読込 (Chrome/Edge)。一度選ぶとそのフォルダを覚えるので、次からは戸別一覧を開いた時に自動で読み込みます（別のフォルダにしたい時だけ押してください）。">📁 フォルダ選択(再帰)</button>
       <button id="btn-list-select-files" title="JSON/.hyb/.encファイルを個別/複数選択">📄 ファイル選択</button>
       <button id="btn-list-dup" title="同じ管理番号のファイルが重なっているところ（iPad/iPhoneで保存すると増える「◯◯ 2.json」など）を探し、残す方を選んで「管理番号.json」にまとめます。フォルダ選択で読み込んだ後に使えます。" style="background:#00838f;">🧹 重複ファイルを整理</button>
       <button id="btn-list-unlock" title="ハイブリッド(.hyb)は氏名・電話・住所・写真を、全暗号化(.enc)は本体をまとめて復号" style="background:#8e24aa;">🔓 一括復号</button>
@@ -12959,6 +12959,8 @@ function openListView(){
   document.body.classList.add("list-view-open");
   // 取り込んだ編集内容を一覧へ即反映（再描画しないと古い表示のまま＝編集が反映されない不具合）
   if(typeof renderListTable === "function") renderListTable();
+  // 前回のフォルダを覚えていれば、選び直さずに読み込む（1回だけ試す）
+  try { listDirAutoLoad(); } catch(e){ console.warn("前回のフォルダの自動読込に失敗", e); }
 }
 function closeListView(){
   document.body.classList.remove("list-view-open");
@@ -13279,6 +13281,91 @@ async function scanDirRecursive(dirHandle, pathPrefix, rows, stats){
    ============================================================ */
 let _listDirHandle = null;        // 最後にフォルダ選択で読んだフォルダ（整理に使う）
 
+/* ============================================================
+   前回のフォルダを覚えて、次からは選び直さずに読み込む
+   ・ブラウザの決まりで、フォルダを読む許可はページを開き直すと切れることがある。
+     許可が生きていれば黙って読み込み、切れていれば「1回押すだけ」のボタンを出す
+     （許可を聞き直すには、利用者の操作が要るため）
+   ・物件を開いているときは自動で読み込まない（物件の一覧を上書きしないため）
+   ============================================================ */
+const LIST_DIR_KEY = "listFolder";                       // IndexedDB(handles) のキー
+const LS_LIST_DIR_NAME = "antenna_list_folder_name";     // 画面に出す用のフォルダ名
+let _listDirAutoTried = false;                           // 自動読込は1回だけ試す
+
+function listDirName(){ try { return localStorage.getItem(LS_LIST_DIR_NAME) || ""; } catch(_){ return ""; } }
+async function listDirRemember(dh){
+  _listDirHandle = dh || null;
+  let kept = false;
+  try { await projHandlePut(LIST_DIR_KEY, dh); kept = true; }
+  catch(e){ console.warn("フォルダを覚えられませんでした（この画面の間だけ覚えます）", e); }
+  // 開き直しても残るときだけ名前を控える（次も読める、と言い切れる場合だけ出す）
+  try { localStorage.setItem(LS_LIST_DIR_NAME, kept ? ((dh && dh.name) || "") : ""); } catch(_){}
+}
+async function listDirForget(){
+  _listDirHandle = null;
+  try { await projHandleDelete(LIST_DIR_KEY); } catch(_){}
+  try { localStorage.removeItem(LS_LIST_DIR_NAME); } catch(_){}
+  const st = document.getElementById("list-status");
+  if(st) st.textContent = "前回のフォルダを忘れました。「📁 フォルダ選択(再帰)」から選び直してください。";
+}
+async function listDirRestore(){
+  if(_listDirHandle) return _listDirHandle;
+  try { _listDirHandle = await projHandleGet(LIST_DIR_KEY); } catch(_){ _listDirHandle = null; }
+  return _listDirHandle;
+}
+/* 覚えているフォルダを読み直す。ask=true のときだけ許可を聞き直す（押した時＝利用者の操作があるとき） */
+async function listReloadRemembered(ask){
+  const dh = await listDirRestore();
+  if(!dh || !dh.queryPermission) return false;
+  let ok = false;
+  try {
+    ok = (await dh.queryPermission({ mode: "read" })) === "granted";
+    if(!ok && ask) ok = (await dh.requestPermission({ mode: "read" })) === "granted";
+  } catch(_){ ok = false; }
+  if(!ok) return false;
+  const st = document.getElementById("list-status");
+  const nm = dh.name || "";
+  if(st){ st.style.display = ""; st.textContent = "📁 前回のフォルダ「" + nm + "」を読み込み中..."; }
+  const rows = [];
+  const stats = { dirs: 0, files: 0, skipped: 0 };
+  try { await scanDirRecursive(dh, "", rows, stats); }
+  catch(err){
+    console.warn("[一覧] 前回のフォルダの読込に失敗", err);
+    if(st) st.textContent = "前回のフォルダを読み込めませんでした（移動・削除されたかもしれません）。「📁 フォルダ選択(再帰)」から選び直してください。";
+    return false;
+  }
+  _listRows = await mergeRowsWithManual(rows);
+  _listSelectedFolderName = nm;
+  renderListTable();
+  if(st) st.textContent = "📁 前回のフォルダ「" + nm + "」から " + rows.length + " 件を読み込みました（別のフォルダにするときは「📁 フォルダ選択(再帰)」）";
+  return true;
+}
+/* 許可が切れているとき用：1回押すだけで読み込めるようにする */
+function renderListDirPrompt(){
+  const st = document.getElementById("list-status");
+  const nm = listDirName();
+  if(!st || !nm) return;
+  st.style.display = "";
+  st.innerHTML = '前回のフォルダ <b>' + escapeHtml(nm) + '</b> を覚えています。'
+    + '<button id="list-dir-reload" style="margin-left:8px;background:#2e5488;color:#fff;border:1px solid #1e3a5f;padding:3px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📁 これを読み込む</button>'
+    + '<button id="list-dir-forget" style="margin-left:6px;background:#fff;color:#666;border:1px solid #bbb;padding:3px 10px;border-radius:3px;cursor:pointer;font-size:11px;">覚えを消す</button>'
+    + '<div style="font-size:11px;color:#667482;margin-top:3px;">ブラウザの決まりで、読む許可はページを開き直すと切れることがあります。一度押していただければ、そのあとは自動で読み込みます。</div>';
+  const rb = document.getElementById("list-dir-reload");
+  if(rb) rb.onclick = async () => { if(!(await listReloadRemembered(true))) renderListDirPrompt(); };
+  const fb = document.getElementById("list-dir-forget");
+  if(fb) fb.onclick = () => listDirForget();
+}
+/* 一覧を開いたときに1回だけ：覚えているフォルダがあれば読み込む */
+function listDirAutoLoad(){
+  if(_listDirAutoTried) return;
+  _listDirAutoTried = true;
+  if(_currentProject) return;                 // 物件を開いている＝一覧は物件のもの。触らない
+  if(_listRows && _listRows.length) return;   // すでに何か読み込んでいる
+  if(!listDirName()) return;                  // 覚えていない
+  listReloadRemembered(false).then(ok => { if(!ok) renderListDirPrompt(); })
+    .catch(() => renderListDirPrompt());
+}
+
 function dupWhenMs(row){
   const t = Date.parse(String((row.data && row.data.editedAt) || "").trim());
   return isFinite(t) ? t : 0;
@@ -13481,7 +13568,7 @@ async function listSelectFolder(){
   if(loadMode === "cancel") return;
   try {
     const dirHandle = await window.showDirectoryPicker();
-    _listDirHandle = dirHandle;          // 重複ファイルの整理に使う
+    await listDirRemember(dirHandle);    // 次からは選び直さずに読み込む（重複整理にも使う）
     const rows = [];
     const stats = { dirs: 0, files: 0, skipped: 0 };
     const status = document.getElementById("list-status");
