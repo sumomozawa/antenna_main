@@ -2947,11 +2947,24 @@
 
   /* --- 受付台帳 --- */
   .ledger-controls {
-    display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap;
+    display: flex; align-items: stretch; gap: 6px 10px; flex-wrap: wrap;
     padding: 8px 12px; margin-bottom: 10px; font-size: 12px;
   }
   .ledger-controls label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
   .ledger-controls .lg-count { margin-left: auto; color: #555; font-size: 11px; }
+  /* 操作を役割ごとにまとめる。何がどこにあるか探さずに済むよう、小見出しを付ける。 */
+  .lgc-grp {
+    display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap;
+    border: 1px solid #dde3ea; border-radius: 5px; padding: 5px 9px 5px 8px; background: #fbfcfd;
+  }
+  .lgc-grp > .lgc-ttl {
+    font-size: 10px; font-weight: 700; color: #7d8894; letter-spacing: .04em;
+    white-space: nowrap; padding-right: 2px; border-right: 1px solid #e3e8ee; margin-right: 2px; align-self: stretch;
+    display: flex; align-items: center;
+  }
+  .lgc-grp button { white-space: nowrap; }
+  .lgc-grp.lgc-wide { flex: 1 1 100%; }
+  .ledger-controls .lgc-note { flex: 1 1 100%; font-size: 11px; color: #667482; margin: 2px 0 0; }
   table.ledger-table { width: 100%; border-collapse: collapse; font-size: 12px; background: #fff; }
   table.ledger-table th, table.ledger-table td { border: 1px solid #dde3ea; padding: 3px 6px; vertical-align: middle; }
   table.ledger-table thead th {
@@ -20440,26 +20453,42 @@ function renderListLedgerMode(rows, container){
   const arrow = k => (_ledgerSort.key === k ? '<span class="lg-arrow">' + (_ledgerSort.dir > 0 ? "▲" : "▼") + '</span>' : "");
   let html = renderSelectedFolderBanner();
   html += lgPrintWPanelHtml();
+  // 操作は「行を足す」「絞り込む」「印刷する」「やりとりする」の4つにまとめる。
+  // 探さずに済むよう、それぞれに小見出しを付けて枠で囲う。
+  const nFilters = (_ledgerOnlyProv ? 1 : 0) + (_ledgerOnlyPending ? 1 : 0) + (_ledgerOnlyNoFlyer ? 1 : 0)
+    + (_ledgerOnlyNoDwg ? 1 : 0) + (_ledgerOnlyHold ? 1 : 0);
   html += '<div class="ledger-controls cost-detail-section">'
-    + '<button id="lg-add-row" title="台帳に新しい戸別行を追加（台帳が戸別作成の起点）" style="background:#1e3a5f;color:#fff;border:1px solid #16314f;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">＋ 新規行</button>'
-    + '<label' + (prov > 0 ? ' style="background:#fff8d6;border-radius:3px;padding:2px 6px;"' : '') + '><input type="checkbox" id="lg-only-prov"' + (_ledgerOnlyProv ? " checked" : "") + '> 仮受付のみ' + (prov > 0 ? '（' + prov + '）' : '') + '</label>'
-    + '<label><input type="checkbox" id="lg-only-pending"' + (_ledgerOnlyPending ? " checked" : "") + '> 未完了のみ</label>'
-    + '<label><input type="checkbox" id="lg-only-noflyer"' + (_ledgerOnlyNoFlyer ? " checked" : "") + '> ビラ未配布のみ</label>'
-    + '<label><input type="checkbox" id="lg-only-nodwg"' + (_ledgerOnlyNoDwg ? " checked" : "") + '> 図面未作成のみ</label>'
-    + '<label' + (held > 0 ? ' style="background:#ffe8cc;border-radius:3px;padding:2px 6px;"' : '') + ' title="着工を止めている戸別だけを表示します"><input type="checkbox" id="lg-only-hold"' + (_ledgerOnlyHold ? " checked" : "") + '> 保留のみ' + (held > 0 ? '（' + held + '）' : '') + '</label>'
-    + '<button id="lg-print-layout" title="印刷したときの見た目のまま、各列の幅をその場で調整できます（この端末だけの設定）" style="background:#37474f;color:#fff;border:1px solid #263238;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">🖨 印刷レイアウト調整</button>'
-    + '<button id="lg-print-sel" title="左端のチェックを入れた戸別の工事調書を 1戸1ページ でまとめて印刷／PDF出力します"' + (selCount ? '' : ' disabled')
-    + ' style="background:#7a4e1e;color:#fff;border:1px solid #5e3c16;padding:4px 12px;border-radius:3px;cursor:' + (selCount ? 'pointer' : 'not-allowed') + ';font-size:12px;opacity:' + (selCount ? '1' : '.5') + ';">🖨 選択印刷' + (selCount ? '（' + selCount + '件）' : '') + '</button>'
-    + (selCount ? '<button id="lg-print-clear" title="工事調書の選択をすべて解除" style="background:#fff;color:#7a4e1e;border:1px solid #b08a55;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:12px;">選択解除</button>' : '')
-    + '<button id="lg-import-ledger" title="受付台帳ソフトなど別のパソコンで作った「受付台帳ファイル（.json）」を読み込みます。いまの台帳と違うところだけを一覧で確認し、選んだ分だけ取り込みます。図面・積算には触りません。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📥 受付台帳を取り込む</button>'
-    + '<button id="lg-xlsx-import" title="Excel（.xlsx）を読み取ります。受付台帳ソフトが書き出した Excel なら、名前・施工会社・状態・打合せ・備考まで全項目の違いを一覧で確認してから取り込めます。現場のExcelなら、H列「管理番号」を下三桁で突き合わせて台帳の管理番号を更新します。" style="background:#2e5488;color:#fff;border:1px solid #1e3a5f;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📗 Excelから読取り</button>'
-    + '<button id="lg-xlsx-export" title="いまの受付台帳を Excel（.xlsx）へ書き出します。見出しは「管理番号」「住所」「備考」を使うので、Excelで直したあと左の「📗 Excelから管理番号を読取り」でそのまま読み戻せます。" style="background:#1b7a3d;color:#fff;border:1px solid #145c2e;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📘 Excelへ書き出し</button>'
-    + '<span class="lg-xlsx-cols" title="1行目の見出し（管理番号／住所結合／過去の情報）から列を自動で探します。見出しが無い場合は H / E / F 列を使います。">'
-    +   '読む列：<b>H</b>管理番号<span class="req">必須</span> ／ <b>E</b>住所 ／ <b>F</b>過去の情報→備考'
-    +   '<span class="sub">（1行目の見出しから自動判別。上から下へ全行）</span></span>'
-    + '<button id="lg-export-genba" title="この受付台帳を1ファイル（受付台帳.json）に書き出します。スマホの現場入力アプリで取り込むと、一覧から選んで入力を開始できます（管理番号・氏名・住所が入った状態）。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📤 現場用に書き出し</button>'
-    + '<span style="font-size:11px;color:#667482;">セルをクリックで直接編集。日程・打合せはカレンダーに、名前・住所等は図面に即反映されます</span>'
+    // ① 行を足す
+    + '<div class="lgc-grp"><span class="lgc-ttl">追加</span>'
+    +   '<button id="lg-add-row" title="台帳に新しい戸別行を追加します。受付の電話を受けたらここから1行足してください（台帳が戸別作成の起点です）。" style="background:#1e3a5f;color:#fff;border:1px solid #16314f;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">＋ 新規行</button>'
+    + '</div>'
+    // ② 絞り込む
+    + '<div class="lgc-grp"><span class="lgc-ttl">絞り込み' + (nFilters ? '（' + nFilters + '）' : '') + '</span>'
+    +   '<label' + (prov > 0 ? ' style="background:#fff8d6;border-radius:3px;padding:2px 6px;"' : '') + ' title="まだ清書していない、電話受付だけの戸別"><input type="checkbox" id="lg-only-prov"' + (_ledgerOnlyProv ? " checked" : "") + '> 仮受付' + (prov > 0 ? '（' + prov + '）' : '') + '</label>'
+    +   '<label title="完了になっていない戸別"><input type="checkbox" id="lg-only-pending"' + (_ledgerOnlyPending ? " checked" : "") + '> 未完了</label>'
+    +   '<label title="ビラをまだ配っていない戸別"><input type="checkbox" id="lg-only-noflyer"' + (_ledgerOnlyNoFlyer ? " checked" : "") + '> ビラ未配布</label>'
+    +   '<label title="図面（積算）がまだ入っていない戸別"><input type="checkbox" id="lg-only-nodwg"' + (_ledgerOnlyNoDwg ? " checked" : "") + '> 図面未作成</label>'
+    +   '<label' + (held > 0 ? ' style="background:#ffe8cc;border-radius:3px;padding:2px 6px;"' : '') + ' title="着工を止めている戸別"><input type="checkbox" id="lg-only-hold"' + (_ledgerOnlyHold ? " checked" : "") + '> 保留' + (held > 0 ? '（' + held + '）' : '') + '</label>'
+    + '</div>'
+    // ③ 印刷する
+    + '<div class="lgc-grp"><span class="lgc-ttl">印刷</span>'
+    +   '<button id="lg-print-layout" title="印刷したときの見た目のまま、台帳の各列の幅をその場で調整できます（この端末だけの設定）。" style="background:#37474f;color:#fff;border:1px solid #263238;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">🖨 レイアウト調整</button>'
+    +   '<button id="lg-print-sel" title="左端のチェックを入れた戸別の工事調書を、1戸1ページ でまとめて印刷／PDF出力します。"' + (selCount ? '' : ' disabled')
+    +     ' style="background:#7a4e1e;color:#fff;border:1px solid #5e3c16;padding:4px 12px;border-radius:3px;cursor:' + (selCount ? 'pointer' : 'not-allowed') + ';font-size:12px;opacity:' + (selCount ? '1' : '.5') + ';">🖨 工事調書' + (selCount ? '（' + selCount + '件）' : '') + '</button>'
+    +   (selCount ? '<button id="lg-print-clear" title="工事調書の選択をすべて解除します。" style="background:#fff;color:#7a4e1e;border:1px solid #b08a55;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:12px;">選択解除</button>' : '')
+    + '</div>'
+    // ④ 取り込む（外から中へ）
+    + '<div class="lgc-grp"><span class="lgc-ttl">取り込み</span>'
+    +   '<button id="lg-import-ledger" title="受付台帳ソフトなど別のパソコンで作った「受付台帳ファイル（.json）」を読み込みます。いまの台帳と違うところだけを一覧で確認し、選んだ分だけ取り込みます。図面・積算には触りません。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📥 受付台帳ファイル</button>'
+    +   '<button id="lg-xlsx-import" title="Excel（.xlsx）を読み取ります。受付台帳ソフトが書き出した Excel なら、名前・施工会社・状態・打合せ・備考まで全項目の違いを一覧で確認してから取り込めます。見出しの無い現場のExcelなら、H列「管理番号」を下三桁で突き合わせて台帳の管理番号・住所・過去の情報を更新します。" style="background:#2e5488;color:#fff;border:1px solid #1e3a5f;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📗 Excel</button>'
+    + '</div>'
+    // ⑤ 書き出す（中から外へ）
+    + '<div class="lgc-grp"><span class="lgc-ttl">書き出し</span>'
+    +   '<button id="lg-xlsx-export" title="いまの受付台帳を Excel（.xlsx）へ書き出します。Excelで直したあと、左の「📗 Excel」でそのまま読み戻せます。" style="background:#1b7a3d;color:#fff;border:1px solid #145c2e;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📘 Excel</button>'
+    +   '<button id="lg-export-genba" title="この受付台帳を1ファイル（受付台帳.json）に書き出します。スマホの現場入力アプリで取り込むと、一覧から選んで入力を開始できます（管理番号・氏名・住所が入った状態）。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📤 現場用</button>'
+    + '</div>'
     + '<span class="lg-count">全 ' + rows.length + ' 件（仮 ' + prov + ' ／ 完了 ' + done + ' ／ ビラ済 ' + flyered + (held ? ' ／ 保留 ' + held : '') + '）' + (shown.length !== rows.length ? ' → 表示 ' + shown.length + ' 件' : '') + '</span>'
+    + '<div class="lgc-note">セルをクリックすると直接編集できます。工事日程・打合せ予定は 📅 予定カレンダーに、名前・住所などは図面にそのまま反映されます。</div>'
     + '</div>';
   html += '<div class="cost-detail-section"><table class="ledger-table"><thead><tr>'
     + '<th data-col="sel" class="lg-c" style="width:34px;" title="表示中の戸別をまとめて選択／解除（工事調書の選択印刷用）"><input type="checkbox" id="lg-print-all"></th>'
