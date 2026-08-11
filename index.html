@@ -20753,26 +20753,136 @@ function buildXlsxBlob(aoa, sheetName){
 }
 /* 受付台帳を .xlsx へ書き出し。見出しは「管理番号」「住所」「備考」を使うので、
    Excelで直したあと「📗 Excelから管理番号を読取り」でそのまま読み戻せる。 */
+/* 表として整えた .xlsx を作る（見出しの色・罫線・列幅・先頭行の固定・
+   オートフィルター・印刷設定つき）。cols=[{label,w,align,wrap}]、rows=[[値,…],…]。
+   title を渡すと1行目が表題になり、見出しは2行目。渡さなければ見出しが1行目。 */
+function buildStyledXlsxBlob(cols, rows, sheetName, title){
+  const nm = _xlsxEsc(String(sheetName || "Sheet1").replace(/[\[\]:*?\/\\]/g, "").slice(0, 31)) || "Sheet1";
+  const hasTitle = !!title;
+  const headRow = hasTitle ? 2 : 1;
+  const firstData = headRow + 1;
+  const lastCol = _xlsxColName(cols.length - 1), lastRow = rows.length + headRow;
+  const S = { title: 5, head: 1, wrap: 2, center: 3, left: 4 };
+  const styleOf = c => (c.wrap ? S.wrap : (c.align === "c" ? S.center : S.left));
+  const cell = (ci, ri, v, s) => {
+    const t = String(v == null ? "" : v);
+    return t
+      ? '<c r="' + _xlsxColName(ci) + ri + '" s="' + s + '" t="inlineStr"><is><t xml:space="preserve">' + _xlsxEsc(t) + "</t></is></c>"
+      : '<c r="' + _xlsxColName(ci) + ri + '" s="' + s + '"/>';     // 空でもセルを出す＝罫線が途切れない
+  };
+  let xml = "";
+  if(hasTitle){
+    xml += '<row r="1" ht="20" customHeight="1">'
+      + cols.map((c, i) => cell(i, 1, i === 0 ? title : "", S.title)).join("") + "</row>";
+  }
+  xml += '<row r="' + headRow + '" ht="28" customHeight="1">'
+    + cols.map((c, i) => cell(i, headRow, c.label, S.head)).join("") + "</row>";
+  rows.forEach((row, ri) => {
+    xml += '<row r="' + (ri + firstData) + '">'
+      + cols.map((c, i) => cell(i, ri + firstData, row[i], styleOf(c))).join("") + "</row>";
+  });
+  const colsXml = "<cols>" + cols.map((c, i) =>
+    '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + c.w + '" customWidth="1"/>').join("") + "</cols>";
+  const X = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+  const NS = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"';
+  const styles = X + "<styleSheet " + NS + ">"
+    + '<fonts count="3">'
+    +   '<font><sz val="11"/><name val="Meiryo UI"/></font>'
+    +   '<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Meiryo UI"/></font>'
+    +   '<font><b/><sz val="14"/><color rgb="FF1F4E79"/><name val="Meiryo UI"/></font>'
+    + "</fonts>"
+    + '<fills count="3"><fill><patternFill patternType="none"/></fill>'
+    +   '<fill><patternFill patternType="gray125"/></fill>'
+    +   '<fill><patternFill patternType="solid"><fgColor rgb="FF1F4E79"/><bgColor indexed="64"/></patternFill></fill></fills>'
+    + '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>'
+    +   '<border><left style="thin"><color rgb="FFB4C6E7"/></left><right style="thin"><color rgb="FFB4C6E7"/></right>'
+    +   '<top style="thin"><color rgb="FFB4C6E7"/></top><bottom style="thin"><color rgb="FFB4C6E7"/></bottom><diagonal/></border></borders>'
+    + '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+    + '<cellXfs count="6">'
+    +   '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+    +   '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">'
+    +     '<alignment horizontal="center" vertical="center" wrapText="1"/></xf>'
+    +   '<xf numFmtId="49" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1">'
+    +     '<alignment horizontal="left" vertical="top" wrapText="1"/></xf>'
+    +   '<xf numFmtId="49" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1">'
+    +     '<alignment horizontal="center" vertical="center"/></xf>'
+    +   '<xf numFmtId="49" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1">'
+    +     '<alignment horizontal="left" vertical="center"/></xf>'
+    +   '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1">'
+    +     '<alignment horizontal="left" vertical="center"/></xf>'
+    + "</cellXfs>"
+    + '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+  const sheet = X + "<worksheet " + NS + ">"
+    + '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>'
+    + '<dimension ref="A1:' + lastCol + lastRow + '"/>'
+    + '<sheetViews><sheetView showGridLines="0" tabSelected="1" workbookViewId="0">'
+    +   '<pane ySplit="' + headRow + '" topLeftCell="A' + firstData + '" activePane="bottomLeft" state="frozen"/>'
+    +   '<selection pane="bottomLeft" activeCell="A' + firstData + '" sqref="A' + firstData + '"/></sheetView></sheetViews>'
+    + '<sheetFormatPr defaultRowHeight="15"/>'
+    + colsXml
+    + "<sheetData>" + xml + "</sheetData>"
+    + '<autoFilter ref="A' + headRow + ":" + lastCol + lastRow + '"/>'
+    + (hasTitle ? '<mergeCells count="1"><mergeCell ref="A1:' + lastCol + '1"/></mergeCells>' : "")
+    + '<printOptions horizontalCentered="1"/>'
+    + '<pageMargins left="0.24" right="0.24" top="0.4" bottom="0.4" header="0.2" footer="0.2"/>'
+    + '<pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/>'
+    + "</worksheet>";
+  return _zipStore([
+    { name:"[Content_Types].xml", text: X + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+      + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+      + '<Default Extension="xml" ContentType="application/xml"/>'
+      + '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+      + '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+      + '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>' },
+    { name:"_rels/.rels", text: X + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
+    { name:"xl/workbook.xml", text: X + "<workbook " + NS
+      + ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+      + '<sheets><sheet name="' + nm + '" sheetId="1" r:id="rId1"/></sheets>'
+      + '<definedNames><definedName name="_xlnm.Print_Titles" localSheetId="0">&apos;' + nm.replace(/'/g, "&apos;&apos;")
+      + "&apos;!$1:$" + headRow + "</definedName></definedNames></workbook>" },
+    { name:"xl/_rels/workbook.xml.rels", text: X + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+      + '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>' },
+    { name:"xl/styles.xml", text: styles },
+    { name:"xl/worksheets/sheet1.xml", text: sheet }
+  ], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+}
+/* 受付台帳を Excel へ書き出すときの列。幅は実際に使っている表に合わせてある。 */
+const LG_XLSX_COLS = [
+  { label:"管理番号",     w:14.7, align:"l" },
+  { label:"状態",         w:10.3, align:"c" },
+  { label:"名前",         w:16,   align:"l" },
+  { label:"施工会社",     w:13,   align:"l" },
+  { label:"住所",         w:41.7, align:"l", wrap:true },
+  { label:"電話番号",     w:16.7, align:"l" },
+  { label:"工事日程予定", w:16,   align:"c" },
+  { label:"打合せ予定",   w:14.7, align:"c" },
+  { label:"ビラ",         w:7.3,  align:"c" },
+  { label:"完了",         w:7.3,  align:"c" },
+  { label:"保留",         w:7.3,  align:"c" },
+  { label:"承諾書",       w:9.3,  align:"c" },
+  { label:"完了書",       w:9.3,  align:"c" },
+  { label:"備考",         w:43.3, align:"l", wrap:true }
+];
 async function exportReceptionLedgerToXlsx(){
   const src = (typeof _listRows !== "undefined" && Array.isArray(_listRows)) ? _listRows : [];
   const yn = b => (b ? "○" : "");
-  const head = ["管理番号", "状態", "名前", "施工会社", "住所", "電話番号",
-    "工事日程予定", "打合せ予定", "ビラ", "完了", "承諾書", "完了書", "備考"];
   const body = src.map(r => {
     const d = r.data || {};
     const lg = (typeof getLedger === "function") ? (getLedger(subCaseKey(r)) || {}) : {};
-    const st = ({ provisional: "仮受付", in_progress: "未完了", completed: "完了" })[d.chosho_status] || "";
+    const st = LGIMP_ST_NAME[d.chosho_status] || "";      // 画面と同じ言い方（仮受付／受付済／完了）
     const date = (d.chosho_date || "") + (lg.time ? (" " + lg.time) : "");
     const meet = String(lg.meetAt || "").replace("T", " ");
     return [ (d.chosho_mgmt_no || "").trim(), st, d.chosho_cust_name || "",
       (typeof rowContractor === "function") ? (rowContractor(r) || "") : "",
       d.chosho_cust_addr || "", d.chosho_cust_tel || "", date, meet,
-      yn(lg.flyer), yn(d.chosho_status === "completed"), yn(lg.consent), yn(lg.compdoc), lg.note || "" ];
+      yn(lg.flyer), yn(d.chosho_status === "completed"), yn(lg.hold), yn(lg.consent), yn(lg.compdoc), lg.note || "" ];
   }).filter(a => a[0] || a[2] || a[4]);
   if(!body.length){ alert("書き出す受付台帳の行がありません。先に戸別一覧を読み込むか、台帳に行を追加してください。"); return; }
 
   const projName = (typeof _currentProject !== "undefined" && _currentProject && _currentProject.name) ? String(_currentProject.name) : "";
-  const blob = buildXlsxBlob([head].concat(body), "受付台帳");
+  const blob = buildStyledXlsxBlob(LG_XLSX_COLS, body, "受付台帳", "");
   const base = "受付台帳" + (projName ? ("_" + projName) : "") + "_" + new Date().toISOString().slice(0, 10);
   const fname = ((typeof sanitizePrintFilename === "function") ? sanitizePrintFilename(base) : base) + ".xlsx";
 
@@ -21316,6 +21426,7 @@ const LGX_ALIAS = {
   note:["備考","メモ"]
 };
 const LGX_ST_CODE = { "仮受付":"provisional", "受付":"in_progress", "受付済":"in_progress", "受付済み":"in_progress",
+                      "未完了":"in_progress",   // 以前の書き出しはこの言い方だった
                       "着工":"in_progress", "完了":"completed", "済":"completed" };
 /* 人が Excel に手で入れる「○」の書き方は揺れるので広めに拾う */
 function lgxYes(v){ return /^(○|◯|〇|●|✓|✔|レ|Ｖ|V|v|1|TRUE|true|True|はい|有|済|済み|OK|ok)$/.test(String(v == null ? "" : v).trim()); }
