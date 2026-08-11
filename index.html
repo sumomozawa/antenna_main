@@ -104,6 +104,14 @@
     border: 1px solid #cdd3da; border-radius: 3px;
     font-size: 12px; background: #fff; min-width: 0;
   }
+  /* 備考（現場メモ）：複数行なのでラベルを上に合わせる */
+  .field.field-area { align-items: flex-start; }
+  .field.field-area label { padding-top: 3px; }
+  .field textarea {
+    flex: 1; padding: 3px 5px; min-width: 0; resize: vertical;
+    border: 1px solid #cdd3da; border-radius: 3px;
+    font-size: 12px; background: #fff; font-family: inherit; line-height: 1.5;
+  }
   /* アンテナ取付ガイドが自動入力した欄（別色で識別。手動変更すると通常色に戻る） */
   .ag-filled {
     background: #e3f2fd !important; border-color: #1565c0 !important;
@@ -3708,6 +3716,10 @@
           <div class="field">
             <label><span data-tip="この戸別の施工を担当する協力会社。物件メニューの「施工業者」で登録した一覧から選択。物件に保存され、工事別フォルダ・工事調書・協力会社請求内訳の会社別集計で使われます（戸別JSONには含まれません）。">施工会社</span></label>
             <select id="case_contractor"></select>
+          </div>
+          <div class="field field-area">
+            <label><span data-tip="この戸別の自由記入メモ。スマホ「現場入力」の備考欄に書いた内容が、現場JSNの取込でここへ入ります（改行もそのまま）。受付台帳の「備考」とは別枠なので、事務所側の備考が上書きされることはありません。">備考（現場メモ）</span></label>
+            <textarea id="chosho_note" rows="3" placeholder="現場で気付いたこと（留守・犬あり・隣家の許可が必要 など）"></textarea>
           </div>
           <div style="font-size:11px;color:#444;margin:6px 0 2px 0;font-weight:600;">📷 写真（複数登録可）</div>
           <div id="photo-list" style="display:flex;flex-direction:column;gap:6px;"></div>
@@ -10746,6 +10758,7 @@ function blankCaseState(){
   s.chosho_status = "provisional";
   s.chosho_mgmt_no = ""; s.chosho_date = "";
   s.chosho_cust_name = ""; s.chosho_cust_addr = ""; s.chosho_cust_tel = "";
+  s.chosho_note = "";
   s.chosho_photos = [];              // → 「施工前」「施工完了」の空枠だけに戻る
   s.measurements = null;             // → 既定の測定値へ
   s.asbestos = null;                 // → 既定値。担当者欄は事業所プリセットから入り直す
@@ -11386,7 +11399,7 @@ function collectState(){
     "cable_indoor_new","cable_vvf_len","cable_s5cfb_power","ext_power_conn",
     "att_main","att_46","att_50","box_consent","ofmu_qty","wire_sus16_len",
     "chosho_mgmt_no","chosho_date","chosho_cust_name","chosho_cust_addr","chosho_cust_tel",
-    "chosho_status"];
+    "chosho_status","chosho_note"];
   const s = {};
   ids.forEach(id => {
     const el = document.getElementById(id);
@@ -15747,7 +15760,7 @@ function doSubFullPrint(){
    ============================================================ */
 const CASE_KEEP_ON_REVERT = [
   "chosho_mgmt_no", "chosho_cust_name", "chosho_cust_addr", "chosho_cust_tel",
-  "chosho_date", "chosho_status",
+  "chosho_date", "chosho_status", "chosho_note",
   "chosho_photos", "chosho_photo_count", "chosho_photos_thumb", "_photosStripped",
   "asbestos",
   "_manual", "_origin", "_schemaVer"
@@ -22444,6 +22457,9 @@ function renderCalPanel(byDate){
     + '住所： ' + escapeHtml(d.chosho_cust_addr || "―") + '<br>'
     + '電話： ' + escapeHtml(d.chosho_cust_tel || "―") + '<br>'
     + '備考： ' + escapeHtml(lg.note || "―")
+    + (String(d.chosho_note || "").trim()
+        ? '<br>現場メモ： <span style="white-space:pre-wrap;">' + escapeHtml(String(d.chosho_note).trim()) + '</span>'
+        : '')
     + '</div>';
   // 削除ボタン：打合せ＝予定削除／仮登録の仮予定＝台帳行ごと削除／この戸別の工事予定＝日付クリア（戸別は残す）
   let delBtn = '';
@@ -22970,7 +22986,8 @@ const GENBA_AUTHORITATIVE_FIELDS = [
   "cable_indoor_new","cable_vvf_len","cable_s5cfb_power","ext_power_conn",
   "att_main","att_46","att_50","box_consent","ofmu_qty","wire_sus16_len",
   "tv_rooms","tv_bd","tv_sp","tv_term",
-  "wire_overrides","text_annotations","antenna_guide","measurements"
+  "wire_overrides","text_annotations","antenna_guide","measurements",
+  "chosho_note"
 ];
 // main(PC/物件)を絶対保持＝genba値を採らないフィールド（現場は既定値/空を出すため）
 const GENBA_HARD_KEEP_MAIN = [
