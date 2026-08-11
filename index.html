@@ -4466,6 +4466,7 @@
       <button id="btn-list-select-folder" title="フォルダ内のファイルをサブフォルダ含めて再帰的に読込 (Chrome/Edge)。一度選ぶとそのフォルダを覚えるので、次からは戸別一覧を開いた時に自動で読み込みます（別のフォルダにしたい時だけ押してください）。">📁 フォルダ選択(再帰)</button>
       <button id="btn-list-select-files" title="JSON/.hyb/.encファイルを個別/複数選択">📄 ファイル選択</button>
       <button id="btn-list-dup" title="同じ管理番号のファイルが重なっているところ（iPad/iPhoneで保存すると増える「◯◯ 2.json」など）を探し、残す方を選んで「管理番号.json」にまとめます。フォルダ選択で読み込んだ後に使えます。" style="background:#00838f;">🧹 重複ファイルを整理</button>
+      <button id="btn-list-writeback" title="受付台帳で直した 名前・住所・電話・工事日程予定・状態・備考 を、フォルダの戸別ファイルへまとめて書き込みます。戸別を1件ずつ開いて保存しなくて済みます（写真・図面・積算には触りません）。フォルダ選択で読み込んだ後に使えます。" style="background:#00695c;">📤 台帳をファイルへ反映</button>
       <button id="btn-list-unlock" title="ハイブリッド(.hyb)は氏名・電話・住所・写真を、全暗号化(.enc)は本体をまとめて復号" style="background:#8e24aa;">🔓 一括復号</button>
       <button id="btn-list-bulk-reenc" title="選択した複数ファイルを一括で別パスワード／別方式に再暗号化して上書き保存" style="background:#e65100;">🔄 一括再暗号化</button>
       <button id="btn-list-bulk-plain" title="暗号化ファイル(.hyb/.enc)を一括で復号し、暗号化なしの平文(.json)として保存し直す（個人情報が平文になります）" style="background:#546e7a;">📄 一括平文化</button>
@@ -13532,6 +13533,107 @@ async function listReloadFolder(){
   await scanDirRecursive(_listDirHandle, "", rows, stats);
   _listRows = await mergeRowsWithManual(rows);
   renderListTable();
+}
+
+/* ============================================================
+   受付台帳の内容を、フォルダの戸別ファイルへ書き戻す
+   受付台帳のセルで直した内容は、その戸別を開いて保存しない限りファイルには入らない。
+   フォルダを読み直すとファイルの中身が勝つため、直したはずの内容が元に戻ってしまう
+   （例：現場入力の古い版が勝手に入れた工事予定日を、台帳で消しても消えない）。
+   ここでは戸別を1件ずつ開かずに、台帳が持ち主の項目だけをファイルへ書き込む。
+   写真・図面・積算・測定値など、ファイルの他の中身には一切触らない。
+   ============================================================ */
+const LGWB_FIELDS = [
+  { k:"chosho_cust_name", label:"名前" },
+  { k:"chosho_cust_addr", label:"住所" },
+  { k:"chosho_cust_tel",  label:"電話" },
+  { k:"chosho_date",      label:"工事日程予定" },
+  { k:"chosho_status",    label:"状態" },
+  { k:"chosho_note",      label:"備考" }
+];
+const LGWB_STATUS = { provisional:"仮受付", in_progress:"受付済", completed:"完了" };
+function lgwbShow(k, v){
+  v = String(v == null ? "" : v);
+  if(!v) return "（空欄）";
+  if(k === "chosho_status") return LGWB_STATUS[v] || v;
+  return v.replace(/\s*\n\s*/g, " ");
+}
+/* この戸別について、台帳が「こうなっているはず」と思っている内容 */
+function lgwbWanted(row){
+  const d = row.data || {};
+  const o = {};
+  LGWB_FIELDS.forEach(f => { o[f.k] = String(d[f.k] == null ? "" : d[f.k]); });
+  const tk = subCaseKey(row);
+  const lg = tk ? getLedger(tk) : null;
+  if(lg && lg.note) o.chosho_note = String(lg.note);   // 備考は台帳側が持ち主
+  return o;
+}
+/* フォルダから読んだ行を1件ずつ実ファイルと突き合わせ、違うところだけ拾う */
+async function lgwbScan(rows){
+  const list = [], skipped = [], unreadable = [];
+  for(const row of (rows || [])){
+    if(!row || !row._dir || !row._name) continue;      // フォルダから読んでいない行
+    if(row.fileType !== "plain"){ skipped.push(row._name); continue; }  // 暗号化ファイルは対象外
+    let json = null;
+    try {
+      const fh = await row._dir.getFileHandle(row._name);
+      json = JSON.parse(await (await fh.getFile()).text());
+    } catch(e){ console.warn("[台帳反映] 読めません", row._name, e); unreadable.push(row._name); continue; }
+    if(!json || typeof json !== "object") continue;
+    const want = lgwbWanted(row), diffs = [];
+    LGWB_FIELDS.forEach(f => {
+      const now = String(json[f.k] == null ? "" : json[f.k]);
+      if(now !== want[f.k]) diffs.push({ k:f.k, label:f.label, from:now, to:want[f.k] });
+    });
+    if(diffs.length) list.push({ row, name:row._name, dirPath:row._dirPath || "", diffs });
+  }
+  return { list, skipped, unreadable };
+}
+async function lgwbApply(list){
+  let ok = 0; const fails = [];
+  for(const it of list){
+    try {
+      if(!(await dupEnsureWritable(it.row._dir))) throw new Error("フォルダへの書き込み許可が得られませんでした");
+      const fh = await it.row._dir.getFileHandle(it.name);
+      const json = JSON.parse(await (await fh.getFile()).text());
+      it.diffs.forEach(d => { json[d.k] = d.to; });
+      json.editedAt = new Date().toISOString();       // 中の更新日時（重複整理の新旧判定にも使う）
+      const w = await fh.createWritable();
+      await w.write(JSON.stringify(json, null, 2));
+      await w.close();
+      ok++;
+    } catch(e){ fails.push("・" + it.name + "：" + ((e && e.message) || e)); }
+  }
+  return { ok, fails };
+}
+async function lgwbButton(){
+  if(!_listRows || !_listRows.length){
+    alert("先に「📁 フォルダ選択(再帰)」で戸別ファイルのフォルダを読み込んでください。");
+    return;
+  }
+  if(!_listRows.some(r => r && r._dir && r._name)){
+    alert("「📁 フォルダ選択(再帰)」で読み込んだ一覧でのみ使えます。\n"
+      + "（ファイルへ書き戻すには、そのフォルダを掴んでいる必要があります）");
+    return;
+  }
+  const { list, skipped, unreadable } = await lgwbScan(_listRows);
+  const note = (skipped.length ? ("\n※ 暗号化ファイル " + skipped.length + " 件は対象外です（戸別を開いて保存してください）") : "")
+             + (unreadable.length ? ("\n※ 読めなかったファイル " + unreadable.length + " 件は飛ばします") : "");
+  if(!list.length){
+    alert("受付台帳の内容と、戸別ファイルの中身は一致しています。\n書き戻すものはありません。" + note);
+    return;
+  }
+  const lines = list.slice(0, 12).map(it => "・" + it.name + "\n    "
+    + it.diffs.map(d => d.label + "： " + lgwbShow(d.k, d.from) + " → " + lgwbShow(d.k, d.to)).join("\n    "));
+  if(!confirm("受付台帳の内容を、戸別ファイル " + list.length + " 件へ書き戻します。\n\n"
+      + lines.join("\n") + (list.length > 12 ? ("\n・ほか " + (list.length - 12) + " 件") : "")
+      + "\n\n書き込むのは 名前・住所・電話・工事日程予定・状態・備考 だけです。\n"
+      + "写真・図面・積算・測定値には触りません。" + note)) return;
+  const res = await lgwbApply(list);
+  alert("📤 台帳の内容を書き戻しました。\n\n" + res.ok + " 件のファイルを更新しました"
+    + (res.fails.length ? ("\n\n⚠ できなかったもの:\n" + res.fails.join("\n")) : "")
+    + "\n\n一覧を読み直します。");
+  await listReloadFolder();
 }
 
 /* 物件を開いたままフォルダ/ファイルを読み込む時の挙動を選択。
@@ -24230,6 +24332,7 @@ function init(){
   document.getElementById("btn-list-close").onclick = closeListView;
   document.getElementById("btn-list-select-folder").onclick = listSelectFolder;
   { const b = document.getElementById("btn-list-dup"); if(b) b.onclick = dupCleanupButton; }
+  { const b = document.getElementById("btn-list-writeback"); if(b) b.onclick = lgwbButton; }
   document.getElementById("btn-list-select-files").onclick = listSelectFiles;
   document.getElementById("btn-list-unlock").onclick = () => unlockListView();
   document.getElementById("btn-list-bulk-reenc").onclick = openBulkReencModal;
