@@ -18237,13 +18237,44 @@ function isCaseOnHold(mgmtNo){
   return !!getLedger("m:" + mg).hold;
 }
 function setLedger(tk, patch){
-  const next = Object.assign({ time: "", meetAt: "", flyer: false, consent: false, compdoc: false, hold: false, note: "" }, _ledgerMap[tk] || {}, patch);
+  const next = Object.assign({ time: "", meetAt: "", flyer: false, consent: false, compdoc: false, hold: false, note: "", noteSrc: "" }, _ledgerMap[tk] || {}, patch);
   let removed = false;
-  if(!next.time && !next.meetAt && !next.flyer && !next.consent && !next.compdoc && !next.hold && !next.note){ delete _ledgerMap[tk]; removed = true; }
+  if(!next.time && !next.meetAt && !next.flyer && !next.consent && !next.compdoc && !next.hold && !next.note && !next.noteSrc){ delete _ledgerMap[tk]; removed = true; }
   else _ledgerMap[tk] = next;
   saveLedgerMap();
   try { removed ? markAnnoDeleted(tk) : markAnnoEdited(tk); } catch(_){} // Phase2: 設定/削除を区別してマージ対象に
   projTouch();
+}
+
+
+/* ---------- 備考の突き合わせ（受付台帳の備考 ＝ 戸別の備考 ＝ 現場入力の備考） ----------
+   同じ1つの欄を、台帳側(_ledgerMap.note)と戸別ファイル側(chosho_note)の2か所で持っている。
+   どちらも書き換わりうるので、「前回ファイルから採り込んだ内容」を noteSrc に控えておき、
+
+     ・ファイル側が前回と変わっている → 現場で書き足された → ファイルを採る
+     ・ファイル側が前回と同じ         → 事務所が台帳で直した   → 台帳を採る
+
+   と判断する。時計を見ないので、端末の時刻ずれや editedAt の無いファイルでも狂わない。
+   ※ これが無いと、現場で書いた備考がフォルダを読み直すたびに台帳の古い内容へ戻る（不具合）。 */
+function noteAdopt(tk, s){ setLedger(tk, { note: s, noteSrc: s }); }
+function noteResolveRow(row){
+  if(!row || !row.data) return;
+  const tk = subCaseKey(row); if(!tk) return;
+  const lg = getLedger(tk) || {};
+  const fileNote = String(row.data.chosho_note || "");
+  const lgNote = String(lg.note || "");
+  if(fileNote === lgNote){
+    // 一致している＝これが今の内容。次に台帳で直した時に見分けられるよう控えるだけ
+    if(fileNote && lg.noteSrc !== fileNote) setLedger(tk, { noteSrc: fileNote });
+    return;
+  }
+  const known = ("noteSrc" in lg) ? String(lg.noteSrc || "") : null;
+  if(fileNote && fileNote !== known) noteAdopt(tk, fileNote);   // 現場が書き換えた → 現場を採る
+  else row.data.chosho_note = lgNote;                            // 台帳が新しい → 戸別へ配る
+}
+function noteResolveRows(rows){
+  (rows || []).forEach(r => { try { noteResolveRow(r); } catch(_){} });
+  return rows;
 }
 
 /* ---------- 施工会社（協力会社）：物件ごとのマスター一覧＋戸別割当 ----------
@@ -18981,6 +19012,7 @@ async function applyProject(p, opts){
     }
     Object.keys(p.ledger || {}).forEach(k => { _ledgerMap[k] = p.ledger[k]; });
     saveLedgerMap();
+    try { noteResolveRows(_listRows); } catch(_){}   // 備考：台帳と戸別で新しい方に揃える
     Object.keys(p.takeout || {}).forEach(k => { _takeoutMap[k] = p.takeout[k]; });
     saveTakeoutMap();
     Object.keys(p.review || {}).forEach(k => { _reviewMap[k] = p.review[k]; });
@@ -20906,7 +20938,8 @@ function renderListLedgerMode(rows, container){
     html += '<td class="lg-c"><input type="checkbox" data-f="consent"' + (lg.consent ? " checked" : "") + (enabled ? "" : " disabled") + ' title="住民からの承諾書 受領済み"></td>';
     html += '<td class="lg-c"><input type="checkbox" data-f="compdoc"' + (lg.compdoc ? " checked" : "") + (enabled ? "" : " disabled") + ' title="完了書 受領／提出済み"></td>';
     // 備考
-    html += '<td data-col="note"><input type="text" class="lg-note-input" data-f="note" maxlength="200" value="' + escapeHtml(lg.note || "") + '" placeholder=""' + (enabled ? "" : " disabled") + '><span class="lg-note-print">' + escapeHtml(lg.note || "") + '</span></td>';
+    const lgNote1 = String(lg.note || "").replace(/\s*\n\s*/g, " ");   // 改行は1行に丸める（全文は吹き出し・印刷欄）
+    html += '<td data-col="note"><input type="text" class="lg-note-input" data-f="note" maxlength="200" value="' + escapeHtml(lgNote1) + '" title="' + escapeHtml(lg.note || "") + '" placeholder=""' + (enabled ? "" : " disabled") + '><span class="lg-note-print">' + escapeHtml(lg.note || "") + '</span></td>';
     // 開く
     html += '<td class="lg-open-btns">'
       + '<button data-open="cal" title="カレンダーで該当月を表示">📅</button>'
@@ -23203,9 +23236,10 @@ function noteSyncToEditor(row){
   try{
     const el = document.getElementById("chosho_note"); if(!el || !row) return;
     const tk = subCaseKey(row); if(!tk) return;
+    noteResolveRow(row);                                  // 現場で書き足されていればそちらを採る
     const lgNote = String((getLedger(tk) || {}).note || "");
     if(lgNote){ el.value = lgNote; if(row.data) row.data.chosho_note = lgNote; }
-    else if(el.value) setLedger(tk, { note: el.value });   // 台帳が空なら戸別側を台帳へ
+    else if(el.value) noteAdopt(tk, el.value);            // 台帳が空なら戸別側を台帳へ
   }catch(_){}
 }
 /* エディタの内容（積算・図面・写真除く）を、開いた元の一覧行へ丸ごと取り込む。
@@ -23245,7 +23279,7 @@ function syncEditorToRowData(force){
     }
     // 備考は台帳と共通の1つの欄なので、受付台帳の備考列へも同じ内容を書く
     try{ const ntk = subCaseKey(_editingRow);
-         if(ntk) setLedger(ntk, { note: String(s.chosho_note || "") }); }catch(_){}
+         if(ntk) noteAdopt(ntk, String(s.chosho_note || "")); }catch(_){}
     clearEditorDirty();              // 行へ取り込んだ＝フォームと行が一致した状態
     _editingRow._photoCount = _photos.length;
     _editingRow._thumbs = undefined; // 旧サムネ破棄 → 保存時に最新写真から再生成
@@ -23666,7 +23700,7 @@ async function applyGenbaMergeToRow(row, genbaData, opts){
   try { markCaseEdited(row); } catch(_){}
   if(genbaData && ("chosho_note" in genbaData)){
     try{ const ntk = subCaseKey(row);
-         if(ntk) setLedger(ntk, { note: String(merged.chosho_note || "") }); }catch(_){}
+         if(ntk) noteAdopt(ntk, String(merged.chosho_note || "")); }catch(_){}
   }
   const note = await _genbaWriteRowIndividual(row);  // 原寸写真は温存して個別JSONへ書戻し
   try { projTouch(); } catch(_){}
@@ -23812,7 +23846,7 @@ function lgMergeDialog(manualRow, fileRow){
 /* 読み込んだ行集合と既存の台帳起点行をマージして最終的な _listRows を返す */
 async function mergeRowsWithManual(newRows){
   const manuals = _listRows.filter(r => r && r._manual);
-  if(manuals.length === 0) return newRows;
+  if(manuals.length === 0) return noteResolveRows(newRows);   // 備考は台帳と突き合わせる
   const byNo = {};
   newRows.forEach(r => {
     const m = ((r.data && r.data.chosho_mgmt_no) || "").trim();
@@ -23863,7 +23897,7 @@ async function mergeRowsWithManual(newRows){
     }
     // choice === "file"（読み込み値で上書き）→ ファイル行をそのまま採用（台帳行は破棄。台帳メモは同じ管理番号キーで引き継がれる）
   }
-  return keep.concat(newRows);
+  return noteResolveRows(keep.concat(newRows));   // 備考は台帳と突き合わせる
 }
 
 /* ---------- 物件機能の初期化（init から呼ばれる） ---------- */
