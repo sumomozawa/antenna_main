@@ -22622,19 +22622,19 @@ function surveyDoneAtOf(row){ return String((row && row.data && row.data.survey_
    どちらも発注する“もの”ではない（金額の集計には引き続き入る）。 */
 const MAT_NON_MATERIAL_UNITS = ["式", "h"];
 /* ---------- 新規5Cケーブル：積算に出ない分 ----------
-   積算（BOM）は「お金を取る分」だけを数えるので、実際には張るのに表へ出ない5Cケーブルが
-   2か所あります。発注では買わないといけないので、この画面ではその分を足します。
+   発注の数量は、積算画面の「ケーブル長さ S5CFB（m）」に入れた長さが
+   まるごと出るようにしてあります。
+   ところが積算（BOM）は「お金を取る分」だけを数えるので、実際には張るのに
+   表へ出ない5Cケーブルがあります。買う分が足りなくなるので、ここで足します。
 
-     ① アンテナ→増幅器（主系統・46CH・50CH）
-        系統図では常に赤（新規）ですが、「外部配線＝既存を流用」の戸別では
-        積算に載りません（基本工事に含む扱い）。
+     ① 外部の配線（主系統・46CH・50CH・増幅器→次段・屋外その他）
+        「外部配線＝新規」の戸別は積算に載るのでそのまま。
+        「外部配線＝既存を流用」の戸別は積算に載らないので、ここで足します。
      ② 宅内新規の標準2mぶん
         標準2mまでは基本工事に含むので積算に載りません（超過分だけ載ります）。
 
    どちらも、系統図でその区間を黒（既存）に切り替えた戸別では数えません
-   （積算とまったく同じ判定を使います）。
-   ※ 増幅器→次段（壁／FA／2分配器WP）は「外部配線＝既存を流用」なら系統図でも黒＝
-      張り替えないので、ここでは足しません。 */
+   （張り替えない区間なので買う必要がない＝積算とまったく同じ判定を使います）。 */
 function matExtraCable5c(row){
   const d = (row && row.data) || {};
   const out = { m: 0, by: {} };
@@ -22643,7 +22643,8 @@ function matExtraCable5c(row){
   const forcedExisting = (...keys) => keys.some(k => ov[k] === true);   // true=既存(黒)へ切替済み
   const num = v => { const n = parseFloat(v); return (isFinite(n) && n > 0) ? n : 0; };
   const push = (label, m) => { if(m > 0){ out.m += m; out.by[label] = (out.by[label] || 0) + m; } };
-  // ① 外部配線＝既存を流用のとき、アンテナ→増幅器のぶんが積算に載らない
+  // ① 外部配線＝既存を流用のとき、積算画面に入れた外部の長さがまるごと積算に載らない
+  //    （積算側は input.outer_wire === "new" のときだけ計上している。判定もそこに合わせる）
   if(d.outer_wire !== "new"){
     if(!forcedExisting("main_trunk_0", "main_trunk_1", "main_trunk_2",
                        "main_amp", "main_amp_1", "main_amp_2", "main_amp_46", "main_amp_3")){
@@ -22651,6 +22652,10 @@ function matExtraCable5c(row){
     }
     if(d.ch46 !== "no" && !forcedExisting("ch46_amp")) push("アンテナ→増幅器", num(d.cable_ch46_len));
     if(d.ch46 === "triple" && !forcedExisting("ch50_amp")) push("アンテナ→増幅器", num(d.cable_ch50_len));
+    if(!forcedExisting("amp_to_wpsp", "amp_to_pwbox", "out_to_fa", "out_to_wall")){
+      push("増幅器→次段", num(d.cable_amp_next_len));
+    }
+    push("屋外その他", num(d.cable_new_len));      // 旧項目（通常0）
   }
   // ② 宅内新規の標準2mぶん（超過分は積算に載っている）
   const isCatvFa = (d.is_catv === "yes") && (d.use_fa === "yes") && (d.power_pos !== "outside");
@@ -22760,8 +22765,8 @@ function renderListMaterialsMode(rows, container){
     + "※ 数量は、下見で入力した内容から出した必要数です。予備・端数は含みません。<br>"
     + "※ ケーブル類は長さ（m）、器具は台・個で出ています。単位の欄をご確認ください。<br>"
     + (extraCable.m > 0
-        ? "※ 新規5Cケーブル（S5CFB）は、<b>積算に出ない分も足した「買う長さ」</b>です"
-          + "（基本工事に含むため積算には載らない分 "
+        ? "※ 新規5Cケーブル（S5CFB）は、<b>積算画面の「ケーブル長さ S5CFB（m）」に入れた長さがそのまま出る"
+          + "「買う長さ」</b>です（金額に載らない分 "
           + exCable.map(k => escapeHtml(k) + " " + fmtQty(extraCable.by[k]) + "m").join("・")
           + " ＝ 合計 " + fmtQty(extraCable.m) + "m を加算）。<br>"
         : "")
