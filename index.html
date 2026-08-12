@@ -3030,6 +3030,19 @@
     font-size: 9px; font-weight: 700; padding: 0 5px; border-radius: 7px;
     margin-left: 4px; vertical-align: 1px; white-space: nowrap;
   }
+  /* ファイルが見当たらない戸別（名前だけ残した行）の印 */
+  .lg-nofile-badge {
+    display: inline-block; background: #6d4c41; color: #fff;
+    font-size: 9px; font-weight: 700; padding: 0 5px; border-radius: 7px;
+    margin-left: 4px; vertical-align: 1px; white-space: nowrap;
+  }
+  .lg-nofile-badge.pending { background: #8d6e63; }
+  #lgmiss-ov .modal{min-width:640px;max-width:900px;max-height:82vh;overflow:auto;}
+  #lgmiss-ov .lgmiss-lead{font-size:12.5px;line-height:1.8;margin-bottom:6px;}
+  #lgmiss-ov .lgmiss-lead2{font-size:11.5px;color:#667482;line-height:1.7;margin-bottom:8px;}
+  #lgmiss-ov table.lgmiss-tbl{width:100%;border-collapse:collapse;font-size:11.5px;}
+  #lgmiss-ov table.lgmiss-tbl th,#lgmiss-ov table.lgmiss-tbl td{border:1px solid #e3e7eb;padding:3px 7px;text-align:left;white-space:nowrap;}
+  #lgmiss-ov table.lgmiss-tbl th{background:#f4f7fa;color:#1e3a5f;}
   table.ledger-table .lg-dwg-ind { float: right; font-size: 11px; color: #667482; cursor: default; }
   table.ledger-table .lg-map-ind { float: right; font-size: 11px; color: #c8d0d8; margin-right: 4px; cursor: default; }
   table.ledger-table select.lg-st-sel {
@@ -5124,6 +5137,17 @@
 #dup-modal table.dup-tbl th{background:#f4f7fa;color:#1e3a5f;}
 #dup-modal table.dup-tbl tr.dup-keep td{background:#e8f5e9;font-weight:600;}
 </style>
+<div class="modal-backdrop" id="lgmiss-ov">
+  <div class="modal">
+    <h3 id="lgmiss-head">戸別ファイルが見当たりません</h3>
+    <div id="lgmiss-body"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap;">
+      <button id="lgmiss-later" style="background:#fff;color:#33424f;border:1px solid #90a0b0;padding:6px 14px;border-radius:3px;cursor:pointer;font-size:12px;" title="今回は決めずにそのままにします。行は残したまま、次にフォルダを読んだときにまた同じことを聞きます。フォルダを選び直したいときもこちら。">あとで決める</button>
+      <button id="lgmiss-drop" style="background:#fff;color:#c62828;border:1px solid #c62828;padding:6px 14px;border-radius:3px;cursor:pointer;font-size:12px;" title="「消す」に印を付けた戸別を、受付台帳からも消します。元に戻せません。">選んだものを一覧からも消す</button>
+      <button id="lgmiss-keep" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:6px 16px;border-radius:3px;cursor:pointer;font-size:12px;font-weight:700;" title="受付台帳には名前だけ残します。打合せ・ビラ・備考などの記入もそのまま残り、ファイルが戻れば元に戻ります。">名前だけ残す（すべて）</button>
+    </div>
+  </div>
+</div>
 <div class="modal-backdrop" id="dup-modal">
   <div class="modal">
     <h3>🧹 同じ管理番号のファイルが重なっています</h3>
@@ -13243,6 +13267,7 @@ async function scanDirRecursive(dirHandle, pathPrefix, rows, stats){
         await scanDirRecursive(handle, pathPrefix + name + "/", rows, stats);
       } catch(err){
         console.warn("サブフォルダ読込失敗:", pathPrefix + name, err);
+        (stats.errDirs = stats.errDirs || []).push(pathPrefix + name + "/");
       }
     } else if(handle.kind === "file"){
       // 対象拡張子: .json / .hyb / .enc / .antenna.hyb / .antenna.enc
@@ -13252,16 +13277,17 @@ async function scanDirRecursive(dirHandle, pathPrefix, rows, stats){
         const file = await handle.getFile();
         const text = await file.text();
         let data;
-        try { data = JSON.parse(text); } catch(_){ stats.skipped++; continue; }
+        try { data = JSON.parse(text); }
+        catch(_){ stats.skipped++; (stats.skippedPaths = stats.skippedPaths || []).push(pathPrefix + name); continue; }
         const row = buildListRow(pathPrefix + name, file.lastModified, data, handle);
         if(row){
           // 重複ファイルの整理で使う：置かれているフォルダ・そこでの名前・大きさ
           row._dir = dirHandle; row._name = name; row._dirPath = pathPrefix; row._size = file.size;
           slimListRow(row, true); rows.push(row);
         }
-        else stats.skipped++;
+        else { stats.skipped++; (stats.skippedPaths = stats.skippedPaths || []).push(pathPrefix + name); }
       } catch(err){
-        stats.skipped++;
+        stats.skipped++; (stats.skippedPaths = stats.skippedPaths || []).push(pathPrefix + name);
       }
     }
   }
@@ -13305,6 +13331,7 @@ async function listDirForget(){
   _listDirHandle = null;
   try { await projHandleDelete(LIST_DIR_KEY); } catch(_){}
   try { localStorage.removeItem(LS_LIST_DIR_NAME); } catch(_){}
+  listCensusClear();                    // 前回そのフォルダで見えていた戸別の控えも消す
   const st = document.getElementById("list-status");
   if(st) st.textContent = "前回のフォルダを忘れました。「📁 フォルダ選択(再帰)」から選び直してください。";
 }
@@ -13327,17 +13354,18 @@ async function listReloadRemembered(ask){
   const nm = dh.name || "";
   if(st){ st.style.display = ""; st.textContent = "📁 前回のフォルダ「" + nm + "」を読み込み中..."; }
   const rows = [];
-  const stats = { dirs: 0, files: 0, skipped: 0 };
+  const stats = { dirs: 0, files: 0, skipped: 0, errDirs: [], skippedPaths: [] };
   try { await scanDirRecursive(dh, "", rows, stats); }
   catch(err){
     console.warn("[一覧] 前回のフォルダの読込に失敗", err);
     if(st) st.textContent = "前回のフォルダを読み込めませんでした（移動・削除されたかもしれません）。「📁 フォルダ選択(再帰)」から選び直してください。";
     return false;
   }
-  _listRows = await mergeRowsWithManual(rows);
+  _listRows = await mergeRowsWithManual(rows, { source: "folder", stats, root: nm });
   _listSelectedFolderName = nm;
   renderListTable();
   if(st) st.textContent = "📁 前回のフォルダ「" + nm + "」から " + rows.length + " 件を読み込みました（別のフォルダにするときは「📁 フォルダ選択(再帰)」）";
+  missShowNote();
   return true;
 }
 /* 許可が切れているとき用：1回押すだけで読み込めるようにする */
@@ -13468,7 +13496,7 @@ function dupDialog(groups){
 }
 /* 選んだとおりに書き直して、余分なファイルを消す */
 async function dupApply(groups, picks){
-  let renamed = 0, done = 0, dropped = 0; const fails = [];
+  let renamed = 0, done = 0, dropped = 0; const fails = [], removed = [];
   for(let gi = 0; gi < groups.length; gi++){
     const g = groups[gi];
     const keepName = picks[gi];
@@ -13484,12 +13512,14 @@ async function dupApply(groups, picks){
         const w = await fh.createWritable();
         await w.write(text); await w.close();
         await dir.removeEntry(keep._name);                  // 元の「 2」付きを消す（中身は残っている）
+        removed.push((g.dirPath || "") + keep._name);
         renamed++;
       }
       for(const it of g.items){
         if(it === keep) continue;
         if(it._name === g.canon) continue;                  // 正式名は上書き済みなので消さない
         await dir.removeEntry(it._name);
+        removed.push((g.dirPath || "") + it._name);
       }
       done++;
       dropped += g.items.length - 1;                        // この組で減ったファイル数
@@ -13498,40 +13528,43 @@ async function dupApply(groups, picks){
       fails.push(g.no + "：" + (err && err.message ? err.message : err));
     }
   }
-  return { renamed, done, dropped, fails };
+  return { renamed, done, dropped, fails, removed };
 }
 /* 入口：フォルダを読んだ後の自動確認からも、ツールバーのボタンからも呼ぶ */
 async function dupCleanupFlow(rows, quietIfNone){
   const groups = dupFindGroups(rows && rows.length ? rows : _listRows);
   if(!groups.length){
     if(!quietIfNone) alert("同じ管理番号のファイルが重なっているところはありませんでした。");
-    return false;
+    return null;
   }
   const picks = await dupDialog(groups);
-  if(!picks) return false;
+  if(!picks) return null;
   const res = await dupApply(groups, picks);
   alert("🧹 重複ファイルの整理が終わりました。\n\n"
     + res.done + " 組をまとめました（余分な " + res.dropped + " ファイルが減りました）\n"
     + "うち名前を付け直した: " + res.renamed + " 件"
     + (res.fails.length ? ("\n\n⚠ できなかったもの:\n" + res.fails.join("\n")) : "")
     + "\n\n一覧を読み直します。");
-  return true;
+  return res.removed || [];      // 自分が消したファイル＝読み直しで「消えた」と数えない
 }
 async function dupCleanupButton(){
   if(!_listDirHandle){
     alert("先に「📁 フォルダ選択(再帰)」でフォルダを読み込んでください。\n（重複の整理には、そのフォルダを掴んでいる必要があります）");
     return;
   }
-  if(await dupCleanupFlow(_listRows, false)) await listReloadFolder();
+  const gone = await dupCleanupFlow(_listRows, false);
+  if(gone) await listReloadFolder(gone);
 }
 /* 整理のあと、同じフォルダを読み直して一覧を作り直す */
-async function listReloadFolder(){
+async function listReloadFolder(expectedGone){
   if(!_listDirHandle) return;
   const rows = [];
-  const stats = { dirs: 0, files: 0, skipped: 0 };
+  const stats = { dirs: 0, files: 0, skipped: 0, errDirs: [], skippedPaths: [] };
   await scanDirRecursive(_listDirHandle, "", rows, stats);
-  _listRows = await mergeRowsWithManual(rows);
+  _listRows = await mergeRowsWithManual(rows, { source: "folder", stats,
+    root: _listDirHandle.name || "", expectedGone: expectedGone || [] });
   renderListTable();
+  missShowNote();
 }
 
 /* ============================================================
@@ -13671,7 +13704,7 @@ async function listSelectFolder(){
     const dirHandle = await window.showDirectoryPicker();
     await listDirRemember(dirHandle);    // 次からは選び直さずに読み込む（重複整理にも使う）
     const rows = [];
-    const stats = { dirs: 0, files: 0, skipped: 0 };
+    const stats = { dirs: 0, files: 0, skipped: 0, errDirs: [], skippedPaths: [] };
     const status = document.getElementById("list-status");
     if(status){
       status.style.display = "";
@@ -13679,21 +13712,27 @@ async function listSelectFolder(){
     }
     await scanDirRecursive(dirHandle, "", rows, stats);
     // 同じ管理番号のファイルが重なっていたら（iPadの「◯◯ 2.json」など）、先に整理を提案する
+    let expectedGone = [];
     {
       const dg = dupFindGroups(rows);
       if(dg.length && confirm("同じ管理番号のファイルが " + dg.length + " 組見つかりました。\n"
           + "（iPad/iPhoneで保存すると「◯◯ 2.json」のように増えることがあります）\n\n"
           + "どれを残すか選んで整理しますか？")){
-        if(await dupCleanupFlow(rows, true)){
+        const gone = await dupCleanupFlow(rows, true);
+        if(gone){
+          expectedGone = gone;              // 整理で自分が消したファイルは「消えた」と数えない
           rows.length = 0;
-          await scanDirRecursive(dirHandle, "", rows, { dirs:0, files:0, skipped:0 });
+          stats.errDirs = []; stats.skippedPaths = [];
+          await scanDirRecursive(dirHandle, "", rows, stats);
         }
       }
     }
     // 台帳起点の行（仮受付・手入力）は保持し、管理番号重複は件ごとに確認してマージ
-    _listRows = await mergeRowsWithManual(rows);
+    _listRows = await mergeRowsWithManual(rows, { source: "folder", stats,
+      root: dirHandle.name || "", expectedGone });
     _listSelectedFolderName = dirHandle.name || "";
     renderListTable();
+    missShowNote();
     // 物件へ取り込み：写真サムネイル生成→即時保存（IndexedDB＋共有ファイル連動時はファイルへも）
     if(loadMode === "absorb" && _currentProject){
       // 読み込んだ工事フォルダを物件にリンク（以後「物件に保存」で戸別の個別JSONも同フォルダへ書き戻す）
@@ -14246,6 +14285,13 @@ function isMapRegistered(mgmt){
   return !!(m && _mapLinkedSet[m]);
 }
 
+let _missLastNote = "";     // 直前の読み込みで伝えること（一覧の描き直しで消えないよう最後に出す）
+function missShowNote(){
+  if(!_missLastNote) return;
+  const st = document.getElementById("list-status");
+  if(st){ st.style.display = ""; st.textContent = _missLastNote; }
+  _missLastNote = "";
+}
 function renderListTable(){
   if(_listMode === "ledger"){ try { refreshMapLinkedSet(); } catch(_){} }
   const tbl = document.getElementById("list-table");
@@ -14422,7 +14468,8 @@ function renderListStandardMode(rows, tbl){
       + '<td>' + escapeHtml(d.chosho_date || "") + '</td>'
       + '<td>' + escapeHtml(LIST_WORK_LABELS[d.work_type] || d.work_type || "") + '</td>'
       + amtCell
-      + '<td class="file-name no-print" title="' + escapeHtml(r._manual ? "受付台帳で作成（ファイル未保存）" : r.file) + '">' + escapeHtml(r._manual ? "（台帳で作成・未保存）" : r.file) + '</td>'
+      + '<td class="file-name no-print" title="' + escapeHtml(r._detached ? ("ファイルが見当たりません" + (r._detached.path ? "（前の場所: " + r._detached.path + "）" : "")) : (r._manual ? "受付台帳で作成（ファイル未保存）" : r.file)) + '">'
+        + escapeHtml(r._detached ? "（ファイル無し・名前だけ）" : (r._manual ? "（台帳で作成・未保存）" : r.file)) + '</td>'
       + '<td class="no-print"><button class="load-btn" data-list-load="' + i + '">読込</button> <button class="map-jump-btn" data-list-map="' + i + '" title="この戸別を地図で開く（該当建物へジャンプ）">🗺️</button>'
         + (caseHasEstimate(r) ? ' <button class="revert-btn" data-list-revert="' + i + '" title="この戸別を「まだ工事していないこと」にします。積算と図面の内容を消して金額が付かない状態に戻します（お客様情報・写真・石綿・受付台帳の記入は残ります）">🧹 未施工</button>' : '')
         + '</td>'
@@ -14459,7 +14506,7 @@ function renderListByFolderMode(rows, container){
   const groups = {};
   rows.forEach(r => {
     let f = getFolderPath(r.file);
-    if(r._manual && f === "(ルート)") f = manualFolder; // 未保存の台帳起点の戸別は物件フォルダ側へ
+    if(r._manual && !r._detached && f === "(ルート)") f = manualFolder; // 未保存の台帳起点の戸別は物件フォルダ側へ
     if(!groups[f]) groups[f] = [];
     groups[f].push(r);
   });
@@ -18692,6 +18739,7 @@ function buildProjectSnapshot(base){
     if(!payload) return;
     // 台帳起点の行（仮受付・手入力）はマーカーを付けて確実に復元できるようにする
     if(r._manual) payload = Object.assign({}, payload, { _manual: true, _origin: r._origin || "manual" });
+    if(r._detached) payload = Object.assign({}, payload, { _detached: r._detached });
     const cw = { caseId: ensureRowCaseId(r), file: r.file || "", lastModified: r.lastModified || 0, payload };
     if(r._prevSubKey) cw.prevSub = r._prevSubKey; // Phase2: 改番した場合の旧キー（移行期のマージ突合用）
     cases.push(cw);
@@ -19096,7 +19144,9 @@ async function applyProject(p, opts){
         const origin = data._origin;
         delete data._manual;
         delete data._origin;
+        if(data._detached){ delete data._detached; }
         return { file: c.file || ("manual:" + projNewId()), lastModified: c.lastModified || 0,
+                 _detached: (c.payload && c.payload._detached) || undefined,
                  data, fileType: "plain", envelope: null, unlocked: true,
                  _manual: true, _origin: origin || "manual", _fromProject: true,
                  _caseId: c.caseId || projNewId() }; // Phase2: 安定IDを復元（無ければ付与）
@@ -21012,6 +21062,9 @@ function renderListLedgerMode(rows, container){
     html += '<td>' + tCell("mgmt", d.chosho_mgmt_no)
       + (isProv ? '<span class="lg-prov-badge">仮</span>' : '')
       + (lg.hold ? '<span class="lg-hold-badge" title="保留（地図でも管理番号の右肩に「保」マークが付きます）">保</span>' : '')
+      + (r._detached ? '<span class="lg-nofile-badge' + (r._detached.reason === "pending" ? ' pending' : '')
+          + '" title="' + (r._detached.reason === "pending" ? "ファイルが見当たりません（次に読み込んだ時にまた確認します）" : "戸別ファイルが無い行です（名前だけ残しています）。ファイルが戻れば自動で元に戻ります")
+          + (r._detached.path ? "。前の場所: " + escapeHtml(r._detached.path) : "") + '">ファイル無</span>' : '')
       + '<span class="lg-dwg-ind" title="' + (lgHasDrawing(r) ? "図面・積算データあり" : "図面未作成（📐ボタンで台帳の情報を流し込んで新規作成）") + '">' + (lgHasDrawing(r) ? "📄" : "－") + '</span>'
       + '<span class="lg-map-ind" title="' + (mapReg ? "地図に登録済み（建物にこの管理番号をリンク済み）" : "地図に未登録（地図で建物にこの管理番号をリンクすると🗺️になります）") + '">' + (mapReg ? "🗺️" : "－") + '</span></td>'
       + '<td>' + tCell("name", d.chosho_cust_name) + '</td>'
@@ -23946,8 +23999,279 @@ function lgMergeDialog(manualRow, fileRow){
     document.getElementById("lg-merge-skip").onclick = () => done("skip");
   });
 }
+/* ============================================================
+   戸別ファイルが見当たらなくなったときに、黙って一覧から消さない
+   ・フォルダを読むたびに「そのとき見えていた戸別」を控えておき、次に読んだとき
+     見当たらないものを見つける。控えは端末に残るので、開き直しても分かる。
+   ・消えた原因は決めつけない。フォルダごと見えない／まとめて消えた／数件だけ、で
+     聞き方を変える。何も読めていないときは、聞かずに一覧をそのまま守る。
+   ・「名前だけ残す」を選んだ行は、元の行のまま印を付けるだけにする。こうすると
+     ファイルの場所が変わらないので、受付台帳・持出・確認・施工会社の記入
+     （管理番号かファイルの場所で引いている）が外れない。物件を開いているときは
+     積算・図面もそのまま残る（ファイルが無いだけで、中身は物件にある）。
+   ・あとでファイルが戻ってくれば、その行は自動で元に戻る。
+   ============================================================ */
+const LS_LIST_CENSUS = "antenna_list_census_v1";   // 前回そのフォルダで見えていた戸別
+const DETACHED_KEY   = "antenna_detached_v1";      // ファイルが無くても台帳に残す戸別
+let _detachedMap = (() => {
+  try { return JSON.parse(localStorage.getItem(DETACHED_KEY)) || {}; } catch(_){ return {}; }
+})();
+function saveDetachedMap(){
+  try { localStorage.setItem(DETACHED_KEY, JSON.stringify(_detachedMap)); }
+  catch(e){ console.warn("[一覧] 名前だけ残した戸別を控えられませんでした", e); }
+}
+/* 突合キー。名前だけ残した行は、元の行のキーをそのまま持ち続ける。 */
+function missKeyOf(row){
+  if(row && row._detached && row._detached.key) return row._detached.key;
+  const no = String((row && row.data && row.data.chosho_mgmt_no) || "").trim();
+  if(no && no.indexOf("🔐") < 0) return "m:" + no;
+  return "f:" + String((row && row.file) || "");
+}
+/* 暗号化されたままの行は対象外。どの戸別か画面に出せないので、聞いても答えられない。 */
+function missSkip(row){
+  return !row || row.fileType === "full" || (row.fileType === "hybrid" && !row.unlocked);
+}
+/* 控えに残す項目（受付台帳に出るものだけ。図面・積算・写真は持たない） */
+function missEntryOf(row){
+  const d = (row && row.data) || {};
+  return { no: String(d.chosho_mgmt_no || "").trim(), n: d.chosho_cust_name || "", a: d.chosho_cust_addr || "",
+           t: d.chosho_cust_tel || "", dt: d.chosho_date || "", s: d.chosho_status || "in_progress",
+           wt: d.work_type || "", note: d.chosho_note || "", p: String((row && row.file) || "") };
+}
+function listCensusLoad(){
+  try {
+    const c = JSON.parse(localStorage.getItem(LS_LIST_CENSUS));
+    return (c && c.entries) ? c : { root: "", entries: {} };
+  } catch(_){ return { root: "", entries: {} }; }
+}
+function listCensusSave(root, rows, carry){
+  try {
+    const entries = {};
+    (rows || []).forEach(r => {
+      if(!r || r._manual || r._detached || missSkip(r)) return;   // ファイルのある平文の行だけ控える
+      entries[missKeyOf(r)] = missEntryOf(r);
+    });
+    // まだ決めていないものは控えに残す。消すと次から気付けなくなる。
+    Object.keys(carry || {}).forEach(k => { if(!entries[k]) entries[k] = carry[k]; });
+    localStorage.setItem(LS_LIST_CENSUS, JSON.stringify({ v: 1, root: String(root || ""), at: Date.now(), entries }));
+  } catch(e){ console.warn("[一覧] 前回の控えを残せませんでした", e); }
+}
+function listCensusClear(){ try { localStorage.removeItem(LS_LIST_CENSUS); } catch(_){} }
+
+/* いまある行に「ファイルが無い」印を付ける。行そのものは作り直さない。
+   ＝ファイルの場所も中身も残るので、台帳の記入も物件の積算・図面も外れない。 */
+function detachRow(row, key, root, reason){
+  row._detached = { at: Date.now(), path: String(row.file || ""), root: root || "", reason: reason || "kept", key: key };
+  row._manual = true;                      // 読み直しても消えない行にする（mergeRowsWithManual が引き継ぐ）
+  if(!row._origin) row._origin = "missing";
+  if(reason === "kept"){
+    _detachedMap[key] = Object.assign({}, missEntryOf(row), { root: root || "", at: Date.now(), key: key });
+    saveDetachedMap();
+  }
+  return row;
+}
+/* 端末の控えから、行そのものが無いときだけ起こす（アプリを開き直した後など）。
+   台帳の記入が外れないよう、元のファイルの場所をそのまま持たせる。 */
+function detachedRowFromEntry(key, e){
+  const row = createManualRow({
+    chosho_mgmt_no: e.no || "", chosho_cust_name: e.n || "", chosho_cust_addr: e.a || "",
+    chosho_cust_tel: e.t || "", chosho_date: e.dt || "",
+    chosho_status: e.s || "in_progress", work_type: e.wt || ""
+  }, "missing");
+  if(e.note) row.data.chosho_note = e.note;
+  if(e.p) row.file = e.p;                  // ←「f:<場所>」で引いている記入を外さない
+  row._detached = { at: e.at || Date.now(), path: e.p || "", root: e.root || "", reason: "kept", key: key };
+  return row;
+}
+function undetach(key){ if(_detachedMap[key]){ delete _detachedMap[key]; saveDetachedMap(); } }
+/* その戸別の記入をすべて消す（「一覧からも消す」を選んだとき） */
+function missPurgeAnno(key){
+  try { setLedger(key, { time:"", meetAt:"", flyer:false, consent:false, compdoc:false, hold:false, note:"", noteSrc:"" }); } catch(_){}
+  try { if(_takeoutMap[key]){ delete _takeoutMap[key]; saveTakeoutMap(); } } catch(_){}
+  try { if(_reviewMap[key]){ delete _reviewMap[key]; saveReviewMap(); } } catch(_){}
+  try { if(_contractorMap[key]){ delete _contractorMap[key]; saveContractorMap(); } } catch(_){}
+}
+
+/* 見当たらない戸別をどう扱うか聞く。{action, picks} を返す。 */
+function lgMissingDialog(items, info){
+  return new Promise(resolve => {
+    const back = document.getElementById("lgmiss-ov");
+    const body = document.getElementById("lgmiss-body");
+    const head = document.getElementById("lgmiss-head");
+    const many = info.cls === "bulk";
+    head.textContent = many ? "戸別ファイルがまとめて見当たりません" : "戸別ファイルが見当たりません";
+    let html = '<div class="lgmiss-lead">'
+      + '前回このフォルダで見えていた戸別のうち、<b>' + items.length + ' 件</b>のファイルが見当たりません'
+      + '（いま読めたのは ' + info.alive + ' 件）。<br>'
+      + (many
+          ? 'まとまって見当たらないので、<b>フォルダを整理して動かした</b>のかもしれません。'
+            + '別の場所へ移しただけなら、いったん<b>「あとで決める」</b>で閉じて、'
+            + '<b>「📁 フォルダ選択(再帰)」でそのフォルダを選び直す</b>のがいちばん確実です。'
+          : '他のファイルは読めているので、この戸別だけ<b>消された・別の場所へ移された</b>のかもしれません。')
+      + '</div>'
+      + '<div class="lgmiss-lead2">「名前だけ残す」を選ぶと、受付台帳の記入（打合せ・ビラ・備考など）はそのまま残ります。'
+      + 'あとでファイルが戻ってくれば、その行は自動で元に戻ります。'
+      + '<br>行ごとの<b>「消す」</b>は、下の<b>「選んだものを一覧からも消す」</b>を押したときだけ効きます。</div>'
+      + '<table class="lgmiss-tbl"><tr><th style="width:64px;">残す</th><th style="width:64px;">消す</th>'
+      + '<th>管理番号</th><th>お客様</th><th>ファイルの場所</th></tr>';
+    items.forEach((it, i) => {
+      html += '<tr>'
+        + '<td style="text-align:center;"><input type="radio" name="lgmiss' + i + '" value="keep" checked></td>'
+        + '<td style="text-align:center;"><input type="radio" name="lgmiss' + i + '" value="drop"></td>'
+        + '<td>' + escapeHtml(it.e.no || "（管理番号なし）") + '</td>'
+        + '<td>' + escapeHtml(it.e.n || "―") + '</td>'
+        + '<td style="color:#667482;">' + escapeHtml(it.e.p || "―") + '</td>'
+        + '</tr>';
+    });
+    html += '</table>';
+    body.innerHTML = html;
+    const done = v => {
+      back.classList.remove("open");
+      ["lgmiss-keep","lgmiss-drop","lgmiss-later"].forEach(id => {
+        const b = document.getElementById(id); if(b) b.onclick = null;
+      });
+      resolve(v);
+    };
+    document.getElementById("lgmiss-keep").onclick  = () => done({ action: "keep" });
+    document.getElementById("lgmiss-later").onclick = () => done({ action: "later" });
+    document.getElementById("lgmiss-drop").onclick  = () => {
+      const picks = items.map((it, i) => {
+        const el = document.querySelector('input[name="lgmiss' + i + '"]:checked');
+        return el ? el.value : "keep";
+      });
+      const n = picks.filter(v => v === "drop").length;
+      if(!n){ alert("「消す」に印を付けた戸別がありません。\n消したい行の「消す」を選んでから押してください。"); return; }
+      if(!confirm(n + " 件を受付台帳からも消します。\n打合せ・ビラ・備考・持出・施工会社などの記入も一緒に消えます。元に戻せません。\n\n消しますか？")) return;
+      done({ action: "each", picks: picks });
+    };
+    back.classList.add("open");
+  });
+}
+
+/* 読み込むたびに走る本体。戻り値 {keepAll} が true のときは一覧を作り直さない。 */
+async function listMissingFlow(newRows, opts){
+  const out = { keepAll: false, kept: 0, dropped: 0, back: 0, missing: 0 };
+  if(!opts || opts.source !== "folder") return out;      // ファイル選択・物件読込では働かない
+  if(window.__VIEWER_MODE__) return out;                 // 閲覧専用ビューアでは聞かない
+  const stats = opts.stats || {};
+  const root = String(opts.root || "");
+
+  const alive = {}, alivePath = {};
+  (newRows || []).forEach(r => { const k = missKeyOf(r); if(!alive[k]) alive[k] = r;
+                                 const p = String(r.file || ""); if(p) alivePath[p] = r; });
+
+  // ① 戻ってきたファイルがあれば、名前だけの行はお役御免
+  for(let i = _listRows.length - 1; i >= 0; i--){
+    const g = _listRows[i];
+    if(!g || !g._detached) continue;
+    const k = g._detached.key || missKeyOf(g);
+    if(alive[k] || (g._detached.path && alivePath[g._detached.path])){
+      _listRows.splice(i, 1); undetach(k); out.back++;
+    }
+  }
+  // ② 端末に控えてある「名前だけの行」を、行が無いときだけ起こす
+  const here = {};
+  _listRows.forEach(r => { if(r) here[missKeyOf(r)] = 1; });
+  Object.keys(_detachedMap).forEach(k => {
+    const e = _detachedMap[k];
+    if(!e || alive[k] || here[k]) return;
+    if(root && e.root && e.root !== root) return;        // 別のフォルダの控えは起こさない
+    here[k] = 1;
+    detachedRowFromEntry(k, e);
+  });
+
+  // ③ 前回このフォルダで見えていたものと突き合わせる
+  const census = listCensusLoad();
+  const base = {};
+  // 控えは同じフォルダのときだけ使う（別のフォルダ・下の階層を読んだだけで「消えた」と言わないため）
+  if(census.root && root && census.root === root){
+    Object.keys(census.entries || {}).forEach(k => { base[k] = census.entries[k]; });
+  }
+  // いま画面にある、このフォルダから読んだ行
+  _listRows.forEach(r => {
+    if(!r || r._manual || r._detached || missSkip(r)) return;
+    if(!r._dir && !r._name) return;                      // フォルダから読んだ行だけ（物件・現場JSN取込は対象外）
+    base[missKeyOf(r)] = missEntryOf(r);
+  });
+  const baseN = Object.keys(base).length;
+  const aliveN = (newRows || []).length;
+
+  // 何も読めていない／1件も戸別が採れない＝フォルダが見えていない。
+  // ここで「全部消えました」と聞くのがいちばん危ないので、聞かずに一覧を守る。
+  if(baseN && (!(stats.files > 0) || !aliveN)){
+    out.keepAll = true;
+    out.warn = "⚠ このフォルダから戸別を読み取れませんでした（フォルダごと移動・名前変更・別のドライブになった等）。"
+             + "一覧はそのまま残しています。「📁 フォルダ選択(再帰)」で場所を選び直してください。";
+    return out;
+  }
+  if(!baseN){ listCensusSave(root, newRows, null); return out; }          // 初回
+  const missing = [];
+  const errDirs = stats.errDirs || [], skippedPaths = stats.skippedPaths || [], expected = opts.expectedGone || [];
+  const ghosted = {};
+  _listRows.forEach(r => { if(r && r._detached) ghosted[r._detached.key || missKeyOf(r)] = r._detached.reason || "kept"; });
+  Object.keys(base).forEach(k => {
+    if(alive[k] || ghosted[k] === "kept") return;               // 生きている／もう「名前だけ残す」と決めた
+    const e = base[k], p = String(e.p || "");
+    if(alivePath[p]) return;                                    // 管理番号は変わったが同じファイルがある
+    if(expected.indexOf(p) >= 0) return;                        // 重複整理で自分が消した
+    if(skippedPaths.indexOf(p) >= 0) return;                    // ファイルはあるが読めない/対象外
+    if(errDirs.some(d => d && p.indexOf(d) === 0)) return;      // 中を読めなかったフォルダの下
+    missing.push({ key: k, e: e });
+  });
+  out.missing = missing.length;
+  if(!missing.length){ listCensusSave(root, newRows, null); return out; }
+  const survived = Object.keys(base).filter(k => alive[k]).length;
+  if(!survived){ listCensusSave(root, newRows, null); return out; }   // 前回のものが1件も無い＝別のフォルダ
+
+  // ④ 聞く。まとまって消えていれば「動かしたのでは」、数件なら「消したのでは」
+  const cls = (missing.length >= 5 && missing.length >= Math.max(3, survived * 0.25)) ? "bulk" : "few";
+  const ans = await lgMissingDialog(missing, { cls, alive: aliveN });
+  const carry = {};
+  const findRow = k => _listRows.find(r => r && (r._detached ? (r._detached.key === k) : (missKeyOf(r) === k)));
+  const asGhost = (m, reason) => {
+    const row = findRow(m.key);                                 // 行が既にあれば作り直さない（増殖防止）
+    if(row) detachRow(row, m.key, root, reason);                // いまある行に印を付ける（中身を残す）
+    else detachedRowFromEntry(m.key, Object.assign({ root }, m.e));
+    if(reason === "kept"){
+      _detachedMap[m.key] = Object.assign({}, m.e, { root, at: Date.now(), key: m.key });
+    }
+  };
+  if(!ans || ans.action === "later"){
+    missing.forEach(m => { carry[m.key] = m.e; asGhost(m, "pending"); });
+    out.kept = missing.length;
+  } else if(ans.action === "keep"){
+    missing.forEach(m => asGhost(m, "kept"));
+    saveDetachedMap();
+    out.kept = missing.length;
+  } else {
+    missing.forEach((m, i) => {
+      if((ans.picks || [])[i] === "drop"){
+        undetach(m.key);
+        missPurgeAnno(m.key);
+        for(let j = _listRows.length - 1; j >= 0; j--){         // 前に名前だけ残していた行も消す
+          const r = _listRows[j];
+          if(r && missKeyOf(r) === m.key) _listRows.splice(j, 1);
+        }
+        out.dropped++;
+      } else { asGhost(m, "kept"); out.kept++; }
+    });
+    saveDetachedMap();
+  }
+  listCensusSave(root, newRows, carry);
+  try { projTouch(); } catch(_){}
+  if(out.kept || out.dropped){
+    out.note = "ファイルが見当たらない戸別： 名前だけ残した " + out.kept + " 件"
+             + (out.dropped ? (" ／ 一覧からも消した " + out.dropped + " 件") : "");
+  }
+  return out;
+}
+
 /* 読み込んだ行集合と既存の台帳起点行をマージして最終的な _listRows を返す */
-async function mergeRowsWithManual(newRows){
+async function mergeRowsWithManual(newRows, opts){
+  // 前回見えていた戸別が消えていないか見る。何も読めていない時は一覧を作り直さない。
+  const _mf = await listMissingFlow(newRows, opts);
+  _missLastNote = (_mf && (_mf.warn || _mf.note)) || "";
+  if(_mf && _mf.keepAll) return noteResolveRows(_listRows.slice());
   const manuals = _listRows.filter(r => r && r._manual);
   if(manuals.length === 0) return noteResolveRows(newRows);   // 備考は台帳と突き合わせる
   const byNo = {};
