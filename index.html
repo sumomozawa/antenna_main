@@ -13190,7 +13190,14 @@ function buildListRow(filePath, lastModified, data, fileHandle){
       _photoCount: count
     };
     // 物件に埋め込まれたサムネイル写真は _thumbs として保持（再保存で維持・プレビューに使用）
-    if(photoArr && data.chosho_photos_thumb){ row._thumbs = photoArr; }
+    if(photoArr && data.chosho_photos_thumb){
+      row._thumbs = photoArr;
+      thumbMemoPut(filePath, lastModified, photoArr);   // 工事フォルダを読み直した時に使い回す
+    } else if(count > 0){
+      // フォルダから読んだ行。ファイルが変わっていなければ前に作ったサムネイルをそのまま使う
+      const memo = thumbMemoGet(filePath, lastModified, count);
+      if(memo) row._thumbs = memo;
+    }
     return row;
   }
   return null; // 工事データではない
@@ -18747,6 +18754,30 @@ function projStripHeavy(d){
    機微情報保護のため plain（平文）行のみ対象。hybrid/full（暗号化）はサムネイル化しない。 */
 const PROJ_THUMB_MAXPX = 512;
 const PROJ_THUMB_QUALITY = 0.72;
+/* ---------- サムネイルの控え（同じ写真を何度も作り直さない） ----------
+   工事フォルダを読むたびに全戸別の写真を作り直すと、件数が多いほど待たされる。
+   一度作ったサムネイルを「ファイルのパス＋更新日時＋枚数」で覚えておき、
+   ファイルが変わっていない戸別は作り直さずにそれを使う。
+   更新日時が動いていれば別物として作り直すので、写真を撮り足した戸別は取りこぼさない。 */
+const _thumbMemo = new Map();
+const THUMB_MEMO_MAX = 2000;
+function thumbMemoKey(file, lastModified, count){
+  const f = String(file || "");
+  if(!f || !(lastModified > 0) || !(count > 0)) return "";
+  return f + "|" + lastModified + "|" + count;
+}
+function thumbMemoPut(file, lastModified, thumbs){
+  if(!Array.isArray(thumbs) || !thumbs.length) return;
+  const k = thumbMemoKey(file, lastModified, thumbs.length);
+  if(!k) return;
+  if(_thumbMemo.has(k)) _thumbMemo.delete(k);       // 使ったものを新しい側へ寄せる
+  _thumbMemo.set(k, thumbs);
+  while(_thumbMemo.size > THUMB_MEMO_MAX) _thumbMemo.delete(_thumbMemo.keys().next().value);
+}
+function thumbMemoGet(file, lastModified, count){
+  const k = thumbMemoKey(file, lastModified, count);
+  return k ? (_thumbMemo.get(k) || null) : null;
+}
 function makeThumbDataUri(dataUri, maxPx, quality){
   return new Promise(resolve => {
     try {
@@ -18789,6 +18820,7 @@ async function ensureRowThumbs(row){
     thumbs.push({ label: p.label || "", dataUri: t });
   }
   row._thumbs = thumbs;
+  thumbMemoPut(row.file, row.lastModified, thumbs);   // 次にフォルダを読んだ時は作り直さない
   // 元ファイルを持たない行（物件由来・エディタ保存直後）はフル写真をサムネへ差し替え＝メモリ軽量化。
   // 行を開き直してもサムネが表示される（原寸が必要な時はフォルダ読込）。
   if(!row.fileHandle && !row.srcFile && row.data && Array.isArray(row.data.chosho_photos)){
@@ -18816,7 +18848,10 @@ async function prepareProjectThumbs(silent){
     if(!ov){
       ov = document.createElement("div");
       ov.id = "proj-thumb-progress";
-      ov.style.cssText = "position:fixed;inset:0;background:rgba(20,30,45,.6);z-index:99999;display:flex;align-items:center;justify-content:center;color:#fff;font-size:17px;font-weight:600;";
+      // 画面全体をふさぐと待たされている感じになるので、右下の小さな表示にして操作は止めない
+      ov.style.cssText = "position:fixed;right:14px;bottom:14px;z-index:99999;display:flex;align-items:center;"
+        + "background:rgba(20,30,45,.92);color:#fff;font-size:13px;font-weight:600;padding:9px 14px;"
+        + "border-radius:6px;box-shadow:0 2px 10px rgba(0,0,0,.3);pointer-events:none;";
       document.body.appendChild(ov);
     }
     ov.style.display = "flex";
