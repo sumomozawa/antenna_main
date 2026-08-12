@@ -5253,7 +5253,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.07.27";
+const APP_VERSION = "2026.08.12";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -18338,9 +18338,13 @@ function isCaseOnHold(mgmtNo){
   return !!getLedger("m:" + mg).hold;
 }
 function setLedger(tk, patch){
-  const next = Object.assign({ time: "", meetAt: "", flyer: false, consent: false, compdoc: false, hold: false, note: "", noteSrc: "" }, _ledgerMap[tk] || {}, patch);
+  const next = Object.assign({ time: "", meetAt: "", flyer: false, consent: false, compdoc: false, hold: false, note: "", noteSrc: "",
+                               flyerSrc: false, consentSrc: false, compdocSrc: false }, _ledgerMap[tk] || {}, patch);
   let removed = false;
-  if(!next.time && !next.meetAt && !next.flyer && !next.consent && !next.compdoc && !next.hold && !next.note && !next.noteSrc){ delete _ledgerMap[tk]; removed = true; }
+  // 既定値だけのエントリは持たない（肥大化防止）。※Src は「前回ファイルから採り込んだ値」の控えで、
+  // これを落とすと現場と台帳のどちらが新しいか分からなくなるので、空判定に必ず含めること。
+  if(!next.time && !next.meetAt && !next.flyer && !next.consent && !next.compdoc && !next.hold && !next.note && !next.noteSrc
+     && !next.flyerSrc && !next.consentSrc && !next.compdocSrc){ delete _ledgerMap[tk]; removed = true; }
   else _ledgerMap[tk] = next;
   saveLedgerMap();
   try { removed ? markAnnoDeleted(tk) : markAnnoEdited(tk); } catch(_){} // Phase2: 設定/削除を区別してマージ対象に
@@ -18374,8 +18378,70 @@ function noteResolveRow(row){
   else row.data.chosho_note = lgNote;                            // 台帳が新しい → 戸別へ配る
 }
 function noteResolveRows(rows){
-  (rows || []).forEach(r => { try { noteResolveRow(r); } catch(_){} });
+  (rows || []).forEach(r => {
+    try { noteResolveRow(r); } catch(_){}
+    try { flowResolveRow(r); } catch(_){}   // 工程：現場入力の下見→ビラ→工事→完了を台帳へ取り込む
+  });
   return rows;
+}
+
+/* ---------- 工程の突き合わせ（現場入力の「工程」 ＝ 受付台帳の ビラ／承諾書／完了書） ----------
+   現場入力アプリ(genba)は「下見 → ビラ配り → 工事 → 完了（同意書・工事完了書の受取）」を
+   戸別ファイルへ書き出す。台帳側は同じ内容を _ledgerMap の flyer/consent/compdoc で持っている
+   ので、備考(noteSrc)と同じやり方で「前回ファイルから採り込んだ値」を控え、どちらが新しいかを
+   見分ける。
+
+     ・ファイル側が前回と変わっている → 現場で押された／外された → ファイルを採る
+     ・ファイル側が前回と同じ         → 事務所が台帳で直した     → 台帳を採る（戸別へ配る）
+
+   ※ 工事は戸別の chosho_status＝completed そのものなので、ここでは扱わない
+      （台帳の「完了」列は元から状態を見ている）。
+   ※ 下見は台帳に欄が無い（現場だけの印）ので、これも扱わない。 */
+const FLOW_LG_FIELDS = [
+  { file: "flyer_done",       lg: "flyer",   src: "flyerSrc" },     // ビラ配り  → ビラ
+  { file: "consent_received", lg: "consent", src: "consentSrc" },   // 同意書    → 承諾書
+  { file: "compdoc_received", lg: "compdoc", src: "compdocSrc" },   // 工事完了書 → 完了書
+];
+function flowResolveRow(row){
+  if(!row || !row.data) return;
+  const tk = subCaseKey(row); if(!tk) return;
+  FLOW_LG_FIELDS.forEach(F => {
+    if(!(F.file in row.data)) return;              // 工程を持たない戸別ファイル（旧版・PCで作った分）は触らない
+    const lg = getLedger(tk) || {};
+    const fileVal = !!row.data[F.file];
+    const lgVal   = !!lg[F.lg];
+    const known   = (F.src in lg) ? !!lg[F.src] : null;   // 前回このファイルから採り込んだ値
+    if(known === null){
+      // 初めての突き合わせ。台帳に付いている○を、まだ現場が触っていないファイルで消さない。
+      if(fileVal) setLedger(tk, { [F.lg]: true, [F.src]: true });
+      else { row.data[F.file] = lgVal; setLedger(tk, { [F.src]: false }); }
+      return;
+    }
+    if(fileVal !== known) setLedger(tk, { [F.lg]: fileVal, [F.src]: fileVal });  // 現場で変わった → 現場を採る
+    else if(fileVal !== lgVal) row.data[F.file] = lgVal;                          // 台帳で変わった → 台帳を採る
+  });
+}
+/* 現場入力の工程を「下見・ビラ・工事 済」のように1行の文字にする（読み込み時の比較表などで使う）。
+   工事は work_done が無い古いファイルでも 状態＝完了 なら済みとみなす。 */
+function genbaFlowLabel(d){
+  if(!d) return "";
+  const parts = [];
+  if(d.survey_done) parts.push("下見");
+  if(d.flyer_done) parts.push("ビラ");
+  if(d.work_done || d.chosho_status === "completed") parts.push("工事");
+  if(d.consent_received) parts.push("同意書");
+  if(d.compdoc_received) parts.push("完了書");
+  return parts.length ? (parts.join("・") + " 済") : "";
+}
+/* 現場JSNの手動取込など「このファイルが今の内容」と分かっている時に、工程をそのまま台帳へ入れる */
+function flowAdoptRow(row, genbaData){
+  if(!row || !genbaData) return;
+  const tk = subCaseKey(row); if(!tk) return;
+  FLOW_LG_FIELDS.forEach(F => {
+    if(!(F.file in genbaData)) return;
+    const v = !!genbaData[F.file];
+    setLedger(tk, { [F.lg]: v, [F.src]: v });
+  });
 }
 
 /* ---------- 施工会社（協力会社）：物件ごとのマスター一覧＋戸別割当 ----------
@@ -23466,7 +23532,11 @@ const GENBA_AUTHORITATIVE_FIELDS = [
   "att_main","att_46","att_50","box_consent","ofmu_qty","wire_sus16_len",
   "tv_rooms","tv_bd","tv_sp","tv_term",
   "wire_overrides","text_annotations","antenna_guide","measurements",
-  "chosho_note"
+  "chosho_note",
+  // 工程（下見 → ビラ配り → 工事 → 完了）。現場が押した印なので、現場を正とする。
+  // ※工事(work_done)に対応する chosho_status は下の「状態 最進捗優先」で別に面倒を見る。
+  "survey_done","survey_done_at","flyer_done","flyer_done_at","work_done","work_done_at",
+  "consent_received","consent_received_at","compdoc_received","compdoc_received_at"
 ];
 // main(PC/物件)を絶対保持＝genba値を採らないフィールド（現場は既定値/空を出すため）
 const GENBA_HARD_KEEP_MAIN = [
@@ -23805,6 +23875,8 @@ async function applyGenbaMergeToRow(row, genbaData, opts){
     try{ const ntk = subCaseKey(row);
          if(ntk) noteAdopt(ntk, String(merged.chosho_note || "")); }catch(_){}
   }
+  // 工程（ビラ配り・同意書・工事完了書）を受付台帳の「ビラ・承諾書・完了書」へ入れる
+  try { flowAdoptRow(row, genbaData); } catch(_){}
   const note = await _genbaWriteRowIndividual(row);  // 原寸写真は温存して個別JSONへ書戻し
   try { projTouch(); } catch(_){}
   if(wasEditing){ try { applyStateData(row.data); _editingRow=row; try{ rtClaimLock(row); }catch(_){} } catch(_){} }
@@ -23915,6 +23987,7 @@ function lgMergeDialog(manualRow, fileRow){
       { label:"増幅器",     get:d => lgOptLabel("amplifier",    d.amplifier) },
       { label:"図面・積算", always:true, get:d => d.amplifier ? "あり" : "なし" },
       { label:"下見完了",   get:d => d.survey_done ? ("済 " + String(d.survey_done_at || "").slice(0, 10)) : "" },
+      { label:"工程",       get:d => genbaFlowLabel(d) },
       { label:"最終更新",   get:d => lgWhenLabel(d.editedAt) },
     ];
     const dLg = manualRow.data || {}, dFile = fileRow.data || {};   // md はモーダル要素なので使わない
