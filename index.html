@@ -22547,6 +22547,44 @@ function surveyDoneAtOf(row){ return String((row && row.data && row.data.survey_
 /* 発注材料数量に出さない単位。「式」＝工事一式、「h」＝時間あたりの作業費で、
    どちらも発注する“もの”ではない（金額の集計には引き続き入る）。 */
 const MAT_NON_MATERIAL_UNITS = ["式", "h"];
+/* ---------- 新規5Cケーブル：積算に出ない分 ----------
+   積算（BOM）は「お金を取る分」だけを数えるので、実際には張るのに表へ出ない5Cケーブルが
+   2か所あります。発注では買わないといけないので、この画面ではその分を足します。
+
+     ① アンテナ→増幅器（主系統・46CH・50CH）
+        系統図では常に赤（新規）ですが、「外部配線＝既存を流用」の戸別では
+        積算に載りません（基本工事に含む扱い）。
+     ② 宅内新規の標準2mぶん
+        標準2mまでは基本工事に含むので積算に載りません（超過分だけ載ります）。
+
+   どちらも、系統図でその区間を黒（既存）に切り替えた戸別では数えません
+   （積算とまったく同じ判定を使います）。
+   ※ 増幅器→次段（壁／FA／2分配器WP）は「外部配線＝既存を流用」なら系統図でも黒＝
+      張り替えないので、ここでは足しません。 */
+function matExtraCable5c(row){
+  const d = (row && row.data) || {};
+  const out = { m: 0, by: {} };
+  if(!d.amplifier) return out;                       // 図面（積算）の無い戸別は数えられない
+  const ov = (d.wire_overrides && typeof d.wire_overrides === "object") ? d.wire_overrides : {};
+  const forcedExisting = (...keys) => keys.some(k => ov[k] === true);   // true=既存(黒)へ切替済み
+  const num = v => { const n = parseFloat(v); return (isFinite(n) && n > 0) ? n : 0; };
+  const push = (label, m) => { if(m > 0){ out.m += m; out.by[label] = (out.by[label] || 0) + m; } };
+  // ① 外部配線＝既存を流用のとき、アンテナ→増幅器のぶんが積算に載らない
+  if(d.outer_wire !== "new"){
+    if(!forcedExisting("main_trunk_0", "main_trunk_1", "main_trunk_2",
+                       "main_amp", "main_amp_1", "main_amp_2", "main_amp_46", "main_amp_3")){
+      push("アンテナ→増幅器", num(d.cable_main_len));
+    }
+    if(d.ch46 !== "no" && !forcedExisting("ch46_amp")) push("アンテナ→増幅器", num(d.cable_ch46_len));
+    if(d.ch46 === "triple" && !forcedExisting("ch50_amp")) push("アンテナ→増幅器", num(d.cable_ch50_len));
+  }
+  // ② 宅内新規の標準2mぶん（超過分は積算に載っている）
+  const isCatvFa = (d.is_catv === "yes") && (d.use_fa === "yes") && (d.power_pos !== "outside");
+  if(!isCatvFa && !forcedExisting("wall_to_sp")){
+    push("宅内新規の標準2m", Math.min(num(d.cable_indoor_new), 2));
+  }
+  return out;
+}
 function renderListMaterialsMode(rows, container){
   const target = _matOnlyDone ? rows.filter(surveyDoneOf) : rows.slice();
   const doneN = rows.filter(surveyDoneOf).length;
@@ -22554,6 +22592,7 @@ function renderListMaterialsMode(rows, container){
   // 集計。同じ品番は戸別をまたいで足し合わせる。
   const byId = {}, order = [];
   let counted = 0, naNoDwg = 0, naEnc = 0;
+  const extraCable = { m: 0, by: {} };   // 新規5Cケーブルのうち積算に出ない分（下の注記に出す）
   const excluded = {};   // 材料ではないので外した行（品名→件数）。下に注記として出す。
   target.forEach(r => {
     const bom = getRowBomAggregate(r);
@@ -22562,7 +22601,6 @@ function renderListMaterialsMode(rows, container){
       return;
     }
     counted++;
-    const seenHere = {};
     bom.items.forEach(it => {
       // 単位が「式」「h」＝工事費・作業費。材料ではないので発注の表からは外す
       if(MAT_NON_MATERIAL_UNITS.indexOf(String(it.unit || "").trim()) >= 0){
@@ -22571,16 +22609,30 @@ function renderListMaterialsMode(rows, container){
         return;
       }
       if(!byId[it.id]){
-        byId[it.id] = { id: it.id, model: it.model || "", name: it.name || "", unit: it.unit || "", qty: 0, cases: 0 };
+        byId[it.id] = { id: it.id, model: it.model || "", name: it.name || "", unit: it.unit || "", qty: 0 };
         order.push(it.id);
       }
       byId[it.id].qty += it.qty;
-      if(!seenHere[it.id]){ seenHere[it.id] = 1; byId[it.id].cases++; }
     });
+    // 新規5Cケーブルのうち、積算に出ない分（基本工事に含む分）も発注では必要なので足す
+    const ex = matExtraCable5c(r);
+    if(ex.m > 0){
+      const P = (typeof PARTS !== "undefined" && PARTS.cable_s5cfb) ? PARTS.cable_s5cfb : {};
+      if(!byId.cable_s5cfb){
+        byId.cable_s5cfb = { id: "cable_s5cfb", model: P.model || "S5CFB",
+                             name: P.name || "ケーブル(標準) S5CFB", unit: P.unit || "m", qty: 0 };
+        order.push("cable_s5cfb");
+      }
+      byId.cable_s5cfb.qty += ex.m;
+      extraCable.m += ex.m;
+      Object.keys(ex.by).forEach(k => { extraCable.by[k] = (extraCable.by[k] || 0) + ex.by[k]; });
+    }
   });
+  // 左端の「品名」で並べる（見出しの並びと合わせる）
   order.sort((a, b) => {
-    const ka = byId[a].model || byId[a].name || "", kb = byId[b].model || byId[b].name || "";
-    return ka.localeCompare(kb, "ja");
+    const ka = byId[a].name || byId[a].model || "", kb = byId[b].name || byId[b].model || "";
+    const c = ka.localeCompare(kb, "ja");
+    return c !== 0 ? c : (byId[a].model || "").localeCompare(byId[b].model || "", "ja");
   });
   const fmtQty = q => (Math.abs(q - Math.round(q)) < 1e-6) ? String(Math.round(q)) : q.toFixed(1);
 
@@ -22612,30 +22664,33 @@ function renderListMaterialsMode(rows, container){
   }
   html += '<table class="cost-detail-table" style="width:100%;border-collapse:collapse;font-size:12px;">'
     + '<thead><tr>'
-    + '<th style="width:34px;text-align:right;">#</th>'
-    + '<th style="width:150px;text-align:left;">型番</th>'
     + '<th style="text-align:left;">品名</th>'
+    + '<th style="width:150px;text-align:left;">型番</th>'
     + '<th style="width:56px;text-align:center;">単位</th>'
     + '<th style="width:90px;text-align:right;">数量</th>'
-    + '<th style="width:90px;text-align:right;" title="この材料を使う戸別の数">使う戸別</th>'
     + "</tr></thead><tbody>";
-  order.forEach((id, i) => {
+  order.forEach(id => {
     const it = byId[id];
     html += "<tr>"
-      + '<td style="text-align:right;color:#8a94a0;">' + (i + 1) + "</td>"
-      + "<td>" + escapeHtml(it.model) + "</td>"
       + "<td>" + escapeHtml(it.name) + "</td>"
+      + "<td>" + escapeHtml(it.model) + "</td>"
       + '<td style="text-align:center;">' + escapeHtml(it.unit) + "</td>"
-      + '<td style="text-align:right;font-weight:700;">' + fmtQty(it.qty) + "</td>"
-      + '<td style="text-align:right;color:#556;">' + it.cases + "</td></tr>";
+      + '<td style="text-align:right;font-weight:700;">' + fmtQty(it.qty) + "</td></tr>";
   });
   html += "</tbody><tfoot><tr>"
-    + '<td colspan="4" style="text-align:right;font-weight:700;">品目数</td>'
-    + '<td style="text-align:right;font-weight:700;">' + order.length + "</td><td></td></tr></tfoot></table>";
+    + '<td colspan="3" style="text-align:right;font-weight:700;">品目数</td>'
+    + '<td style="text-align:right;font-weight:700;">' + order.length + "</td></tr></tfoot></table>";
   const exNames = Object.keys(excluded);
+  const exCable = Object.keys(extraCable.by);
   html += '<div style="margin-top:8px;font-size:11px;color:#667482;">'
     + "※ 数量は、下見で入力した内容から出した必要数です。予備・端数は含みません。<br>"
     + "※ ケーブル類は長さ（m）、器具は台・個で出ています。単位の欄をご確認ください。<br>"
+    + (extraCable.m > 0
+        ? "※ 新規5Cケーブル（S5CFB）は、<b>積算に出ない分も足した「買う長さ」</b>です"
+          + "（基本工事に含むため積算には載らない分 "
+          + exCable.map(k => escapeHtml(k) + " " + fmtQty(extraCable.by[k]) + "m").join("・")
+          + " ＝ 合計 " + fmtQty(extraCable.m) + "m を加算）。<br>"
+        : "")
     + "※ 単位が「式」「h」の行（工事費・作業費）は材料ではないため、この表には出しません"
     + (exNames.length ? "（" + exNames.map(escapeHtml).join("・") + "）" : "")
     + "。金額の集計には今までどおり入っています。</div>";
@@ -22646,9 +22701,9 @@ function renderListMaterialsMode(rows, container){
 function bindMaterialsMode(container, items){
   const chk = container.querySelector("#mat-only-done");
   if(chk) chk.addEventListener("change", () => { _matOnlyDone = chk.checked; renderListTable(); });
-  const head = ["型番", "品名", "単位", "数量", "使う戸別"];
-  const aoa = () => [head].concat(items.map(it => [it.model, it.name, it.unit,
-    (Math.abs(it.qty - Math.round(it.qty)) < 1e-6) ? String(Math.round(it.qty)) : it.qty.toFixed(1), String(it.cases)]));
+  const head = ["品名", "型番", "単位", "数量"];
+  const aoa = () => [head].concat(items.map(it => [it.name, it.model, it.unit,
+    (Math.abs(it.qty - Math.round(it.qty)) < 1e-6) ? String(Math.round(it.qty)) : it.qty.toFixed(1)]));
   const cp = container.querySelector("#mat-copy");
   if(cp) cp.addEventListener("click", async () => {
     if(!items.length){ alert("コピーする材料がありません。"); return; }
