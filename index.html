@@ -4960,7 +4960,7 @@
     <button type="button" id="map-parked-clean" class="map-hbtn" style="display:none;background:#8a6d1f;border-color:#6b5416;" title="共有ファイルの競合で自動的に控えられたシート（⚠ 競合退避）を削除します。元シートの丸ごと複製なので、物件ファイルが大きくなる原因になります。中身を確認してから削除してください。">🧹 競合退避シートを削除</button>
     <span class="map-cur-proj" id="map-cur-proj"></span>
     <button type="button" id="map-attach" class="map-hbtn" style="display:none;background:#1b7a3d;border-color:#145c2e;" title="この端末ローカル地図を、開いている物件に紐付けます">📎 物件に紐付け</button>
-    <button type="button" id="map-export-genba" class="map-hbtn" style="background:#00695c;border-color:#004d40;" title="この地図を現場入力アプリ用のファイル（.json）に書き出します。スマホで取り込むと、戸別の「地図」からその建物を拡大して見られます。下地の写真は載せず、描いた線と管理番号だけを書き出します。">📤 現場用に地図を書き出し</button>
+    <button type="button" id="map-export-genba" class="map-hbtn" style="background:#00695c;border-color:#004d40;" title="この地図を現場入力アプリ用のファイル（.json）に書き出します。スマホで取り込むと、戸別の「地図」からその建物を拡大して見られます。下地（住宅地図など）も一緒に書き出すので、スマホでも背景として出ます（現場入力の「図」ボタンで消せます）。参照地図下地（トレース専用）は載せません。">📤 現場用に地図を書き出し</button>
     <button type="button" id="map-goto-ledger" class="map-hbtn" style="background:#1e3a5f;border-color:#16314f;" title="受付台帳（戸別一覧）を開きます">📋 受付台帳</button>
     <button type="button" id="map-close" class="map-hbtn map-close-btn" title="地図を閉じてメニューへ">✕ 閉じる</button>
   </header>
@@ -31455,6 +31455,76 @@ window.addEventListener("DOMContentLoaded", init);
     });
     return marks;
   }
+  /* ---------- 現場入力アプリへ渡す下地（住宅地図など） ----------
+     線と管理番号はベクターのまま渡すが、下地は画像なので、その図面の範囲だけを
+     1枚の画像に焼いて持たせる。スマホへ渡すファイルなので長辺を抑えめにし、
+     写真向きのJPEGで小さくする（下地は写真・地図なので継ぎ目が出にくい）。
+     参照地図下地（トレース専用）は印刷と同じく載せない。 */
+  var GENBA_BG_MAXPX = 3000;
+  var GENBA_BG_QUALITY = 0.75;
+  function buildGenbaBgSvg(box, bgList, pxW, pxH){
+    var b = worldBounds();
+    var op = bgOpacity();
+    var inner = "";
+    (bgList || []).forEach(function(it){
+      if(!it || !it.uri) return;
+      var im = it.im, W = bgImgW(im), H = bgImgH(im), clipDef = "", clipAttr = "";
+      if(im.crop){
+        var c = bgClipRect(im);
+        clipDef = '<clipPath id="gbgclip_' + esc(im.id) + '" clipPathUnits="userSpaceOnUse">'
+          + '<rect x="' + c.x + '" y="' + c.y + '" width="' + c.w + '" height="' + c.h + '"/></clipPath>';
+        clipAttr = ' clip-path="url(#gbgclip_' + esc(im.id) + ')"';
+      }
+      inner += clipDef + '<image x="' + (im.x || 0) + '" y="' + (im.y || 0) + '" width="' + W + '" height="' + H
+        + '" opacity="' + op + '" preserveAspectRatio="none"' + clipAttr + ' href="' + it.uri + '" xlink:href="' + it.uri + '"/>';
+    });
+    var roadVisible = !current.layers.road || current.layers.road.visible !== false;
+    if(current.paint && roadVisible){
+      var pc = el("map-paint-canvas");
+      if(pc && pc.width){
+        try {
+          var puri = pc.toDataURL("image/png");
+          inner += '<image x="0" y="0" width="' + b.w + '" height="' + b.h + '" preserveAspectRatio="none" href="' + puri + '" xlink:href="' + puri + '"/>';
+        } catch(_){}
+      }
+    }
+    if(!inner) return "";
+    return '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="' + pxW + '" height="' + pxH
+      + '" viewBox="' + box.x + ' ' + box.y + ' ' + box.w + ' ' + box.h + '">'
+      + '<rect x="' + box.x + '" y="' + box.y + '" width="' + box.w + '" height="' + box.h + '" fill="#ffffff"/>' + inner + '</svg>';
+  }
+  async function mapViewerBgOfSheet(box){
+    var imgs = bgImages();
+    var list = [];
+    for(var i = 0; i < imgs.length; i++){
+      try {
+        // 通常は blobKey（画面の下地はBlobで持つ）。dataUri しか無い形でも拾えるようにしておく
+        if(imgs[i].dataUri){ list.push({ im: imgs[i], uri: imgs[i].dataUri }); continue; }
+        var blob = await blobGet(imgs[i].blobKey);
+        if(!blob) continue;
+        list.push({ im: imgs[i], uri: await mapPrintBlobToDataUri(blob) });
+      } catch(_){}
+    }
+    var k = GENBA_BG_MAXPX / Math.max(1e-6, Math.max(box.w, box.h));
+    var pxW = Math.max(1, Math.round(box.w * k)), pxH = Math.max(1, Math.round(box.h * k));
+    var svg = buildGenbaBgSvg(box, list, pxW, pxH);
+    if(!svg) return null;
+    return await new Promise(function(res){
+      var img = new Image();
+      img.onload = function(){
+        try {
+          var cv = document.createElement("canvas");
+          cv.width = pxW; cv.height = pxH;
+          var ctx = cv.getContext("2d");
+          ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, pxW, pxH);
+          ctx.drawImage(img, 0, 0, pxW, pxH);
+          res(cv.toDataURL("image/jpeg", GENBA_BG_QUALITY));
+        } catch(e){ console.warn("[map] 現場用の下地を焼けませんでした", e); res(null); }
+      };
+      img.onerror = function(){ console.warn("[map] 現場用の下地を画像にできませんでした"); res(null); };
+      img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+    });
+  }
   async function mapCollectViewerPack(){
     var list = (sheets || []).filter(function(s){ return s && !s._mapConflictParked; });
     if(!list.length) return null;
@@ -31474,8 +31544,10 @@ window.addEventListener("DOMContentLoaded", init);
       // ここで入れてしまうと現場の画面で二重に出てしまう。
       var svg = clonePrintVectorSvg((PRINT_DPI / 96) * VIEW_PX / box.w, 1, { dropBldMarks: true });
       var marks = mapViewerMarksOfSheet(s);
+      var bg = null;
+      try { bg = await mapViewerBgOfSheet(box); } catch(e){ console.warn("[map] 下地の書き出しに失敗", e); }
       out.push({ name: s.name || "図面", zentai: !!s._zentai,
-                 viewBox: box, svg: svg, marks: marks, markCount: Object.keys(marks).length });
+                 viewBox: box, svg: svg, bg: bg, marks: marks, markCount: Object.keys(marks).length });
     }
     if(keep) openSheet(keep);
     return out.length ? out : null;
@@ -31488,6 +31560,7 @@ window.addEventListener("DOMContentLoaded", init);
     var p = curProj();
     var projName = (p && p.name) ? String(p.name) : "";
     var total = pack.reduce(function(a, s){ return a + s.markCount; }, 0);
+    var bgN = pack.filter(function(s){ return !!s.bg; }).length;
     var payload = { type: "antenna_map_pack", version: 1, app: "アンテナ工事 積算・図面",
                     exportedAt: new Date().toISOString(), project: projName,
                     sheetCount: pack.length, markCount: total, sheets: pack };
@@ -31499,6 +31572,7 @@ window.addEventListener("DOMContentLoaded", init);
       alert("現場用の地図を書き出しました。\n\n"
         + "図面：" + pack.length + " 枚\n"
         + "管理番号のついた建物：" + total + " 件\n"
+        + "下地（住宅地図など）：" + (bgN ? (bgN + " 枚ぶん入り") : "なし") + "\n"
         + "大きさ：約 " + (mb < 1 ? (Math.round(mb * 1024) + " KB") : (mb.toFixed(1) + " MB")) + "\n\n"
         + "このファイルをスマホへ移し、現場入力アプリの「地図」から取り込んでください。\n"
         + "戸別の「地図」を押すと、その管理番号の建物が拡大して出ます。");
