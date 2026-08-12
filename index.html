@@ -20822,9 +20822,11 @@ function lgEditableField(row, f){
 }
 /* 戸別フィールドの書き込み（data＋ハイブリッドは envelope.plain も同期）。
    - 仮受付の行に名前/住所/電話のいずれかが記入されたら自動で「受付済」へ昇格（清書）
+     ※ opts.keepStatus を付けると昇格しない。取込（受付台帳/Excel）はこちらを使い、
+       代わりに「状態」も違いの一覧に出して、利用者が見たうえで選べるようにしてある。
    - エディタ（積算・図面）で同じ戸別を開いている場合は入力欄へも即時反映（双方向） */
 const LG_FIELD_MAP = { mgmt: "chosho_mgmt_no", name: "chosho_cust_name", addr: "chosho_cust_addr", tel: "chosho_cust_tel", date: "chosho_date", status: "chosho_status" };
-function lgWriteCaseField(row, f, v){
+function lgWriteCaseField(row, f, v, opts){
   const key = LG_FIELD_MAP[f] || f;
   // 住所・電話の数字は半角へ統一（全角のままだと検索・並び・印刷幅が揃わないため）
   if(f === "addr" || f === "tel") v = toHalfWidthNum(v);
@@ -20844,7 +20846,8 @@ function lgWriteCaseField(row, f, v){
   };
   writeBoth(key, v);
   // 清書による自動昇格：仮受付 ＋ 名前/住所/電話の記入 → 受付済
-  if((f === "name" || f === "addr" || f === "tel") && v && row.data.chosho_status === "provisional"){
+  if(!(opts && opts.keepStatus)
+     && (f === "name" || f === "addr" || f === "tel") && v && row.data.chosho_status === "provisional"){
     writeBoth("chosho_status", "in_progress");
   }
   if(f === "mgmt"){
@@ -21711,6 +21714,8 @@ const LGIMP_FIELDS = [
   { f: "contractor", label: "施工会社", kind: "ctr", key: "contractor" }
 ];
 const LGIMP_ST_NAME = { provisional: "仮受付", in_progress: "受付済", completed: "完了" };
+/* 自動昇格を違いの一覧に出すときに使う「状態」の定義（LGIMP_FIELDS の状態と同じもの） */
+const LGIMP_STATUS_FIELD = LGIMP_FIELDS.filter(F => F.f === "status")[0];
 function lgimpShow(v, F){
   if(F && F.bool) return v ? "○" : "―";
   const s = String(v == null ? "" : v).trim();
@@ -21768,6 +21773,14 @@ function lgLedgerDiff(payload){
       if(F.kind === "case" && !lgEditableField(row, F.edit || (F.f === "name" || F.f === "tel" || F.f === "addr" ? "addr" : F.f))) return; // 暗号化で書けない項目は出さない
       diffs.push({ F, before, after });
     });
+    // 清書による自動昇格（仮受付＋名前/住所/電話 → 受付済）も、隠さずに違いとして出す。
+    // ここに出しておけば、チェックを外して「仮受付のまま」にもできる。
+    if(diffs.length && String(d.chosho_status || "") === "provisional"
+       && !diffs.some(z => z.F.f === "status")
+       && diffs.some(z => (z.F.f === "name" || z.F.f === "addr" || z.F.f === "tel") && z.after)
+       && lgEditableField(row, "done")){
+      diffs.push({ F: LGIMP_STATUS_FIELD, before: "provisional", after: "in_progress", auto: true });
+    }
     if(diffs.length) items.push({ no, row, kind: "update", src: x, diffs, by });
   });
   items._dup = dup;
@@ -21812,7 +21825,9 @@ function lgShowLedgerDiffDialog(payload, items){
       '<tr class="lgimp-upd" data-key="' + escapeHtml(it.no + " " + d.F.label) + '">'
       + '<td><input type="checkbox" data-i="' + i + '" data-g="' + (d.F.kind === "case" ? "case" : "lg") + '" data-j="' + j + '" checked></td>'
       + "<td>" + (j === 0 ? "<b>" + escapeHtml(it.no) + "</b>" + tag(it) : "") + "</td>"
-      + "<td>" + escapeHtml(d.F.label) + "</td>"
+      + "<td>" + escapeHtml(d.F.label)
+      +   (d.auto ? '<div style="font-size:10px;color:#8a5a00;">名前などを書いたため</div>' : "")
+      + "</td>"
       + '<td class="lgimp-b">' + escapeHtml(lgimpShow(d.before, d.F)) + "</td>"
       + '<td class="lgimp-a">' + escapeHtml(lgimpShow(d.after, d.F)) + "</td></tr>").join("");
   }).join("");
@@ -21894,7 +21909,7 @@ function lgShowLedgerDiffDialog(payload, items){
       const d = it.diffs[parseInt(bx.dataset.j, 10)];
       if(!d) return;
       if(d.F.kind === "case"){
-        lgWriteCaseField(it.row, d.F.f, d.after);
+        lgWriteCaseField(it.row, d.F.f, d.after, { keepStatus: true });
         if(d.F.pick === "status") it.row._amtCache = undefined;      // 完了かどうかで金額の出し方が変わる
       }
       else if(d.F.kind === "ctr"){
@@ -22379,7 +22394,7 @@ async function applyXlsxPlan(){
       added++;
     } else updated++;
     lgWriteCaseField(row, "mgmt", e.excel.mgmt);          // 改番＝台帳/持出/確認/施工会社のキーも移行される
-    if(e.addrPick === "excel" && e.excel.addr) lgWriteCaseField(row, "addr", e.excel.addr);
+    if(e.addrPick === "excel" && e.excel.addr) lgWriteCaseField(row, "addr", e.excel.addr, { keepStatus: true });
     const tk = subCaseKey(row);
     if(e.notePick === "excel" && e.excel.note){ try { setLedger(tk, { note: e.excel.note }); } catch(_){} }
     const co = contractorByMgmtNo(e.excel.mgmt);          // 4桁目→施工会社を自動判別
