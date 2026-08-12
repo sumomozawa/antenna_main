@@ -29292,8 +29292,10 @@ window.addEventListener("DOMContentLoaded", init);
   }
   /* 建物に重ねる文字（管理番号の下3桁・保留マーク）。中心からの相対位置 dx,dy を data 属性に残し、
      ドラッグ中の軽量描画（updateObjGeometryInDom）が図形の移動に追従できるようにしておく。 */
-  function bldLabelText(cx, cy, dx, dy, fs, halo, color, text){
-    return '<text data-bld-lab="1" data-dx="' + dx + '" data-dy="' + dy + '"'
+  /* isMark=true … 状態の印（保・下・完・未）。現場入力アプリへ書き出す地図では外す。
+     （現場入力アプリは同じ印を自分で重ねて描くので、焼き込むと二重に出てしまう） */
+  function bldLabelText(cx, cy, dx, dy, fs, halo, color, text, isMark){
+    return '<text data-bld-lab="1"' + (isMark ? ' data-bld-mark="1"' : '') + ' data-dx="' + dx + '" data-dy="' + dy + '"'
       + ' x="' + (cx + dx) + '" y="' + (cy + dy) + '" font-size="' + fs + '" fill="' + color + '"'
       + ' stroke="#ffffff" stroke-width="' + halo + '" paint-order="stroke" text-anchor="middle"'
       + ' dominant-baseline="central" font-family="sans-serif" font-weight="700" pointer-events="none">' + text + '</text>';
@@ -29470,7 +29472,7 @@ window.addEventListener("DOMContentLoaded", init);
           for(var mi = 0; mi < marks.length; mi++){
             var hdx = hx0 + (mi % 2) * hfs * 0.98;
             var hdy = hy0 + Math.floor(mi / 2) * hfs * 0.98;
-            lab += bldLabelText(cx, cy, hdx, hdy, hfs, Math.max(0.4, hfs * 0.22), marks[mi].color, marks[mi].ch);
+            lab += bldLabelText(cx, cy, hdx, hdy, hfs, Math.max(0.4, hfs * 0.22), marks[mi].color, marks[mi].ch, true);
           }
         }
         // 番地（丁目以降の数字）。管理番号とは別の文字色にし、ドラッグで好きな位置へ動かせる
@@ -30686,7 +30688,11 @@ window.addEventListener("DOMContentLoaded", init);
     return new Promise(function(res, rej){ var r = new FileReader(); r.onload = function(){ res(r.result); }; r.onerror = function(){ rej(r.error); }; r.readAsDataURL(blob); });
   }
   // 表示中ベクターを複製。ラスタ用に screen-px stroke を world 単位へ焼き込み（画面相当の太さ＝×DPI/96）、破線は実線化。
-  function clonePrintVectorSvg(pxPerWorld, lineMul){
+  /* opts.dropBldMarks=true … 建物に添えた状態の印（保・下・完・未）を外して書き出す。
+     現場入力アプリ用の地図で使う（あちらは同じ印を自分で重ねて描くので、焼き込むと二重になる）。
+     印刷は従来どおり印を含める。 */
+  function clonePrintVectorSvg(pxPerWorld, lineMul, opts){
+    opts = opts || {};
     var mul = (isFinite(lineMul) && lineMul > 0) ? lineMul : 1;
     mul = Math.max(0.3, Math.min(4, mul));
     var out = "";
@@ -30699,6 +30705,12 @@ window.addEventListener("DOMContentLoaded", init);
       Array.prototype.forEach.call(clone.querySelectorAll("[data-noprint]"), function(node){
         if(node.parentNode) node.parentNode.removeChild(node);
       });
+      // 状態の印（保・下・完・未）を外す指定のとき（現場入力アプリ用の書き出し）
+      if(opts.dropBldMarks){
+        Array.prototype.forEach.call(clone.querySelectorAll("[data-bld-mark]"), function(node){
+          if(node.parentNode) node.parentNode.removeChild(node);
+        });
+      }
       var w2w = (PRINT_DPI / 96) / pxPerWorld;   // 画面px → 印刷ワールド単位の換算
       Array.prototype.forEach.call(clone.querySelectorAll("[vector-effect]"), function(node){
         var wpx = parseFloat(node.getAttribute("stroke-width") || "1") || 1;
@@ -31369,7 +31381,9 @@ window.addEventListener("DOMContentLoaded", init);
       // clonePrintVectorSvg は太さを (PRINT_DPI/96)/pxPerWorld 倍してワールド単位にするので、
       // 図の横幅を VIEW_PX とみなしたときに 1px 相当＝ box.w/VIEW_PX になるよう pxPerWorld を渡す。
       var VIEW_PX = 1000;
-      var svg = clonePrintVectorSvg((PRINT_DPI / 96) * VIEW_PX / box.w, 1);
+      // 状態の印（保・下・完・未）は焼き込まない。現場入力アプリが同じ印を自分で重ねて描くため、
+      // ここで入れてしまうと現場の画面で二重に出てしまう。
+      var svg = clonePrintVectorSvg((PRINT_DPI / 96) * VIEW_PX / box.w, 1, { dropBldMarks: true });
       var marks = mapViewerMarksOfSheet(s);
       out.push({ name: s.name || "図面", zentai: !!s._zentai,
                  viewBox: box, svg: svg, marks: marks, markCount: Object.keys(marks).length });
