@@ -17827,17 +17827,28 @@ function backupDelete(bid){
 }
 /* ※ 世代の一覧は backupMetaListByProject（軽量メタ）を使う。本体は地図画像を含み重いので、
    復元/書き出しのときに backupGet で1件だけ読む。 */
+/* 保存時刻は世界標準時(UTC)の文字列で持っている（例 2026-08-12T09:30:00.000Z）。
+   文字をそのまま切り出すと日本時間より9時間ずれるので、必ず端末の時計に直してから表示する。 */
+function backupLocalParts(ts){
+  const t = String(ts || "").trim();
+  if(!t) return null;
+  const d = new Date(t);
+  if(isNaN(d.getTime())) return null;
+  const p = n => String(n).padStart(2, "0");
+  return { y: String(d.getFullYear()), mo: p(d.getMonth() + 1), d: p(d.getDate()),
+           h: p(d.getHours()), mi: p(d.getMinutes()) };
+}
 function fmtBackupTs(ts){
-  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(ts || ""));
-  return m ? (m[1] + "/" + m[2] + "/" + m[3] + " " + m[4] + ":" + m[5]) : String(ts || "");
+  const t = backupLocalParts(ts);
+  return t ? (t.y + "/" + t.mo + "/" + t.d + " " + t.h + ":" + t.mi) : String(ts || "");
 }
 function fmtBackupDay(ts){
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(ts || ""));
-  return m ? (m[1] + "/" + m[2] + "/" + m[3]) : String(ts || "");
+  const t = backupLocalParts(ts);
+  return t ? (t.y + "/" + t.mo + "/" + t.d) : String(ts || "");
 }
 function fmtBackupTime(ts){
-  const m = /T(\d{2}):(\d{2})/.exec(String(ts || ""));
-  return m ? (m[1] + ":" + m[2]) : "";
+  const t = backupLocalParts(ts);
+  return t ? (t.h + ":" + t.mi) : "";
 }
 /* 「3分前」「2時間前」など、どれくらい前の状態かを一目で分かるように。 */
 function fmtBackupAgo(at){
@@ -18320,7 +18331,7 @@ async function connectHandleWithFreshness(handle, loadedProject, opts){
     // ※ 起動時の自動再接続(opts.confirmReplace 無し)は、まだ何も入力していない状態なので確認しない。
     try { await createProjectBackup(loadedProject, "manual", "共有ファイル再接続で置き換える前の状態"); } catch(_){}
     if(opts.confirmReplace){
-      const when = s => String(s || "").replace("T", " ").slice(0, 16) || "不明";
+      const when = s => (s ? fmtBackupTs(s) : "") || "不明";   // 端末の時計に直して見せる
       if(!confirm(
         "⚠ 共有ファイルの方が新しいようです。\n\n"
         + "　この端末　： " + when(loadedProject && loadedProject.updatedAt) + "\n"
@@ -21811,7 +21822,7 @@ function lgShowLedgerDiffDialog(payload, items){
     '<div class="lgimp-box"><div class="lgimp-head">'
     + (payload.fromXlsx ? "📗 Excel からの取り込み（違うところだけ）" : "📥 受付台帳の取り込み（違うところだけ）") + "</div>"
     + '<div class="lgimp-sub">' + (payload.fromXlsx ? "Excel：" : "ファイル：") + escapeHtml(payload.project || "（物件名なし）") + "　"
-    + escapeHtml(String(payload.exportedAt || "").replace("T", " ").slice(0, 16)) + "　" + (payload.rows || []).length + "件<br>"
+    + escapeHtml(payload.exportedAt ? fmtBackupTs(payload.exportedAt) : "") + "　" + (payload.rows || []).length + "件<br>"
     + "いまの受付台帳と<b>違うところだけ</b>を出しています。チェックを外したものは取り込みません。"
     + "<b>戸別の図面・積算・写真には触りません。</b>"
     + (nBy3 ? '<br><span style="color:#8a5a00;">※ ' + nBy3 + " 件は管理番号の<b>下三桁</b>で突き合わせました（🔎 の行）。取り違えが無いかご確認ください。</span>" : "")
