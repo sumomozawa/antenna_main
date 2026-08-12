@@ -4479,6 +4479,7 @@
       <button id="btn-list-select-folder" title="フォルダ内のファイルをサブフォルダ含めて再帰的に読込 (Chrome/Edge)。一度選ぶとそのフォルダを覚えるので、次からは戸別一覧を開いた時に自動で読み込みます（別のフォルダにしたい時だけ押してください）。">📁 フォルダ選択(再帰)</button>
       <button id="btn-list-select-files" title="JSON/.hyb/.encファイルを個別/複数選択">📄 ファイル選択</button>
       <button id="btn-list-dup" title="同じ管理番号のファイルが重なっているところ（iPad/iPhoneで保存すると増える「◯◯ 2.json」など）を探し、残す方を選んで「管理番号.json」にまとめます。フォルダ選択で読み込んだ後に使えます。" style="background:#00838f;">🧹 重複ファイルを整理</button>
+      <button id="btn-list-junk" title="中身が空（0KB）のファイルを探して消します。スマホで同じ戸別を保存し直すと「管理番号_長い数字.json」という別ファイルが増え、そのうち空のものはメインで読めないため戸別が一覧から抜けます。消す前に一覧で確かめられます。中身のある壊れたファイルは消しません。フォルダ選択で読み込んだ後に使えます。" style="background:#8a5a00;">🧹 空ファイルを掃除</button>
       <button id="btn-list-unlock" title="ハイブリッド(.hyb)は氏名・電話・住所・写真を、全暗号化(.enc)は本体をまとめて復号" style="background:#8e24aa;">🔓 一括復号</button>
       <button id="btn-list-bulk-reenc" title="選択した複数ファイルを一括で別パスワード／別方式に再暗号化して上書き保存" style="background:#e65100;">🔄 一括再暗号化</button>
       <button id="btn-list-bulk-plain" title="暗号化ファイル(.hyb/.enc)を一括で復号し、暗号化なしの平文(.json)として保存し直す（個人情報が平文になります）" style="background:#546e7a;">📄 一括平文化</button>
@@ -5129,13 +5130,16 @@
 
 <!-- 📒 フォルダ読み込み時の台帳マージ確認ダイアログ（管理番号重複・件ごと） -->
 <style>
-#dup-modal .modal{min-width:640px;max-width:900px;max-height:82vh;overflow:auto;}
-#dup-modal .dup-grp{border:1px solid #dde3ea;border-radius:5px;margin:8px 0;overflow:hidden;}
-#dup-modal .dup-grp-h{background:#eef6f7;padding:5px 9px;font-weight:600;font-size:12px;color:#00575f;}
-#dup-modal table.dup-tbl{width:100%;border-collapse:collapse;font-size:11.5px;}
-#dup-modal table.dup-tbl th,#dup-modal table.dup-tbl td{border:1px solid #e3e7eb;padding:3px 7px;text-align:left;white-space:nowrap;}
-#dup-modal table.dup-tbl th{background:#f4f7fa;color:#1e3a5f;}
+/* 重複整理と空ファイル掃除は同じ見た目の表を使う */
+#dup-modal .modal,#junk-modal .modal{min-width:640px;max-width:900px;max-height:82vh;overflow:auto;}
+#dup-modal .dup-grp,#junk-modal .dup-grp{border:1px solid #dde3ea;border-radius:5px;margin:8px 0;overflow:hidden;}
+#dup-modal .dup-grp-h,#junk-modal .dup-grp-h{background:#eef6f7;padding:5px 9px;font-weight:600;font-size:12px;color:#00575f;}
+#dup-modal table.dup-tbl,#junk-modal table.dup-tbl{width:100%;border-collapse:collapse;font-size:11.5px;}
+#dup-modal table.dup-tbl th,#dup-modal table.dup-tbl td,
+#junk-modal table.dup-tbl th,#junk-modal table.dup-tbl td{border:1px solid #e3e7eb;padding:3px 7px;text-align:left;white-space:nowrap;}
+#dup-modal table.dup-tbl th,#junk-modal table.dup-tbl th{background:#f4f7fa;color:#1e3a5f;}
 #dup-modal table.dup-tbl tr.dup-keep td{background:#e8f5e9;font-weight:600;}
+#junk-modal .dup-grp>div:last-child{padding:4px 9px 6px;}
 </style>
 <div class="modal-backdrop" id="lgmiss-ov">
   <div class="modal">
@@ -13266,6 +13270,16 @@ function slimListRow(row, canReread){
 }
 
 /* サブフォルダ含む再帰スキャン */
+/* 読めなかったファイルを控える。skippedPaths は「戸別が消えた」の判定で今までどおり使い、
+   badFiles には掃除に必要な手がかり（どのフォルダの何という名前で、大きさはいくつか）を足す。 */
+function junkNote(stats, dirPath, name, dir, file){
+  stats.skipped++;
+  (stats.skippedPaths = stats.skippedPaths || []).push(dirPath + name);
+  (stats.badFiles = stats.badFiles || []).push({
+    path: dirPath + name, name: name, dir: dir, dirPath: dirPath,
+    size: file ? file.size : -1, lastModified: file ? file.lastModified : 0
+  });
+}
 async function scanDirRecursive(dirHandle, pathPrefix, rows, stats){
   for await (const [name, handle] of dirHandle.entries()){
     if(handle.kind === "directory"){
@@ -13280,21 +13294,22 @@ async function scanDirRecursive(dirHandle, pathPrefix, rows, stats){
       // 対象拡張子: .json / .hyb / .enc / .antenna.hyb / .antenna.enc
       if(!/\.(json|hyb|enc)$/i.test(name)) continue;
       stats.files++;
+      let file = null;
       try {
-        const file = await handle.getFile();
+        file = await handle.getFile();
         const text = await file.text();
         let data;
         try { data = JSON.parse(text); }
-        catch(_){ stats.skipped++; (stats.skippedPaths = stats.skippedPaths || []).push(pathPrefix + name); continue; }
+        catch(_){ junkNote(stats, pathPrefix, name, dirHandle, file); continue; }
         const row = buildListRow(pathPrefix + name, file.lastModified, data, handle);
         if(row){
           // 重複ファイルの整理で使う：置かれているフォルダ・そこでの名前・大きさ
           row._dir = dirHandle; row._name = name; row._dirPath = pathPrefix; row._size = file.size;
           slimListRow(row, true); rows.push(row);
         }
-        else { stats.skipped++; (stats.skippedPaths = stats.skippedPaths || []).push(pathPrefix + name); }
+        else junkNote(stats, pathPrefix, name, dirHandle, file);
       } catch(err){
-        stats.skipped++; (stats.skippedPaths = stats.skippedPaths || []).push(pathPrefix + name);
+        junkNote(stats, pathPrefix, name, dirHandle, file);
       }
     }
   }
@@ -13554,6 +13569,155 @@ async function dupCleanupFlow(rows, quietIfNone){
     + "\n\n一覧を読み直します。");
   return res.removed || [];      // 自分が消したファイル＝読み直しで「消えた」と数えない
 }
+/* ============================================================
+   空っぽのファイル（0KB）の掃除
+   スマホ（Android）で同じ戸別を何度も保存すると、上書きされずに
+   「管理番号_長い数字.json」という別ファイルが増えていく。そのうち中身が
+   0KB のものが混ざることがあり、メインでは中身が無いので読めず、戸別が抜ける。
+   0KB＝中身が無い＝消しても失うものが無いので、ここで見つけて掃除する。
+   中身のある壊れたファイルは、開けば直せる見込みがあるので消さずに知らせるだけ。
+   ============================================================ */
+/* ファイル名から管理番号を推す。「2613ZSO263_5017105541291380094.json」→「2613ZSO263」 */
+function junkNoFromName(name){
+  return String(name || "").replace(/\.(json|hyb|enc)$/i, "").split("_")[0].trim();
+}
+function junkSizeLabel(n){
+  if(n === 0) return "0 KB（空）";
+  if(!(n > 0)) return "―";
+  return (n < 1024) ? (n + " B") : (Math.round(n / 1024) + " KB");
+}
+/* 読めなかったファイルを「空っぽ」「中身はあるが壊れている」に仕分ける。
+   その管理番号のファイルが1つも読めていない戸別には印を付ける（作り直しが要るため）。 */
+function junkClassify(badList, rows){
+  const alive = {};
+  (rows || _listRows || []).forEach(r => {
+    const no = String((r && r.data && r.data.chosho_mgmt_no) || "").trim();
+    if(no) alive[no] = true;
+  });
+  const empty = [], broken = [], lost = {};
+  (badList || []).forEach(b => {
+    const no = junkNoFromName(b.name);
+    const it = Object.assign({}, b, { no: no, lost: !!no && !alive[no] });
+    if(it.lost) lost[no] = true;
+    (b.size === 0 ? empty : broken).push(it);
+  });
+  return { empty: empty, broken: broken, lostNos: Object.keys(lost).sort() };
+}
+/* 掃除ボタン用の軽い見回り。中身は読まず大きさだけを見るので、写真の多いフォルダでも速い。 */
+async function junkScanEmpty(dirHandle, pathPrefix, out){
+  for await (const [name, handle] of dirHandle.entries()){
+    if(handle.kind === "directory"){
+      try { await junkScanEmpty(handle, pathPrefix + name + "/", out); } catch(_){}
+    } else if(handle.kind === "file"){
+      if(!/\.(json|hyb|enc)$/i.test(name)) continue;
+      try {
+        const f = await handle.getFile();
+        if(f.size === 0){
+          out.push({ path: pathPrefix + name, name: name, dir: dirHandle, dirPath: pathPrefix,
+                     size: 0, lastModified: f.lastModified });
+        }
+      } catch(_){}
+    }
+  }
+}
+/* 中身を見せて確かめてもらう。掃除してよければ true。 */
+function junkDialog(found){
+  return new Promise(resolve => {
+    const lostMark = x => x.lost
+      ? '<span style="color:#c62828;font-weight:700;">読めるファイルが無い</span>'
+      : '<span style="color:#2e7d32;">別に読めるファイルあり</span>';
+    const tbl = (list, note) => '<table class="dup-tbl"><tr><th>ファイル</th><th>管理番号</th><th>大きさ</th><th>この管理番号</th></tr>'
+      + list.map(x => '<tr><td>' + escapeHtml(x.dirPath || "") + "<b>" + escapeHtml(x.name) + "</b></td>"
+        + "<td>" + escapeHtml(x.no || "―") + "</td>"
+        + "<td>" + escapeHtml(junkSizeLabel(x.size)) + "</td>"
+        + "<td>" + lostMark(x) + "</td></tr>").join("")
+      + "</table>" + (note ? ('<div style="font-size:11px;color:#667482;margin-top:4px;">' + note + "</div>") : "");
+    let html = '<div style="font-size:12px;margin-bottom:8px;">'
+      + "スマホで同じ戸別を保存し直すと、上書きされずに <b>管理番号_長い数字.json</b> という別ファイルが増えることがあります。"
+      + "そのうち <b>中身が空（0KB）</b> のものはメインで読めないため、その戸別が一覧から抜けます。</div>";
+    if(found.empty.length){
+      html += '<div class="dup-grp"><div class="dup-grp-h">🗑 空（0KB）のファイル ' + found.empty.length + " 件 — 掃除します</div>"
+        + tbl(found.empty, "中身が無いので、消しても失うものはありません。") + "</div>";
+    }
+    if(found.broken.length){
+      html += '<div class="dup-grp"><div class="dup-grp-h">⚠ 中身はあるが読めないファイル ' + found.broken.length + " 件 — <b>消しません</b></div>"
+        + tbl(found.broken, "書きかけ等で中身が残っている可能性があるため、こちらは残します。中を確かめてから手で消してください。") + "</div>";
+    }
+    if(found.lostNos.length){
+      html += '<div style="margin-top:8px;padding:8px 10px;border:1px solid #f5c6cb;background:#fdf3f4;border-radius:5px;font-size:12px;">'
+        + "⚠ 次の管理番号は <b>読めるファイルが1つもありません</b>（" + found.lostNos.length + " 件）。<br>"
+        + '<b style="color:#c62828;">' + escapeHtml(found.lostNos.join("・")) + "</b><br>"
+        + "掃除しても中身は戻りません。スマホの現場入力に下書きが残っていれば、その戸別を開いて<b>「保存」</b>し直してください。</div>";
+    }
+    const back = document.createElement("div");
+    back.className = "modal-backdrop open";
+    back.id = "junk-modal";
+    back.innerHTML = '<div class="modal" style="min-width:640px;max-width:900px;max-height:82vh;overflow:auto;">'
+      + "<h3>🧹 読めないファイルの掃除</h3><div>" + html + "</div>"
+      + '<div style="display:flex;gap:6px;margin-top:10px;justify-content:flex-end;">'
+      + '<button id="junk-ok"' + (found.empty.length ? "" : " disabled")
+      + ' style="background:#00838f;color:#fff;border:1px solid #00666f;padding:6px 14px;border-radius:3px;cursor:pointer;font-size:12px;'
+      + (found.empty.length ? "" : "opacity:.45;cursor:default;") + '">空のファイル ' + found.empty.length + " 件を消す</button>"
+      + '<button id="junk-cancel" style="background:#666;color:#fff;border:1px solid #444;padding:6px 14px;border-radius:3px;cursor:pointer;font-size:12px;">何もしない</button>'
+      + "</div></div>";
+    document.body.appendChild(back);
+    const done = ok => { if(back.parentNode) back.parentNode.removeChild(back); resolve(ok); };
+    back.querySelector("#junk-ok").onclick = () => { if(found.empty.length) done(true); };
+    back.querySelector("#junk-cancel").onclick = () => done(false);
+    back.addEventListener("click", e => { if(e.target === back) done(false); });
+  });
+}
+/* 空のファイルだけを消す。フォルダごとに1回だけ書き込み許可を求める。 */
+async function junkApply(list){
+  let done = 0; const fails = [], removed = [];
+  const asked = new Map();                       // フォルダ → 書き込んでよいか
+  for(const it of list){
+    try {
+      if(!asked.has(it.dir)) asked.set(it.dir, await dupEnsureWritable(it.dir));
+      if(!asked.get(it.dir)){ fails.push(it.path + "：書き込みを許可されませんでした"); continue; }
+      await it.dir.removeEntry(it.name);
+      removed.push(it.path); done++;
+    } catch(err){
+      console.warn("[掃除] 失敗", it.path, err);
+      fails.push(it.path + "：" + (err && err.message ? err.message : err));
+    }
+  }
+  return { done: done, fails: fails, removed: removed };
+}
+/* 入口：フォルダを読んだ後の自動確認からも、ツールバーのボタンからも呼ぶ */
+async function junkCleanupFlow(badList, rows, quietIfNone){
+  const found = junkClassify(badList, rows);
+  if(!found.empty.length && !found.broken.length){
+    if(!quietIfNone) alert("読めないファイルはありませんでした。\nフォルダの中はきれいです。");
+    return null;
+  }
+  if(!(await junkDialog(found))) return null;
+  const res = await junkApply(found.empty);
+  alert("🧹 掃除が終わりました。\n\n"
+    + "消した空のファイル： " + res.done + " 件\n"
+    + (found.broken.length ? ("中身はあるが読めないファイル： " + found.broken.length + " 件（残してあります）\n") : "")
+    + (found.lostNos.length
+        ? ("\n⚠ 次の管理番号は読めるファイルがありません（" + found.lostNos.length + " 件）。\n"
+           + found.lostNos.join("・") + "\n"
+           + "スマホの現場入力でその戸別を開き、「保存」し直してください。\n")
+        : "")
+    + (res.fails.length ? ("\n⚠ できなかったもの:\n" + res.fails.join("\n")) : ""));
+  return res.removed || [];
+}
+async function junkCleanupButton(){
+  if(!_listDirHandle){
+    alert("先に「📁 フォルダ選択(再帰)」でフォルダを読み込んでください。\n（掃除には、そのフォルダを掴んでいる必要があります）");
+    return;
+  }
+  const status = document.getElementById("list-status");
+  if(status){ status.style.display = ""; status.textContent = "🧹 空のファイルを探しています…"; }
+  const empties = [];
+  try { await junkScanEmpty(_listDirHandle, "", empties); }
+  catch(err){ alert("フォルダを見に行けませんでした：\n" + (err && err.message ? err.message : err)); return; }
+  finally { if(status) status.style.display = "none"; }
+  const gone = await junkCleanupFlow(empties, _listRows, false);
+  if(gone && gone.length) await listReloadFolder(gone);
+}
 async function dupCleanupButton(){
   if(!_listDirHandle){
     alert("先に「📁 フォルダ選択(再帰)」でフォルダを読み込んでください。\n（重複の整理には、そのフォルダを掴んでいる必要があります）");
@@ -13750,6 +13914,24 @@ async function listSelectFolder(){
           expectedGone = gone;              // 整理で自分が消したファイルは「消えた」と数えない
           rows.length = 0;
           stats.errDirs = []; stats.skippedPaths = [];
+          await scanDirRecursive(dirHandle, "", rows, stats);
+        }
+      }
+    }
+    // 中身が空（0KB）のファイルがあれば掃除を提案する（Androidで増える「管理番号_長い数字.json」）
+    {
+      const jf = junkClassify(stats.badFiles, rows);
+      if(jf.empty.length && confirm("中身が空（0KB）のファイルが " + jf.empty.length + " 件見つかりました。\n"
+          + "（スマホで同じ戸別を保存し直すと増えることがあります）\n"
+          + (jf.lostNos.length
+              ? ("\nこのうち " + jf.lostNos.length + " 件の管理番号は、読めるファイルが1つもありません。\nそのぶん一覧から抜けています。\n")
+              : "")
+          + "\n中身を確かめてから掃除しますか？")){
+        const gone = await junkCleanupFlow(stats.badFiles, rows, true);
+        if(gone && gone.length){
+          expectedGone = expectedGone.concat(gone);   // 自分が消したぶんは「消えた」と数えない
+          rows.length = 0;
+          stats.errDirs = []; stats.skippedPaths = []; stats.badFiles = [];
           await scanDirRecursive(dirHandle, "", rows, stats);
         }
       }
@@ -24940,6 +25122,7 @@ function init(){
   document.getElementById("btn-list-close").onclick = closeListView;
   document.getElementById("btn-list-select-folder").onclick = listSelectFolder;
   { const b = document.getElementById("btn-list-dup"); if(b) b.onclick = dupCleanupButton; }
+  { const b = document.getElementById("btn-list-junk"); if(b) b.onclick = junkCleanupButton; }
   document.getElementById("btn-list-select-files").onclick = listSelectFiles;
   document.getElementById("btn-list-unlock").onclick = () => unlockListView();
   document.getElementById("btn-list-bulk-reenc").onclick = openBulkReencModal;
