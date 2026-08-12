@@ -21193,7 +21193,11 @@ function renderListLedgerMode(rows, container){
       + '<button data-open="map" title="この戸別を地図で開く（管理番号でリンクした建物へジャンプ）">🗺️</button>'
       + '<button data-open="est" title="この戸別の積算を開く">✏️ 積算</button>'
       + '<button data-open="dwg" title="' + (lgHasDrawing(r) ? "この戸別の図面を開く" : "台帳の情報を流し込んで図面を新規作成") + '">📐' + (lgHasDrawing(r) ? '' : '作成') + '</button>'
-      + (r._manual ? '<button data-open="del" title="この行を削除（台帳で作成した行のみ削除可能。ファイルから読み込んだ行は削除されません）" style="border-color:#c62828;color:#c62828;">🗑</button>' : '')
+      + '<button data-open="del" title="' + escapeHtml(
+            r._manual   ? "この行を削除します（受付台帳で作った行）"
+          : r._detached ? "この行を削除します（戸別ファイルが見当たらない行）"
+          : "この戸別を一覧（と開いている物件）から削除します。戸別ファイルそのものは消えません。")
+        + '" style="border-color:#c62828;color:#c62828;">🗑</button>'
       + '</td>';
     html += '</tr>';
   });
@@ -22454,14 +22458,35 @@ function bindLedgerHandlers(container){
         if(typeof closeListView === "function") closeListView();
         if(typeof openMapView === "function") openMapView({ focusMgmtNo: mg });
       } else if(kind === "del"){
-        if(row._manual && confirm("台帳の行「" + ((row.data && row.data.chosho_mgmt_no) || "（管理番号なし）") + "」を削除しますか？")){
-          const idx = _listRows.indexOf(row);
-          try { markCaseDeleted(row); } catch(_){} // Phase2: 削除を記録（競合マージでも復活させない）
-          if(idx >= 0) _listRows.splice(idx, 1);
-          if(_editingRow === row) _editingRow = null;
-          projTouch();
-          renderListTable();
+        // 受付台帳で作った行はその場で消える。ファイルから読み込んだ行は、
+        // 戸別ファイルまでは消さない（消せてしまうと事故になる）。一覧と開いている物件から外すだけ。
+        // ※ 管理番号の入っていない戸別など「消す手立てが無い行」を残さないため、
+        //    ファイル起点の行も消せるようにしている。
+        const d0 = row.data || {};
+        const who = (String(d0.chosho_mgmt_no || "").trim() || "（管理番号なし）")
+                  + (d0.chosho_cust_name ? ("　" + d0.chosho_cust_name) : "");
+        const msg = row._manual
+          ? "受付台帳の行「" + who + "」を削除しますか？"
+          : "この戸別を一覧（と開いている物件）から削除しますか？\n\n" + who
+            + (row.file ? ("\nファイル： " + row.file) : "")
+            + "\n\n・戸別ファイルそのものは消えません。\n"
+            + "・フォルダを読み直したときにそのファイルがまだあれば、また出てきます。\n"
+            + "　二度と出したくないときは、ファイルをフォルダの外へ移してください。";
+        if(!confirm(msg)) return;
+        const idx = _listRows.indexOf(row);
+        try { markCaseDeleted(row); } catch(_){} // Phase2: 削除を記録（競合マージでも復活させない）
+        if(!row._manual){
+          // 「ファイルが見当たりません」の控えからも外す（消したのに毎回聞かれないように）＋
+          // この戸別に紐づく台帳メモ・持出・確認・施工会社の割当も片付ける
+          try {
+            const mk = missKeyOf(row);
+            undetach(mk); listCensusForget(mk); missPurgeAnno(mk);
+          } catch(_){}
         }
+        if(idx >= 0) _listRows.splice(idx, 1);
+        if(_editingRow === row) _editingRow = null;
+        projTouch();
+        renderListTable();
       } else {
         openCaseInEditor(row, kind === "dwg");
       }
@@ -24211,6 +24236,19 @@ function listCensusSave(root, rows, carry){
   } catch(e){ console.warn("[一覧] 前回の控えを残せませんでした", e); }
 }
 function listCensusClear(){ try { localStorage.removeItem(LS_LIST_CENSUS); } catch(_){} }
+/* 控えから1件だけ外す。自分で一覧から消した戸別を、次の読み込みで
+   「ファイルが見当たりません」と毎回聞かれないようにするため。 */
+function listCensusForget(key){
+  if(!key) return;
+  try {
+    const c = listCensusLoad();
+    if(c && c.entries && c.entries[key]){
+      delete c.entries[key];
+      localStorage.setItem(LS_LIST_CENSUS,
+        JSON.stringify({ v: 1, root: String(c.root || ""), at: Date.now(), entries: c.entries }));
+    }
+  } catch(e){ console.warn("[一覧] 前回の控えから外せませんでした", e); }
+}
 
 /* いまある行に「ファイルが無い」印を付ける。行そのものは作り直さない。
    ＝ファイルの場所も中身も残るので、台帳の記入も物件の積算・図面も外れない。 */
@@ -24240,7 +24278,9 @@ function detachedRowFromEntry(key, e){
 function undetach(key){ if(_detachedMap[key]){ delete _detachedMap[key]; saveDetachedMap(); } }
 /* その戸別の記入をすべて消す（「一覧からも消す」を選んだとき） */
 function missPurgeAnno(key){
-  try { setLedger(key, { time:"", meetAt:"", flyer:false, consent:false, compdoc:false, hold:false, note:"", noteSrc:"" }); } catch(_){}
+  // ※ 控え（*Src）まで空にしないと、台帳のエントリが残り続ける（setLedger の空判定に入っているため）
+  try { setLedger(key, { time:"", meetAt:"", flyer:false, consent:false, compdoc:false, hold:false, note:"", noteSrc:"",
+                         flyerSrc:false, consentSrc:false, compdocSrc:false }); } catch(_){}
   try { if(_takeoutMap[key]){ delete _takeoutMap[key]; saveTakeoutMap(); } } catch(_){}
   try { if(_reviewMap[key]){ delete _reviewMap[key]; saveReviewMap(); } } catch(_){}
   try { if(_contractorMap[key]){ delete _contractorMap[key]; saveContractorMap(); } } catch(_){}
