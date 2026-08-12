@@ -17827,17 +17827,28 @@ function backupDelete(bid){
 }
 /* ※ 世代の一覧は backupMetaListByProject（軽量メタ）を使う。本体は地図画像を含み重いので、
    復元/書き出しのときに backupGet で1件だけ読む。 */
+/* 保存時刻は世界標準時(UTC)の文字列で持っている（例 2026-08-12T09:30:00.000Z）。
+   文字をそのまま切り出すと日本時間より9時間ずれるので、必ず端末の時計に直してから表示する。 */
+function backupLocalParts(ts){
+  const t = String(ts || "").trim();
+  if(!t) return null;
+  const d = new Date(t);
+  if(isNaN(d.getTime())) return null;
+  const p = n => String(n).padStart(2, "0");
+  return { y: String(d.getFullYear()), mo: p(d.getMonth() + 1), d: p(d.getDate()),
+           h: p(d.getHours()), mi: p(d.getMinutes()) };
+}
 function fmtBackupTs(ts){
-  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(ts || ""));
-  return m ? (m[1] + "/" + m[2] + "/" + m[3] + " " + m[4] + ":" + m[5]) : String(ts || "");
+  const t = backupLocalParts(ts);
+  return t ? (t.y + "/" + t.mo + "/" + t.d + " " + t.h + ":" + t.mi) : String(ts || "");
 }
 function fmtBackupDay(ts){
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(ts || ""));
-  return m ? (m[1] + "/" + m[2] + "/" + m[3]) : String(ts || "");
+  const t = backupLocalParts(ts);
+  return t ? (t.y + "/" + t.mo + "/" + t.d) : String(ts || "");
 }
 function fmtBackupTime(ts){
-  const m = /T(\d{2}):(\d{2})/.exec(String(ts || ""));
-  return m ? (m[1] + ":" + m[2]) : "";
+  const t = backupLocalParts(ts);
+  return t ? (t.h + ":" + t.mi) : "";
 }
 /* 「3分前」「2時間前」など、どれくらい前の状態かを一目で分かるように。 */
 function fmtBackupAgo(at){
@@ -18320,7 +18331,7 @@ async function connectHandleWithFreshness(handle, loadedProject, opts){
     // ※ 起動時の自動再接続(opts.confirmReplace 無し)は、まだ何も入力していない状態なので確認しない。
     try { await createProjectBackup(loadedProject, "manual", "共有ファイル再接続で置き換える前の状態"); } catch(_){}
     if(opts.confirmReplace){
-      const when = s => String(s || "").replace("T", " ").slice(0, 16) || "不明";
+      const when = s => (s ? fmtBackupTs(s) : "") || "不明";   // 端末の時計に直して見せる
       if(!confirm(
         "⚠ 共有ファイルの方が新しいようです。\n\n"
         + "　この端末　： " + when(loadedProject && loadedProject.updatedAt) + "\n"
@@ -20811,9 +20822,11 @@ function lgEditableField(row, f){
 }
 /* 戸別フィールドの書き込み（data＋ハイブリッドは envelope.plain も同期）。
    - 仮受付の行に名前/住所/電話のいずれかが記入されたら自動で「受付済」へ昇格（清書）
+     ※ opts.keepStatus を付けると昇格しない。取込（受付台帳/Excel）はこちらを使い、
+       代わりに「状態」も違いの一覧に出して、利用者が見たうえで選べるようにしてある。
    - エディタ（積算・図面）で同じ戸別を開いている場合は入力欄へも即時反映（双方向） */
 const LG_FIELD_MAP = { mgmt: "chosho_mgmt_no", name: "chosho_cust_name", addr: "chosho_cust_addr", tel: "chosho_cust_tel", date: "chosho_date", status: "chosho_status" };
-function lgWriteCaseField(row, f, v){
+function lgWriteCaseField(row, f, v, opts){
   const key = LG_FIELD_MAP[f] || f;
   // 住所・電話の数字は半角へ統一（全角のままだと検索・並び・印刷幅が揃わないため）
   if(f === "addr" || f === "tel") v = toHalfWidthNum(v);
@@ -20833,7 +20846,8 @@ function lgWriteCaseField(row, f, v){
   };
   writeBoth(key, v);
   // 清書による自動昇格：仮受付 ＋ 名前/住所/電話の記入 → 受付済
-  if((f === "name" || f === "addr" || f === "tel") && v && row.data.chosho_status === "provisional"){
+  if(!(opts && opts.keepStatus)
+     && (f === "name" || f === "addr" || f === "tel") && v && row.data.chosho_status === "provisional"){
     writeBoth("chosho_status", "in_progress");
   }
   if(f === "mgmt"){
@@ -21700,6 +21714,8 @@ const LGIMP_FIELDS = [
   { f: "contractor", label: "施工会社", kind: "ctr", key: "contractor" }
 ];
 const LGIMP_ST_NAME = { provisional: "仮受付", in_progress: "受付済", completed: "完了" };
+/* 自動昇格を違いの一覧に出すときに使う「状態」の定義（LGIMP_FIELDS の状態と同じもの） */
+const LGIMP_STATUS_FIELD = LGIMP_FIELDS.filter(F => F.f === "status")[0];
 function lgimpShow(v, F){
   if(F && F.bool) return v ? "○" : "―";
   const s = String(v == null ? "" : v).trim();
@@ -21757,6 +21773,14 @@ function lgLedgerDiff(payload){
       if(F.kind === "case" && !lgEditableField(row, F.edit || (F.f === "name" || F.f === "tel" || F.f === "addr" ? "addr" : F.f))) return; // 暗号化で書けない項目は出さない
       diffs.push({ F, before, after });
     });
+    // 清書による自動昇格（仮受付＋名前/住所/電話 → 受付済）も、隠さずに違いとして出す。
+    // ここに出しておけば、チェックを外して「仮受付のまま」にもできる。
+    if(diffs.length && String(d.chosho_status || "") === "provisional"
+       && !diffs.some(z => z.F.f === "status")
+       && diffs.some(z => (z.F.f === "name" || z.F.f === "addr" || z.F.f === "tel") && z.after)
+       && lgEditableField(row, "done")){
+      diffs.push({ F: LGIMP_STATUS_FIELD, before: "provisional", after: "in_progress", auto: true });
+    }
     if(diffs.length) items.push({ no, row, kind: "update", src: x, diffs, by });
   });
   items._dup = dup;
@@ -21801,7 +21825,9 @@ function lgShowLedgerDiffDialog(payload, items){
       '<tr class="lgimp-upd" data-key="' + escapeHtml(it.no + " " + d.F.label) + '">'
       + '<td><input type="checkbox" data-i="' + i + '" data-g="' + (d.F.kind === "case" ? "case" : "lg") + '" data-j="' + j + '" checked></td>'
       + "<td>" + (j === 0 ? "<b>" + escapeHtml(it.no) + "</b>" + tag(it) : "") + "</td>"
-      + "<td>" + escapeHtml(d.F.label) + "</td>"
+      + "<td>" + escapeHtml(d.F.label)
+      +   (d.auto ? '<div style="font-size:10px;color:#8a5a00;">名前などを書いたため</div>' : "")
+      + "</td>"
       + '<td class="lgimp-b">' + escapeHtml(lgimpShow(d.before, d.F)) + "</td>"
       + '<td class="lgimp-a">' + escapeHtml(lgimpShow(d.after, d.F)) + "</td></tr>").join("");
   }).join("");
@@ -21811,7 +21837,7 @@ function lgShowLedgerDiffDialog(payload, items){
     '<div class="lgimp-box"><div class="lgimp-head">'
     + (payload.fromXlsx ? "📗 Excel からの取り込み（違うところだけ）" : "📥 受付台帳の取り込み（違うところだけ）") + "</div>"
     + '<div class="lgimp-sub">' + (payload.fromXlsx ? "Excel：" : "ファイル：") + escapeHtml(payload.project || "（物件名なし）") + "　"
-    + escapeHtml(String(payload.exportedAt || "").replace("T", " ").slice(0, 16)) + "　" + (payload.rows || []).length + "件<br>"
+    + escapeHtml(payload.exportedAt ? fmtBackupTs(payload.exportedAt) : "") + "　" + (payload.rows || []).length + "件<br>"
     + "いまの受付台帳と<b>違うところだけ</b>を出しています。チェックを外したものは取り込みません。"
     + "<b>戸別の図面・積算・写真には触りません。</b>"
     + (nBy3 ? '<br><span style="color:#8a5a00;">※ ' + nBy3 + " 件は管理番号の<b>下三桁</b>で突き合わせました（🔎 の行）。取り違えが無いかご確認ください。</span>" : "")
@@ -21883,7 +21909,7 @@ function lgShowLedgerDiffDialog(payload, items){
       const d = it.diffs[parseInt(bx.dataset.j, 10)];
       if(!d) return;
       if(d.F.kind === "case"){
-        lgWriteCaseField(it.row, d.F.f, d.after);
+        lgWriteCaseField(it.row, d.F.f, d.after, { keepStatus: true });
         if(d.F.pick === "status") it.row._amtCache = undefined;      // 完了かどうかで金額の出し方が変わる
       }
       else if(d.F.kind === "ctr"){
@@ -22368,7 +22394,7 @@ async function applyXlsxPlan(){
       added++;
     } else updated++;
     lgWriteCaseField(row, "mgmt", e.excel.mgmt);          // 改番＝台帳/持出/確認/施工会社のキーも移行される
-    if(e.addrPick === "excel" && e.excel.addr) lgWriteCaseField(row, "addr", e.excel.addr);
+    if(e.addrPick === "excel" && e.excel.addr) lgWriteCaseField(row, "addr", e.excel.addr, { keepStatus: true });
     const tk = subCaseKey(row);
     if(e.notePick === "excel" && e.excel.note){ try { setLedger(tk, { note: e.excel.note }); } catch(_){} }
     const co = contractorByMgmtNo(e.excel.mgmt);          // 4桁目→施工会社を自動判別
@@ -22596,19 +22622,19 @@ function surveyDoneAtOf(row){ return String((row && row.data && row.data.survey_
    どちらも発注する“もの”ではない（金額の集計には引き続き入る）。 */
 const MAT_NON_MATERIAL_UNITS = ["式", "h"];
 /* ---------- 新規5Cケーブル：積算に出ない分 ----------
-   積算（BOM）は「お金を取る分」だけを数えるので、実際には張るのに表へ出ない5Cケーブルが
-   2か所あります。発注では買わないといけないので、この画面ではその分を足します。
+   発注の数量は、積算画面の「ケーブル長さ S5CFB（m）」に入れた長さが
+   まるごと出るようにしてあります。
+   ところが積算（BOM）は「お金を取る分」だけを数えるので、実際には張るのに
+   表へ出ない5Cケーブルがあります。買う分が足りなくなるので、ここで足します。
 
-     ① アンテナ→増幅器（主系統・46CH・50CH）
-        系統図では常に赤（新規）ですが、「外部配線＝既存を流用」の戸別では
-        積算に載りません（基本工事に含む扱い）。
+     ① 外部の配線（主系統・46CH・50CH・増幅器→次段・屋外その他）
+        「外部配線＝新規」の戸別は積算に載るのでそのまま。
+        「外部配線＝既存を流用」の戸別は積算に載らないので、ここで足します。
      ② 宅内新規の標準2mぶん
         標準2mまでは基本工事に含むので積算に載りません（超過分だけ載ります）。
 
    どちらも、系統図でその区間を黒（既存）に切り替えた戸別では数えません
-   （積算とまったく同じ判定を使います）。
-   ※ 増幅器→次段（壁／FA／2分配器WP）は「外部配線＝既存を流用」なら系統図でも黒＝
-      張り替えないので、ここでは足しません。 */
+   （張り替えない区間なので買う必要がない＝積算とまったく同じ判定を使います）。 */
 function matExtraCable5c(row){
   const d = (row && row.data) || {};
   const out = { m: 0, by: {} };
@@ -22617,7 +22643,8 @@ function matExtraCable5c(row){
   const forcedExisting = (...keys) => keys.some(k => ov[k] === true);   // true=既存(黒)へ切替済み
   const num = v => { const n = parseFloat(v); return (isFinite(n) && n > 0) ? n : 0; };
   const push = (label, m) => { if(m > 0){ out.m += m; out.by[label] = (out.by[label] || 0) + m; } };
-  // ① 外部配線＝既存を流用のとき、アンテナ→増幅器のぶんが積算に載らない
+  // ① 外部配線＝既存を流用のとき、積算画面に入れた外部の長さがまるごと積算に載らない
+  //    （積算側は input.outer_wire === "new" のときだけ計上している。判定もそこに合わせる）
   if(d.outer_wire !== "new"){
     if(!forcedExisting("main_trunk_0", "main_trunk_1", "main_trunk_2",
                        "main_amp", "main_amp_1", "main_amp_2", "main_amp_46", "main_amp_3")){
@@ -22625,6 +22652,10 @@ function matExtraCable5c(row){
     }
     if(d.ch46 !== "no" && !forcedExisting("ch46_amp")) push("アンテナ→増幅器", num(d.cable_ch46_len));
     if(d.ch46 === "triple" && !forcedExisting("ch50_amp")) push("アンテナ→増幅器", num(d.cable_ch50_len));
+    if(!forcedExisting("amp_to_wpsp", "amp_to_pwbox", "out_to_fa", "out_to_wall")){
+      push("増幅器→次段", num(d.cable_amp_next_len));
+    }
+    push("屋外その他", num(d.cable_new_len));      // 旧項目（通常0）
   }
   // ② 宅内新規の標準2mぶん（超過分は積算に載っている）
   const isCatvFa = (d.is_catv === "yes") && (d.use_fa === "yes") && (d.power_pos !== "outside");
@@ -22734,8 +22765,8 @@ function renderListMaterialsMode(rows, container){
     + "※ 数量は、下見で入力した内容から出した必要数です。予備・端数は含みません。<br>"
     + "※ ケーブル類は長さ（m）、器具は台・個で出ています。単位の欄をご確認ください。<br>"
     + (extraCable.m > 0
-        ? "※ 新規5Cケーブル（S5CFB）は、<b>積算に出ない分も足した「買う長さ」</b>です"
-          + "（基本工事に含むため積算には載らない分 "
+        ? "※ 新規5Cケーブル（S5CFB）は、<b>積算画面の「ケーブル長さ S5CFB（m）」に入れた長さがそのまま出る"
+          + "「買う長さ」</b>です（金額に載らない分 "
           + exCable.map(k => escapeHtml(k) + " " + fmtQty(extraCable.by[k]) + "m").join("・")
           + " ＝ 合計 " + fmtQty(extraCable.m) + "m を加算）。<br>"
         : "")
