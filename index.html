@@ -4497,7 +4497,7 @@
       <label class="list-hide-dup-label" title="同じ管理番号が複数あるとき、ファイル更新日時が最新の1件だけ表示します（古い重複を隠す）"><input type="checkbox" id="list-hide-dup"> 重複を隠す <span class="hd-sub">(同一管理番号は最新日付のみ)</span></label>
     </div>
     <div class="list-mode-tabs">
-      <button class="mode-tab active" data-list-mode="standard" title="全戸別を1枚の表でフラットに表示。工事種別・ファイル形式（📄平文／🔐HYB／🔐FULL）・ファイル名が出るのはここだけです。番号や氏名で探す・どのファイルから読んだか確かめる用。">📄 標準一覧</button>
+      <button class="mode-tab active" data-list-mode="standard" title="全戸別を1枚の表でフラットに表示。取付方法（アンテナ取付ガイド）・ファイル形式（📄平文／🔐HYB／🔐FULL）・ファイル名が出るのはここだけです。番号や氏名で探す・どのファイルから読んだか確かめる用。">📄 標準一覧</button>
       <button class="mode-tab" data-list-mode="by_folder" title="保存先フォルダ（工区）ごとにグループ分けし、グループごとに件数・小計・石綿サマリと全体合計を出します。施工会社の割り当て（プルダウン）・写真枚数の確認・石綿みなし判定が出るのはここだけです。">📁 工事別フォルダ</button>
       <button class="mode-tab" data-list-mode="cost_detail" title="読み込んだ全戸別の材料費・労務費を工事全体で集計。★基本工事プリセットを指定すると、基本工事とそれ以外（追加工事）に分けて集計します。">💴 全体費用詳細</button>
       <button class="mode-tab" data-list-mode="subcontractor" title="協力会社→元請けへの請求内訳（労務費＋協力会社諸経費＋持出材料）。全体費用詳細の数値には一切影響しません。単価は標準単価（業者間の統一額）で計算し、物件用の単価変更（単価マスターの色付き行）は反映されません">🤝 協力会社請求内訳</button>
@@ -14209,7 +14209,33 @@ async function unlockListView(opts){
 }
 
 /* 一覧の共通バッジレンダラ */
-const LIST_WORK_LABELS = { new:"新設(UHF)", replace:"アンテナ更新", catv_to_uhf:"CATV→UHF切替" };
+/* アンテナ取付ガイドの取付方法。id は createAntennaGuide の PATTERN_CONFIGS と同じもの。
+   （PATTERN_CONFIGS はガイドのモジュール内なので、一覧用に名前だけここへ持つ） */
+const LIST_MOUNT_LABELS = { pole:"柱", hafu:"破風", hafu2:"破風2段", gaiheki:"外壁", tatenarabi:"縦並び", yaneuma:"屋根馬" };
+/* 標準一覧の「取付方法」セル。
+   ・アンテナ取付ガイドで選んだ取付方法（柱・破風・破風2段・外壁・縦並び・屋根馬）を出す。
+   ・工事が終わるまでは決まりきっていないので「予定」を添える
+     （下見で取付方法は決めたが、まだ取り付けていない状態）。工事完了で「予定」が外れる。
+   ・取付方法はガイド＝戸別ファイルの中身なので、受付台帳だけで作った戸別（ファイル無し）や
+     ガイドをまだ触っていない戸別は「―」。全暗号化で未復号の戸別は中身が読めないので🔒。 */
+function listMountCellHtml(r){
+  if(r && r.fileType === "full" && !r.unlocked){
+    return '<td style="color:#9aa3ad;" title="全暗号化（未復号）のため確認できません">🔒</td>';
+  }
+  const d = (r && r.data) || {};
+  const g = (d.antenna_guide && typeof d.antenna_guide === "object") ? d.antenna_guide : null;
+  const label = LIST_MOUNT_LABELS[g && g.pattern] || "";
+  if(!label){
+    return '<td style="color:#c2c8cf;" title="アンテナ取付ガイドで取付方法がまだ選ばれていません">―</td>';
+  }
+  const done = (d.chosho_status === "completed") || !!d.work_done;   // 工事完了＝取付方法が確定
+  if(done) return '<td title="アンテナ取付ガイドの取付方法（工事完了）">' + escapeHtml(label) + '</td>';
+  const ttl = d.survey_done
+    ? "アンテナ取付ガイドの取付方法（下見済み・工事はまだ＝予定）"
+    : "アンテナ取付ガイドの取付方法（工事はまだ＝予定）";
+  return '<td title="' + ttl + '">' + escapeHtml(label)
+    + ' <span style="font-size:9px;color:#fb8c00;font-weight:600;">予定</span></td>';
+}
 function listTypeBadge(r){
   if(r.fileType === "hybrid"){
     return r.unlocked
@@ -14431,7 +14457,7 @@ function renderListStandardMode(rows, tbl){
     + '<th>お客様 <span style="font-size:9px;color:#555;font-weight:normal;">(氏名／電話)</span></th>'
     + '<th>住所</th>'
     + '<th>施工日</th>'
-    + '<th>工事種別</th>'
+    + '<th title="アンテナ取付ガイドで選んだ取付方法（柱・破風・破風2段・外壁・縦並び・屋根馬）。工事が終わるまでは「予定」が付きます">取付方法</th>'
     + '<th style="text-align:right;">金額 <span style="font-size:9px;font-weight:normal;color:#555;">(諸経費抜・税抜)</span></th>'
     + '<th class="no-print">ファイル名</th>'
     + '<th class="no-print"></th>'
@@ -14466,7 +14492,7 @@ function renderListStandardMode(rows, tbl){
       + '<td title="' + escapeHtml(nameTitle) + '">' + nameTel + '</td>'
       + '<td class="wrap" title="' + addrEsc + '">' + addrEsc + '</td>'
       + '<td>' + escapeHtml(d.chosho_date || "") + '</td>'
-      + '<td>' + escapeHtml(LIST_WORK_LABELS[d.work_type] || d.work_type || "") + '</td>'
+      + listMountCellHtml(r)
       + amtCell
       + '<td class="file-name no-print" title="' + escapeHtml(r._detached ? ("ファイルが見当たりません" + (r._detached.path ? "（前の場所: " + r._detached.path + "）" : "")) : (r._manual ? "受付台帳で作成（ファイル未保存）" : r.file)) + '">'
         + escapeHtml(r._detached ? "（ファイル無し・名前だけ）" : (r._manual ? "（台帳で作成・未保存）" : r.file)) + '</td>'
