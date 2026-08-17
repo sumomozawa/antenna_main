@@ -13540,7 +13540,11 @@ function dupFindGroups(rows){
   });
   const groups = [];
   by.forEach(g => {
-    if(g.items.length < 2) return;
+    // 読めるファイルが1つでも、名前が「管理番号.json」でなければ付け直す対象にする。
+    // Android は保存のたびに「管理番号_長い数字.json」を勝手に作るので、
+    // 読めるファイルが1つしか残らない戸別（他は0KB）が普通に起きる。
+    // 2つ以上でないと整理しない作りだと、その名前がいつまでも残ってしまう。
+    if(g.items.length < 2 && g.items[0]._name === (g.no + ".json")) return;
     // 新しい順：中の editedAt → ファイルの更新日時 → 大きい方（写真が多い）
     g.items.sort((a, b) => (dupWhenMs(b) - dupWhenMs(a))
       || ((b.lastModified || 0) - (a.lastModified || 0))
@@ -13565,8 +13569,13 @@ function dupDialog(groups){
     const back = document.getElementById("dup-modal");
     const body = document.getElementById("dup-body");
     const total = groups.reduce((a, g) => a + g.items.length - 1, 0);
+    const renameOnly = groups.filter(g => g.items.length === 1).length;
     let html = '<div style="font-size:12px;margin-bottom:8px;">'
-      + '同じ管理番号のファイルが <b>' + groups.length + '</b> 組（余分な <b>' + total + '</b> ファイル）見つかりました。<br>'
+      + '整理できるところが <b>' + groups.length + '</b> 組（余分な <b>' + total + '</b> ファイル）見つかりました。<br>'
+      + (renameOnly
+          ? ('<span style="color:#1b5e20;">うち <b>' + renameOnly + '</b> 組は、ファイルが1つだけで名前が <b>管理番号_長い数字.json</b> になっているものです。'
+             + '（スマホの保存でこの名前になります）中身はそのままに <b>管理番号.json</b> へ付け直します。</span><br>')
+          : "")
       + '<b>残す</b>を選んだファイルの中身を <b>管理番号.json</b> という名前で書き直し、同じ組の他のファイルは削除します。'
       + '<span style="color:#c62828;font-weight:600;">削除したファイルは元に戻せません。</span><br>'
       + '<span style="color:#555;">※ 既定では「ファイルの中に記録された更新日時（中の更新）」がいちばん新しいものを選んでいます。'
