@@ -13872,6 +13872,8 @@ const LGWB_FIELDS = [
   { k:"chosho_cust_addr",  label:"住所" },
   { k:"chosho_cust_tel",   label:"電話" },
   { k:"chosho_date",       label:"工事日程予定" },
+  // 打合せ予定は台帳が持ち主だが、現場でも決められるよう戸別ファイルへ入れて往復させる
+  { k:"chosho_meet_at",    label:"打合せ予定", lg:"meetAt" },
   { k:"chosho_status",     label:"状態" },
   { k:"chosho_note",       label:"備考" },
   { k:"hold_flag",         label:"保留",   bool:true, lg:"hold" },
@@ -13881,7 +13883,7 @@ const LGWB_FIELDS = [
 ];
 /* 戸別ファイルに置き場所が無く、書き戻せない台帳の欄（物件ファイルとこの端末に保存されます）。
    「書き戻すものはありません」と出たときに、何が対象外なのかを伝えるために使う。 */
-const LGWB_LEDGER_ONLY = "打合せ予定・受付時刻";
+const LGWB_LEDGER_ONLY = "受付時刻";
 const LGWB_STATUS = { provisional:"仮受付", in_progress:"受付済", completed:"完了" };
 function lgwbField(k){ for(const f of LGWB_FIELDS){ if(f.k === k) return f; } return null; }
 function lgwbShow(k, v){
@@ -13903,6 +13905,7 @@ function lgwbWanted(row){
                     : String(d[f.k] == null ? "" : d[f.k]);
   });
   if(lg.note) o.chosho_note = String(lg.note);         // 備考も台帳側が持ち主
+  o.chosho_meet_at = String(lg.meetAt || "");          // 打合せ予定は台帳側が持ち主
   return o;
 }
 /* フォルダから読んだ行を1件ずつ実ファイルと突き合わせ、違うところだけ拾う */
@@ -13967,7 +13970,7 @@ async function lgwbButton(){
     + it.diffs.map(d => d.label + "： " + lgwbShow(d.k, d.from) + " → " + lgwbShow(d.k, d.to)).join("\n    "));
   if(!confirm("受付台帳の内容を、戸別ファイル " + list.length + " 件へ書き戻します。\n\n"
       + lines.join("\n") + (list.length > 12 ? ("\n・ほか " + (list.length - 12) + " 件") : "")
-      + "\n\n書き込むのは 名前・住所・電話・工事日程予定・状態・備考・保留・ビラ・同意書・完了書 だけです。\n"
+      + "\n\n書き込むのは 名前・住所・電話・工事日程予定・打合せ予定・状態・備考・保留・ビラ・同意書・完了書 だけです。\n"
       + "写真・図面・積算・測定値には触りません。\n"
       + "（「" + LGWB_LEDGER_ONLY + "」は戸別ファイルに置き場所が無いため対象外です）" + note)) return;
   const res = await lgwbApply(list);
@@ -18777,11 +18780,13 @@ function isCaseOnHold(mgmtNo){
 }
 function setLedger(tk, patch){
   const next = Object.assign({ time: "", meetAt: "", flyer: false, consent: false, compdoc: false, hold: false, note: "", noteSrc: "",
+                               meetSrc: "",
                                flyerSrc: false, consentSrc: false, compdocSrc: false, holdSrc: false }, _ledgerMap[tk] || {}, patch);
   let removed = false;
   // 既定値だけのエントリは持たない（肥大化防止）。※Src は「前回ファイルから採り込んだ値」の控えで、
   // これを落とすと現場と台帳のどちらが新しいか分からなくなるので、空判定に必ず含めること。
   if(!next.time && !next.meetAt && !next.flyer && !next.consent && !next.compdoc && !next.hold && !next.note && !next.noteSrc
+     && !next.meetSrc
      && !next.flyerSrc && !next.consentSrc && !next.compdocSrc && !next.holdSrc){ delete _ledgerMap[tk]; removed = true; }
   else _ledgerMap[tk] = next;
   saveLedgerMap();
@@ -18799,25 +18804,38 @@ function setLedger(tk, patch){
 
    と判断する。時計を見ないので、端末の時刻ずれや editedAt の無いファイルでも狂わない。
    ※ これが無いと、現場で書いた備考がフォルダを読み直すたびに台帳の古い内容へ戻る（不具合）。 */
+/* 文字の欄をひとつ突き合わせる（備考・打合せ予定）。控え(src)が「前回ファイルから
+   採り込んだ内容」なので、ファイルがそこから変わっていれば現場が直したと分かる。 */
+function lgTextResolve(row, fileKey, lgKey, srcKey){
+  const tk = subCaseKey(row); if(!tk) return;
+  const lg = getLedger(tk) || {};
+  const fileVal = String(row.data[fileKey] || "");
+  const lgVal   = String(lg[lgKey] || "");
+  if(fileVal === lgVal){
+    // 一致している＝これが今の内容。次に台帳で直した時に見分けられるよう控えるだけ
+    if(fileVal && lg[srcKey] !== fileVal) setLedger(tk, { [srcKey]: fileVal });
+    return;
+  }
+  const known = (srcKey in lg) ? String(lg[srcKey] || "") : null;
+  if(fileVal && fileVal !== known) setLedger(tk, { [lgKey]: fileVal, [srcKey]: fileVal }); // 現場が直した → 現場を採る
+  else row.data[fileKey] = lgVal;                                                          // 台帳が新しい → 戸別へ配る
+}
 function noteAdopt(tk, s){ setLedger(tk, { note: s, noteSrc: s }); }
 function noteResolveRow(row){
   if(!row || !row.data) return;
-  const tk = subCaseKey(row); if(!tk) return;
-  const lg = getLedger(tk) || {};
-  const fileNote = String(row.data.chosho_note || "");
-  const lgNote = String(lg.note || "");
-  if(fileNote === lgNote){
-    // 一致している＝これが今の内容。次に台帳で直した時に見分けられるよう控えるだけ
-    if(fileNote && lg.noteSrc !== fileNote) setLedger(tk, { noteSrc: fileNote });
-    return;
-  }
-  const known = ("noteSrc" in lg) ? String(lg.noteSrc || "") : null;
-  if(fileNote && fileNote !== known) noteAdopt(tk, fileNote);   // 現場が書き換えた → 現場を採る
-  else row.data.chosho_note = lgNote;                            // 台帳が新しい → 戸別へ配る
+  lgTextResolve(row, "chosho_note", "note", "noteSrc");
+}
+/* 打合せ予定（現場入力でも決められる）。備考と同じ突き合わせ方。
+   古いファイル（欄そのものが無い）は触らない＝台帳の予定を消さない。 */
+function meetResolveRow(row){
+  if(!row || !row.data) return;
+  if(!("chosho_meet_at" in row.data)) return;
+  lgTextResolve(row, "chosho_meet_at", "meetAt", "meetSrc");
 }
 function noteResolveRows(rows){
   (rows || []).forEach(r => {
     try { noteResolveRow(r); } catch(_){}
+    try { meetResolveRow(r); } catch(_){}   // 打合せ予定：現場で決めた分を台帳へ取り込む
     try { flowResolveRow(r); } catch(_){}   // 工程：現場入力の下見→ビラ→工事→完了を台帳へ取り込む
   });
   return rows;
@@ -24889,7 +24907,7 @@ function undetach(key){ if(_detachedMap[key]){ delete _detachedMap[key]; saveDet
 /* その戸別の記入をすべて消す（「一覧からも消す」を選んだとき） */
 function missPurgeAnno(key){
   // ※ 控え（*Src）まで空にしないと、台帳のエントリが残り続ける（setLedger の空判定に入っているため）
-  try { setLedger(key, { time:"", meetAt:"", flyer:false, consent:false, compdoc:false, hold:false, note:"", noteSrc:"",
+  try { setLedger(key, { time:"", meetAt:"", flyer:false, consent:false, compdoc:false, hold:false, note:"", noteSrc:"", meetSrc:"",
                          flyerSrc:false, consentSrc:false, compdocSrc:false, holdSrc:false }); } catch(_){}
   try { if(_takeoutMap[key]){ delete _takeoutMap[key]; saveTakeoutMap(); } } catch(_){}
   try { if(_reviewMap[key]){ delete _reviewMap[key]; saveReviewMap(); } } catch(_){}
