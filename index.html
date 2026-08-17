@@ -13803,6 +13803,63 @@ async function junkApply(list){
   return { done: done, fails: fails, removed: removed };
 }
 /* 入口：フォルダを読んだ後の自動確認からも、ツールバーのボタンからも呼ぶ */
+/* 🗑 を押したとき、「一覧から消す」か「フォルダのファイルごと消す」かを選んでもらう。
+   ファイルを残したままだと、フォルダを読み直すたびにまた出てくる（間違って作った戸別を
+   消したのに復活する、という状態になる）。
+   返り値は "list"（一覧から消す）／"file"（ファイルごと消す）／""（やめる）。 */
+function lgDelDialog(row, who){
+  return new Promise(resolve => {
+    const canFile = !!(row && row._dir && row._name);
+    const path = canFile ? ((row._dirPath || "") + row._name) : "";
+    const btn = "padding:6px 14px;border-radius:3px;cursor:pointer;font-size:12px;";
+    const back = document.createElement("div");
+    back.className = "modal-backdrop open";
+    back.id = "lgdel-modal";
+    back.innerHTML = '<div class="modal" style="min-width:520px;max-width:760px;">'
+      + "<h3>🗑 この戸別を消す</h3>"
+      + '<div style="font-size:13px;font-weight:700;margin-bottom:6px;">' + escapeHtml(who) + "</div>"
+      + (canFile ? ('<div style="font-size:12px;color:#667482;margin-bottom:10px;">ファイル： <b>'
+                    + escapeHtml(path) + "</b></div>") : "")
+      + '<div style="font-size:12px;line-height:1.8;">'
+      + (canFile
+          ? "<b>一覧から消す</b> … ファイルはフォルダに残ります。"
+            + '<b style="color:#c62828;">フォルダを読み直すと、また出てきます。</b><br>'
+            + "<b>ファイルごと消す</b> … フォルダからファイルそのものを消します。"
+            + "<b>元に戻せません。</b>間違って作ってしまった戸別は、こちらを選べば二度と出てきません。<br>"
+            + '<span style="color:#667482;">写真フォルダは消しません。必要なら手で片付けてください。</span>'
+          : "この行は受付台帳で作った行です（戸別ファイルはまだありません）。消すと戻せません。")
+      + "</div>"
+      + '<div style="display:flex;gap:6px;margin-top:14px;justify-content:flex-end;">'
+      + (canFile ? ('<button id="lgdel-file" style="background:#c62828;color:#fff;border:1px solid #8e0000;'
+                    + btn + '">🗑 ファイルごと消す</button>') : "")
+      + '<button id="lgdel-list" style="background:#1e3a5f;color:#fff;border:1px solid #16314f;' + btn + '">'
+      + (canFile ? "一覧から消す（ファイルは残す）" : "消す") + "</button>"
+      + '<button id="lgdel-cancel" style="background:#666;color:#fff;border:1px solid #444;' + btn + '">やめる</button>'
+      + "</div></div>";
+    document.body.appendChild(back);
+    const done = v => { if(back.parentNode) back.parentNode.removeChild(back); resolve(v); };
+    const bind = (id, v) => { const b = document.getElementById(id); if(b) b.addEventListener("click", () => done(v)); };
+    bind("lgdel-file", "file"); bind("lgdel-list", "list"); bind("lgdel-cancel", "");
+    back.addEventListener("click", e => { if(e.target === back) done(""); });
+  });
+}
+/* 選ばれたとおりに片付ける。ファイルごと消すときは、書き込みの許可を取ってから消す。
+   返り値は消せたかどうか（消せなければ一覧からも消さない）。 */
+async function lgDelApply(row, choice){
+  if(choice !== "file") return true;
+  try {
+    if(!(await dupEnsureWritable(row._dir))){
+      alert("フォルダへの書き込みを許可されなかったため、ファイルを消せませんでした。\n\n一覧からも消していません。");
+      return false;
+    }
+    await row._dir.removeEntry(row._name);
+    return true;
+  } catch(err){
+    console.warn("[戸別削除] ファイルを消せません", row._name, err);
+    alert("ファイルを消せませんでした。\n\n" + ((err && err.message) || err) + "\n\n一覧からも消していません。");
+    return false;
+  }
+}
 async function junkCleanupFlow(badList, rows, quietIfNone){
   const found = junkClassify(badList, rows);
   if(!found.empty.length && !found.broken.length){
@@ -13872,6 +13929,8 @@ const LGWB_FIELDS = [
   { k:"chosho_cust_addr",  label:"住所" },
   { k:"chosho_cust_tel",   label:"電話" },
   { k:"chosho_date",       label:"工事日程予定" },
+  // 打合せ予定は台帳が持ち主だが、現場でも決められるよう戸別ファイルへ入れて往復させる
+  { k:"chosho_meet_at",    label:"打合せ予定", lg:"meetAt" },
   { k:"chosho_status",     label:"状態" },
   { k:"chosho_note",       label:"備考" },
   { k:"hold_flag",         label:"保留",   bool:true, lg:"hold" },
@@ -13881,7 +13940,7 @@ const LGWB_FIELDS = [
 ];
 /* 戸別ファイルに置き場所が無く、書き戻せない台帳の欄（物件ファイルとこの端末に保存されます）。
    「書き戻すものはありません」と出たときに、何が対象外なのかを伝えるために使う。 */
-const LGWB_LEDGER_ONLY = "打合せ予定・受付時刻";
+const LGWB_LEDGER_ONLY = "受付時刻";
 const LGWB_STATUS = { provisional:"仮受付", in_progress:"受付済", completed:"完了" };
 function lgwbField(k){ for(const f of LGWB_FIELDS){ if(f.k === k) return f; } return null; }
 function lgwbShow(k, v){
@@ -13903,6 +13962,7 @@ function lgwbWanted(row){
                     : String(d[f.k] == null ? "" : d[f.k]);
   });
   if(lg.note) o.chosho_note = String(lg.note);         // 備考も台帳側が持ち主
+  o.chosho_meet_at = String(lg.meetAt || "");          // 打合せ予定は台帳側が持ち主
   return o;
 }
 /* フォルダから読んだ行を1件ずつ実ファイルと突き合わせ、違うところだけ拾う */
@@ -13967,7 +14027,7 @@ async function lgwbButton(){
     + it.diffs.map(d => d.label + "： " + lgwbShow(d.k, d.from) + " → " + lgwbShow(d.k, d.to)).join("\n    "));
   if(!confirm("受付台帳の内容を、戸別ファイル " + list.length + " 件へ書き戻します。\n\n"
       + lines.join("\n") + (list.length > 12 ? ("\n・ほか " + (list.length - 12) + " 件") : "")
-      + "\n\n書き込むのは 名前・住所・電話・工事日程予定・状態・備考・保留・ビラ・同意書・完了書 だけです。\n"
+      + "\n\n書き込むのは 名前・住所・電話・工事日程予定・打合せ予定・状態・備考・保留・ビラ・同意書・完了書 だけです。\n"
       + "写真・図面・積算・測定値には触りません。\n"
       + "（「" + LGWB_LEDGER_ONLY + "」は戸別ファイルに置き場所が無いため対象外です）" + note)) return;
   const res = await lgwbApply(list);
@@ -14044,9 +14104,14 @@ async function listSelectFolder(){
       let jf = junkClassify(stats.badFiles, rows);
       // いちばん困るのは「読めるファイルが1つも無い管理番号」。ここは必ず知らせる。
       if(jf.lostNos.length){
+        // どのファイルなのかが分からないと片付けられないので、ファイル名も並べる
+        const lostFiles = jf.empty.concat(jf.broken).filter(x => x.lost)
+          .map(x => "・" + (x.dirPath || "") + x.name + "（" + junkSizeLabel(x.size) + "）");
         alert("⚠ 読み込めなかった戸別が " + jf.lostNos.length + " 件あります。\n\n"
           + jf.lostNos.slice(0, 20).join("・") + (jf.lostNos.length > 20 ? "　ほか" : "") + "\n\n"
-          + "この管理番号のファイルは中身が空（0KB）か壊れているため、一覧に出ません。\n"
+          + "読めなかったファイル\n" + lostFiles.slice(0, 20).join("\n")
+          + (lostFiles.length > 20 ? ("\n・ほか " + (lostFiles.length - 20) + " 件") : "") + "\n\n"
+          + "これらは中身が空（0KB）か壊れているため、一覧に出ません。\n"
           + "スマホの現場入力でその戸別を開き、「保存」し直してください（下書きが残っていれば中身は無事です）。");
       }
       if(jf.empty.length && confirm("中身が空（0KB）のファイルが " + jf.empty.length + " 件見つかりました。\n"
@@ -14063,9 +14128,22 @@ async function listSelectFolder(){
       }
       const nBad = jf.empty.length + jf.broken.length;
       if(nBad){
+        // 読めないファイルがあっても、同じ管理番号に読めるファイルが別にあれば
+        // その戸別は一覧に出る（出ているのは読めた方）。「読めないと書いてあるのに
+        // 一覧に出てくる」と見えるのはこの場合なので、件数を分けて知らせる。
+        const okNos = [];
+        jf.empty.concat(jf.broken).forEach(x => {
+          if(x.no && !x.lost && okNos.indexOf(x.no) < 0) okNos.push(x.no);
+        });
+        // どのファイルが読めなかったのかを、名前で分かるようにする（片付けられるように）
+        const badNames = jf.empty.concat(jf.broken).map(x => (x.dirPath || "") + x.name);
         junkNote = "読めないファイル " + nBad + " 件"
           + (jf.empty.length ? ("（空 " + jf.empty.length + " 件"
               + (jf.broken.length ? ("・壊れ " + jf.broken.length + " 件") : "") + "）") : "")
+          + "：" + badNames.slice(0, 6).join("・") + (badNames.length > 6 ? (" ほか" + (badNames.length - 6) + "件") : "")
+          + (okNos.length ? ("／うち " + okNos.length + " 件は同じ管理番号に読めるファイルが別にあります"
+              + "（一覧に出ているのはそちら）：" + okNos.slice(0, 8).join("・")
+              + (okNos.length > 8 ? " ほか" : "")) : "")
           + (jf.lostNos.length ? ("／読み込めなかった戸別 " + jf.lostNos.length + " 件："
               + jf.lostNos.slice(0, 8).join("・") + (jf.lostNos.length > 8 ? " ほか" : "")) : "")
           + "　※「🧹 空ファイルを掃除」で確認できます";
@@ -18777,11 +18855,13 @@ function isCaseOnHold(mgmtNo){
 }
 function setLedger(tk, patch){
   const next = Object.assign({ time: "", meetAt: "", flyer: false, consent: false, compdoc: false, hold: false, note: "", noteSrc: "",
+                               meetSrc: "",
                                flyerSrc: false, consentSrc: false, compdocSrc: false, holdSrc: false }, _ledgerMap[tk] || {}, patch);
   let removed = false;
   // 既定値だけのエントリは持たない（肥大化防止）。※Src は「前回ファイルから採り込んだ値」の控えで、
   // これを落とすと現場と台帳のどちらが新しいか分からなくなるので、空判定に必ず含めること。
   if(!next.time && !next.meetAt && !next.flyer && !next.consent && !next.compdoc && !next.hold && !next.note && !next.noteSrc
+     && !next.meetSrc
      && !next.flyerSrc && !next.consentSrc && !next.compdocSrc && !next.holdSrc){ delete _ledgerMap[tk]; removed = true; }
   else _ledgerMap[tk] = next;
   saveLedgerMap();
@@ -18799,25 +18879,60 @@ function setLedger(tk, patch){
 
    と判断する。時計を見ないので、端末の時刻ずれや editedAt の無いファイルでも狂わない。
    ※ これが無いと、現場で書いた備考がフォルダを読み直すたびに台帳の古い内容へ戻る（不具合）。 */
+/* 文字の欄をひとつ突き合わせる（備考・打合せ予定）。控え(src)が「前回ファイルから
+   採り込んだ内容」なので、ファイルがそこから変わっていれば現場が直したと分かる。 */
+function lgTextResolve(row, fileKey, lgKey, srcKey){
+  const tk = subCaseKey(row); if(!tk) return;
+  const lg = getLedger(tk) || {};
+  const fileVal = String(row.data[fileKey] || "");
+  const lgVal   = String(lg[lgKey] || "");
+  if(fileVal === lgVal){
+    // 一致している＝これが今の内容。次に台帳で直した時に見分けられるよう控えるだけ
+    if(fileVal && lg[srcKey] !== fileVal) setLedger(tk, { [srcKey]: fileVal });
+    return;
+  }
+  const known = (srcKey in lg) ? String(lg[srcKey] || "") : null;
+  if(fileVal && fileVal !== known) setLedger(tk, { [lgKey]: fileVal, [srcKey]: fileVal }); // 現場が直した → 現場を採る
+  else row.data[fileKey] = lgVal;                                                          // 台帳が新しい → 戸別へ配る
+}
 function noteAdopt(tk, s){ setLedger(tk, { note: s, noteSrc: s }); }
 function noteResolveRow(row){
   if(!row || !row.data) return;
-  const tk = subCaseKey(row); if(!tk) return;
-  const lg = getLedger(tk) || {};
-  const fileNote = String(row.data.chosho_note || "");
-  const lgNote = String(lg.note || "");
-  if(fileNote === lgNote){
-    // 一致している＝これが今の内容。次に台帳で直した時に見分けられるよう控えるだけ
-    if(fileNote && lg.noteSrc !== fileNote) setLedger(tk, { noteSrc: fileNote });
-    return;
-  }
-  const known = ("noteSrc" in lg) ? String(lg.noteSrc || "") : null;
-  if(fileNote && fileNote !== known) noteAdopt(tk, fileNote);   // 現場が書き換えた → 現場を採る
-  else row.data.chosho_note = lgNote;                            // 台帳が新しい → 戸別へ配る
+  lgTextResolve(row, "chosho_note", "note", "noteSrc");
+}
+/* 打合せ予定（現場入力でも決められる）。備考と同じ突き合わせ方。
+   古いファイル（欄そのものが無い）は触らない＝台帳の予定を消さない。 */
+function meetResolveRow(row){
+  if(!row || !row.data) return;
+  if(!("chosho_meet_at" in row.data)) return;
+  lgTextResolve(row, "chosho_meet_at", "meetAt", "meetSrc");
+}
+/* 読み込んだ戸別の 名前・住所・電話 も、受付台帳と同じく英数字を半角にそろえる。
+   直すのは画面に出す内容（この端末が持っている分）だけで、フォルダの戸別ファイルは
+   そのまま。ファイルの中身まで半角にしたいときは「💾 戸別ファイルへ反映」を押すと、
+   ここでそろえた内容との違いとして出てくるので、まとめて書き戻せる。
+   ※ 管理番号はファイル名と結び付いているので触らない。 */
+function lgNormalizeRow(row){
+  if(!row || !row.data) return;
+  ["chosho_cust_name", "chosho_cust_addr", "chosho_cust_tel"].forEach(k => {
+    const v = row.data[k];
+    if(typeof v !== "string" || !v) return;
+    const h = toHalfWidthAn(v);
+    if(h === v) return;
+    row.data = Object.assign({}, row.data);
+    row.data[k] = h;
+    // 一部暗号化の戸別は、平文側にも同じ値を持っているのでそろえる
+    if(row.fileType === "hybrid" && row.envelope && row.envelope.plain && (k in row.envelope.plain)){
+      row.envelope = Object.assign({}, row.envelope);
+      row.envelope.plain = Object.assign({}, row.envelope.plain, { [k]: h });
+    }
+  });
 }
 function noteResolveRows(rows){
   (rows || []).forEach(r => {
+    try { lgNormalizeRow(r); } catch(_){}   // 英数字を半角へ（受付台帳と同じ規則）
     try { noteResolveRow(r); } catch(_){}
+    try { meetResolveRow(r); } catch(_){}   // 打合せ予定：現場で決めた分を台帳へ取り込む
     try { flowResolveRow(r); } catch(_){}   // 工程：現場入力の下見→ビラ→工事→完了を台帳へ取り込む
   });
   return rows;
@@ -23062,34 +23177,35 @@ function bindLedgerHandlers(container){
         if(typeof openMapView === "function") openMapView({ focusMgmtNo: mg });
       } else if(kind === "del"){
         // 受付台帳で作った行はその場で消える。ファイルから読み込んだ行は、
-        // 戸別ファイルまでは消さない（消せてしまうと事故になる）。一覧と開いている物件から外すだけ。
+        // 「一覧から消す」だけか「フォルダのファイルごと消す」かを選んでもらう。
+        // ファイルを残したままだと、フォルダを読み直すたびにまた出てくるため。
         // ※ 管理番号の入っていない戸別など「消す手立てが無い行」を残さないため、
         //    ファイル起点の行も消せるようにしている。
         const d0 = row.data || {};
         const who = (String(d0.chosho_mgmt_no || "").trim() || "（管理番号なし）")
                   + (d0.chosho_cust_name ? ("　" + d0.chosho_cust_name) : "");
-        const msg = row._manual
-          ? "受付台帳の行「" + who + "」を削除しますか？"
-          : "この戸別を一覧（と開いている物件）から削除しますか？\n\n" + who
-            + (row.file ? ("\nファイル： " + row.file) : "")
-            + "\n\n・戸別ファイルそのものは消えません。\n"
-            + "・フォルダを読み直したときにそのファイルがまだあれば、また出てきます。\n"
-            + "　二度と出したくないときは、ファイルをフォルダの外へ移してください。";
-        if(!confirm(msg)) return;
-        const idx = _listRows.indexOf(row);
-        try { markCaseDeleted(row); } catch(_){} // Phase2: 削除を記録（競合マージでも復活させない）
-        if(!row._manual){
-          // 「ファイルが見当たりません」の控えからも外す（消したのに毎回聞かれないように）＋
-          // この戸別に紐づく台帳メモ・持出・確認・施工会社の割当も片付ける
-          try {
-            const mk = missKeyOf(row);
-            undetach(mk); listCensusForget(mk); missPurgeAnno(mk);
-          } catch(_){}
-        }
-        if(idx >= 0) _listRows.splice(idx, 1);
-        if(_editingRow === row) _editingRow = null;
-        projTouch();
-        renderListTable();
+        (async () => {
+          const choice = await lgDelDialog(row, who);
+          if(!choice) return;
+          if(!(await lgDelApply(row, choice))) return;
+          const idx = _listRows.indexOf(row);
+          try { markCaseDeleted(row); } catch(_){} // Phase2: 削除を記録（競合マージでも復活させない）
+          if(!row._manual){
+            // 「ファイルが見当たりません」の控えからも外す（消したのに毎回聞かれないように）＋
+            // この戸別に紐づく台帳メモ・持出・確認・施工会社の割当も片付ける
+            try {
+              const mk = missKeyOf(row);
+              undetach(mk); listCensusForget(mk); missPurgeAnno(mk);
+            } catch(_){}
+          }
+          if(idx >= 0) _listRows.splice(idx, 1);
+          if(_editingRow === row) _editingRow = null;
+          projTouch();
+          renderListTable();
+          if(choice === "file") alert("🗑 ファイルごと消しました。\n\n" + who
+            + "\n" + ((row._dirPath || "") + (row._name || ""))
+            + "\n\nフォルダを読み直しても、もう出てきません。");
+        })();
       } else {
         openCaseInEditor(row, kind === "dwg");
       }
@@ -24889,7 +25005,7 @@ function undetach(key){ if(_detachedMap[key]){ delete _detachedMap[key]; saveDet
 /* その戸別の記入をすべて消す（「一覧からも消す」を選んだとき） */
 function missPurgeAnno(key){
   // ※ 控え（*Src）まで空にしないと、台帳のエントリが残り続ける（setLedger の空判定に入っているため）
-  try { setLedger(key, { time:"", meetAt:"", flyer:false, consent:false, compdoc:false, hold:false, note:"", noteSrc:"",
+  try { setLedger(key, { time:"", meetAt:"", flyer:false, consent:false, compdoc:false, hold:false, note:"", noteSrc:"", meetSrc:"",
                          flyerSrc:false, consentSrc:false, compdocSrc:false, holdSrc:false }); } catch(_){}
   try { if(_takeoutMap[key]){ delete _takeoutMap[key]; saveTakeoutMap(); } } catch(_){}
   try { if(_reviewMap[key]){ delete _reviewMap[key]; saveReviewMap(); } } catch(_){}
