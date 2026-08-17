@@ -16597,6 +16597,15 @@ const CASE_KEEP_ON_REVERT = [
   "chosho_date", "chosho_status", "chosho_note",
   "chosho_photos", "chosho_photo_count", "chosho_photos_thumb", "_photosStripped",
   "asbestos",
+  // 受付台帳の記入（保留・ビラ・承諾書・完了書）と下見は残す。
+  // 「未施工に戻す」は工事をしていないことにするだけで、事務所が付けた印や
+  // 下見に行った事実まで消してしまうと、台帳と戸別ファイルが食い違う。
+  // ※工事(work_done/work_done_at)だけは、この操作の意味そのものなので落とす。
+  "hold_flag",
+  "survey_done", "survey_done_at",
+  "flyer_done", "flyer_done_at",
+  "consent_received", "consent_received_at",
+  "compdoc_received", "compdoc_received_at",
   "_manual", "_origin", "_schemaVer"
 ];
 /* この戸別に積算の中身が入っているか（＝「未施工に戻す」を出すか） */
