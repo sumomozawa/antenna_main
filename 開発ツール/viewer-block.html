@@ -364,6 +364,8 @@ svg#diagram{ cursor:default !important; }
       node.addEventListener(t, function(e){
         // 印刷ダイアログ等のショートカットは通す
         if((t === "keydown" || t === "keypress") && (e.ctrlKey || e.metaKey)) return;
+        // 折りたたみ（details/summary）の開け閉めは通す。閲覧専用でも中身は読めるように。
+        if(e.target && e.target.closest && e.target.closest("summary")) return;
         e.stopPropagation();
         if(t !== "keydown" && t !== "keypress") e.preventDefault();
       }, true);

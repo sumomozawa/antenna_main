@@ -50,6 +50,73 @@
   }
   header button:hover { background: #3a6ba8; }
 
+  /* ---- 濃紺のヘッダーで使うツールバー部品（メイン画面と戸別一覧で共通） ----
+     区切り線は .diagram-toolbar の .tb-sep と紛れないよう .tb-div という別名。 */
+  .tb-grp { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+  .tb-div {
+    flex: 0 0 auto; width: 1px; height: 18px; margin: 0 2px;
+    background: rgba(255,255,255,.28);
+  }
+  /* ボタン＋▾（ほかのやり方をしまう） */
+  .tb-split { display: inline-flex; align-items: stretch; flex: 0 0 auto; }
+  .tb-split > button { border-top-right-radius: 0 !important; border-bottom-right-radius: 0 !important; }
+  .tb-split > .uc-menu > summary { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: none; }
+  .tb-caret {
+    display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+    box-sizing: border-box; min-width: 22px; padding: 4px 5px;
+    background: #2e5488; color: #fff; border: 1px solid #3a6ba8; border-radius: 3px;
+    font-size: 11px; line-height: 1.2; cursor: pointer;
+    list-style: none; white-space: nowrap; user-select: none; -webkit-user-select: none;
+  }
+  .tb-caret::-webkit-details-marker { display: none; }
+  .tb-caret::marker { content: ""; }
+  .tb-caret:hover { background: #3a6ba8; }
+  .uc-menu[open] > .tb-caret { background: #16314f; }
+  /* 文字つきの ▾ ボタン（それ自体には主たる動作がないまとまり用） */
+  .tb-caret.tb-lbl { min-width: 0; padding: 4px 9px; font-size: 12px; }
+  .tb-caret.tb-lbl::after { content: "▾"; font-size: 9px; opacity: .85; }
+  .tb-more { flex: 0 0 auto; margin-left: 2px; }
+  .tb-more > .tb-caret { min-width: 28px; font-size: 14px; }
+  .list-view-actions .tb-caret { padding: 6px 6px; font-size: 12px; }
+  .list-view-actions .tb-caret.tb-lbl { padding: 6px 10px; }
+
+  /* ▾ で開く小さな一覧。ツールバーは横スクロールする箱なので、中に置くと切れてしまう。
+     開いたときに位置を測って画面基準（fixed）で出す（ucMenuPlace）。 */
+  .uc-menu { position: relative; display: inline-flex; flex: 0 0 auto; }
+  .uc-menu-pop {
+    position: fixed; left: 0; top: 0; z-index: 900;
+    min-width: 150px; padding: 4px;
+    background: #fff; border: 1px solid var(--uc-border); border-radius: var(--uc-r-card);
+    box-shadow: 0 6px 20px rgba(0,0,0,.22);
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .uc-menu:not([open]) .uc-menu-pop { display: none; }
+  .uc-menu-pop.uc-menu-pop button {
+    display: flex; align-items: center; gap: 6px;
+    width: 100%; box-sizing: border-box; min-height: 34px;
+    padding: 6px 10px;
+    background: #fff; color: var(--uc-ink); border: none; border-radius: var(--uc-r-ctl);
+    font-family: inherit; font-size: 12.5px; font-weight: 600; line-height: 1.3;
+    text-align: left; white-space: nowrap; cursor: pointer;
+  }
+  .uc-menu-pop.uc-menu-pop button:hover { background: var(--uc-brand-weak); }
+  /* 一覧が長くなるときの小見出し */
+  .uc-menu-cap {
+    padding: 6px 10px 2px; font-size: 10px; font-weight: 700; letter-spacing: .04em;
+    color: var(--uc-ink-3); white-space: nowrap;
+  }
+  .uc-menu-cap + button { margin-top: 0; }
+  .uc-menu-pop .uc-menu-cap ~ .uc-menu-cap { border-top: 1px solid var(--uc-border-weak); margin-top: 4px; padding-top: 7px; }
+  /* ▾ の一覧に入れたボタンは、元の派手な地色ではなく白地にそろえる */
+  .uc-menu-pop.uc-menu-pop button.map-hbtn { background: #fff; color: var(--uc-ink); border: none; }
+  .uc-menu-pop.uc-menu-pop button.map-hbtn:hover { background: var(--uc-brand-weak); }
+  .uc-menu-pop.uc-menu-pop button:disabled { opacity: .45; cursor: not-allowed; }
+  .uc-menu-pop.uc-menu-pop button small {
+    margin-left: auto; padding: 0 6px; border-radius: 999px;
+    background: #e8f5e9; color: #1b5e20; font-size: 10px; font-weight: 700;
+  }
+  body.mobile-layout .uc-menu-pop.uc-menu-pop button { min-height: 44px; font-size: 14px; }
+
   main {
     flex: 1;
     display: grid;
@@ -79,15 +146,10 @@
   }
 
   /* 入力パネル */
-  .section {
-    margin-bottom: 12px; border: 1px solid #dfe3e8;
-    border-radius: 4px; background: #fff;
-  }
-  .section-head {
-    padding: 6px 10px; background: #eef2f6;
-    font-weight: 600; font-size: 12px;
-    border-bottom: 1px solid #dfe3e8; color: #1e3a5f;
-  }
+  /* 入力パネルのまとまり。見た目は共通カード(.uc-card)が受け持つ。
+     クラス名 .section は 開発ツール/viewer-block.html が closest(".section") で
+     使っているので残してある。 */
+  .section { margin-bottom: 12px; }
   .section-body { padding: 8px 10px; }
   .field {
     display: flex; align-items: center;
@@ -488,7 +550,11 @@
   .list-view-body > .list-mode-tabs,
   .list-view-body > .list-base-preset-row,
   .list-view-body > #list-status { flex: 0 0 auto; }
-  .list-search-row { margin-bottom: 10px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .list-search-row {
+    margin-bottom: 10px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    background: var(--uc-surface); border: 1px solid var(--uc-border);
+    border-radius: var(--uc-r-card); box-shadow: var(--uc-sh-card); padding: 8px 12px;
+  }
   .list-hide-dup-label { font-size: 13px; color: #33424f; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; white-space: nowrap; }
   .list-hide-dup-label .hd-sub { font-size: 10px; color: #7a8a99; }
   .list-search-row input {
@@ -504,15 +570,16 @@
     text-align: center;
     color: #666;
     font-size: 13px;
-    background: #fff;
-    border-radius: 4px;
-    border: 1px dashed #cdd3da;
+    background: var(--uc-surface);
+    border-radius: var(--uc-r-card);
+    border: 1px dashed var(--uc-border);
   }
   .list-table-wrap {
-    background: #fff;
-    border-radius: 4px;
+    background: var(--uc-surface);
+    border: 1px solid var(--uc-border);
+    border-radius: var(--uc-r-card);
     overflow: auto;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    box-shadow: var(--uc-sh-card);
     flex: 1 1 auto;
     min-height: 0;   /* flex子が中身の高さに引っぱられず、枠内でスクロールできるように */
   }
@@ -556,31 +623,33 @@
   body.mobile-layout .list-table tbody td { padding: 6px 4px; }
   body.mobile-layout .list-search-row input { font-size: 16px; }
 
-  /* 一覧ビューのモードタブ */
+  /* 一覧ビューのモードタブ。ひとつの帯（カード）にまとめて、どれを見ているか分かりやすくする */
   .list-mode-tabs {
     display: flex;
-    gap: 4px;
+    gap: 3px;
     margin-bottom: 10px;
     align-items: center;
     flex-wrap: wrap;
+    background: var(--uc-surface); border: 1px solid var(--uc-border);
+    border-radius: var(--uc-r-card); box-shadow: var(--uc-sh-card); padding: 5px 6px;
   }
   .list-mode-tabs button.mode-tab {
-    background: #eef2f6;
-    color: #555;
-    border: 1px solid #cdd3da;
-    padding: 6px 14px;
+    background: transparent;
+    color: #5a6773;
+    border: 1px solid transparent;
+    padding: 6px 12px;
     font-size: 13px;
-    border-radius: 3px 3px 0 0;
+    border-radius: var(--uc-r-ctl);
     cursor: pointer;
-    border-bottom: 2px solid transparent;
+    white-space: nowrap;
   }
   .list-mode-tabs button.mode-tab.active {
-    background: #fff;
-    color: #1e3a5f;
-    border-bottom: 2px solid #1e3a5f;
-    font-weight: 600;
+    background: var(--uc-brand);
+    color: #fff;
+    border-color: var(--uc-brand);
+    font-weight: 700;
   }
-  .list-mode-tabs button.mode-tab:hover:not(.active) { background: #dbe4ed; }
+  .list-mode-tabs button.mode-tab:hover:not(.active) { background: var(--uc-brand-weak); color: var(--uc-brand); }
   .list-mode-tabs .list-pdf-btn {
     margin-left: auto;
     background: #8e6b3a;
@@ -597,8 +666,9 @@
   .list-base-preset-row {
     display: none;
     align-items: center; gap: 10px; flex-wrap: wrap;
-    background: #fff; padding: 8px 12px; border-radius: 4px;
-    margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    background: var(--uc-surface); padding: 8px 12px; border-radius: var(--uc-r-card);
+    border: 1px solid var(--uc-border);
+    margin-bottom: 10px; box-shadow: var(--uc-sh-card);
     font-size: 12px;
   }
   body.list-mode-cost_detail .list-base-preset-row { display: flex; }
@@ -2845,12 +2915,29 @@
   }
   .menu-header button:hover { background: #3a6ba8; }
   .menu-body { flex: 1; overflow: auto; padding: 18px 22px; }
-  .menu-sec { max-width: 1080px; margin: 0 auto 22px; }
+  /* 帯・カード・版表示まで、ぜんぶ同じ幅の一列にそろえる。
+     .menu-summary など、あとから margin を指定している行に負けないよう2クラスで書く。 */
+  .menu-view .menu-body > * { max-width: 1080px; margin-left: auto; margin-right: auto; }
+  /* メニューのまとまりはカード。中の小見出し（業者番号など）は今までどおりの線見出し。 */
+  .menu-sec {
+    max-width: 1080px; margin: 0 auto 14px;
+    background: var(--uc-surface); border: 1px solid var(--uc-border);
+    border-radius: var(--uc-r-card); box-shadow: var(--uc-sh-card); overflow: hidden;
+  }
   .menu-sec-head {
     font-size: 14px; font-weight: 700; color: #1e3a5f;
     border-bottom: 2px solid #1e3a5f; padding-bottom: 5px; margin-bottom: 10px;
     display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   }
+  /* カードの見出しとして使うとき（一番外側の見出し）は共通カードの見た目に寄せる */
+  .menu-sec > summary.menu-sec-head,
+  .menu-sec > .uc-head.menu-sec-head {
+    border-bottom: 1px solid var(--uc-border-weak); margin-bottom: 0;
+    padding: var(--uc-sp-2) var(--uc-sp-3); background: var(--uc-brand-weak);
+    font-size: var(--uc-fs-head);
+  }
+  .menu-sec > summary.menu-sec-head { min-height: 38px; }
+  .menu-sec > .uc-body { padding: 14px 16px; font-size: 12px; }
   /* 📗 Excel取込：読み取り列の軽い説明（操作バー内・控えめ） */
   .lg-xlsx-cols { font-size: 11px; color: #667482; line-height: 1.5; }
   .lg-xlsx-cols b {
@@ -3289,11 +3376,27 @@
   }
   .map-side-sec { margin-bottom: 14px; }
   .map-side-head { font-size: 12px; font-weight: 700; color: #1e3a5f; margin: 0 0 6px; border-bottom: 1px solid #dce2e8; padding-bottom: 3px; }
-  .map-tools { display: flex; flex-direction: column; gap: 5px; }
+  /* まとまりはカード。中身は少し詰めて、260pxの幅に収める。 */
+  .map-sidebar .map-side-sec.uc-card { margin-bottom: 8px; }
+  .map-sidebar .map-side-sec > summary.map-side-head {
+    margin: 0; border-bottom: 1px solid var(--uc-border-weak); padding: 7px 9px;
+    background: var(--uc-brand-weak); min-height: 34px;
+  }
+  .map-sidebar .map-side-sec > summary + * { margin-top: 0; }
+  .map-sidebar .map-side-sec > *:not(summary) { padding-left: 9px; padding-right: 9px; }
+  .map-sidebar .map-side-sec > *:first-of-type:not(summary) { padding-top: 8px; }
+  .map-sidebar .map-side-sec > *:last-child:not(summary) { padding-bottom: 9px; }
+  /* 編集ロック中でも、見出しを押して開け閉めだけはできるようにする（中身は触れない） */
+  body.map-locked .map-side-sec.map-edit-sec > summary { pointer-events: auto; opacity: 1; }
+  /* 道具は2列。縦に長い一本道だと下まで届かないため。 */
+  .map-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; align-items: stretch; }
+  .map-tools > .map-tool-opt,
+  .map-tools > .map-tool-txtype { grid-column: 1 / -1; }
   .map-tool {
-    display: flex; align-items: center; gap: 6px; text-align: left;
+    display: flex; align-items: center; gap: 4px; text-align: left;
     background: #fff; border: 1px solid #cdd3da; border-radius: 4px;
-    padding: 7px 9px; cursor: pointer; font-size: 12px; color: #33414f; font-family: inherit;
+    padding: 7px 6px; cursor: pointer; font-size: 11.5px; color: #33414f; font-family: inherit;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .map-tool:hover:not(:disabled) { background: #eef2f6; }
   .map-tool.active { background: #1e3a5f; color: #fff; border-color: #16314f; }
@@ -3647,34 +3750,293 @@
     /* 合計ボックスのみ全幅ページ用に右寄せの小箱へ */
     body.bukken-case-print #bukken-print-body .total-area { max-width: 90mm; margin-left: auto; }
   }
+
+  /* ============================================================
+     共通カード／アコーディオン（uc- = Unified Card）
+     4つの画面（入力パネル・戸別一覧・メニュー・地図）で同じ見た目を使う。
+     ・色は今までの値をそのまま役割名に写しただけ。新しい色は足していない。
+     ・変数名は必ず --uc- で始める。素の --border / --text-primary /
+       --text-secondary / --bg-elevated / --font-voice は系統図SVGの
+       線色（POLE_STRUCT ほか）が var() で読んでいるので定義しないこと。
+     ============================================================ */
+  :root{
+    /* 紺系（今までのヘッダー・見出しと同じ値） */
+    --uc-brand:        #1e3a5f;
+    --uc-brand-2:      #2e5488;
+    --uc-brand-3:      #3a6ba8;
+    --uc-brand-weak:   #eef2f6;
+    --uc-brand-weak-2: #dbe4ed;
+    /* 面 */
+    --uc-surface:   #fff;
+    --uc-surface-2: #f4f6f8;
+    --uc-canvas:    #eef1f5;
+    /* 枠線 */
+    --uc-border:      #cdd3da;
+    --uc-border-weak: #dfe3e8;
+    /* 文字 */
+    --uc-ink:   #1f2a36;
+    --uc-ink-2: #33424f;
+    --uc-ink-3: #667482;
+    /* 状態 */
+    --uc-ok:   #1b7a3d;
+    --uc-warn: #e65100;
+    --uc-bad:  #b3433a;
+    /* 影・角丸 */
+    --uc-sh-card: 0 1px 3px rgba(0,0,0,.08);
+    --uc-r-card: 6px;
+    --uc-r-ctl:  4px;
+    /* 余白 */
+    --uc-sp-1: 4px;
+    --uc-sp-2: 8px;
+    --uc-sp-3: 12px;
+    --uc-sp-4: 16px;
+    /* 指で押せる大きさ */
+    --uc-tap:    44px;
+    --uc-tap-sm: 30px;
+    /* 文字の大きさ */
+    --uc-fs-head: 13px;
+    --uc-fs-body: 12.5px;
+    --uc-fs-sub:  11px;
+  }
+
+  /* ---- カード本体。<details class="uc-card"> でも <div class="uc-card"> でも使える ---- */
+  .uc-card{
+    display: block;
+    box-sizing: border-box;
+    background: var(--uc-surface);
+    border: 1px solid var(--uc-border);
+    border-radius: var(--uc-r-card);
+    box-shadow: var(--uc-sh-card);
+    margin: 0 0 var(--uc-sp-3);
+    overflow: hidden;              /* 角丸から見出しの地色がはみ出さないように */
+  }
+  /* 中に position:sticky の表を入れる場合はこちら（overflow:hidden は sticky を殺すため） */
+  .uc-card.uc-flush{ overflow: visible; }
+  .uc-card.uc-quiet{ box-shadow: none; }
+
+  /* ---- 折りたたみの見出し ---- */
+  .uc-card > summary{
+    display: flex;                 /* これで Chrome/Safari の ▶ が消える */
+    align-items: center;
+    gap: var(--uc-sp-2);
+    box-sizing: border-box;
+    min-height: 34px;
+    padding: var(--uc-sp-2) var(--uc-sp-3);
+    cursor: pointer;
+    list-style: none;              /* Firefox の ▶ を消す */
+    background: var(--uc-brand-weak);
+    border-bottom: 1px solid var(--uc-border-weak);
+    color: var(--uc-brand);
+    font-size: var(--uc-fs-head);
+    font-weight: 700;
+    line-height: 1.35;
+    user-select: none; -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .uc-card > summary::-webkit-details-marker{ display: none; }
+  .uc-card > summary::marker{ content: ""; }
+  .uc-card > summary:hover{ background: var(--uc-brand-weak-2); }
+  .uc-card > summary:focus-visible{ outline: 2px solid var(--uc-brand-3); outline-offset: -2px; }
+  /* 閉じているときは見出しの下線を消す（1本の帯に見えるように） */
+  .uc-card:not([open]) > summary{ border-bottom-color: transparent; }
+
+  /* 開閉の印。閉＝▸ / 開＝▾ */
+  .uc-card > summary::after{
+    content: "▾";
+    flex: 0 0 auto;
+    margin-left: auto;
+    font-size: 12px; line-height: 1;
+    color: var(--uc-brand-2);
+    transform: rotate(-90deg);
+    transition: transform .15s ease;
+  }
+  .uc-card[open] > summary::after{ transform: rotate(0deg); }
+  @media (prefers-reduced-motion: reduce){ .uc-card > summary::after{ transition: none; } }
+
+  /* 見出しの中身 */
+  .uc-t{ flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .uc-sub{ flex: 0 0 auto; font-size: var(--uc-fs-sub); font-weight: 400; color: var(--uc-ink-3); white-space: nowrap; }
+  .uc-card[open] > summary .uc-sub{ display: none; }   /* 開いたら要約は消す */
+
+  /* 折りたたまない見出し */
+  .uc-head{
+    display: flex; align-items: center; gap: var(--uc-sp-2);
+    box-sizing: border-box; min-height: 32px;
+    padding: var(--uc-sp-2) var(--uc-sp-3);
+    background: var(--uc-brand-weak);
+    border-bottom: 1px solid var(--uc-border-weak);
+    color: var(--uc-brand);
+    font-size: var(--uc-fs-head); font-weight: 700; line-height: 1.35;
+  }
+
+  /* ---- カードの中身 ---- */
+  .uc-body{ padding: var(--uc-sp-3); font-size: var(--uc-fs-body); color: var(--uc-ink-2); line-height: 1.6; }
+  .uc-body > :first-child{ margin-top: 0; }
+  .uc-body > :last-child{ margin-bottom: 0; }
+  .uc-body.uc-tight{ padding: var(--uc-sp-2); }
+  .uc-body.uc-flat{ padding: 0; }
+
+  /* 補足の一言。長い説明はここか title= に逃がす */
+  .uc-note{ font-size: var(--uc-fs-sub); color: var(--uc-ink-3); line-height: 1.6; margin: var(--uc-sp-1) 0 0; }
+  .uc-row{ display: flex; align-items: center; gap: var(--uc-sp-2); flex-wrap: wrap; }
+  .uc-row + .uc-row{ margin-top: var(--uc-sp-2); }
+
+  /* ---- カードを並べる ---- */
+  .uc-grid{ display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: var(--uc-sp-3); align-items: start; }
+  .uc-grid.uc-wide  { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+  .uc-grid.uc-narrow{ grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .uc-grid > .uc-card{ margin-bottom: 0; }
+
+  /* ---- ボタン ----
+     クラスを2回書いて特異度を上げてある（既存の「.xxx button {…}」に勝つため）。 */
+  .uc-btn.uc-btn{
+    display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+    box-sizing: border-box; min-height: var(--uc-tap-sm);
+    padding: 5px 10px;
+    background: var(--uc-brand-2); color: #fff;
+    border: 1px solid var(--uc-brand-3); border-radius: var(--uc-r-ctl);
+    font-family: inherit; font-size: 12px; font-weight: 600; line-height: 1.2;
+    white-space: nowrap; cursor: pointer;
+  }
+  .uc-btn.uc-btn:hover{ background: var(--uc-brand-3); }
+  .uc-btn.uc-btn:disabled{ opacity: .45; cursor: not-allowed; }
+  .uc-btn.uc-ghost{ background: var(--uc-surface); color: var(--uc-brand-2); border-color: var(--uc-brand-2); }
+  .uc-btn.uc-ghost:hover{ background: var(--uc-brand-weak); }
+  .uc-btn.uc-ok  { background: var(--uc-ok);   border-color: #14602f; }
+  .uc-btn.uc-warn{ background: var(--uc-warn); border-color: #bf360c; }
+  .uc-btn.uc-bad { background: var(--uc-bad);  border-color: #8e332c; }
+
+  /* ボタンを並べる帯 */
+  .uc-btnbar{ display: flex; gap: var(--uc-sp-1); flex-wrap: wrap; align-items: center; }
+  .uc-btnbar.uc-end{ margin-left: auto; }
+
+  /* ---- 小さな印（件数・状態） ---- */
+  .uc-badge{
+    display: inline-flex; align-items: center;
+    padding: 1px 7px; border-radius: 999px;
+    background: var(--uc-brand-weak-2); color: var(--uc-brand);
+    font-size: 10.5px; font-weight: 700; line-height: 17px; white-space: nowrap;
+  }
+  .uc-badge.uc-ok  { background: #e8f5e9; color: #1b5e20; }
+  .uc-badge.uc-warn{ background: #fff3e0; color: #e65100; }
+
+  /* ---- ❔ 補足。ふだんは畳んでおき、押したときだけ読める ---- */
+  .uc-hint { margin-top: 6px; }
+  .uc-hint > summary {
+    display: inline-flex; align-items: center; gap: 3px;
+    padding: 2px 0; cursor: pointer; list-style: none;
+    font-size: 10.5px; color: var(--uc-brand-2); font-weight: 600;
+    user-select: none; -webkit-user-select: none;
+  }
+  .uc-hint > summary::-webkit-details-marker { display: none; }
+  .uc-hint > summary::marker { content: ""; }
+  .uc-hint > summary::before { content: "❔"; }
+  .uc-hint > summary:hover { text-decoration: underline; }
+  .uc-hint > div {
+    margin-top: 4px; padding: 6px 8px;
+    background: var(--uc-brand-weak); border-radius: var(--uc-r-ctl);
+    font-size: 10px; color: #555; line-height: 1.7;
+  }
+  body.mobile-layout .uc-hint > summary { font-size: 12px; padding: 6px 0; }
+  body.mobile-layout .uc-hint > div { font-size: 11.5px; }
+  @media print { .uc-hint { display: none !important; } }
+
+  /* ---- 画面ごとの合わせ込み ---- */
+  /* .uc-card の margin が .menu-sec の中央寄せ（max-width:1080px + auto）を
+     打ち消してしまうので、メニュー画面では戻す。 */
+  .menu-body > .uc-card { max-width: 1080px; margin-left: auto; margin-right: auto; }
+  /* 一覧本体は縦flex。直下の子に flex:0 0 auto を明示しないと表の枠の高さ配分が崩れ、
+     見出し行の position:sticky が効かなくなる（475行あたりのコメント参照）。 */
+  .list-view-body > .uc-card{ flex: 0 0 auto; }
+  .map-sidebar .uc-card{ margin-bottom: var(--uc-sp-2); }
+  .map-sidebar .uc-card > summary{ min-height: var(--uc-tap); padding: var(--uc-sp-2); font-size: 12px; }
+  .map-sidebar .uc-body{ padding: var(--uc-sp-2); }
+
+  /* ---- スマホ縦画面 ---- */
+  body.mobile-layout .uc-card{ border-radius: var(--uc-r-ctl); margin-bottom: var(--uc-sp-2); }
+  body.mobile-layout .uc-card > summary{ min-height: var(--uc-tap); padding: var(--uc-sp-2) var(--uc-sp-3); font-size: 14px; }
+  body.mobile-layout .uc-card > summary::after{ font-size: 14px; }
+  body.mobile-layout .uc-body{ padding: var(--uc-sp-2) var(--uc-sp-3); font-size: 13px; }
+  body.mobile-layout .uc-grid,
+  body.mobile-layout .uc-grid.uc-wide,
+  body.mobile-layout .uc-grid.uc-narrow{ grid-template-columns: 1fr; gap: var(--uc-sp-2); }
+  body.mobile-layout .uc-btn.uc-btn{ min-height: 40px; font-size: 13px; padding: 8px 12px; }
+  body.mobile-layout .uc-btnbar{ gap: var(--uc-sp-2); }
+
+  /* ---- 印刷 ----
+     影と角丸を落とし、閉じているカードでも中身が紙に出るようにする。
+     中身へ一律 display:block をかけるのは禁止（body クラスで出し分けている
+     行まで出てしまう）。対象は .uc-body だけに絞ってある。 */
+  @media print{
+    .uc-card{ box-shadow: none !important; border-radius: 0 !important; border-color: #999 !important;
+      break-inside: avoid; page-break-inside: avoid; }
+    .uc-card > summary, .uc-head{ background: transparent !important; border-bottom: 1px solid #999 !important;
+      min-height: 0; padding: 2px 0; }
+    .uc-card > summary{ cursor: auto; }
+    .uc-card > summary::after{ display: none !important; }
+    .uc-body{ padding: 4px 0; }
+    .uc-noprint{ display: none !important; }
+    .uc-card:not([open]) > .uc-body{ display: block !important; }
+  }
+  /* 新しめの Chrome は閉じた details を ::details-content 側で隠すので、子への
+     display 指定だけでは開かない。未対応のブラウザではこの塊ごと捨てられる。 */
+  @media print{
+    .uc-card::details-content{ content-visibility: visible !important; }
+  }
 </style>
 </head>
 <body>
 
 <div class="app">
   <header>
-    <h1>アンテナ工事 積算・図面作成ツール</h1>
-    <div class="toolbar">
-      <button id="btn-menu-app" title="メニュー画面（物件の選択・予定カレンダー・受付台帳など）へ戻る" style="background:#e65100;border-color:#bf360c;">🏠 メニュー</button>
+    <h1 title="アンテナ工事 積算・図面作成ツール">積算・図面</h1>
+    <nav class="toolbar" aria-label="操作">
+      <!-- 行き先 -->
+      <span class="tb-grp">
+        <button id="btn-menu-app" title="メニューへ戻る（物件の選択・予定カレンダー・受付台帳など）" style="background:#e65100;border-color:#bf360c;">🏠</button>
+        <button id="btn-list" title="戸別一覧を開く（保存済のファイルを読み込んで一覧・受付台帳・集計）">📋 一覧</button>
+        <button id="btn-map-jump" title="この戸別を地図で開く（管理番号でリンクした建物へジャンプ／未配置なら地図を開く）">🗺️ 地図</button>
+      </span>
+      <span class="tb-div" aria-hidden="true"></span>
+      <!-- ファイル -->
+      <span class="tb-grp">
+        <button id="btn-reset" title="入力をすべて消して、新しい戸別をはじめる">＋ 新規</button>
+        <button id="btn-load" title="保存したファイル（.json）を読み込む">📂 読込</button>
+        <button id="btn-save" title="この戸別をファイル（.json）として保存する">💾 保存</button>
+        <button id="btn-save-overwrite" title="📁フォルダ選択 から読み込んだ戸別を、元のファイルへ同じ形式で上書き保存" disabled>💾 上書き</button>
+      </span>
+      <span class="tb-div" aria-hidden="true"></span>
+      <!-- 出力 -->
+      <span class="tb-grp">
+        <span class="tb-split">
+          <button id="btn-print" title="いま開いている戸別の見積・図面を印刷 / PDF">🖨 印刷</button>
+          <details class="uc-menu"><summary class="tb-caret" title="工事調書を印刷">▾</summary>
+            <div class="uc-menu-pop">
+              <button id="btn-print-chosho" title="お客様情報・測定記録・系統図・使用材料・写真をA4縦1ページにまとめて印刷">工事調書</button>
+              <button id="btn-print-chosho-all" title="読み込んだ全戸別（一覧／物件）の工事調書を1戸1ページで連続印刷">📚 工事調書 全件</button>
+            </div>
+          </details>
+        </span>
+      </span>
+      <span class="tb-div" aria-hidden="true"></span>
+      <!-- 状態表示 -->
       <span id="proj-ind-app" class="proj-ind" title="現在開いている物件"></span>
       <span id="rt-ind-app" class="rt-ind" style="display:none;" title="リアルタイム同期"></span>
       <span id="rt-locks-app" class="rt-locks" style="display:none;"></span>
-      <button id="btn-mobile-toggle" title="スマホ縦画面レイアウトに切替">📱 縦画面</button>
-      <button id="btn-reset">新規</button>
-      <button id="btn-save">保存</button>
-      <button id="btn-save-overwrite" title="📁フォルダ選択 から読み込んだ戸別を、元のファイルへ同じ形式で上書き保存" disabled>💾 上書き保存</button>
-      <button id="btn-load">読込</button>
-      <button id="btn-map-jump" title="この戸別を地図で開く（管理番号でリンクした建物へジャンプ／未配置なら地図を開く）">🗺️ 地図</button>
-      <button id="btn-save-enc" title="AES-GCM-256 でファイル全体を暗号化 (方式A・全暗号化)">🔐 全暗号化保存</button>
-      <button id="btn-save-hyb" title="氏名・電話・住所・写真を暗号化。管理番号/進捗/工事内容は一覧可 (方式C・推奨)">🔐🔑 ハイブリッド保存</button>
-      <button id="btn-load-enc" title="暗号化ファイル(.enc/.hyb)をパスワードで復号して読込">🔓 復号読込</button>
-      <button id="btn-list" title="保存済JSONファイルから戸別一覧を表示">📋 一覧</button>
-      <button id="btn-parts-edit" title="部材マスター(単価)を編集・保存・読込">🔧 単価マスター</button>
-      <button id="btn-print">印刷 / PDF</button>
-      <button id="btn-print-chosho" title="お客様情報・測定記録・系統図・使用材料・写真をA4縦1ページにまとめて印刷">工事調書印刷</button>
-      <button id="btn-print-chosho-all" title="読み込んだ全戸別（一覧／物件）の工事調書を1戸1ページで連続印刷。個別は左の「工事調書印刷」">📚 工事調書 全件印刷</button>
-      <button id="btn-about" type="button" title="このアプリについて（著作権表示）" style="background:#3a4757;border-color:#2b343f;">ⓘ このアプリについて</button>
-    </div>
+      <!-- その他 -->
+      <details class="uc-menu tb-more"><summary class="tb-caret" title="ときどき使うもの（暗号化・単価マスターなど）">⋯</summary>
+        <div class="uc-menu-pop">
+          <div class="uc-menu-cap">暗号化（ふつうは使いません）</div>
+          <button id="btn-save-hyb" title="氏名・電話・住所・写真を暗号化して保存。管理番号・進捗・工事内容は一覧で見えます（方式C・推奨）">🔑 ハイブリッド保存<small>推奨</small></button>
+          <button id="btn-save-enc" title="AES-GCM-256 でファイル全体を暗号化して保存（方式A・全暗号化）">🔐 全暗号化保存</button>
+          <button id="btn-load-enc" title="暗号化ファイル(.enc/.hyb)をパスワードで開く">🔓 復号して読込</button>
+          <div class="uc-menu-cap">設定</div>
+          <button id="btn-parts-edit" title="部材マスター（単価）を編集・保存・読込">🔧 単価マスター</button>
+          <button id="btn-mobile-toggle" title="スマホ縦画面レイアウトに切替">📱 縦画面</button>
+          <button id="btn-about" type="button" title="このアプリについて（著作権表示）">ⓘ このアプリについて</button>
+        </div>
+      </details>
+    </nav>
   </header>
 
   <nav class="mobile-tabs" id="mobile-tabs">
@@ -3686,8 +4048,8 @@
   <main>
     <!-- ============ 入力パネル ============ -->
     <aside class="input-panel" id="input-panel">
-      <div class="section">
-        <div class="section-head">プリセット</div>
+      <details class="section uc-card" data-uc="in.preset" open>
+        <summary title="よく使う組み合わせを呼び出す／保存する"><span class="uc-t">プリセット</span></summary>
         <div class="section-body">
           <div class="preset-buttons" id="preset-list"></div>
           <div class="preset-util-row">
@@ -3698,10 +4060,10 @@
           </div>
           <div style="font-size:10px;color:#555;margin-top:4px;">標準=青／作成=紫。<b style="color:#2e7d32;">↻</b>で現在設定を上書き、<b style="color:#d32f2f;">×</b>で削除</div>
         </div>
-      </div>
+      </details>
 
-      <div class="section">
-        <div class="section-head">工事調書情報</div>
+      <details class="section uc-card" data-uc="in.chosho" open>
+        <summary title="工事状態・管理番号・施工日・お客様情報・備考・写真"><span class="uc-t">📝 調書・お客様</span></summary>
         <div class="section-body">
           <div class="field">
             <label><span data-tip="工事の完了状態を記録。一覧表示時に完了/未完了のバッジで判別できる。">工事状態</span></label>
@@ -3746,12 +4108,14 @@
             <button type="button" id="btn-photo-export" style="padding:4px 10px;font-size:11px;border:1px solid #0d47a1;color:#0d47a1;background:#fff;border-radius:3px;cursor:pointer;align-self:flex-start;" title="この戸別の写真を、管理番号フォルダ（無ければ作成）に原本のまま無劣化で書き出します。スマホ現場入力で撮った写真の取り出しに使用。">📁 写真をフォルダに書き出し</button>
             <button type="button" id="btn-photo-compress" style="padding:4px 10px;font-size:11px;border:1px solid #ad6800;color:#ad6800;background:#fff;border-radius:3px;cursor:pointer;align-self:flex-start;" title="この戸別の写真を長辺2000pxに縮小してファイルを軽くします（見積・調書には十分な画質）。フォルダに書き出した原本には影響しません。案件JSONが大きく重い時に。">📉 写真を軽量化</button>
           </div>
-          <div style="font-size:10px;color:#555;margin-top:4px;">ラベル名は自由に変更可（例: 施工前 / 施工完了 / 屋根上 / 保安器 / 居間TV …）。工事調書・系統図印刷に使用、保存/読込にも含まれます。<br>📁書き出し＝スマホ「現場入力」で撮った写真を、指定フォルダ内の「管理番号」フォルダへ無劣化でコピー（PC・Chrome/Edge）。<br>📉軽量化＝案件JSONを軽くしたい時。長辺2000pxに縮小（原本を残したい場合は先に📁書き出しを）。</div>
+          <details class="uc-hint"><summary>写真の使い方</summary>
+            <div>ラベル名は自由に変更できます（例: 施工前 / 施工完了 / 屋根上 / 保安器 / 居間TV …）。工事調書・系統図の印刷に使い、保存・読込にも入ります。<br>📁書き出し＝スマホ「現場入力」で撮った写真を、選んだフォルダの中の「管理番号」フォルダへ、画質を落とさずコピーします（PC・Chrome/Edge）。<br>📉軽量化＝案件のファイルを軽くしたいとき。長辺2000pxに縮めます（元の写真を残したいときは、先に📁書き出しを）。</div>
+          </details>
         </div>
-      </div>
+      </details>
 
-      <div class="section">
-        <div class="section-head">🏢 石綿対応判定</div>
+      <details class="section uc-card" data-uc="in.asbestos" open>
+        <summary title="建築着工日から石綿（アスベスト）の扱いを判定します"><span class="uc-t">🏢 石綿判定</span></summary>
         <div class="section-body">
           <div class="field">
             <label><span data-tip="建物の新築着工日。2006/9/1以前は石綿みなし扱い。">建築着工日</span></label>
@@ -3799,7 +4163,7 @@
             <label></label>
             <label style="flex:1;font-size:11px;color:#555;">
               <input type="checkbox" id="asbestos_no_dust_method" style="vertical-align:middle;">
-              <span data-tip="みなし該当のまま、電動工具・穿孔を使わない手締め等の非発じん工法で施工する戸別。みなし判定（事前調査の事実）は変えずに、石綿みなし諸経費の自動計上だけを止め、バッジ・調書・一覧集計で区別表示します。">非発じん工法で施工（穿孔・切断なし＝石綿諸経費 計上なし）</span>
+              <span data-tip="みなし該当のまま、電動工具・穿孔を使わない手締め等の非発じん工法で施工する戸別。みなし判定（事前調査の事実）は変えずに、石綿みなし諸経費の自動計上だけを止め、バッジ・調書・一覧集計で区別表示します。">非発じん工法（穿孔・切断なし）</span>
             </label>
           </div>
           <div class="field">
@@ -3842,14 +4206,12 @@
             <label>その他建材</label>
             <input type="text" id="asbestos_material_other" placeholder="建材名を入力">
           </div>
-          <div style="font-size:10px;color:#555;margin-top:4px;">
-            2006/9/1以前の建物、または着工日不明の場合はみなし適用（通常 LV3 扱い）
-          </div>
+          <div style="font-size:10px;color:#555;margin-top:4px;" title="2006/9/1以前の建物、または着工日が不明の場合はみなし適用（通常 LV3 扱い）">2006/9/1以前・着工日不明はみなし（LV3）</div>
         </div>
-      </div>
+      </details>
 
-      <div class="section">
-        <div class="section-head">🏢 石綿 担当者・元請情報（事業所プリセット対応）</div>
+      <details class="section uc-card" data-uc="in.asbestos-person" data-uc-def="0">
+        <summary title="事業所プリセットから自動で入ります。ふだんは開かなくて大丈夫です"><span class="uc-t">🏢 石綿 担当者</span></summary>
         <div class="section-body">
           <div class="field">
             <label>元請業者</label>
@@ -3881,14 +4243,12 @@
             <button type="button" id="btn-asbestos-preset-clear" title="保存済プリセットを削除" style="border-color:#d32f2f;color:#d32f2f;">× 削除</button>
           </div>
           <div id="asbestos-preset-status" style="font-size:10px;color:#555;margin-top:4px;"></div>
-          <div style="font-size:10px;color:#555;margin-top:2px;">
-            1度保存すれば、新規戸別の入力時に自動で流入します（戸別ごとの上書き可）
-          </div>
+          <div style="font-size:10px;color:#555;margin-top:2px;" title="1度保存すれば、新規戸別の入力時に自動で流入します（戸別ごとに上書きもできます）">1度保存すれば、次から自動で入ります</div>
         </div>
-      </div>
+      </details>
 
-      <div class="section">
-        <div class="section-head">基本条件</div>
+      <details class="section uc-card" data-uc="in.base" open>
+        <summary title="住宅の種類・電源部の位置など、工事全体にかかわる条件"><span class="uc-t">基本条件</span></summary>
         <div class="section-body">
           <div class="field">
             <label>工事種別</label>
@@ -3927,18 +4287,18 @@
             </select>
           </div>
         </div>
-      </div>
+      </details>
 
-      <details class="section" id="ag-guide-panel">
-        <summary class="section-head" style="cursor:pointer;">🗼 アンテナ取付ガイド（ここで組むと下の入力に自動で反映されます）</summary>
+      <details class="section uc-card" id="ag-guide-panel" data-uc="in.guide" data-uc-def="0">
+        <summary title="ここで組むと、下のアンテナ欄へ自動で反映されます"><span class="uc-t">🗼 取付ガイド</span></summary>
         <div class="section-body">
           <div id="ag-host-edit"></div>
-          <div style="font-size:10px;color:#1565c0;margin-top:6px;">🟦 <b>水色</b>の入力欄＝取付ガイドが自動入力した項目です（手動で変更すると通常色に戻ります）。</div>
+          <div style="font-size:10px;color:#1565c0;margin-top:6px;" title="手で変えると、ふつうの色に戻ります">🟦 <b>水色</b>＝取付ガイドが入れた欄</div>
         </div>
       </details>
 
-      <div class="section">
-        <div class="section-head">アンテナ</div>
+      <details class="section uc-card" data-uc="in.antenna" open>
+        <summary title="アンテナ・マスト・金物の構成"><span class="uc-t">📡 アンテナ</span></summary>
         <div class="section-body">
           <div class="field">
             <label>主アンテナ</label>
@@ -4105,12 +4465,14 @@
             <label><span data-tip="ルーフベース支線用ターンバックル。ルーフベース時に必ず使用（基本4個）。数量を入力。単価は単価マスターで調整可。">ターンバックル</span></label>
             <input type="number" id="turnbuckle_qty" value="4" min="0" step="1">
           </div>
-          <div style="font-size:10px;color:#555;margin:-3px 0 6px 106px;">※ 1ペア=サイドベース1基＋マスト1本。マストを2本連結する時は「連結金物」の種類と数量を入力。ルーフ/支柱時はサイドベース欄は非表示</div>
+          <details class="uc-hint"><summary>ペアの数えかた</summary>
+            <div>1ペア＝サイドベース1基＋マスト1本です。マストを2本つなぐときは「連結金物」の種類と数量を入れてください。ルーフ／支柱のときはサイドベースの欄は出ません。</div>
+          </details>
         </div>
-      </div>
+      </details>
 
-      <div class="section">
-        <div class="section-head">引込・補強</div>
+      <details class="section uc-card" data-uc="in.lead" open>
+        <summary title="引込コーナーブラケット（OFMU）とステンレスワイヤー"><span class="uc-t">引込・補強</span></summary>
         <div class="section-body">
           <div class="field">
             <label><span data-tip="引込コーナーブラケット OFMU。&#10;軒先コーナー部の配線取り回しに使用。&#10;増幅器out→次段機器への配線で角を回す場合に取り付ける。&#10;なし／個数を選択。">引込ブラケット</span></label>
@@ -4127,10 +4489,10 @@
             <input type="number" id="wire_sus16_len" value="0" min="0" step="0.5">
           </div>
         </div>
-      </div>
+      </details>
 
-      <div class="section">
-        <div class="section-head">増幅器・フィルター</div>
+      <details class="section uc-card" data-uc="in.amp" open>
+        <summary title="ブースター・ラインブースター・ハイパスフィルター"><span class="uc-t">増幅器・フィルタ</span></summary>
         <div class="section-body">
           <div class="field">
             <label>増幅器</label>
@@ -4164,10 +4526,10 @@
             </select>
           </div>
         </div>
-      </div>
+      </details>
 
-      <div class="section">
-        <div class="section-head">アッテネーター（増幅器入力）</div>
+      <details class="section uc-card" data-uc="in.att" data-uc-def="0">
+        <summary title="増幅器の入力直前に入れる減衰器"><span class="uc-t">アッテネーター</span></summary>
         <div class="section-body">
           <div class="field">
             <label><span data-tip="主系統(14-24ch+二戸50ch、または14-24chのみ)の増幅器入力直前に挿入する減衰器。&#10;入力レベルが強すぎる時に使用。">主系統</span></label>
@@ -4196,12 +4558,12 @@
               <option value="att_w10">ATTW10 (-10dB)</option>
             </select>
           </div>
-          <div style="font-size:10px;color:#555;margin-top:4px;">信号レベル過大時に減衰。増幅器の入力直前に挿入され、図面にも表示されます。</div>
+          <div style="font-size:10px;color:#555;margin-top:4px;" title="信号レベルが過大なときに減衰させます。増幅器の入力直前に挿入され、図面にも表示されます">信号が強すぎるときに下げる</div>
         </div>
-      </div>
+      </details>
 
-      <div class="section">
-        <div class="section-head">宅内配線</div>
+      <details class="section uc-card" data-uc="in.wire" open>
+        <summary title="分配器・宅内のケーブル・電源まわり"><span class="uc-t">宅内配線</span></summary>
         <div class="section-body">
           <div class="field">
             <label>宅内分配数</label>
@@ -4268,10 +4630,10 @@
             </select>
           </div>
         </div>
-      </div>
+      </details>
 
-      <div class="section">
-        <div class="section-head">TV設置部屋</div>
+      <details class="section uc-card" data-uc="in.tv" open>
+        <summary title="テレビを置く部屋と、部屋ごとの分配・端子"><span class="uc-t">TV部屋</span></summary>
         <div class="section-body">
           <div class="field">
             <label>TV台数</label>
@@ -4285,16 +4647,16 @@
               <option value="8">8</option>
             </select>
           </div>
-          <div style="font-size:10px;color:#555;margin:-2px 0 4px 0;line-height:1.4;">
-            各TV行：[部屋名] / [BD=チャンネル調整] / [分配=壁後分配器] / [壁端子]<br>
-            <b>壁端子</b>: 既存流用=黒（積算なし）／品名選択=赤（交換・積算に反映）。単価マスターの■端子カテゴリから選択。
-          </div>
+          <details class="uc-hint"><summary>行の見かた</summary>
+            <div>各TV行：[部屋名] / [BD＝チャンネル調整] / [分配＝壁後分配器] / [壁端子]<br>
+            <b>壁端子</b>：既存流用＝黒（積算なし）／品名を選ぶ＝赤（交換・積算に反映）。単価マスターの■端子カテゴリから選べます。</div>
+          </details>
           <div class="tv-list" id="tv-list"></div>
         </div>
-      </div>
+      </details>
 
-      <div class="section" id="catv-section">
-        <div class="section-head">CATV撤去（CATV住宅時）</div>
+      <details class="section uc-card" id="catv-section" data-uc="in.catv" open>
+        <summary title="CATV住宅のときだけ出ます。撤去する引込線・保安器・FAの扱い"><span class="uc-t">CATV撤去</span></summary>
         <div class="section-body">
           <div class="field">
             <label>保安器撤去</label>
@@ -4345,10 +4707,10 @@
             </select>
           </div>
         </div>
-      </div>
+      </details>
 
-      <div class="section">
-        <div class="section-head">電波測定値（図面に表示）</div>
+      <details class="section uc-card" data-uc="in.meas" data-uc-def="0">
+        <summary title="図面に載せる測定値。編集は「測定値」ボタンから"><span class="uc-t">電波測定値</span></summary>
         <div class="section-body">
           <div class="field">
             <label>図面表示</label>
@@ -4360,12 +4722,12 @@
           <div class="field">
             <button id="btn-meas-edit" type="button" style="width:100%;padding:4px 10px;font-size:12px;background:#fff;border:1px solid #2e7d32;color:#2e7d32;border-radius:3px;cursor:pointer;">測定値を編集</button>
           </div>
-          <div style="font-size:10px;color:#555;margin-top:4px;">アンテナ出力／増幅器出力／宅内末端の3箇所に dB・MER・BER を表示</div>
+          <div style="font-size:10px;color:#555;margin-top:4px;" title="アンテナ出力／増幅器出力／宅内末端の3箇所に dB・MER・BER を表示します">3箇所の dB・MER・BER を図面に載せる</div>
         </div>
-      </div>
+      </details>
 
-      <div class="section">
-        <div class="section-head">ケーブル長さ S5CFB（m）</div>
+      <details class="section uc-card" data-uc="in.cable" open>
+        <summary title="系統ごとの S5CFB の長さ（m）"><span class="uc-t">ケーブル長 S5CFB</span></summary>
         <div class="section-body">
           <div class="field">
             <label>主系統 外部</label>
@@ -4394,7 +4756,7 @@
           <!-- 旧フィールド(非表示・後方互換) -->
           <input type="hidden" id="cable_new_len" value="0">
         </div>
-      </div>
+      </details>
     </aside>
 
     <!-- ============ 図面パネル ============ -->
@@ -4492,26 +4854,47 @@
 <div class="list-view" id="list-view">
   <header class="list-view-header">
     <h1>📋 戸別一覧</h1>
-    <div class="list-view-actions">
-      <button id="btn-menu-list" title="メニュー画面（物件の選択など）へ戻る" style="background:#e65100;border-color:#bf360c;">🏠 メニュー</button>
+    <nav class="list-view-actions" aria-label="一覧の操作">
+      <button id="btn-menu-list" title="メニューへ戻る（物件の選択など）" style="background:#e65100;border-color:#bf360c;">🏠</button>
+      <span class="tb-div" aria-hidden="true"></span>
+      <!-- 読み込む -->
+      <span class="tb-grp">
+        <span class="tb-split">
+          <button id="btn-list-select-folder" title="フォルダの中を、下のフォルダまで全部読み込みます (Chrome/Edge)。一度選ぶとそのフォルダを覚えるので、次からは一覧を開いたときに自動で読み込みます（別のフォルダにしたいときだけ押してください）。">📁 フォルダ</button>
+          <details class="uc-menu"><summary class="tb-caret" title="ほかの読み込み方">▾</summary>
+            <div class="uc-menu-pop">
+              <button id="btn-list-select-files" title="JSON/.hyb/.enc ファイルを1つずつ／まとめて選ぶ">📄 ファイルを選ぶ</button>
+              <button id="btn-list-clear" title="読み込んだ一覧を空にする">🧽 一覧を空にする</button>
+            </div>
+          </details>
+        </span>
+        <button id="btn-genba-import" title="スマホ現場入力が書き出した「管理番号.json」を、開いている物件の同じ管理番号の戸別へ取り込みます。顧客情報は台帳を優先し、アンテナ・部材・測定・写真・配線は現場を採用。料金・石綿・図面レイアウトはPCを保持。取込前に中身を確かめられます。" style="background:#1565c0;">📥 現場取込</button>
+      </span>
+      <span class="tb-div" aria-hidden="true"></span>
+      <!-- 物件のはじめ／終わりにだけ使うもの -->
+      <details class="uc-menu"><summary class="tb-caret tb-lbl" title="ときどき使うもの（ファイルの整理・暗号化・写真のまとめ書き出し）">⋯ まとめて</summary>
+        <div class="uc-menu-pop">
+          <div class="uc-menu-cap">ファイルを整える</div>
+          <button id="btn-list-dup" title="同じ管理番号のファイルが重なっているところ（iPad/iPhoneで保存すると増える「◯◯ 2.json」など）を探し、残す方を選んで「管理番号.json」にまとめます。フォルダを読み込んだ後に使えます。">🧩 重複をまとめる</button>
+          <button id="btn-list-junk" title="中身が空（0KB）のファイルを探して消します。スマホで同じ戸別を保存し直すと「管理番号_長い数字.json」という別ファイルが増え、そのうち空のものは読めないため戸別が一覧から抜けます。消す前に一覧で確かめられます。中身のある壊れたファイルは消しません。">🗑 空ファイルを消す</button>
+          <div class="uc-menu-cap">まとめて書き出す</div>
+          <button id="btn-list-bulk-photos" title="この物件（一覧）の全戸別の写真を、選んだフォルダの中に「管理番号」フォルダを作って、画質を落とさずまとめて書き出します。スマホ現場入力で撮った写真の取り出しに使います。">📸 写真をまとめて書き出し</button>
+          <div class="uc-menu-cap">暗号化（ふつうは使いません）</div>
+          <button id="btn-list-unlock" title="ハイブリッド(.hyb)は氏名・電話・住所・写真を、全暗号化(.enc)は本体をまとめて復号">🔓 まとめて復号</button>
+          <button id="btn-list-bulk-reenc" title="選んだ複数のファイルを、別のパスワード／別の方式にまとめて変えて上書き保存">🔄 まとめて再暗号化</button>
+          <button id="btn-list-bulk-plain" title="暗号化ファイル(.hyb/.enc)をまとめて復号し、暗号化なし(.json)で保存し直す（個人情報が平文になります）">📄 まとめて平文に</button>
+          <button id="btn-list-clear-pw" title="覚えているパスワードを消す">🗝 パスワードを忘れる</button>
+        </div>
+      </details>
+      <span class="tb-div" aria-hidden="true"></span>
+      <!-- 状態表示 -->
       <span id="proj-ind-list" class="proj-ind" title="現在開いている物件"></span>
       <span id="rt-ind-list" class="rt-ind" style="display:none;" title="リアルタイム同期"></span>
       <span id="rt-locks-list" class="rt-locks" style="display:none;"></span>
-      <button id="btn-list-select-folder" title="フォルダ内のファイルをサブフォルダ含めて再帰的に読込 (Chrome/Edge)。一度選ぶとそのフォルダを覚えるので、次からは戸別一覧を開いた時に自動で読み込みます（別のフォルダにしたい時だけ押してください）。">📁 フォルダ選択(再帰)</button>
-      <button id="btn-list-select-files" title="JSON/.hyb/.encファイルを個別/複数選択">📄 ファイル選択</button>
-      <button id="btn-list-dup" title="同じ管理番号のファイルが重なっているところ（iPad/iPhoneで保存すると増える「◯◯ 2.json」など）を探し、残す方を選んで「管理番号.json」にまとめます。フォルダ選択で読み込んだ後に使えます。" style="background:#00838f;">🧹 重複ファイルを整理</button>
-      <button id="btn-list-junk" title="中身が空（0KB）のファイルを探して消します。スマホで同じ戸別を保存し直すと「管理番号_長い数字.json」という別ファイルが増え、そのうち空のものはメインで読めないため戸別が一覧から抜けます。消す前に一覧で確かめられます。中身のある壊れたファイルは消しません。フォルダ選択で読み込んだ後に使えます。" style="background:#8a5a00;">🧹 空ファイルを掃除</button>
-      <button id="btn-list-unlock" title="ハイブリッド(.hyb)は氏名・電話・住所・写真を、全暗号化(.enc)は本体をまとめて復号" style="background:#8e24aa;">🔓 一括復号</button>
-      <button id="btn-list-bulk-reenc" title="選択した複数ファイルを一括で別パスワード／別方式に再暗号化して上書き保存" style="background:#e65100;">🔄 一括再暗号化</button>
-      <button id="btn-list-bulk-plain" title="暗号化ファイル(.hyb/.enc)を一括で復号し、暗号化なしの平文(.json)として保存し直す（個人情報が平文になります）" style="background:#546e7a;">📄 一括平文化</button>
-      <button id="btn-list-bulk-photos" title="この物件（一覧）の全戸別の写真を、指定フォルダ内に「管理番号」フォルダを整然と作って無劣化で一括書き出し。スマホ現場入力で撮った写真の取り出しに使用。" style="background:#00695c;">📸 写真を一括書き出し</button>
-      <button id="btn-genba-import" title="スマホ現場入力(genba)が書き出した「管理番号.json」を、開いている物件の同じ管理番号の戸別へ取り込みます。顧客情報は台帳を優先し、アンテナ・部材・測定・写真・配線は現場を採用。料金・石綿・図面レイアウトはPCを保持。取込前にプレビューで確認できます。" style="background:#1565c0;">📥 現場JSN取込</button>
       <span id="list-pw-indicator" style="display:none;color:#fff;font-size:11px;padding:2px 8px;border-radius:3px;background:#2e7d32;" title="クリックで記憶パスワードを消去"></span>
-      <button id="btn-list-clear-pw" title="記憶しているパスワードをメモリから消去" style="background:#c62828;">🗝 パスワードクリア</button>
-      <button id="btn-list-clear">クリア</button>
       <span id="list-count" style="color:#fff;font-size:12px;margin:0 10px;"></span>
-      <button id="btn-list-close" style="margin-left:auto;background:#666;">✕ 閉じる</button>
-    </div>
+      <button id="btn-list-close" style="margin-left:auto;background:#666;" title="一覧を閉じる">✕</button>
+    </nav>
   </header>
   <div class="list-view-body">
     <div class="list-search-row">
@@ -4519,13 +4902,13 @@
       <label class="list-hide-dup-label" title="同じ管理番号が複数あるとき、ファイル更新日時が最新の1件だけ表示します（古い重複を隠す）"><input type="checkbox" id="list-hide-dup"> 重複を隠す <span class="hd-sub">(同一管理番号は最新日付のみ)</span></label>
     </div>
     <div class="list-mode-tabs">
-      <button class="mode-tab active" data-list-mode="standard" title="全戸別を1枚の表でフラットに表示。取付方法（アンテナ取付ガイド）・ファイル形式（📄平文／🔐HYB／🔐FULL）・ファイル名が出るのはここだけです。番号や氏名で探す・どのファイルから読んだか確かめる用。">📄 標準一覧</button>
-      <button class="mode-tab" data-list-mode="by_folder" title="保存先フォルダ（工区）ごとにグループ分けし、グループごとに件数・小計・石綿サマリと全体合計を出します。施工会社の割り当て（プルダウン）・写真枚数の確認・石綿みなし判定が出るのはここだけです。">📁 工事別フォルダ</button>
-      <button class="mode-tab" data-list-mode="cost_detail" title="読み込んだ全戸別の材料費・労務費を工事全体で集計。★基本工事プリセットを指定すると、基本工事とそれ以外（追加工事）に分けて集計します。">💴 全体費用詳細</button>
-      <button class="mode-tab" data-list-mode="subcontractor" title="協力会社→元請けへの請求内訳（労務費＋協力会社諸経費＋持出材料）。全体費用詳細の数値には一切影響しません。単価は標準単価（業者間の統一額）で計算し、物件用の単価変更（単価マスターの色付き行）は反映されません">🤝 協力会社請求内訳</button>
+      <button class="mode-tab active" data-list-mode="standard" title="全戸別を1枚の表でフラットに表示。取付方法（アンテナ取付ガイド）・ファイル形式（📄平文／🔐HYB／🔐FULL）・ファイル名が出るのはここだけです。番号や氏名で探す・どのファイルから読んだか確かめる用。">📄 一覧</button>
+      <button class="mode-tab" data-list-mode="by_folder" title="保存先フォルダ（工区）ごとにグループ分けし、グループごとに件数・小計・石綿サマリと全体合計を出します。施工会社の割り当て（プルダウン）・写真枚数の確認・石綿みなし判定が出るのはここだけです。">📁 工事別</button>
+      <button class="mode-tab" data-list-mode="cost_detail" title="読み込んだ全戸別の材料費・労務費を工事全体で集計。★基本工事プリセットを指定すると、基本工事とそれ以外（追加工事）に分けて集計します。">💴 費用</button>
+      <button class="mode-tab" data-list-mode="subcontractor" title="協力会社→元請けへの請求内訳（労務費＋協力会社諸経費＋持出材料）。全体費用詳細の数値には一切影響しません。単価は標準単価（業者間の統一額）で計算し、物件用の単価変更（単価マスターの色付き行）は反映されません">🤝 協力会社</button>
       <button class="mode-tab" data-list-mode="ledger" title="全戸別を1行ずつ一覧・セル直接編集（工事日程・打合せ・ビラ配布・完了・備考）。カレンダーと双方向連動">📒 受付台帳</button>
-      <button class="mode-tab" data-list-mode="calendar" title="工事予定（青）と打合せ予定（緑）を月表示。受付台帳と双方向連動">📅 予定カレンダー</button>
-      <button class="mode-tab" data-list-mode="materials" title="現場入力で「下見完了」にした戸別の材料を、工事全体で合計します。まとめ発注の数量表（金額なし）">🧰 発注材料数量</button>
+      <button class="mode-tab" data-list-mode="calendar" title="工事予定（青）と打合せ予定（緑）を月表示。受付台帳と双方向連動">📅 予定</button>
+      <button class="mode-tab" data-list-mode="materials" title="現場入力で「下見完了」にした戸別の材料を、工事全体で合計します。まとめ発注の数量表（金額なし）">🧰 発注材料</button>
       <button class="list-pdf-btn" id="btn-list-pdf" title="現在のモードの内容をPDF/印刷ダイアログで出力">🖨 PDF出力</button>
     </div>
     <div class="list-base-preset-row">
@@ -4827,27 +5210,31 @@
     <span class="menu-cur-proj" id="rt-ind-menu" style="display:none;cursor:pointer;" title="リアルタイム同期設定"></span>
     <button id="menu-projfile" title="共有物件JSONファイルへの連動状態" style="display:none;">🔗 共有ファイルに連動</button>
     <button id="menu-detach" title="開いている物件から切り離し、単価マスター/プリセットを通常（全物件共通）に戻す" style="display:none;background:#546e7a;border-color:#37474f;">🔌 物件から切り離す</button>
-    <button id="menu-close" title="メニューを閉じて従来の画面（積算・図面編集）へ">✕ 閉じる（編集画面へ）</button>
+    <button id="menu-close" title="メニューを閉じて、積算・図面の編集画面へ">✕</button>
   </header>
   <div class="menu-body">
     <div class="menu-savestate ss-none" id="menu-savestate"></div>
+    <div class="menu-summary" id="menu-summary"></div>
     <section class="menu-sec">
-      <div class="menu-summary" id="menu-summary"></div>
-      <div class="menu-sec-head">機能 <span id="menu-feat-note" style="font-weight:normal;font-size:11px;color:#667482;"></span></div>
-      <div class="menu-cards" id="menu-feats"></div>
+      <div class="uc-head menu-sec-head">機能 <span id="menu-feat-note" style="font-weight:normal;font-size:11px;color:#667482;"></span></div>
+      <div class="uc-body"><div class="menu-cards" id="menu-feats"></div></div>
     </section>
-    <section class="menu-sec">
-      <div class="menu-sec-head">📁 物件（保存単位）
+    <details class="menu-sec uc-card" data-uc="menu.proj" open>
+      <summary class="menu-sec-head">📁 物件
         <span class="menu-sec-actions">
           <button id="menu-proj-new" title="新しい物件を作成（現在読み込み中の一覧があれば取り込み可）">＋ 新規作成</button>
           <button id="menu-proj-openfile" title="ドライブ等の共有物件JSONをファイル選択で開く。以後の変更はそのファイルへ自動保存（Chrome/Edge）。複数端末で最新を共有する推奨方法" style="background:#1b7a3d;border-color:#145c2e;color:#fff;">📂 共有ファイルを開く</button>
           <button id="menu-proj-import" title="エクスポートした物件JSONファイルを取り込む（読み取り。編集の書き戻しは「出力」で手動上書き）">📥 インポート</button>
           <button id="menu-proj-restore" title="直近に削除した物件を1件だけ元に戻せます" style="display:none;">♻️ 削除を元に戻す</button>
         </span>
-      </div>
+      </summary>
+      <div class="uc-body">
       <div class="menu-proj-note">
-        <b>1物件 ＝ ひとつの工事のデータ一式</b>（戸別一覧・受付台帳・予定・積算・図面・地図）。<b>開いている間の変更は自動で保存されます</b>（保存ボタンは押さなくて大丈夫です）。<br>
-        📤 エクスポートしたJSONを別PCでインポートすると同じ状態を開けます（写真は<b>縮小サムネイル＋枚数</b>として物件に保存され、どの端末でも枚数表示・プレビュー・図面の写真欄に表示されます。原寸写真は工事フォルダ側。ハイブリッド暗号化戸別は暗号化されたまま保存されます）。
+        <b>1物件 ＝ ひとつの工事のデータ一式</b>。開いている間の変更は<b>自動で保存</b>されます。
+        <details class="uc-hint"><summary>くわしく</summary>
+          <div>1物件には戸別一覧・受付台帳・予定・積算・図面・地図が入ります。保存ボタンは押さなくて大丈夫です。<br>
+          📤 出力したJSONを別のPCで取り込むと同じ状態を開けます（写真は<b>縮小した控え＋枚数</b>として物件に入り、どの端末でも枚数表示・プレビュー・図面の写真欄に出ます。原寸の写真は工事フォルダ側です。ハイブリッド暗号化の戸別は暗号化されたまま保存されます）。</div>
+        </details>
         <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
           <div style="flex:1;min-width:250px;background:#eaf3ec;border:1px solid #bfe0c2;border-radius:6px;padding:8px 11px;line-height:1.55;">
             <b style="color:#1b5e20;">📂 共有ファイルを開く（ふだんはこちら）</b><br>
@@ -4863,15 +5250,17 @@
           </div>
         </div>
       </div>
-      <div class="menu-proj-note" style="background:#eef3f9;border:1px solid #cfdcea;border-radius:6px;padding:8px 11px;margin-bottom:8px;">
-        🕘 <b>入力したものが消えてしまったら</b> — 下の一覧のその物件の「<b>🕘 履歴</b>」を押すと、<b>約5分ごとの控え</b>から前の状態に戻せます（直近6時間はすべて残っています）。
+      <div class="menu-proj-note" style="background:#eef3f9;border:1px solid #cfdcea;border-radius:6px;padding:8px 11px;margin-bottom:8px;" title="約5分ごとの控えから戻せます。直近6時間はすべて残っています">
+        🕘 <b>入力が消えてしまったら</b> — 下の一覧の「<b>🕘 履歴</b>」から前の状態に戻せます。
       </div>
       <div id="menu-proj-list"></div>
-    </section>
-    <section class="menu-sec" id="menu-company-sec">
-      <div class="menu-sec-head">🏷 自社名・共有フォルダへの控え（この端末の設定）</div>
-      <div class="menu-proj-note">
-        <b>自社名</b>は「<b>誰が最後に保存したか</b>」の記録と、共有フォルダに置く <b>.bak</b> のファイル名に使います（他業者の控えと混ざりません）。<b>端末ごと</b>の設定です。
+      </div>
+    </details>
+    <details class="menu-sec uc-card" id="menu-company-sec" data-uc="menu.company" data-uc-def="0">
+      <summary class="menu-sec-head">🏷 自社名・控え <span class="uc-sub">この端末の設定</span></summary>
+      <div class="uc-body">
+      <div class="menu-proj-note" title="他業者の控えと混ざらないようにするための設定です">
+        <b>自社名</b>は「誰が最後に保存したか」の記録と、共有フォルダに置く <b>.bak</b> のファイル名に使います。<b>端末ごと</b>の設定です。
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0 4px;">
         <input type="text" id="menu-company-name" placeholder="例）浪岡電設" style="flex:1 1 220px;max-width:320px;font-size:13px;padding:6px 8px;border:1px solid #cdd3da;border-radius:4px;">
@@ -4888,35 +5277,43 @@
         <span id="menu-bak-stat" style="font-size:11px;color:#667482;"></span>
       </div>
       <div id="menu-lastsaved" class="menu-proj-note" style="margin-top:10px;"></div>
-    </section>
-    <section class="menu-sec" id="menu-contractor-sec">
-      <div class="menu-sec-head">🏢 施工業者（この物件で使う協力会社）</div>
+      </div>
+    </details>
+    <details class="menu-sec uc-card" id="menu-contractor-sec" data-uc="menu.contractor" data-uc-def="0">
+      <summary class="menu-sec-head">🏢 施工業者 <span class="uc-sub">この物件の協力会社</span></summary>
+      <div class="uc-body">
       <div class="menu-proj-note">
-        この物件で工事を担当する協力会社（施工業者）を <b>1行に1社ずつ</b> 入力してください。<br>
-        ここで登録した会社が、受付台帳・工事別フォルダの「施工会社」欄、工事調書、協力会社請求内訳の<b>会社別集計</b>で選べるようになります。物件を開いている間は物件に保存されます。<br>
-        💡 <b>「株式会社」「有限会社」「(株)」などの法人格は入力不要です。</b>短い名前（例：青森電気・三沢通信）で登録すると、受付台帳の選択チップや各画面の表示がすっきり見やすくなります。
+        工事を担当する協力会社を <b>1行に1社ずつ</b>。「株式会社」などの法人格は要りません。
+        <details class="uc-hint"><summary>どこで使われるか</summary>
+          <div>ここで登録した会社が、受付台帳・工事別フォルダの「施工会社」欄、工事調書、協力会社請求内訳の<b>会社別集計</b>で選べるようになります。物件を開いている間は物件に保存されます。<br>
+          💡 短い名前（例：青森電気・三沢通信）で登録すると、受付台帳の選択チップや各画面の表示がすっきり見やすくなります。</div>
+        </details>
       </div>
       <textarea id="menu-contractor-list" rows="5" placeholder="例）&#10;○○電気&#10;△△通信サービス&#10;□□アンテナ工房" style="width:100%;box-sizing:border-box;font-size:13px;padding:8px;border:1px solid #cdd3da;border-radius:4px;resize:vertical;font-family:inherit;"></textarea>
       <div style="margin-top:6px;display:flex;gap:10px;align-items:center;">
         <button id="menu-contractor-save" style="background:#1e3a5f;color:#fff;border:1px solid #16314f;padding:5px 16px;border-radius:3px;cursor:pointer;font-size:12px;">施工業者を保存</button>
         <span id="menu-contractor-stat" style="font-size:11px;color:#667482;"></span>
       </div>
-      <div class="menu-sec-head" style="margin-top:16px;">🔢 業者番号の割り当て（管理番号の左から4桁目）</div>
+      <div class="menu-sec-head" style="margin-top:16px;">🔢 業者番号（管理番号の4桁目）</div>
       <div class="menu-proj-note">
-        管理番号の<b>左から4桁目の数字（1〜4）</b>に会社を割り当てると、受付台帳で<b>施工会社を自動で判別</b>します。<br>
-        <span style="color:#9aa3ad;">例：管理番号「2622MAT001」なら4桁目は「2」→ 2番の会社が施工会社になります。空欄の番号は自動判別しません。</span>
+        管理番号の<b>左から4桁目（1〜4）</b>に会社を割り当てると、受付台帳で<b>施工会社を自動で判別</b>します。
+        <span style="color:#9aa3ad;">例：「2622MAT001」なら4桁目は「2」→ 2番の会社。空欄の番号は判別しません。</span>
       </div>
       <div id="menu-ctrdigit-rows" style="display:flex;flex-direction:column;gap:6px;margin:8px 0 4px;"></div>
       <div style="display:flex;gap:10px;align-items:center;">
         <button id="menu-ctrdigit-save" style="background:#1e3a5f;color:#fff;border:1px solid #16314f;padding:5px 16px;border-radius:3px;cursor:pointer;font-size:12px;">業者番号を保存</button>
         <span id="menu-ctrdigit-stat" style="font-size:11px;color:#667482;"></span>
       </div>
-    </section>
-    <section class="menu-sec" id="menu-fee-sec">
-      <div class="menu-sec-head">💴 諸経費（協力会社諸経費の既定額）</div>
+      </div>
+    </details>
+    <details class="menu-sec uc-card" id="menu-fee-sec" data-uc="menu.fee" data-uc-def="0">
+      <summary class="menu-sec-head">💴 諸経費 <span class="uc-sub">協力会社諸経費の既定額</span></summary>
+      <div class="uc-body">
       <div class="menu-proj-note">
-        物件を開いている間、各戸別の積算は <b>「諸経費なし」＋「協力会社諸経費＝この額」</b> を既定にします（諸経費を協力会社諸経費としてまとめて計上する運用）。<br>
-        戸別側で金額を変えるとその戸別だけ個別の額になり（個別上書き）、変えていない戸別はこの額に揃います。<b>協力会社請求内訳・一覧の金額</b>にも反映されます（全体費用詳細には協力会社諸経費は含まれません）。
+        各戸別の積算を <b>「諸経費なし」＋「協力会社諸経費＝この額」</b> ではじめます。
+        <details class="uc-hint"><summary>戸別で変えたときは</summary>
+          <div>戸別側で金額を変えると、その戸別だけ別の額になります（個別の上書き）。変えていない戸別はこの額にそろいます。<b>協力会社請求内訳・一覧の金額</b>にも反映されます（全体費用詳細には協力会社諸経費は含まれません）。</div>
+        </details>
       </div>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
         <span style="font-size:13px;color:#37474f;">1戸あたり</span>
@@ -4926,31 +5323,41 @@
         <button id="menu-proj-fee-clear" style="background:#fff;color:#7a4e1e;border:1px solid #b08a55;padding:5px 12px;border-radius:3px;cursor:pointer;font-size:12px;">未設定に戻す</button>
         <span id="menu-proj-fee-stat" style="font-size:11px;color:#667482;"></span>
       </div>
-    </section>
-    <section class="menu-sec" id="menu-rt-sec">
-      <div class="menu-sec-head">🔌 リアルタイム同期（同時編集の接続台数・編集ロック・更新通知）
+      </div>
+    </details>
+    <details class="menu-sec uc-card" id="menu-rt-sec" data-uc="menu.rt" data-uc-def="0">
+      <summary class="menu-sec-head">🔌 同期 <span class="uc-sub">同時編集の台数・ロック・通知</span>
         <span class="menu-sec-actions">
           <button id="menu-rt-config" title="この端末のFirebase接続設定（接続台数・編集ロック・更新通知）" style="background:#1565c0;border-color:#0d47a1;color:#fff;">⚙ 同期設定</button>
         </span>
-      </div>
+      </summary>
+      <div class="uc-body">
       <div class="menu-proj-note">
-        同じ共有物件を複数端末で<b>同時に開いて編集</b>するとき、<b>今の接続台数</b>を表示し、<b>同じ戸別は1台だけ編集可（他端末は閲覧のみ）</b>に制限し、誰かが保存すると<b>「最新を取り込む」通知</b>を出します。<br>
-        ※ <b>写真・顧客情報（個人情報）は送信しません</b>。送るのは端末名・編集中の管理番号・保存時刻など最小限のメタ情報のみで、データ本体は従来どおりDropbox共有ファイルに保存されます。<br>
-        ※ <b>接続設定はアプリに内蔵済み</b>です。「⚙ 同期設定」で<b>この端末の表示名</b>を決めるだけでOK（任意）。設定しなくても自動で接続します。
+        同じ物件を何台かで同時に開くとき、接続台数を出し、<b>同じ戸別は1台だけ編集可</b>にします。
+        <details class="uc-hint"><summary>送っている情報・設定</summary>
+          <div>誰かが保存すると「最新を取り込む」通知が出ます。<br>
+          ※ <b>写真・顧客情報（個人情報）は送りません</b>。送るのは端末名・編集中の管理番号・保存時刻などの最小限だけで、データ本体は今までどおりDropboxの共有ファイルに保存されます。<br>
+          ※ <b>接続の設定はアプリに入っています</b>。「⚙ 同期設定」で<b>この端末の表示名</b>を決めるだけでOK（任意）。決めなくても自動でつながります。</div>
+        </details>
       </div>
       <div id="menu-rt-stat" style="font-size:12px;color:#445;margin-top:4px;"></div>
-    </section>
-    <section class="menu-sec" id="menu-teishutsu-sec">
-      <div class="menu-sec-head">📋 提出書類チェックリスト（三沢市／設計事務所／掲示）
+      </div>
+    </details>
+    <details class="menu-sec uc-card" id="menu-teishutsu-sec" data-uc="menu.teishutsu" data-uc-def="0">
+      <summary class="menu-sec-head">📋 提出書類 <span class="uc-sub">三沢市／設計事務所／掲示</span>
         <span class="menu-sec-actions">
           <button type="button" id="tsl-edit-toggle" title="書類や提出先を追加・削除・名称変更できるようにする（書類一覧は全物件共通）">✏️ 項目を編集</button>
           <button type="button" id="tsl-print-btn" title="このチェックリストを印刷/PDF出力（下のチェックで『チェック済みのみ』に切替可）" style="background:#7a4e1e;border-color:#5e3c16;color:#fff;">🖨 印刷/PDF</button>
           <button type="button" id="tsl-reset" title="この物件のチェックと提出日をリセット" style="background:#a33;border-color:#822;color:#fff;">リセット</button>
         </span>
-      </div>
+      </summary>
+      <div class="uc-body">
       <div class="menu-proj-note">
-        各書類に <b>📝作成完了</b> と <b>📤提出済み</b> の2つのチェックがあり、☑をクリックすると<b>その日付が自動記録</b>され（あとで手修正可）、<b>物件ごとに自動保存</b>されます。各書類の<b>提出先</b>は行の<b>プルダウン</b>で切替（マウスを乗せると説明表示）。<br>
-        <b>「✏️ 項目を編集」</b>で書類・章・提出先の追加／削除／名称変更ができます（<b>書類一覧・提出先は全物件共通</b>。チェックと提出日は物件ごと）。<b>「🖨 印刷/PDF」</b>で一覧を印刷できます。
+        書類ごとに <b>📝作成完了</b> と <b>📤提出済み</b> のチェック。☑にすると日付が自動で入ります。
+        <details class="uc-hint"><summary>編集・印刷のしかた</summary>
+          <div>日付はあとで手直しできます。物件ごとに自動保存されます。各書類の<b>提出先</b>は行のプルダウンで切り替えます（マウスを乗せると説明が出ます）。<br>
+          <b>「✏️ 項目を編集」</b>で書類・章・提出先の追加／削除／名称変更ができます（<b>書類一覧・提出先は全物件共通</b>。チェックと提出日は物件ごと）。<b>「🖨 印刷/PDF」</b>で一覧を印刷できます。</div>
+        </details>
       </div>
       <div id="tsl-meta" style="display:flex;flex-wrap:wrap;gap:10px;margin:8px 0;align-items:flex-end;"></div>
       <div id="tsl-dests"></div>
@@ -4964,7 +5371,8 @@
         </label>
       </div>
       <div id="tsl-root"></div>
-    </section>
+      </div>
+    </details>
     <div class="app-ver-foot" id="app-ver-foot"></div>
   </div>
 </div>
@@ -4974,47 +5382,59 @@
 <div class="map-view" id="map-view">
   <header class="map-header">
     <h1>🗺️ 地図</h1>
-    <button type="button" id="map-lock" class="map-lock-btn locked" title="地図を開いた直後は編集できないようにしてあります（誤操作防止）。見る・探す・印刷はそのままできます。クリックすると編集できるようになります。"><span class="mlk-ico">🔒</span><span class="mlk-txt">編集ロック中</span></button>
-    <select id="map-sheet-select" class="map-sheet-select" title="シート切替"></select>
-    <button type="button" id="map-new-sheet" class="map-hbtn" title="新しいシートを作成">＋ 新規シート</button>
-    <button type="button" id="map-rename-sheet" class="map-hbtn" title="シート名を変更">✏️ 名称</button>
-    <button type="button" id="map-delete-sheet" class="map-hbtn" title="このシートを削除">🗑 削除</button>
-    <button type="button" id="map-parked-clean" class="map-hbtn" style="display:none;background:#8a6d1f;border-color:#6b5416;" title="共有ファイルの競合で自動的に控えられたシート（⚠ 競合退避）を削除します。元シートの丸ごと複製なので、物件ファイルが大きくなる原因になります。中身を確認してから削除してください。">🧹 競合退避シートを削除</button>
+    <button type="button" id="map-lock" class="map-lock-btn locked" title="地図を開いた直後は編集できないようにしてあります（誤操作防止）。見る・探す・印刷はそのままできます。クリックすると編集できるようになります。"><span class="mlk-ico">🔒</span><span class="mlk-txt">ロック中</span></button>
+    <span class="tb-div" aria-hidden="true"></span>
+    <span class="tb-grp">
+      <select id="map-sheet-select" class="map-sheet-select" title="シートを切り替える"></select>
+      <details class="uc-menu"><summary class="tb-caret" title="ときどき使うもの（シートの追加・名称変更・削除、現場用の書き出し）">▾</summary>
+        <div class="uc-menu-pop">
+          <div class="uc-menu-cap">シート</div>
+          <button type="button" id="map-new-sheet" class="map-hbtn" title="新しいシートを作る">＋ 新規シート</button>
+          <button type="button" id="map-rename-sheet" class="map-hbtn" title="シート名を変える">✏️ 名前を変える</button>
+          <button type="button" id="map-delete-sheet" class="map-hbtn" title="このシートを消す">🗑 このシートを消す</button>
+          <button type="button" id="map-parked-clean" class="map-hbtn" style="display:none;" title="共有ファイルの食い違いで自動的に控えられたシート（⚠ 競合退避）を消します。元シートの丸ごと複製なので、物件ファイルが大きくなる原因になります。中身を確かめてから消してください。">🧹 競合退避シートを消す</button>
+          <button type="button" id="map-attach" class="map-hbtn" style="display:none;" title="この端末の地図を、開いている物件に結びつけます">📎 物件に紐付け</button>
+          <div class="uc-menu-cap">書き出す</div>
+          <button type="button" id="map-export-genba" class="map-hbtn" title="この地図を現場入力アプリ用のファイル（.json）に書き出します。スマホで取り込むと、戸別の「地図」からその建物を拡大して見られます。下地（住宅地図など）も一緒に書き出すので、スマホでも背景として出ます（現場入力の「図」ボタンで消せます）。参照地図下地（なぞる用）は載せません。">📤 現場用に書き出し</button>
+        </div>
+      </details>
+    </span>
+    <span class="tb-div" aria-hidden="true"></span>
+    <span class="tb-grp">
+      <button type="button" id="map-goto-ledger" class="map-hbtn" style="background:#1e3a5f;border-color:#16314f;" title="受付台帳（戸別一覧）を開きます">📋 台帳</button>
+    </span>
     <span class="map-cur-proj" id="map-cur-proj"></span>
-    <button type="button" id="map-attach" class="map-hbtn" style="display:none;background:#1b7a3d;border-color:#145c2e;" title="この端末ローカル地図を、開いている物件に紐付けます">📎 物件に紐付け</button>
-    <button type="button" id="map-export-genba" class="map-hbtn" style="background:#00695c;border-color:#004d40;" title="この地図を現場入力アプリ用のファイル（.json）に書き出します。スマホで取り込むと、戸別の「地図」からその建物を拡大して見られます。下地（住宅地図など）も一緒に書き出すので、スマホでも背景として出ます（現場入力の「図」ボタンで消せます）。参照地図下地（トレース専用）は載せません。">📤 現場用に地図を書き出し</button>
-    <button type="button" id="map-goto-ledger" class="map-hbtn" style="background:#1e3a5f;border-color:#16314f;" title="受付台帳（戸別一覧）を開きます">📋 受付台帳</button>
-    <button type="button" id="map-close" class="map-hbtn map-close-btn" title="地図を閉じてメニューへ">✕ 閉じる</button>
+    <button type="button" id="map-close" class="map-hbtn map-close-btn" title="地図を閉じてメニューへ">✕</button>
   </header>
   <div class="map-main">
     <aside class="map-sidebar" id="map-sidebar">
-      <div class="map-side-sec">
-        <div class="map-side-head">ツール</div>
+      <details class="map-side-sec uc-card" data-uc="map.tools" open>
+        <summary class="map-side-head" title="地図に描く道具"><span class="uc-t">ツール</span></summary>
         <div class="map-tools" id="map-tools">
-          <button type="button" class="map-tool active" data-tool="pan">✋ 選択 / 移動</button>
-          <button type="button" class="map-tool" data-tool="road">🛣 道路（連続直線）</button>
-          <button type="button" class="map-tool" data-tool="boundary">📐 境界（連続直線）</button>
-          <button type="button" class="map-tool" data-tool="chome">🚩 丁目境界（一点鎖線）</button>
-          <button type="button" class="map-tool" data-tool="building">🏠 建物（多角形）</button>
+          <button type="button" class="map-tool active" data-tool="pan" title="選択 / 移動">✋ 選択</button>
+          <button type="button" class="map-tool" data-tool="road" title="道路（連続直線）">🛣 道路</button>
+          <button type="button" class="map-tool" data-tool="boundary" title="境界（連続直線）">📐 境界</button>
+          <button type="button" class="map-tool" data-tool="chome" title="丁目境界（一点鎖線）">🚩 丁目</button>
+          <button type="button" class="map-tool" data-tool="building" title="建物（多角形）">🏠 建物</button>
           <label class="map-tool-opt" title="ONの間は、建物を1つ確定しても『建物』ツールのまま続けて次の建物を描けます。OFFにすると1つ作るごとに『選択/移動』へ戻り、その建物の管理番号リンクをすぐ設定できます。"><input type="checkbox" id="map-bld-continuous" checked> 🔁 建物を続けて作成</label>
-          <button type="button" class="map-tool" data-tool="text">🅰 テキスト</button>
+          <button type="button" class="map-tool" data-tool="text" title="テキスト">🅰 文字</button>
           <div class="map-tool-txtype map-gsi-seg" id="map-txtype-seg" title="テキストを置くときの種類。選んだ種類の既定スタイル（色・大きさ）で配置されます。">
             <button type="button" data-txtype="generic" class="active">汎用</button>
             <button type="button" data-txtype="addr">住所</button>
             <button type="button" data-txtype="bldg">建物名</button>
           </div>
-          <button type="button" class="map-tool" data-tool="pin">📍 住所ピン</button>
-          <button type="button" class="map-tool" data-tool="signal">🚦 信号機</button>
-          <button type="button" class="map-tool" data-tool="paint">🖌 道路ペイント</button>
-          <button type="button" class="map-tool" data-tool="bgedit">🖼 下地調整（移動・拡縮）</button>
-          <button type="button" class="map-tool" data-tool="zenrin">🗾 参照地図下地（重ねる）</button>
-          <button type="button" class="map-tool" data-tool="vecrect">🟦 範囲指定ベクター（GSI）</button>
-          <button type="button" class="map-tool" data-tool="marquee" title="四角で範囲を囲って、その中の図形をまとめて選択します。上のバーで対象レイヤー（建物だけ／道路だけ 等）を選べ、ドラッグで一括移動、または一括削除できます（下地画像は動きません）">⬚ 範囲選択（移動・削除）</button>
+          <button type="button" class="map-tool" data-tool="pin" title="住所ピン">📍 ピン</button>
+          <button type="button" class="map-tool" data-tool="signal" title="信号機">🚦 信号</button>
+          <button type="button" class="map-tool" data-tool="paint" title="道路ペイント">🖌 ペイント</button>
+          <button type="button" class="map-tool" data-tool="bgedit" title="下地調整（移動・拡縮）">🖼 下地調整</button>
+          <button type="button" class="map-tool" data-tool="zenrin" title="参照地図下地（重ねる）">🗾 参照地図</button>
+          <button type="button" class="map-tool" data-tool="vecrect" title="範囲指定ベクター（GSI）">🟦 範囲ベクタ</button>
+          <button type="button" class="map-tool" data-tool="marquee" title="四角で範囲を囲って、その中の図形をまとめて選択します。上のバーで対象レイヤー（建物だけ／道路だけ 等）を選べ、ドラッグで一括移動、または一括削除できます（下地画像は動きません）">⬚ 範囲選択</button>
           <button type="button" class="map-tool" data-tool="delete">🗑 削除</button>
         </div>
-      </div>
-      <div class="map-side-sec map-edit-sec">
-        <div class="map-side-head">地図作成（国土地理院・無料）</div>
+      </details>
+      <details class="map-side-sec map-edit-sec uc-card" data-uc="map.gsi" data-uc-def="0">
+        <summary class="map-side-head" title="国土地理院の地図を下地として取り込む（無料）"><span class="uc-t">地図を作る</span></summary>
         <div class="map-gsi">
           <input type="text" id="map-gsi-addr" placeholder="住所（例: 青森県三沢市…）" autocomplete="off">
           <div class="map-gsi-zip-row">〒 <input type="text" id="map-gsi-zip" placeholder="0330000" inputmode="numeric" maxlength="8" autocomplete="off"><span>7桁で住所自動補完</span></div>
@@ -5030,71 +5450,71 @@
             <button type="button" data-z="17" class="active">詳細</button>
           </div>
           <button type="button" class="map-side-btn" id="map-gsi-go" style="background:#1b7a3d;border-color:#145c2e;">🗺 地図を作成</button>
-          <div class="map-side-note">住所（または郵便番号）から国土地理院の地図を下地として自動取得します。要ネット接続。出典は地図内に明記されます。中心が住所地点です。</div>
+          <details class="uc-hint"><summary>くわしく</summary><div>住所（または郵便番号）から国土地理院の地図を下地として自動取得します。要ネット接続。出典は地図内に明記されます。中心が住所地点です。</div></details>
           <div class="map-gsi-seg" id="map-vec-mode" title="ベクター化で取り込む対象を選びます（例：道路だけ国土ベクトルタイルを使い、建物は手描きしたい時は『道路のみ』）">
             <button type="button" data-vec="both" class="active">建物+道路</button>
             <button type="button" data-vec="building">建物のみ</button>
             <button type="button" data-vec="road">道路のみ</button>
           </div>
-          <div class="map-side-note">下の2つのベクター化ボタンで<b>取り込む対象</b>を選べます。「道路のみ」にすると、<b>国土地理院のベクトルタイルから道路だけ</b>を取り込みます（建物は下地を見て手描き、など）。</div>
+          <details class="uc-hint"><summary>くわしく</summary><div>下の2つのベクター化ボタンで<b>取り込む対象</b>を選べます。「道路のみ」にすると、<b>国土地理院のベクトルタイルから道路だけ</b>を取り込みます（建物は下地を見て手描き、など）。</div></details>
           <button type="button" class="map-side-btn" id="map-gsi-vec-rect" style="background:#3949ab;border-color:#283593;margin-top:4px;">🟦 範囲を囲ってベクター化</button>
-          <div class="map-side-note"><b>おすすめ。</b>押すと「範囲指定ベクター」ツールになります。地図の上を<b>ドラッグして対象ブロックを四角く囲む</b>と、その枠の中だけを編集できる建物/道路の図形にします。範囲が広すぎて失敗するときはこちらで狭く囲ってください。何度でも囲えます。</div>
+          <details class="uc-hint"><summary>くわしく</summary><div><b>おすすめ。</b>押すと「範囲指定ベクター」ツールになります。地図の上を<b>ドラッグして対象ブロックを四角く囲む</b>と、その枠の中だけを編集できる建物/道路の図形にします。範囲が広すぎて失敗するときはこちらで狭く囲ってください。何度でも囲えます。</div></details>
           <button type="button" class="map-side-btn" id="map-gsi-vec-visible" style="background:#6a1b9a;border-color:#4a148c;margin-top:4px;">🧱 表示範囲をベクター化</button>
-          <div class="map-side-note">先に標準/淡色などのGSI地図を出し、<b>縮小マップの枠（＝表示範囲）を対象ブロックに合わせて</b>からこのボタンを押すと、<b>今見えている範囲だけ</b>を編集できる建物/道路の図形にします（地図とぴったり一致）。<b>広いとうまく変換できないことがあります</b>—その場合は上の「範囲を囲ってベクター化」をお使いください。</div>
+          <details class="uc-hint"><summary>くわしく</summary><div>先に標準/淡色などのGSI地図を出し、<b>縮小マップの枠（＝表示範囲）を対象ブロックに合わせて</b>からこのボタンを押すと、<b>今見えている範囲だけ</b>を編集できる建物/道路の図形にします（地図とぴったり一致）。<b>広いとうまく変換できないことがあります</b>—その場合は上の「範囲を囲ってベクター化」をお使いください。</div></details>
         </div>
-      </div>
-      <div class="map-side-sec">
-        <div class="map-side-head">レイヤー</div>
+      </details>
+      <details class="map-side-sec uc-card" data-uc="map.layers" open>
+        <summary class="map-side-head" title="表示・色・重なりの切り替え"><span class="uc-t">レイヤー</span></summary>
         <div id="map-layers"></div>
-      </div>
-      <div class="map-side-sec">
-        <div class="map-side-head">建物の色分け</div>
+      </details>
+      <details class="map-side-sec uc-card" data-uc="map.color" data-uc-def="0">
+        <summary class="map-side-head" title="番号を付けた建物の塗り分け方"><span class="uc-t">色分け</span></summary>
         <div class="map-gsi-seg" id="map-bld-colormode" title="番号を付けた建物の塗り分け方法を切り替えます">
           <button type="button" data-cmode="link">番号色</button>
           <button type="button" data-cmode="contractor" class="active">施工会社別</button>
         </div>
         <div class="map-side-note" id="map-bld-cmode-note">番号を付けた建物を施工会社ごとの色で表示します（受付台帳の割当が無い建物は業者番号＝管理番号の左から4桁目で判定・どちらも無ければグレー／番号なしは緑）。</div>
         <label class="map-layer-extra" style="margin:6px 0 2px;display:flex;gap:5px;align-items:center;" title="管理番号をリンクしていない建物の塗りを消し、枠線だけで表示します。下地の住宅地図を隠さずに見たいときに使います。番号を付けた建物の色は変わりません。"><input type="checkbox" id="map-bld-nofill"> 番号なしの建物は背景なし（枠線だけ）</label>
-        <div class="map-side-note">下地の地図が塗りで隠れて読みにくいときに。印刷・縮小マップにも同じように効きます（この設定はこの端末だけに保存されます）。</div>
+        <details class="uc-hint"><summary>くわしく</summary><div>下地の地図が塗りで隠れて読みにくいときに。印刷・縮小マップにも同じように効きます（この設定はこの端末だけに保存されます）。</div></details>
         <label class="map-layer-extra" style="margin:6px 0 2px;display:flex;gap:5px;align-items:center;" title="番号を付けた建物に出る「番地（丁目以降の数字）」を出すかどうかを切り替えます。建物1つにつき文字がもう1つ増えるので、建物が多いシートではそのぶん地図の動きが重くなります。印刷にもそのまま反映されます。"><input type="checkbox" id="map-bld-banchi"> 番地（丁目以降の数字）を表示</label>
-        <div class="map-side-note">既定は<b>表示なし</b>です（建物1つにつき文字がもう1つ増えるぶん、地図の動きが重くなるため）。番地が要るときだけ入れてください。<b>入れれば印刷にも出ます／外せば印刷にも出ません</b>（画面の見たままが印刷されます）。この設定はこの端末だけに保存されます。</div>
+        <details class="uc-hint"><summary>くわしく</summary><div>既定は<b>表示なし</b>です（建物1つにつき文字がもう1つ増えるぶん、地図の動きが重くなるため）。番地が要るときだけ入れてください。<b>入れれば印刷にも出ます／外せば印刷にも出ません</b>（画面の見たままが印刷されます）。この設定はこの端末だけに保存されます。</div></details>
         <div id="map-ctr-legend" class="map-ctr-legend"></div>
-      </div>
-      <div class="map-side-sec">
-        <div class="map-side-head">建物に付ける印</div>
+      </details>
+      <details class="map-side-sec uc-card" data-uc="map.marks" data-uc-def="0">
+        <summary class="map-side-head" title="保留・下見完了・工事完了などの印"><span class="uc-t">印</span></summary>
         <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="受付台帳で「保留」にした戸別に付きます"><input type="checkbox" id="map-mark-hold"> <b style="color:#e65100;">保</b> 保留</label>
         <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="スマホ現場入力で「下見完了」にした戸別に付きます"><input type="checkbox" id="map-mark-surv"> <b style="color:#00838f;">下</b> 下見済み</label>
         <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="工事状態が「工事完了」の戸別に付きます"><input type="checkbox" id="map-mark-done"> <b style="color:#2e7d32;">完</b> 工事完了</label>
         <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="工事状態が「未完了」の戸別に付きます。着工前（仮受付）には付きません。数が多くなるので既定は表示なしです。"><input type="checkbox" id="map-mark-undone"> <b style="color:#1565c0;">未</b> 未完了</label>
-        <div class="map-side-note">管理番号の右肩に出ます（番号が無い建物は中心）。<b>入れれば印刷にも出ます／外せば印刷にも出ません</b>。この設定はこの端末だけに保存されます。</div>
-      </div>
-      <div class="map-side-sec map-edit-sec">
-        <div class="map-side-head">下地</div>
+        <details class="uc-hint"><summary>くわしく</summary><div>管理番号の右肩に出ます（番号が無い建物は中心）。<b>入れれば印刷にも出ます／外せば印刷にも出ません</b>。この設定はこの端末だけに保存されます。</div></details>
+      </details>
+      <details class="map-side-sec map-edit-sec uc-card" data-uc="map.bg" data-uc-def="0">
+        <summary class="map-side-head" title="住宅地図などの画像を下敷きにする"><span class="uc-t">下地</span></summary>
         <div id="map-bg-controls">
           <button type="button" class="map-side-btn" id="map-bg-load" disabled>📂 下地を読み込み</button>
           <div class="map-side-note">F1 で有効化（JPG / PNG、PDFはF7）</div>
         </div>
-      </div>
-      <div class="map-side-sec map-edit-sec">
-        <div class="map-side-head">参照地図下地（トレース専用・出力非掲載）</div>
+      </details>
+      <details class="map-side-sec map-edit-sec uc-card" data-uc="map.zenrin" data-uc-def="0">
+        <summary class="map-side-head" title="なぞる用の下敷き。印刷には出ません"><span class="uc-t">参照地図</span></summary>
         <div id="map-zenrin-controls"></div>
-      </div>
-      <div class="map-side-sec map-edit-sec">
-        <div class="map-side-head">アンテナ図 仕上げ</div>
+      </details>
+      <details class="map-side-sec map-edit-sec uc-card" data-uc="map.finish" data-uc-def="0">
+        <summary class="map-side-head" title="色凡例など、印刷に載せる飾り"><span class="uc-t">仕上げ</span></summary>
         <div class="map-gsi">
           <button type="button" class="map-side-btn" id="map-ctrlegend-add" style="background:#00695c;border-color:#004d40;">🎨 施工会社の色凡例</button>
-          <div class="map-side-note">各社の色見本を載せた枠を配置します。<b>ドラッグで移動</b>でき、<b>印刷にも掲載</b>されます。中身は施工業者マスターに自動追従します。配置後に選択するとサイズ変更・削除ができます。</div>
+          <details class="uc-hint"><summary>くわしく</summary><div>各社の色見本を載せた枠を配置します。<b>ドラッグで移動</b>でき、<b>印刷にも掲載</b>されます。中身は施工業者マスターに自動追従します。配置後に選択するとサイズ変更・削除ができます。</div></details>
         </div>
-      </div>
-      <div class="map-side-sec map-edit-sec">
-        <div class="map-side-head">道路ペイント（ラスター・任意）</div>
+      </details>
+      <details class="map-side-sec map-edit-sec uc-card" data-uc="map.paint" data-uc-def="0">
+        <summary class="map-side-head" title="道路を手で塗る（任意）"><span class="uc-t">道路ペイント</span></summary>
         <div class="map-bg-opacity-row">太さ <input type="range" id="map-brush" min="1" max="60" step="1"></div>
         <label class="map-layer-extra" style="margin:4px 0;display:flex;gap:5px;align-items:center;"><input type="checkbox" id="map-erase"> 消しゴム</label>
         <button type="button" class="map-side-btn" id="map-paint-clear" style="background:#9aa7b4;border-color:#7e8c99;">🧽 ペイントを全消去</button>
-        <div class="map-side-note">「🖌 道路ペイント」ツールでペン／マウスで手塗りできます（道路を「下地参照のみ」で使う場合の保険）。色は道路レイヤー色。※ 元に戻す（Undo）の対象外。</div>
-      </div>
-      <div class="map-side-sec">
-        <div class="map-side-head">印刷範囲</div>
+        <details class="uc-hint"><summary>くわしく</summary><div>「🖌 道路ペイント」ツールでペン／マウスで手塗りできます（道路を「下地参照のみ」で使う場合の保険）。色は道路レイヤー色。※ 元に戻す（Undo）の対象外。</div></details>
+      </details>
+      <details class="map-side-sec uc-card" data-uc="map.print" data-uc-def="0">
+        <summary class="map-side-head" title="用紙・線幅・縮尺と印刷範囲の枠"><span class="uc-t">印刷</span></summary>
         <div class="map-print-row">
           用紙
           <select id="map-print-paper" title="用紙サイズ">
@@ -5118,15 +5538,15 @@
         <label class="map-print-toggle"><input type="checkbox" id="map-print-show"> 印刷範囲を表示</label>
         <div class="map-print-scale" id="map-print-scale" style="font-size:12px;color:#1f2a36;margin:2px 0 6px;font-weight:700;">縮尺: ―</div>
         <button type="button" class="map-side-btn" id="map-print-go">🖨 印刷</button>
-        <div class="map-side-note">枠をドラッグで移動、四隅で拡大縮小（用紙比率に固定）。「🖨 印刷」で枠内だけを用紙サイズで印刷します。縮尺はGSI地図の下地から自動計算し、印刷にも表示します（原寸印刷時）。</div>
-      </div>
-      <div class="map-side-sec">
-        <div class="map-side-head">検索</div>
+        <details class="uc-hint"><summary>くわしく</summary><div>枠をドラッグで移動、四隅で拡大縮小（用紙比率に固定）。「🖨 印刷」で枠内だけを用紙サイズで印刷します。縮尺はGSI地図の下地から自動計算し、印刷にも表示します（原寸印刷時）。</div></details>
+      </details>
+      <details class="map-side-sec uc-card" data-uc="map.search" open>
+        <summary class="map-side-head" title="管理番号・氏名・住所で建物を探す"><span class="uc-t">検索</span></summary>
         <input type="text" id="map-search" placeholder="管理番号 / 氏名 / 住所" autocomplete="off"
           style="width:100%;box-sizing:border-box;font-size:12px;padding:6px;border:1px solid #cdd3da;border-radius:4px;font-family:inherit;">
         <div id="map-search-results" class="map-link-results"></div>
         <div class="map-side-note">検索結果をクリックで該当建物へジャンプ＆ハイライト</div>
-      </div>
+      </details>
     </aside>
     <div class="map-stage-wrap" id="map-stage-wrap"></div>
     <aside class="map-detail" id="map-detail"></aside>
@@ -5302,7 +5722,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.12";
+const APP_VERSION = "2026.08.17";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -5324,6 +5744,136 @@ function noteGenbaVersion(v){
 function getGenbaVersion(){
   try { const o = JSON.parse(localStorage.getItem(GENBA_VER_KEY) || "null"); return (o && o.ver) ? o : null; } catch(_){ return null; }
 }
+
+/* ============================================================
+   共通カード（.uc-card）の開閉を、この端末に覚えさせる。
+   ・物件ファイルには入れない（受付台帳の印刷列幅と同じ考え方）。
+   ・details に data-uc="一意な名前" を付けたものだけが対象。
+   ・既定は「開いた状態」。data-uc-def="0" を付けたものだけ既定で閉じる。
+   ============================================================ */
+const UC_OPEN_KEY = "antenna_ui_card_open_v1";
+let _ucOpen = (function(){
+  try{
+    const o = JSON.parse(localStorage.getItem(UC_OPEN_KEY) || "{}");
+    return (o && typeof o === "object" && !Array.isArray(o)) ? o : {};
+  }catch(_){ return {}; }
+})();
+function ucSaveOpen(){ try{ localStorage.setItem(UC_OPEN_KEY, JSON.stringify(_ucOpen)); }catch(_){} }
+
+/* こちらから open を書き換えている間は記録を止める（toggle は後から飛んでくるので
+   解除は setTimeout で1回ぶん後ろにずらす）。 */
+let _ucSuspend = 0;
+function ucQuiet(fn){
+  _ucSuspend++;
+  try{ fn(); }
+  finally{ setTimeout(function(){ if(_ucSuspend > 0) _ucSuspend--; }, 0); }
+}
+
+/* 覚えていた開閉を画面へ流し込む。あとから作ったカードには root を渡して呼び直す。 */
+function ucApplyOpen(root){
+  const scope = root || document;
+  ucQuiet(function(){
+    scope.querySelectorAll("details.uc-card[data-uc]").forEach(function(dt){
+      const k = dt.getAttribute("data-uc"); if(!k) return;
+      const v = _ucOpen[k];
+      const want = (v === 1 || v === 0) ? (v === 1) : (dt.getAttribute("data-uc-def") !== "0");
+      if(dt.open !== want) dt.open = want;
+    });
+  });
+}
+
+/* toggle は親へ伝わらないので、いちばん外側で捕まえる。
+   こうしておくと、あとから作ったカードにも自動で効く。 */
+document.addEventListener("toggle", function(e){
+  if(_ucSuspend > 0) return;
+  const dt = e.target;
+  if(!dt || dt.nodeType !== 1 || !dt.classList || !dt.classList.contains("uc-card")) return;
+  const k = dt.getAttribute("data-uc"); if(!k) return;
+  _ucOpen[k] = dt.open ? 1 : 0;
+  ucSaveOpen();
+}, true);
+
+/* 中身を必ず見せたいとき（警告など）に、そのカードを開く。 */
+function ucRevealFor(node){
+  let dt = node && node.closest ? node.closest("details.uc-card") : null;
+  while(dt){ if(!dt.open) dt.open = true; dt = dt.parentElement ? dt.parentElement.closest("details.uc-card") : null; }
+}
+
+/* 印刷のときは全部開き、終わったら元に戻す。 */
+let _ucPrintClosed = null;
+function ucExpandForPrint(){
+  if(_ucPrintClosed) return;
+  const list = [];
+  document.querySelectorAll("details.uc-card").forEach(function(dt){ if(!dt.open) list.push(dt); });
+  _ucPrintClosed = list;
+  ucQuiet(function(){ list.forEach(function(dt){ dt.open = true; }); });
+}
+function ucRestoreAfterPrint(){
+  if(!_ucPrintClosed) return;
+  const list = _ucPrintClosed; _ucPrintClosed = null;
+  ucQuiet(function(){ list.forEach(function(dt){ dt.open = false; }); });
+}
+window.addEventListener("beforeprint", ucExpandForPrint);
+window.addEventListener("afterprint",  ucRestoreAfterPrint);
+/* beforeprint が飛ばないブラウザでも効くように、window.print 自体を包んでおく。
+   ※ 地図の印刷は別ウィンドウを開く作りなので、そちらには .uc-card は無い。 */
+(function(){
+  const _origPrint = window.print.bind(window);
+  window.print = function(){
+    ucExpandForPrint();
+    try { return _origPrint(); }
+    finally { setTimeout(ucRestoreAfterPrint, 1000); }
+  };
+})();
+
+/* 画面ができた時点で、覚えていた開閉を反映する（この時点で入力パネルは読み終わっている） */
+ucApplyOpen();
+
+/* ============================================================
+   ▾ で開く小さな一覧（.uc-menu）。
+   ツールバーは横スクロールする箱なので、中に絶対配置すると端が切れてしまう。
+   開いた瞬間に位置を測って、画面基準（position:fixed）で置き直す。
+   ============================================================ */
+function ucMenuPlace(dt){
+  const pop = dt.querySelector(".uc-menu-pop"); if(!pop) return;
+  const r = dt.getBoundingClientRect();
+  pop.style.left = "0px"; pop.style.top = "0px";   // いったん戻して実寸を測る
+  const w = pop.offsetWidth, h = pop.offsetHeight;
+  let left = r.left, top = r.bottom + 4;
+  if(left + w > window.innerWidth - 6)  left = window.innerWidth - w - 6;
+  if(left < 6) left = 6;
+  if(top + h > window.innerHeight - 6)  top = Math.max(6, r.top - h - 4);
+  pop.style.left = left + "px";
+  pop.style.top  = top + "px";
+}
+function ucMenuCloseAll(except){
+  document.querySelectorAll("details.uc-menu[open]").forEach(function(o){ if(o !== except) o.open = false; });
+}
+document.addEventListener("toggle", function(e){
+  const dt = e.target;
+  if(!dt || dt.nodeType !== 1 || !dt.classList || !dt.classList.contains("uc-menu")) return;
+  if(dt.open){ ucMenuCloseAll(dt); ucMenuPlace(dt); }
+}, true);
+document.addEventListener("click", function(e){
+  // 中の項目を押したら閉じる。外を押しても閉じる。
+  const inPop = e.target.closest ? e.target.closest(".uc-menu-pop") : null;
+  if(inPop){
+    if(e.target.closest("button")) ucMenuCloseAll(null);
+    return;
+  }
+  const own = e.target.closest ? e.target.closest("details.uc-menu") : null;
+  ucMenuCloseAll(own);
+});
+document.addEventListener("keydown", function(e){ if(e.key === "Escape") ucMenuCloseAll(null); });
+
+/* 見出し（summary）の中にボタンや入力欄があるとき、それを押しただけで
+   折りたたみが開いたり閉じたりしないようにする。 */
+document.addEventListener("click", function(e){
+  const s = e.target.closest ? e.target.closest("summary") : null;
+  if(!s || e.target === s) return;
+  if(e.target.closest("button, a[href], input, select, textarea")) e.preventDefault();
+}, true);
+window.addEventListener("resize", function(){ ucMenuCloseAll(null); });
 
 // 地図復元/uid書き戻し中の抑制フラグ（mapRestoreFromSnapshot/mapCollectForExport が使用）。
 // 未初期化(undefined)混入を防ぐため、地図処理より前に必ず false で明示初期化する。
@@ -11971,6 +12521,7 @@ function applyViewOnlyMaskToForm(){
       banner.id = "photo-mask-banner";
       banner.style.cssText = "padding:4px 8px;font-size:11px;color:#b85042;font-weight:600;background:#fff4f4;border:1px solid #f0c4be;border-radius:3px;margin-bottom:4px;";
       wrap.parentNode.insertBefore(banner, wrap);
+      ucRevealFor(wrap);      // 折りたたまれていると気づけないので開く
     }
     banner.textContent = MASK;
   }
@@ -12007,6 +12558,7 @@ function showPhotoStrippedBanner(on){
     b.id = "photo-stripped-banner";
     b.style.cssText = "padding:5px 8px;font-size:11px;color:#b71c1c;font-weight:700;background:#fff4f4;border:1px solid #ef9a9a;border-radius:3px;margin-bottom:4px;line-height:1.5;";
     wrap.parentNode.insertBefore(b, wrap);
+    ucRevealFor(wrap);        // 写真が失われる警告なので必ず見えるように
   }
   b.textContent = "⚠ この戸別の写真は復元できていません（共有物件JSON由来など）。このまま上書き保存／再暗号化すると、元ファイルの写真が失われます。写真が必要な場合は元の個別ファイル(.hyb)から開き直してください。";
 }
@@ -20953,7 +21505,7 @@ function updateProjBar(){
   if(mc){
     mc.textContent = _currentProject
       ? ("現在の物件： " + _currentProject.name + (_projFileHandle ? "　📄共有ファイル連動" : "　⚠端末保存のみ") + (_projLastSaved ? "（保存 " + _projLastSaved + " ✓）" : "（変更は自動保存）") + (_projWriteWarn ? "　" + _projWriteWarn : ""))
-      : "物件を開いていません（下の「📂 共有ファイルを開く」または一覧から開く／「＋ 新規作成」。物件なしでも各機能は使えます）";
+      : "物件を開いていません";
     mc.style.color = (_currentProject && _projWriteWarn) ? "#c62828" : "";
   }
   const md = document.getElementById("menu-detach");
