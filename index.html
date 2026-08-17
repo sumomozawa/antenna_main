@@ -14012,28 +14012,46 @@ async function listSelectFolder(){
         }
       }
     }
-    // 中身が空（0KB）のファイルがあれば掃除を提案する（Androidで増える「管理番号_長い数字.json」）
+    // 読めなかったファイルの知らせ。戸別が丸ごと一覧から抜けるので、黙って飛ばさない。
+    // （スマホの保存が途中で切れると「管理番号_長い数字.json」が0KBで残る。
+    //   その管理番号のファイルが全部読めないと、その戸別は一覧に出ない＝消えたように見える）
+    let junkNote = "";
     {
-      const jf = junkClassify(stats.badFiles, rows);
+      let jf = junkClassify(stats.badFiles, rows);
+      // いちばん困るのは「読めるファイルが1つも無い管理番号」。ここは必ず知らせる。
+      if(jf.lostNos.length){
+        alert("⚠ 読み込めなかった戸別が " + jf.lostNos.length + " 件あります。\n\n"
+          + jf.lostNos.slice(0, 20).join("・") + (jf.lostNos.length > 20 ? "　ほか" : "") + "\n\n"
+          + "この管理番号のファイルは中身が空（0KB）か壊れているため、一覧に出ません。\n"
+          + "スマホの現場入力でその戸別を開き、「保存」し直してください（下書きが残っていれば中身は無事です）。");
+      }
       if(jf.empty.length && confirm("中身が空（0KB）のファイルが " + jf.empty.length + " 件見つかりました。\n"
-          + "（スマホで同じ戸別を保存し直すと増えることがあります）\n"
-          + (jf.lostNos.length
-              ? ("\nこのうち " + jf.lostNos.length + " 件の管理番号は、読めるファイルが1つもありません。\nそのぶん一覧から抜けています。\n")
-              : "")
-          + "\n中身を確かめてから掃除しますか？")){
+          + "（スマホで同じ戸別を保存し直すと増えることがあります）\n\n"
+          + "中身を確かめてから掃除しますか？")){
         const gone = await junkCleanupFlow(stats.badFiles, rows, true);
         if(gone && gone.length){
           expectedGone = expectedGone.concat(gone);   // 自分が消したぶんは「消えた」と数えない
           rows.length = 0;
           stats.errDirs = []; stats.skippedPaths = []; stats.badFiles = [];
           await scanDirRecursive(dirHandle, "", rows, stats);
+          jf = junkClassify(stats.badFiles, rows);
         }
+      }
+      const nBad = jf.empty.length + jf.broken.length;
+      if(nBad){
+        junkNote = "読めないファイル " + nBad + " 件"
+          + (jf.empty.length ? ("（空 " + jf.empty.length + " 件"
+              + (jf.broken.length ? ("・壊れ " + jf.broken.length + " 件") : "") + "）") : "")
+          + (jf.lostNos.length ? ("／読み込めなかった戸別 " + jf.lostNos.length + " 件："
+              + jf.lostNos.slice(0, 8).join("・") + (jf.lostNos.length > 8 ? " ほか" : "")) : "")
+          + "　※「🧹 空ファイルを掃除」で確認できます";
       }
     }
     // 台帳起点の行（仮受付・手入力）は保持し、管理番号重複は件ごとに確認してマージ
     _listRows = await mergeRowsWithManual(rows, { source: "folder", stats,
       root: dirHandle.name || "", expectedGone });
     _listSelectedFolderName = dirHandle.name || "";
+    if(junkNote) _missLastNote = (_missLastNote ? (_missLastNote + " ／ ") : "") + junkNote;
     renderListTable();
     missShowNote();
     // 物件へ取り込み：写真サムネイル生成→即時保存（IndexedDB＋共有ファイル連動時はファイルへも）
