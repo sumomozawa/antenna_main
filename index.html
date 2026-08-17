@@ -4323,6 +4323,22 @@
               <option value="no">使用しない</option>
             </select>
           </div>
+          <div class="field fa-sp-only">
+            <label><span data-tip="FA接続部（保安器台のところ）に分配器が入る現場で選びます。&#10;1口は今までどおり 壁→宅内分配器 へ、残りは「別系統へ」として図面に出します。&#10;※ 外部電源（2分配器使用）のときは、そこに2分配器WPが入るのでこの欄は出ません。">FA接続部の分配</span></label>
+            <select id="fa_splitter">
+              <option value="no">なし</option>
+              <option value="sp_2cw">2分配器WP SP2CW</option>
+              <option value="sp_2cdw">2分配器WP SP2CDW（全通電）</option>
+              <option value="sp_3cw">3分配器WP SP3CW</option>
+            </select>
+          </div>
+          <div class="field fa-sp-pos-only">
+            <label><span data-tip="FAの代わり＝保安器台に分配器を付ける（FA中継は図面に出ません）&#10;FAの後ろ＝増幅器アウト→FA中継→分配器→壁">分配器の位置</span></label>
+            <select id="fa_splitter_pos">
+              <option value="instead">FAの代わり</option>
+              <option value="after">FAの後ろ</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -5540,6 +5556,8 @@ function getInputs() {
     dummy_attached: $("dummy_attached") === "yes",
     meas_show: $("meas_show") === "yes",
     use_fa: $("use_fa") === "yes",
+    fa_splitter: $("fa_splitter"),
+    fa_splitter_pos: $("fa_splitter_pos"),
     cable_new_len: parseFloat($("cable_new_len"))||0,
     cable_main_len: parseFloat($("cable_main_len"))||0,
     cable_ch46_len: parseFloat($("cable_ch46_len"))||0,
@@ -5708,6 +5726,20 @@ function renderTvList(){
 /* ============================================================
    積算ロジック
    ============================================================ */
+/* FA接続部（保安器台のところ）に何が入るか。図面・積算・発注材料数量で同じ答えを使う。
+     fa  … FA中継を出すか
+     sp  … 分配器の品番（"" なら分配器なし）
+     after … 分配器を「FAの後ろ」に置く（FA中継と2段になる）
+     any … FA接続部に何かある（＝宅内への引込を fa_indoor グループで見る）
+   ※ 外部電源のときは、そこに 2分配器WP／電源部 が入るのでどちらも作らない。 */
+function faPointOf(useFa, powerPos, faSplitter, faSplitterPos){
+  const outside = powerPos === "outside";
+  const sp    = (!outside && faSplitter && faSplitter !== "no") ? faSplitter : "";
+  const after = !!(sp && faSplitterPos === "after" && useFa);
+  const fa    = !!(!outside && useFa && (!sp || after));
+  return { fa, sp, after, any: !!(fa || sp) };
+}
+
 function buildBOM(input, qtyOverridesOpt) {
   const items = [];
   const qtyOverrides = qtyOverridesOpt !== undefined ? qtyOverridesOpt : STATE.qtyOverrides;
@@ -5906,6 +5938,11 @@ function buildBOM(input, qtyOverridesOpt) {
   add(input.amplifier, 1);
 
   // CATV：FA中継 材料費・労務費は雑工事に含まれるため積算しない（系統図のみ表示）
+  // FA接続部に分配器が入る現場（1口は宅内へ、残りは別系統へ）。分配器は部材として計上する。
+  if(input.is_catv){
+    const faSpId = faPointOf(input.use_fa, input.power_pos, input.fa_splitter, input.fa_splitter_pos).sp;
+    if(faSpId) add(faSpId, 1, { note:"FA接続部 分配" });
+  }
 
   // 宅内分配器（不明の場合は部材未確定）
   if(input.indoor_split !== "unknown"){
@@ -5915,8 +5952,9 @@ function buildBOM(input, qtyOverridesOpt) {
   }
 
   // CATV+FA（FA中継→宅内分配 をグループ配線として扱う）判定。
-  // faNode は input.use_fa && input.power_pos !== "outside" の時のみ生成される（レンダ側6635行目と同値式）。
-  const isCatvFa = input.is_catv && input.use_fa && input.power_pos !== "outside";
+  // FA接続部に何か（FA中継／分配器）が入るかは、レンダ側と同じ faPointOf で決める。
+  const isCatvFa = input.is_catv
+    && faPointOf(input.use_fa, input.power_pos, input.fa_splitter, input.fa_splitter_pos).any;
 
   // 宅内新規ケーブル（壁→電源部/分配器・一次側）
   // 標準2mは計上しない（基本工事に含む）、超過分のみ追加計上。
@@ -7814,6 +7852,7 @@ function renderDiagram(input){
   // 構成: CATV分岐分配器（TV柱）→引込線→保安器→保安器台→FA→宅内
   //      引込線撤去時は、分岐分配器のアウトにダミー抵抗(DR7M)を差し込む
   let faNode = null;
+  let faSpNode = null;      // FA接続部の分配器（2/3分配器WP）
   let safetyNode = null;
   let baseNode = null;
   let cvBoxNode = null;
@@ -7896,18 +7935,52 @@ function renderDiagram(input){
       mkLabel(svg, cvBoxNode.bottom.x + 6, safetyY - 20, "引込線", "wire-label");
     }
 
-    // FA中継（外部電源時はFAを使わず2分配器WPが兼ねるので作成しない）
-    if(input.use_fa && input.power_pos !== "outside"){
-      faNode = mkNode(svg, ampX, 500, ampW, 38, "FA中継",
+    // FA接続部（保安器台のところ）。ここに分配器が入る現場があるので、
+    // 「FA中継だけ」「分配器だけ（FAの代わり）」「FA中継→分配器（FAの後ろ）」を出し分ける。
+    // 外部電源のときは、この場所に 2分配器WP／電源部 が入るのでどちらも作らない。
+    const faPt = faPointOf(input.use_fa, input.power_pos, input.fa_splitter, input.fa_splitter_pos);
+    if(faPt.fa){
+      // 分配器を後ろに置くときは2段に積むので、FAを少し上へ寄せる
+      faNode = mkNode(svg, ampX, faPt.after ? 466 : 500, ampW, 38, "FA中継",
         { id:"fa_relay", existing:false,
-          sublabel:"保安器台に取付",
+          sublabel: faPt.after ? "" : "保安器台に取付",
           nodeKey:"fa" });
-      // 保安器台 → FA（台を流用：破線）
+    }
+    if(faPt.sp){
+      const faSpP = PARTS[faPt.sp] || {};
+      faSpNode = mkNode(svg, ampX, faPt.after ? 536 : 500, ampW, 44,
+        (faSpP.diagram_label || "分配") + "\n" + (faSpP.model || ""),
+        { id: faPt.sp, existing:false,
+          // 下には「別系統へ」の線を出すので、添え字は付けない
+          // （保安器台に付くことは、台からの「台を利用」の破線で分かる）
+          inputId:"fa_splitter", editTitle:"FA接続部の分配器",
+          nodeKey:"fa_sp" });
+      // FA中継 → 分配器（FAの後ろに置くとき）
+      if(faNode){
+        mkWire(svg, [faNode.bottom, faSpNode.top], { existing: false, wireKey:"fa_to_fasp" });
+      }
+      // 余り口は別系統へ（1口は下の「壁抜け」で宅内分配器へ行く）
+      const faSpOuts = (faPt.sp === "sp_3cw") ? 3 : 2;
+      const faSpRest = faSpOuts - 1;
+      const faSpHalf = (faSpNode.right.x - faSpNode.left.x) / 2;
+      for(let i = 0; i < faSpRest; i++){
+        const bx = faSpNode.bottom.x
+          + (faSpRest === 1 ? 0 : (i === 0 ? -faSpHalf * 0.42 : faSpHalf * 0.42));
+        mkWire(svg, [
+          { x: bx, y: faSpNode.bottom.y },
+          { x: bx, y: faSpNode.bottom.y + 22 }
+        ], { existing: true, dash: true });
+        mkLabel(svg, bx - 18, faSpNode.bottom.y + 34, "別系統へ", "wire-label");
+      }
+    }
+    // 保安器台 → FA接続部（台を流用：破線）
+    const faTopNode = faNode || faSpNode;
+    if(faTopNode){
       mkWire(svg, [
         baseNode.right,
-        { x: faNode.left.x - 6, y: baseNode.right.y },
-        { x: faNode.left.x - 6, y: faNode.left.y },
-        faNode.left
+        { x: faTopNode.left.x - 6, y: baseNode.right.y },
+        { x: faTopNode.left.x - 6, y: faTopNode.left.y },
+        faTopNode.left
       ], { existing: true, dash: true });
       mkLabel(svg, baseNode.right.x + 10, baseNode.right.y - 5, "台を利用", "wire-label");
     }
@@ -8416,25 +8489,27 @@ function renderDiagram(input){
     mkLabel(svg, outPowerBox.right.x + 8, outPowerBox.right.y - 4, "S5CFB" + s5pwLen, "wire-label");
     mkLabel(svg, outPowerBox.right.x + 8, outPowerBox.right.y + 8, "電源部OUT→壁", "wire-label");
     mkLabel(svg, boundaryX + 10, outPowerBox.right.y - 4, "壁抜け", "wire-label");
-  } else if(input.is_catv && faNode){
-    // CATV+通常電源：増幅器(or衛星MX) → FA → 壁 → (電源部) → 分配器
+  } else if(input.is_catv && (faNode || faSpNode)){
+    // CATV+通常電源：増幅器(or衛星MX) → FA接続部（FA中継／分配器） → 壁 → (電源部) → 分配器
+    const faIn  = faNode || faSpNode;      // 増幅器アウトが入る側（上）
+    const faOut = faSpNode || faNode;      // 壁へ出る側（下）
     mkWire(svg, [
       postAmpOut,
-      { x: postAmpOut.x, y: faNode.top.y }
+      { x: postAmpOut.x, y: faIn.top.y }
     ], { existing: false, wireKey:"out_to_fa" });
     mkLabel(svg, postAmpOut.x + 6, postAmpOut.y + 12, "増幅器アウト" + (input.cable_amp_next_len > 0 ? " " + input.cable_amp_next_len + "m" : ""), "wire-label");
     mkWire(svg, [
-      faNode.right,
-      { x: boundaryX - 5, y: faNode.right.y }
+      faOut.right,
+      { x: boundaryX - 5, y: faOut.right.y }
     ], { existing: true, wireKey:"fa_indoor" });
     mkWire(svg, [
-      { x: boundaryX - 5, y: faNode.right.y },
+      { x: boundaryX - 5, y: faOut.right.y },
       { x: boundaryX + 5, y: indoorSpEntry.y },
       indoorSpEntry
     ], { existing: true, wireKey:"fa_indoor" });
-    mkLabel(svg, boundaryX + 10, faNode.right.y - 4, "壁抜け", "wire-label");
+    mkLabel(svg, boundaryX + 10, faOut.right.y - 4, "壁抜け", "wire-label");
     const faIndoorRed = STATE.wireOverrides && STATE.wireOverrides["fa_indoor"] === false;
-    mkLabel(svg, faNode.right.x + 8, faNode.right.y - 4, "S5CFB" + (faIndoorRed ? " 10m" : ""), "wire-label");
+    mkLabel(svg, faOut.right.x + 8, faOut.right.y - 4, "S5CFB" + (faIndoorRed ? " 10m" : ""), "wire-label");
   } else {
     // 通常：増幅器 → 壁 → (電源部) → 分配器
     mkWire(svg, [
@@ -9904,6 +9979,18 @@ function rebuild(){
   document.querySelectorAll(".power-outside-only").forEach(el => {
     el.style.display = STATE.input.power_pos === "outside" ? "" : "none";
   });
+  // FA接続部の分配器：外部電源時はそこに2分配器WP/電源部が入るので出さない。
+  // 位置（FAの代わり/後ろ）は、分配器を選んでいてFA中継も使うときだけ意味がある。
+  {
+    const faSpOn = STATE.input.fa_splitter && STATE.input.fa_splitter !== "no";
+    const outside = STATE.input.power_pos === "outside";
+    document.querySelectorAll(".fa-sp-only").forEach(el => {
+      el.style.display = outside ? "none" : "";
+    });
+    document.querySelectorAll(".fa-sp-pos-only").forEach(el => {
+      el.style.display = (!outside && faSpOn && STATE.input.use_fa) ? "" : "none";
+    });
+  }
   // 「TV背面」のときだけ、どの部屋のTV背面に置くかを部屋ごとに選べるようにする
   document.querySelectorAll(".tv-pw-label").forEach(el => {
     el.style.display = STATE.input.power_pos === "tv_back" ? "" : "none";
@@ -10586,6 +10673,7 @@ const PRESETS = {
     tv_count:"4", cable_new_len:"0", cable_indoor_new:"2",
     cable_main_len:"5", cable_ch46_len:"5", cable_ch50_len:"5", cable_amp_next_len:"10",
     remove_safety:"yes", remove_drop:"yes", dummy_attached:"yes", use_fa:"yes",
+    fa_splitter:"no", fa_splitter_pos:"instead",
     high_work:"yes", snow_guard:"no", indoor_adj:"yes",
     cable_vvf_len:"5", cable_s5cfb_power:"5", cable_drop_len:"20",
     att_main:"no", att_46:"no", att_50:"no",
@@ -10606,6 +10694,7 @@ const PRESETS = {
     tv_count:"4", cable_new_len:"0", cable_indoor_new:"0",
     cable_main_len:"5", cable_ch46_len:"5", cable_ch50_len:"5", cable_amp_next_len:"10",
     remove_safety:"yes", remove_drop:"yes", dummy_attached:"yes", use_fa:"yes",
+    fa_splitter:"no", fa_splitter_pos:"instead",
     high_work:"no", snow_guard:"no", indoor_adj:"yes",
     cable_vvf_len:"5", cable_s5cfb_power:"5", cable_drop_len:"15",
     att_main:"no", att_46:"no", att_50:"no",
@@ -10628,6 +10717,7 @@ const PRESETS = {
     tv_count:"4", cable_new_len:"0", cable_indoor_new:"15",
     cable_main_len:"5", cable_ch46_len:"5", cable_ch50_len:"5", cable_amp_next_len:"10",
     remove_safety:"no", remove_drop:"no", dummy_attached:"yes", use_fa:"no",
+    fa_splitter:"no", fa_splitter_pos:"instead",
     high_work:"no", snow_guard:"no", indoor_adj:"yes",
     cable_vvf_len:"5", cable_s5cfb_power:"5", cable_drop_len:"15",
     att_main:"no", att_46:"no", att_50:"no",
@@ -10648,6 +10738,7 @@ const PRESETS = {
     tv_count:"4", cable_new_len:"0", cable_indoor_new:"0",
     cable_main_len:"5", cable_ch46_len:"5", cable_ch50_len:"5", cable_amp_next_len:"10",
     remove_safety:"no", remove_drop:"no", dummy_attached:"yes", use_fa:"no",
+    fa_splitter:"no", fa_splitter_pos:"instead",
     high_work:"yes", snow_guard:"no", indoor_adj:"yes",
     cable_vvf_len:"5", cable_s5cfb_power:"5", cable_drop_len:"15",
     att_main:"no", att_46:"no", att_50:"no",
@@ -11451,7 +11542,8 @@ function collectState(){
     "mast","mast_2","mast_3","connector_type","connector_qty","turnbuckle_qty",
     "amplifier","line_booster","hpf","outer_splitter","indoor_split",
     "split_all_pass","power_pos","indoor_wire","outer_wire","tv_count",
-    "remove_safety","remove_drop","cable_drop_len","dummy_attached","use_fa","meas_show",
+    "remove_safety","remove_drop","cable_drop_len","dummy_attached","use_fa",
+    "fa_splitter","fa_splitter_pos","meas_show",
     "cable_new_len","cable_main_len","cable_ch46_len","cable_ch50_len","cable_amp_next_len",
     "cable_indoor_new","cable_vvf_len","cable_s5cfb_power","ext_power_conn",
     "att_main","att_46","att_50","box_consent","ofmu_qty","wire_sus16_len",
@@ -13083,6 +13175,8 @@ function convertSavedToInput(d){
     dummy_attached: d.dummy_attached === "yes",
     meas_show: d.meas_show === "yes",
     use_fa: d.use_fa === "yes",
+    fa_splitter: d.fa_splitter || "no",
+    fa_splitter_pos: d.fa_splitter_pos || "instead",
     cable_new_len: pf(d.cable_new_len),
     cable_main_len: pf(d.cable_main_len),
     cable_ch46_len: pf(d.cable_ch46_len),
@@ -22875,7 +22969,8 @@ function matExtraCable5c(row){
     push("屋外その他", num(d.cable_new_len));      // 旧項目（通常0）
   }
   // ② 宅内新規の標準2mぶん（超過分は積算に載っている）
-  const isCatvFa = (d.is_catv === "yes") && (d.use_fa === "yes") && (d.power_pos !== "outside");
+  const isCatvFa = (d.is_catv === "yes")
+    && faPointOf(d.use_fa === "yes", d.power_pos, d.fa_splitter, d.fa_splitter_pos).any;
   if(!isCatvFa && !forcedExisting("wall_to_sp")){
     push("宅内新規の標準2m", Math.min(num(d.cable_indoor_new), 2));
   }
@@ -23957,6 +24052,7 @@ const GENBA_AUTHORITATIVE_FIELDS = [
   "amplifier","line_booster","hpf","outer_splitter","indoor_split","split_all_pass",
   "power_pos","indoor_wire","outer_wire","tv_count",
   "remove_safety","remove_drop","cable_drop_len","dummy_attached","use_fa",
+  "fa_splitter","fa_splitter_pos",
   "cable_new_len","cable_main_len","cable_ch46_len","cable_ch50_len","cable_amp_next_len",
   "cable_indoor_new","cable_vvf_len","cable_s5cfb_power","ext_power_conn",
   "att_main","att_46","att_50","box_consent","ofmu_qty","wire_sus16_len",
@@ -24153,7 +24249,7 @@ const GENBA_TECH_LABELS = {
   mast:"マスト",mast_2:"マスト2",mast_3:"マスト3",connector_type:"接続金具",connector_qty:"接続金具数",turnbuckle_qty:"ターンバックル",
   amplifier:"増幅器",line_booster:"ラインブースター",hpf:"HPF",outer_splitter:"屋外分配",indoor_split:"宅内分配",split_all_pass:"全端子通電",
   power_pos:"電源位置",indoor_wire:"宅内配線",outer_wire:"屋外配線",tv_count:"TV台数",
-  remove_safety:"保安器撤去",remove_drop:"引込撤去",cable_drop_len:"引込長",dummy_attached:"ダミー",use_fa:"FA",
+  remove_safety:"保安器撤去",remove_drop:"引込撤去",cable_drop_len:"引込長",dummy_attached:"ダミー",use_fa:"FA",fa_splitter:"FA接続部の分配",fa_splitter_pos:"分配器の位置",
   att_main:"減衰(主)",att_46:"減衰(46)",att_50:"減衰(50)",box_consent:"BOXコンセント",ofmu_qty:"OFMU数",wire_sus16_len:"SUS16長",ext_power_conn:"外部電源"
 };
 
