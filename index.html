@@ -2953,6 +2953,11 @@
   .proj-ind { font-size: 11px; color: #ffd54f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
   @media print { .menu-view { display: none !important; } }
 
+  /* 同じ管理番号が2件以上あるときの印。積算・材料・費用が二重に数えられるので目立たせる */
+  .lg-dup-badge{display:inline-block;margin-left:4px;padding:0 5px;border-radius:8px;background:#c62828;color:#fff;
+    font-size:10px;font-weight:700;vertical-align:middle;}
+  .mat-dup-warn{margin:0 0 10px;padding:8px 10px;border:1px solid #f5c6cb;background:#fdf3f4;border-radius:5px;
+    font-size:12px;color:#8e0000;line-height:1.7;}
   /* --- 受付台帳 --- */
   .ledger-controls {
     display: flex; align-items: stretch; gap: 6px 10px; flex-wrap: wrap;
@@ -13529,6 +13534,16 @@ function dupWhen(ms){
 }
 /* 同じフォルダの中で、中の管理番号が同じファイルが2つ以上ある組を探す。
    別フォルダに同じ管理番号がある場合は「別の工事」の可能性があるので触らない。 */
+/* 管理番号ごとの読み込み件数。2件以上＝同じ戸別のファイルが重なっている。
+   気づかないまま積算・発注材料数量・費用が二重に数えられるので、一覧と集計に印を出す。 */
+function lgDupCounts(rows){
+  const n = {};
+  ((rows && rows.length) ? rows : (_listRows || [])).forEach(r => {
+    const k = ((r && r.data && r.data.chosho_mgmt_no) || "").trim();
+    if(k) n[k] = (n[k] || 0) + 1;
+  });
+  return n;
+}
 function dupFindGroups(rows){
   const by = new Map();
   (rows || []).forEach(r => {
@@ -21559,6 +21574,7 @@ function renderListLedgerMode(rows, container){
     if(_ledgerOnlyHold && !getLedger(subCaseKey(r)).hold) return false;
     return true;
   });
+  const dupN = lgDupCounts(rows);   // 同じ管理番号が重なっている戸別に印を出すため
   let done = 0, flyered = 0, prov = 0, held = 0;
   rows.forEach(r => {
     if(r.data && r.data.chosho_status === "completed") done++;
@@ -21671,6 +21687,10 @@ function renderListLedgerMode(rows, container){
     const mapReg = isMapRegistered(d.chosho_mgmt_no);
     html += '<td>' + tCell("mgmt", d.chosho_mgmt_no)
       + (isProv ? '<span class="lg-prov-badge">仮</span>' : '')
+      + ((dupN[(d.chosho_mgmt_no || "").trim()] > 1)
+          ? ('<span class="lg-dup-badge" title="同じ管理番号のファイルが '
+             + dupN[(d.chosho_mgmt_no || "").trim()] + ' 件あります。このままだと積算・発注材料数量・費用が'
+             + '二重に数えられます。「🧩 重複」でどれを残すか選んでください。">重複</span>') : '')
       + (lg.hold ? '<span class="lg-hold-badge" title="保留（地図でも管理番号の右肩に「保」マークが付きます）">保</span>' : '')
       + (r._detached ? '<span class="lg-nofile-badge' + (r._detached.reason === "pending" ? ' pending' : '')
           + '" title="' + (r._detached.reason === "pending" ? "ファイルが見当たりません（次に読み込んだ時にまた確認します）" : "戸別ファイルが無い行です（名前だけ残しています）。ファイルが戻れば自動で元に戻ります")
@@ -22729,7 +22749,9 @@ function builtYearAsbestosLabel(y){
 /* 管理番号の左から4桁目（施工業者の番号 1〜4） */
 function mgmtContractorDigit(s){ const t = String(s == null ? "" : s).trim(); return (t.length >= 4) ? t.charAt(3) : ""; }
 /* 数字だけ抜いた末尾3桁（地図の建物表示と同じ規則） */
-function mgmtLast3Digits(s){ const d = String(s == null ? "" : s).replace(/[^0-9]/g, ""); return d.slice(-3); }
+/* 管理番号の下三桁（数字だけ拾って末尾3桁）。全角の数字で保存されたファイルでも
+   突き合わせが効くように、拾う前に半角へ直す。 */
+function mgmtLast3Digits(s){ const d = toHalfWidthAn(s).replace(/[^0-9]/g, ""); return d.slice(-3); }
 
 /* =========================================================================
    受付台帳ソフトが書き出した Excel を読む
@@ -23386,7 +23408,19 @@ function renderListMaterialsMode(rows, container){
   });
   const fmtQty = q => (Math.abs(q - Math.round(q)) < 1e-6) ? String(Math.round(q)) : q.toFixed(1);
 
+  // 同じ管理番号が重なっていると、その戸別の材料が数のぶんだけ足されてしまう
+  const matDup = (() => {
+    const n = lgDupCounts(target), out = [];
+    Object.keys(n).forEach(k => { if(n[k] > 1) out.push(k + "（" + n[k] + "件）"); });
+    return out;
+  })();
   let html = renderSelectedFolderBanner();
+  if(matDup.length){
+    html += '<div class="mat-dup-warn">⚠ <b>同じ管理番号が ' + matDup.length + ' 組あります。'
+      + 'その戸別の材料を、ファイルの数だけ二重に数えています。</b><br>'
+      + escapeHtml(matDup.slice(0, 10).join("・")) + (matDup.length > 10 ? " ほか" : "") + "<br>"
+      + '上の「🧩 重複」でどれを残すか選ぶと、正しい数量になります。</div>';
+  }
   html += '<div class="cost-detail-section"><h3>🧰 発注材料数量'
     + ' <span style="font-size:11px;color:#555;font-weight:normal;">('
     + (_matOnlyDone ? "下見完了の戸別のみ" : "読み込んだ全戸別") + "・" + counted + " 件ぶん・金額なし)</span></h3>";
