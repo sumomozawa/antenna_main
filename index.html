@@ -91,7 +91,7 @@
     display: flex; flex-direction: column; gap: 2px;
   }
   .uc-menu:not([open]) .uc-menu-pop { display: none; }
-  .uc-menu-pop button {
+  .uc-menu-pop.uc-menu-pop button {
     display: flex; align-items: center; gap: 6px;
     width: 100%; box-sizing: border-box; min-height: 34px;
     padding: 6px 10px;
@@ -99,16 +99,23 @@
     font-family: inherit; font-size: 12.5px; font-weight: 600; line-height: 1.3;
     text-align: left; white-space: nowrap; cursor: pointer;
   }
-  .uc-menu-pop button:hover { background: var(--uc-brand-weak); }
+  .uc-menu-pop.uc-menu-pop button:hover { background: var(--uc-brand-weak); }
+  /* 一覧が長くなるときの小見出し */
+  .uc-menu-cap {
+    padding: 6px 10px 2px; font-size: 10px; font-weight: 700; letter-spacing: .04em;
+    color: var(--uc-ink-3); white-space: nowrap;
+  }
+  .uc-menu-cap + button { margin-top: 0; }
+  .uc-menu-pop .uc-menu-cap ~ .uc-menu-cap { border-top: 1px solid var(--uc-border-weak); margin-top: 4px; padding-top: 7px; }
   /* ▾ の一覧に入れたボタンは、元の派手な地色ではなく白地にそろえる */
-  .uc-menu-pop button.map-hbtn { background: #fff; color: var(--uc-ink); border: none; }
-  .uc-menu-pop button.map-hbtn:hover { background: var(--uc-brand-weak); }
-  .uc-menu-pop button:disabled { opacity: .45; cursor: not-allowed; }
-  .uc-menu-pop button small {
+  .uc-menu-pop.uc-menu-pop button.map-hbtn { background: #fff; color: var(--uc-ink); border: none; }
+  .uc-menu-pop.uc-menu-pop button.map-hbtn:hover { background: var(--uc-brand-weak); }
+  .uc-menu-pop.uc-menu-pop button:disabled { opacity: .45; cursor: not-allowed; }
+  .uc-menu-pop.uc-menu-pop button small {
     margin-left: auto; padding: 0 6px; border-radius: 999px;
     background: #e8f5e9; color: #1b5e20; font-size: 10px; font-weight: 700;
   }
-  body.mobile-layout .uc-menu-pop button { min-height: 44px; font-size: 14px; }
+  body.mobile-layout .uc-menu-pop.uc-menu-pop button { min-height: 44px; font-size: 14px; }
 
   main {
     flex: 1;
@@ -3993,25 +4000,10 @@
       <span class="tb-div" aria-hidden="true"></span>
       <!-- ファイル -->
       <span class="tb-grp">
-        <button id="btn-reset" title="入力をすべて消して、新しい戸別をはじめる">✚ 新規</button>
-        <span class="tb-split">
-          <button id="btn-load" title="保存したファイル（.json）を読み込む">📂 読込</button>
-          <details class="uc-menu"><summary class="tb-caret" title="ほかの読み込み方">▾</summary>
-            <div class="uc-menu-pop">
-              <button id="btn-load-enc" title="暗号化ファイル(.enc/.hyb)をパスワードで復号して読込">🔓 復号読込</button>
-            </div>
-          </details>
-        </span>
-        <span class="tb-split">
-          <button id="btn-save" title="この戸別をファイル（.json）として保存する">💾 保存</button>
-          <details class="uc-menu"><summary class="tb-caret" title="暗号化して保存">▾</summary>
-            <div class="uc-menu-pop">
-              <button id="btn-save-hyb" title="氏名・電話・住所・写真を暗号化。管理番号/進捗/工事内容は一覧可 (方式C・推奨)">🔑 ハイブリッド保存<small>推奨</small></button>
-              <button id="btn-save-enc" title="AES-GCM-256 でファイル全体を暗号化 (方式A・全暗号化)">🔐 全暗号化保存</button>
-            </div>
-          </details>
-        </span>
-        <button id="btn-save-overwrite" title="📁フォルダ選択 から読み込んだ戸別を、元のファイルへ同じ形式で上書き保存" disabled>⤓ 上書き</button>
+        <button id="btn-reset" title="入力をすべて消して、新しい戸別をはじめる">＋ 新規</button>
+        <button id="btn-load" title="保存したファイル（.json）を読み込む">📂 読込</button>
+        <button id="btn-save" title="この戸別をファイル（.json）として保存する">💾 保存</button>
+        <button id="btn-save-overwrite" title="📁フォルダ選択 から読み込んだ戸別を、元のファイルへ同じ形式で上書き保存" disabled>💾 上書き</button>
       </span>
       <span class="tb-div" aria-hidden="true"></span>
       <!-- 出力 -->
@@ -4032,10 +4024,15 @@
       <span id="rt-ind-app" class="rt-ind" style="display:none;" title="リアルタイム同期"></span>
       <span id="rt-locks-app" class="rt-locks" style="display:none;"></span>
       <!-- その他 -->
-      <details class="uc-menu tb-more"><summary class="tb-caret" title="そのほか">⋯</summary>
+      <details class="uc-menu tb-more"><summary class="tb-caret" title="ときどき使うもの（暗号化・単価マスターなど）">⋯</summary>
         <div class="uc-menu-pop">
+          <div class="uc-menu-cap">暗号化（ふつうは使いません）</div>
+          <button id="btn-save-hyb" title="氏名・電話・住所・写真を暗号化して保存。管理番号・進捗・工事内容は一覧で見えます（方式C・推奨）">🔑 ハイブリッド保存<small>推奨</small></button>
+          <button id="btn-save-enc" title="AES-GCM-256 でファイル全体を暗号化して保存（方式A・全暗号化）">🔐 全暗号化保存</button>
+          <button id="btn-load-enc" title="暗号化ファイル(.enc/.hyb)をパスワードで開く">🔓 復号して読込</button>
+          <div class="uc-menu-cap">設定</div>
+          <button id="btn-parts-edit" title="部材マスター（単価）を編集・保存・読込">🔧 単価マスター</button>
           <button id="btn-mobile-toggle" title="スマホ縦画面レイアウトに切替">📱 縦画面</button>
-          <button id="btn-parts-edit" title="部材マスター(単価)を編集・保存・読込">🔧 単価マスター</button>
           <button id="btn-about" type="button" title="このアプリについて（著作権表示）">ⓘ このアプリについて</button>
         </div>
       </details>
@@ -4874,24 +4871,21 @@
         <button id="btn-genba-import" title="スマホ現場入力が書き出した「管理番号.json」を、開いている物件の同じ管理番号の戸別へ取り込みます。顧客情報は台帳を優先し、アンテナ・部材・測定・写真・配線は現場を採用。料金・石綿・図面レイアウトはPCを保持。取込前に中身を確かめられます。" style="background:#1565c0;">📥 現場取込</button>
       </span>
       <span class="tb-div" aria-hidden="true"></span>
-      <!-- ファイルを整える -->
-      <span class="tb-grp">
-        <details class="uc-menu"><summary class="tb-caret tb-lbl" title="重なったファイル・空のファイルを整える">🧹 整理</summary>
-          <div class="uc-menu-pop">
-            <button id="btn-list-dup" title="同じ管理番号のファイルが重なっているところ（iPad/iPhoneで保存すると増える「◯◯ 2.json」など）を探し、残す方を選んで「管理番号.json」にまとめます。フォルダを読み込んだ後に使えます。">🧩 重複をまとめる</button>
-            <button id="btn-list-junk" title="中身が空（0KB）のファイルを探して消します。スマホで同じ戸別を保存し直すと「管理番号_長い数字.json」という別ファイルが増え、そのうち空のものは読めないため戸別が一覧から抜けます。消す前に一覧で確かめられます。中身のある壊れたファイルは消しません。">🗑 空ファイルを消す</button>
-          </div>
-        </details>
-        <details class="uc-menu"><summary class="tb-caret tb-lbl" title="暗号化されたファイルをまとめて扱う">🔐 暗号</summary>
-          <div class="uc-menu-pop">
-            <button id="btn-list-unlock" title="ハイブリッド(.hyb)は氏名・電話・住所・写真を、全暗号化(.enc)は本体をまとめて復号">🔓 まとめて復号</button>
-            <button id="btn-list-bulk-reenc" title="選んだ複数のファイルを、別のパスワード／別の方式にまとめて変えて上書き保存">🔄 まとめて再暗号化</button>
-            <button id="btn-list-bulk-plain" title="暗号化ファイル(.hyb/.enc)をまとめて復号し、暗号化なし(.json)で保存し直す（個人情報が平文になります）">📄 まとめて平文に</button>
-            <button id="btn-list-clear-pw" title="覚えているパスワードを消す">🗝 パスワードを忘れる</button>
-          </div>
-        </details>
-        <button id="btn-list-bulk-photos" title="この物件（一覧）の全戸別の写真を、選んだフォルダの中に「管理番号」フォルダを作って、画質を落とさずまとめて書き出します。スマホ現場入力で撮った写真の取り出しに使います。" style="background:#00695c;">📸 写真</button>
-      </span>
+      <!-- 物件のはじめ／終わりにだけ使うもの -->
+      <details class="uc-menu"><summary class="tb-caret tb-lbl" title="ときどき使うもの（ファイルの整理・暗号化・写真のまとめ書き出し）">⋯ まとめて</summary>
+        <div class="uc-menu-pop">
+          <div class="uc-menu-cap">ファイルを整える</div>
+          <button id="btn-list-dup" title="同じ管理番号のファイルが重なっているところ（iPad/iPhoneで保存すると増える「◯◯ 2.json」など）を探し、残す方を選んで「管理番号.json」にまとめます。フォルダを読み込んだ後に使えます。">🧩 重複をまとめる</button>
+          <button id="btn-list-junk" title="中身が空（0KB）のファイルを探して消します。スマホで同じ戸別を保存し直すと「管理番号_長い数字.json」という別ファイルが増え、そのうち空のものは読めないため戸別が一覧から抜けます。消す前に一覧で確かめられます。中身のある壊れたファイルは消しません。">🗑 空ファイルを消す</button>
+          <div class="uc-menu-cap">まとめて書き出す</div>
+          <button id="btn-list-bulk-photos" title="この物件（一覧）の全戸別の写真を、選んだフォルダの中に「管理番号」フォルダを作って、画質を落とさずまとめて書き出します。スマホ現場入力で撮った写真の取り出しに使います。">📸 写真をまとめて書き出し</button>
+          <div class="uc-menu-cap">暗号化（ふつうは使いません）</div>
+          <button id="btn-list-unlock" title="ハイブリッド(.hyb)は氏名・電話・住所・写真を、全暗号化(.enc)は本体をまとめて復号">🔓 まとめて復号</button>
+          <button id="btn-list-bulk-reenc" title="選んだ複数のファイルを、別のパスワード／別の方式にまとめて変えて上書き保存">🔄 まとめて再暗号化</button>
+          <button id="btn-list-bulk-plain" title="暗号化ファイル(.hyb/.enc)をまとめて復号し、暗号化なし(.json)で保存し直す（個人情報が平文になります）">📄 まとめて平文に</button>
+          <button id="btn-list-clear-pw" title="覚えているパスワードを消す">🗝 パスワードを忘れる</button>
+        </div>
+      </details>
       <span class="tb-div" aria-hidden="true"></span>
       <!-- 状態表示 -->
       <span id="proj-ind-list" class="proj-ind" title="現在開いている物件"></span>
@@ -5392,19 +5386,21 @@
     <span class="tb-div" aria-hidden="true"></span>
     <span class="tb-grp">
       <select id="map-sheet-select" class="map-sheet-select" title="シートを切り替える"></select>
-      <details class="uc-menu"><summary class="tb-caret" title="シートの追加・名称変更・削除">▾</summary>
+      <details class="uc-menu"><summary class="tb-caret" title="ときどき使うもの（シートの追加・名称変更・削除、現場用の書き出し）">▾</summary>
         <div class="uc-menu-pop">
+          <div class="uc-menu-cap">シート</div>
           <button type="button" id="map-new-sheet" class="map-hbtn" title="新しいシートを作る">＋ 新規シート</button>
           <button type="button" id="map-rename-sheet" class="map-hbtn" title="シート名を変える">✏️ 名前を変える</button>
           <button type="button" id="map-delete-sheet" class="map-hbtn" title="このシートを消す">🗑 このシートを消す</button>
           <button type="button" id="map-parked-clean" class="map-hbtn" style="display:none;" title="共有ファイルの食い違いで自動的に控えられたシート（⚠ 競合退避）を消します。元シートの丸ごと複製なので、物件ファイルが大きくなる原因になります。中身を確かめてから消してください。">🧹 競合退避シートを消す</button>
           <button type="button" id="map-attach" class="map-hbtn" style="display:none;" title="この端末の地図を、開いている物件に結びつけます">📎 物件に紐付け</button>
+          <div class="uc-menu-cap">書き出す</div>
+          <button type="button" id="map-export-genba" class="map-hbtn" title="この地図を現場入力アプリ用のファイル（.json）に書き出します。スマホで取り込むと、戸別の「地図」からその建物を拡大して見られます。下地（住宅地図など）も一緒に書き出すので、スマホでも背景として出ます（現場入力の「図」ボタンで消せます）。参照地図下地（なぞる用）は載せません。">📤 現場用に書き出し</button>
         </div>
       </details>
     </span>
     <span class="tb-div" aria-hidden="true"></span>
     <span class="tb-grp">
-      <button type="button" id="map-export-genba" class="map-hbtn" style="background:#00695c;border-color:#004d40;" title="この地図を現場入力アプリ用のファイル（.json）に書き出します。スマホで取り込むと、戸別の「地図」からその建物を拡大して見られます。下地（住宅地図など）も一緒に書き出すので、スマホでも背景として出ます（現場入力の「図」ボタンで消せます）。参照地図下地（なぞる用）は載せません。">📤 現場へ</button>
       <button type="button" id="map-goto-ledger" class="map-hbtn" style="background:#1e3a5f;border-color:#16314f;" title="受付台帳（戸別一覧）を開きます">📋 台帳</button>
     </span>
     <span class="map-cur-proj" id="map-cur-proj"></span>
