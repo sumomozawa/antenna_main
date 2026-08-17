@@ -202,9 +202,10 @@ const PROJ_SCHEMA = "antenna_project_v1";          // メインの物件ファ�
 const FS_OK = !!(window.showOpenFilePicker && window.showSaveFilePicker);
 
 const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c]));
-/* 住所・電話の全角数字とハイフン類は半角へ（長音符「ー」は語を壊すので触らない）。メインと同じ規則。 */
-const toHalfWidthNum = s => String(s == null ? "" : s)
-  .replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+/* 全角の英数字とハイフン類は半角へ（長音符「ー」は語を壊すので触らない）。メインと同じ規則。
+   受付台帳は英数字を半角にそろえる（検索・並び替え・下三桁の突き合わせ・印刷幅のため）。 */
+const toHalfWidthAn = s => String(s == null ? "" : s)
+  .replace(/[Ａ-Ｚａ-ｚ０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
   .replace(/[－−‐‑]/g, "-");
 const newId = () => "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 const el = id => document.getElementById(id);
@@ -432,7 +433,8 @@ function canEdit(row, f){
    清書の自動昇格をしない＝黙って状態が変わらない。状態はファイルの値を別に入れる。 */
 function writeField(row, f, v, opts){
   const key = FIELD_MAP[f] || f;
-  if(f === "addr" || f === "tel") v = toHalfWidthNum(v);
+  // 管理番号・名前・住所・電話の英数字は半角へ統一（メインと同じ規則）
+  if(f === "mgmt" || f === "name" || f === "addr" || f === "tel") v = toHalfWidthAn(v);
   const oldKey = subKeyOf(row.d.chosho_mgmt_no, row.file);
   row.d = Object.assign({}, row.d); row.d[key] = v;
   // payload にも同じ値を入れる（一部暗号化の行は plain 側へ）
@@ -617,7 +619,7 @@ function render(){
     + '<th data-col="flyer" data-sort="flyer" style="width:42px;" title="ビラ配布済み">ビラ ' + arrow("flyer") + "</th>"
     + '<th data-col="done"  data-sort="done"  style="width:42px;" title="工事完了">完了 ' + arrow("done") + "</th>"
     + '<th data-col="hold"  data-sort="hold"  style="width:42px;" title="保留（着工を止めている戸別）">保留 ' + arrow("hold") + "</th>"
-    + '<th data-col="consent" style="width:42px;" title="住民からの承諾書 受領済み">承諾書</th>'
+    + '<th data-col="consent" style="width:42px;" title="住民からの同意書 受領済み">同意書</th>'
     + '<th data-col="compdoc" style="width:42px;" title="完了書 受領／提出済み">完了書</th>'
     + '<th data-col="note">備考</th>'
     + '<th data-col="del" style="width:38px;"></th>'
@@ -663,7 +665,7 @@ function render(){
         + '<select data-f="ctr">' + ctrOpts + "</select>"
         + '<span class="ctr-print">' + esc(ctr.name) + "</span></td>"
       + '<td data-col="addr">' + cell("addr", r.d.chosho_cust_addr)
-        + '<span class="addr-print">' + esc(toHalfWidthNum(r.d.chosho_cust_addr || "")) + "</span></td>"
+        + '<span class="addr-print">' + esc(toHalfWidthAn(r.d.chosho_cust_addr || "")) + "</span></td>"
       + '<td data-col="tel">' + cell("tel", r.d.chosho_cust_tel) + "</td>"
       + '<td class="c" data-col="date">' + (canEdit(r, "date")
           ? '<input type="date" data-f="date" value="' + esc(r.d.chosho_date || "") + '">'
@@ -789,7 +791,7 @@ el("wrap").addEventListener("change", e => {
 el("wrap").addEventListener("input", e => {
   const node = e.target.closest('[data-f="note"]'); if(!node) return;
   const r = rowOf(node); if(!r) return;
-  setLg(subKeyOf(r.d.chosho_mgmt_no, r.file), { note: node.value });
+  setLg(subKeyOf(r.d.chosho_mgmt_no, r.file), { note: toHalfWidthAn(node.value) });
 });
 
 /* =========================================================================
@@ -848,7 +850,7 @@ const XL_COLS = [
   { key:"flyer",   label:"ビラ",         w:5,  align:"c" },
   { key:"done",    label:"完了",         w:5,  align:"c" },
   { key:"hold",    label:"保留",         w:5,  align:"c" },
-  { key:"consent", label:"承諾書",       w:6,  align:"c" },
+  { key:"consent", label:"同意書",       w:6,  align:"c" },
   { key:"compdoc", label:"完了書",       w:6,  align:"c" },
   { key:"note",    label:"備考",         w:28, align:"l", wrap:true }
 ];
@@ -1021,7 +1023,7 @@ function xlsxDetectCols(rows){
     flyer:["ビラ","ビラ配布","チラシ"],
     done:["完了","完了済"],
     hold:["保留"],
-    consent:["承諾書","承諾"],
+    consent:["同意書","承諾書","承諾"],
     compdoc:["完了書","完了報告書"],
     note:["備考","メモ","過去の情報"]
   };
@@ -1155,7 +1157,7 @@ async function xlsxImport(file){
     let r = p.row;
     if(p.kind === "add"){
       const payload = { chosho_mgmt_no: p.v.mgmt, chosho_date: p.v.date, chosho_cust_name: p.v.name,
-        chosho_cust_addr: toHalfWidthNum(p.v.addr), chosho_cust_tel: toHalfWidthNum(p.v.tel),
+        chosho_cust_addr: toHalfWidthAn(p.v.addr), chosho_cust_tel: toHalfWidthAn(p.v.tel),
         chosho_status: ST_CODE[p.v.status] || "provisional", work_type:"", _manual:true, _origin:"xlsx" };
       if(isYes(p.v.done)) payload.chosho_status = "completed";
       r = { caseId: newId(), file: "manual:" + newId(), lastModified: Date.now(), prevSub:"",
@@ -1263,7 +1265,7 @@ const PRINT_COLS = [
   { key:"flyer",   label:"ビラ",     def:3 },
   { key:"done",    label:"完了",     def:3 },
   { key:"hold",    label:"保留",     def:3 },
-  { key:"consent", label:"承諾書",   def:3 },
+  { key:"consent", label:"同意書",   def:3 },
   { key:"compdoc", label:"完了書",   def:3 },
   { key:"note",    label:"備考",     def:14 }
 ];
@@ -1381,7 +1383,7 @@ async function importLedgerFile(file){
     let r = byNo.get(no);
     if(!r){
       const payload = { chosho_mgmt_no: no, chosho_date: x.date || "", chosho_cust_name: x.name || "",
-        chosho_cust_addr: toHalfWidthNum(x.addr || ""), chosho_cust_tel: toHalfWidthNum(x.tel || ""),
+        chosho_cust_addr: toHalfWidthAn(x.addr || ""), chosho_cust_tel: toHalfWidthAn(x.tel || ""),
         chosho_status: x.status || "provisional", work_type:"", _manual:true, _origin:"ledger-file" };
       r = { caseId: newId(), file: "manual:" + newId(), lastModified: Date.now(), prevSub:"",
             payload, hybrid:false, d: Object.assign({}, payload), manual:true, origin:"ledger-file" };
@@ -1401,7 +1403,7 @@ async function importLedgerFile(file){
       upd++;
     }
     // ファイルに入っていない項目は触らない。古い版のメインが書き出したファイルには
-    // ビラ・承諾書・完了書 が入っておらず、まとめて入れるとチェックが外れてしまうため。
+    // ビラ・同意書・完了書 が入っておらず、まとめて入れるとチェックが外れてしまうため。
     const patch = {};
     if("time" in x) patch.time = x.time || "";
     if("meet" in x) patch.meetAt = x.meet || "";
