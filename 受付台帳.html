@@ -46,6 +46,11 @@
   .savestate.ss-none{ background:#fdecea; color:#a5342b; }
   .savestate .path{ font-weight:700; }
   .savestate .sub{ opacity:.85; }
+  /* メインから書き出した「データ入りHTML」であることを知らせる帯 */
+  .embed-note{ display:flex; align-items:flex-start; gap:8px; padding:6px 14px; font-size:12px;
+               background:#e7effa; color:var(--navy); border-bottom:1px solid var(--line); }
+  .embed-note .ico{ font-size:14px; }
+  .embed-note .sub{ opacity:.85; }
   /* ---------- 操作行 ---------- */
   .bar{ background:#fff; border-bottom:1px solid var(--line); padding:7px 14px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   .bar label{ display:inline-flex; align-items:center; gap:4px; cursor:pointer; white-space:nowrap; }
@@ -135,7 +140,7 @@
   body.pm table.lg thead th{ position:static !important; }
   @media print{
     body{ background:#fff; }
-    body.pm .top, body.pm .savestate, body.pm .bar{ display:none !important; }
+    body.pm .top, body.pm .savestate, body.pm .bar, body.pm .embed-note{ display:none !important; }
     body.pm .wrap{ padding:0; overflow:visible !important; height:auto !important; }
     body.pm *{ color:#000 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     body.pm table.lg thead{ display:table-header-group; }
@@ -181,6 +186,11 @@
 <div class="print-head" id="print-head"></div>
 <div class="wrap" id="wrap"><div class="empty">読み込み中…</div></div>
 
+<!-- ▼ 台帳の中身の差し込み口。メインの 📒受付台帳 →「🌐 HTMLで書き出し」が、
+     この行の null を台帳の中身に置き換えた HTML を作ります。
+     ここを消すと、メインから「差し込み口がありません」と言われて書き出せなくなります。 -->
+<script type="application/json" id="embed-data">null</script>
+
 <script>
 "use strict";
 /* =========================================================================
@@ -224,12 +234,33 @@ const caseSubKeyOf = c => {
 };
 
 /* =========================================================================
+   0.5 メインから書き出した「データ入りHTML」かどうか
+       メインの 📒受付台帳 →「🌐 HTMLで書き出し」で作ったファイルは、
+       上の <script id="embed-data"> に台帳の中身が入っている。
+       ふつうに受付台帳.html を開いたときは null なので、これまでどおり動く。
+   ========================================================================= */
+const EMBED = (() => {
+  const t = document.getElementById("embed-data");
+  if(!t) return null;
+  let o = null;
+  try { o = JSON.parse(t.textContent || "null"); } catch(_){ return null; }
+  if(!o || o.schema !== PROJ_SCHEMA || !Array.isArray(o.cases)) return null;
+  return o;
+})();
+
+/* =========================================================================
    1. この端末のデータベース（台帳の保存先）
       メインの IndexedDB とは別物にしてある。同じDBを別バージョンで開くと
       メイン側が壊れるおそれがあるため、絶対に共有しない。
+
+      保存キーは「データ入りHTML」ごとに分ける。パソコンの中のHTMLファイル
+      （file://）は、別のファイルでも保管場所を共有する作りになっている。
+      分けないと、書き出したHTMLを開いただけで、この受付台帳ソフト本体や
+      別の物件のHTMLの中身を上書きしてしまう。
    ========================================================================= */
 const DB_NAME = "antenna_ledger_app_db";
-const ST_LOCAL  = "local";       // 台帳の本体（out-of-line key="cur"）
+const ST_LOCAL  = "local";       // 台帳の本体（out-of-line key）
+const STORE_KEY = EMBED ? ("embed:" + String(EMBED.embedId || EMBED.id || "1")) : "cur";
 let _db = null;
 function openDb(){
   return new Promise((res, rej) => {
@@ -249,8 +280,8 @@ function idb(store, mode, fn){
     r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
   }));
 }
-const localPut = o => idb(ST_LOCAL, "readwrite", st => st.put(o, "cur"));
-const localGet = () => idb(ST_LOCAL, "readonly", st => st.get("cur")).catch(() => null);
+const localPut = o => idb(ST_LOCAL, "readwrite", st => st.put(o, STORE_KEY));
+const localGet = () => idb(ST_LOCAL, "readonly", st => st.get(STORE_KEY)).catch(() => null);
 
 /* =========================================================================
    2. 状態
@@ -670,6 +701,27 @@ function updateSaveState(){
       + '<span class="sub">　メインへ渡すときは「📤 台帳を書き出し」でファイルにして、メインの 📒 受付台帳 で「📥 受付台帳を取り込む」を押してください。'
       + 'ブラウザの閲覧データを消すと台帳も消えるので、区切りのついたところで書き出しておくと安心です。</span></span>';
   }
+}
+/* メインから書き出したHTMLのときだけ、上に帯を出す。
+   「何の台帳か」「直した分はどう戻すか」がその場で分かるようにする。 */
+function renderEmbedNote(){
+  if(!EMBED) return;
+  const d = new Date(EMBED.exportedAt || "");
+  const p = n => String(n).padStart(2, "0");
+  const when = isNaN(d.getTime()) ? ""
+    : (d.getFullYear() + "/" + (d.getMonth() + 1) + "/" + d.getDate() + " " + p(d.getHours()) + ":" + p(d.getMinutes()));
+  const div = document.createElement("div");
+  div.className = "embed-note";
+  div.innerHTML = '<span class="ico">📄</span><span><b>メインから書き出した受付台帳です。</b>'
+    + (EMBED.name ? '　' + esc(EMBED.name) : "")
+    + '　' + (EMBED.cases || []).length + ' 件'
+    + (when ? '　' + when + ' 書き出し' : "")
+    + '<br><span class="sub">ここで直した内容は<b>このファイル専用</b>としてこの端末に残ります'
+    + '（受付台帳ソフト本体や、別の物件のHTMLとは混ざりません）。'
+    + 'メインへ戻すときは「📤 台帳を書き出し」でファイルにして、メインの 📒受付台帳 の「📥 受付台帳」から取り込んでください。</span></span>';
+  const ss = el("savestate");
+  ss.parentNode.insertBefore(div, ss);
+  if(EMBED.name) document.title = "受付台帳　" + EMBED.name;
 }
 let _toastTimer = null;
 function toast(msg){
@@ -1406,10 +1458,13 @@ document.addEventListener("keydown", e => {
 (async function boot(){
   let local = null;
   try { local = await localGet(); } catch(_){}
-  adoptSnapshot(local && isProjectFile(local) ? local : {
+  // 続き（このファイルで前に直した内容）があればそれ。無ければ、メインから
+  // 差し込まれた中身。どちらも無ければ空の台帳から始める。
+  adoptSnapshot(local && isProjectFile(local) ? local : (EMBED || {
     schema: PROJ_SCHEMA, id: "ledger_local", name: "",
     createdAt: new Date().toISOString(), updatedAt: "", cases: [], ledger: {}, contractorAssign: {}
-  });
+  }));
+  renderEmbedNote();
   render();
 })();
 </script>

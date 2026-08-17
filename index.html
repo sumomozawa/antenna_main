@@ -21489,6 +21489,7 @@ function renderListLedgerMode(rows, container){
     + '<div class="lgc-grp"><span class="lgc-ttl">書き出し</span>'
     +   '<button id="lg-export-set" title="受付台帳と地図をひとまとめにして1ファイルで書き出します。スマホへ渡すのはこれ1つで済み、現場入力アプリの「台帳」か「地図」から取り込むと、受付台帳と地図の両方がいっぺんに入ります。" style="background:#7a4e1e;color:#fff;border:1px solid #5e3c16;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📦 現場用</button>'
     +   '<button id="lg-export-genba" title="受付台帳だけを1ファイルに書き出します（地図は入りません）。スマホの現場入力アプリの「台帳」と、受付台帳ソフトの「📥 台帳を取り込み」の、どちらでもそのまま読めます。左の「📥 受付台帳」で戻せます。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📤 受付台帳</button>'
+    +   '<button id="lg-export-html" title="いまの受付台帳を、中身の入った1枚のHTMLにして書き出します。渡した先はブラウザで開くだけで台帳がそのまま出るので、受付台帳ソフトを別に渡さなくて済みます。向こうで直した分は「📤 台帳を書き出し」でファイルにしてもらい、左の「📥 受付台帳」で戻せます。初回だけ 受付台帳.html の場所を聞きます（Shiftを押しながら押すと、ひな型を選び直せます）。名前・住所・電話が入るので、渡す相手にご注意ください。" style="background:#00838f;color:#fff;border:1px solid #006064;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">🌐 HTML</button>'
     +   '<button id="lg-xlsx-export" title="いまの受付台帳を Excel（.xlsx）へ書き出します。Excelで直したあと、左の「📗 Excel」でそのまま読み戻せます。" style="background:#1b7a3d;color:#fff;border:1px solid #145c2e;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📘 Excel</button>'
     +   '<button id="lg-writeback" title="この台帳で直した 名前・住所・電話・工事日程予定・状態・備考・保留・ビラ・承諾書・完了書 を、フォルダの戸別ファイルへまとめて書き込みます。台帳のセルで直しただけでは戸別ファイルは変わらないため、フォルダを読み直すと元に戻ってしまいます（工事予定日を消しても消えない等）。戸別を1件ずつ開いて保存しなくて済みます。写真・図面・積算・測定値には触りません。「打合せ予定・受付時刻」は戸別ファイルに置き場所が無いため対象外です（物件ファイルに保存されます）。「📁 フォルダ選択(再帰)」で読み込んだ後に使えます。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">💾 戸別ファイルへ反映</button>'
     + '</div>'
@@ -22046,6 +22047,160 @@ async function exportReceptionLedgerForGenba(){
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
   alert("受付台帳を書き出しました（" + rows.length + "件）。\n保存先：ブラウザの「ダウンロード」フォルダ（ファイル名「" + fname + "」）。\nこのファイルをスマホに移し、現場入力アプリの「🗒 受付台帳」から取り込んでください。");
+}
+/* ============================================================
+   🌐 受付台帳を「データ入りHTML」で書き出す
+   ・受付台帳ソフト（受付台帳.html）に、いまの台帳の中身を差し込んだ 1 枚の HTML を作る。
+   ・渡した先はブラウザで開くだけ。台帳ソフトを別に渡さなくてよい。
+   ・向こうで直した分は「📤 台帳を書き出し」→ こちらの「📥 受付台帳」で戻せる。
+   ・ひな型（受付台帳.html）は初回だけ選んでもらい、この端末に控える。
+   ============================================================ */
+const LGHTML_TPL_KEY = "antenna_ledger_html_tpl_v1";              // 控えたひな型（受付台帳.html の中身）
+const LGHTML_SLOT_RE = /(<script\b[^>]*\bid=["']embed-data["'][^>]*>)[\s\S]*?(<\/script>)/i;
+function lghtmlTplGet(){
+  try {
+    const o = JSON.parse(localStorage.getItem(LGHTML_TPL_KEY) || "null");
+    if(o && typeof o.text === "string" && LGHTML_SLOT_RE.test(o.text)) return o;
+  } catch(_){}
+  return null;
+}
+function lghtmlTplPut(text, name, fileAt){
+  try {
+    localStorage.setItem(LGHTML_TPL_KEY, JSON.stringify({ text: text, name: name || "受付台帳.html",
+      at: new Date().toISOString(), fileAt: fileAt || 0 }));
+    return true;
+  } catch(_){ return false; }   // 保存容量が足りない等。控えられなくても、その回の書き出しはできる
+}
+/* ひな型（受付台帳.html）を選んでもらう。差し込み口があれば控えて返す。取消・不適合は null。 */
+function lghtmlTplPick(){
+  return new Promise(res => {
+    const inp = document.createElement("input");
+    inp.type = "file"; inp.accept = ".html,.htm,text/html";
+    let done = false;
+    inp.addEventListener("cancel", () => { if(!done){ done = true; res(null); } });
+    inp.addEventListener("change", async () => {
+      if(done) return;
+      done = true;
+      const f = inp.files && inp.files[0];
+      if(!f){ res(null); return; }
+      let text = "";
+      try { text = await f.text(); }
+      catch(_){ alert("ファイルを読み込めませんでした。"); res(null); return; }
+      if(!LGHTML_SLOT_RE.test(text)){
+        alert("この HTML には台帳の差し込み口がありません。\n\n"
+          + "受付台帳ソフト（受付台帳.html）を選んでください。\n"
+          + "選んでいるのにこれが出る場合は、受付台帳.html が古い版です。新しいものに入れ替えてください。");
+        res(null); return;
+      }
+      res({ text: text, name: f.name, stored: lghtmlTplPut(text, f.name, f.lastModified) });
+    });
+    inp.click();
+  });
+}
+/* 台帳に要る項目だけを取り出して、受付台帳ソフトが読める形（物件ファイルと同じ形）にする。
+   図面・積算・写真・測定値は入れない。渡すのは台帳の中身だけ。
+   暗号化した戸別は plain に入れる＝向こうでも管理番号・工事日・状態しか直せない（メインと同じ）。 */
+function buildLedgerHtmlSnapshot(){
+  const src = (typeof _listRows !== "undefined" && Array.isArray(_listRows)) ? _listRows : [];
+  const cases = [], ledger = {}, assign = {};
+  src.forEach(r => {
+    const d = r.data || {};
+    const no = String(d.chosho_mgmt_no || "").trim();
+    if(!no && !String(d.chosho_cust_name || "").trim() && !String(d.chosho_cust_addr || "").trim()) return;
+    const tk = subCaseKey(r);
+    const lg = getLedger(tk) || {};
+    const fields = {
+      chosho_mgmt_no:   no,
+      chosho_cust_name: d.chosho_cust_name || "",
+      chosho_cust_addr: d.chosho_cust_addr || "",
+      chosho_cust_tel:  d.chosho_cust_tel  || "",
+      chosho_date:      d.chosho_date      || "",
+      chosho_status:    d.chosho_status    || "in_progress",
+      chosho_note:      d.chosho_note      || "",
+      work_type:        d.work_type        || ""
+    };
+    const enc = (r.fileType === "hybrid" || r.fileType === "full");
+    cases.push({ caseId: r._caseId || "", file: r.file || "", lastModified: r.lastModified || 0,
+                 payload: enc ? { plain: fields } : fields });
+    // 台帳の記入。控え（*Src）は渡さない（向こうでは使わないうえ、ファイルも重くなる）
+    const one = { time: lg.time || "", meetAt: lg.meetAt || "",
+                  flyer: !!lg.flyer, hold: !!lg.hold, consent: !!lg.consent, compdoc: !!lg.compdoc,
+                  note: lg.note || d.chosho_note || "" };
+    if(one.time || one.meetAt || one.flyer || one.hold || one.consent || one.compdoc || one.note) ledger[tk] = one;
+    const ctr = String((typeof rowContractor === "function" ? rowContractor(r) : "") || "").trim();
+    if(ctr) assign[tk] = ctr;
+  });
+  const now = new Date().toISOString();
+  const projName = (typeof _currentProject !== "undefined" && _currentProject && _currentProject.name) ? String(_currentProject.name) : "";
+  const eid = (typeof projNewId === "function") ? projNewId() : ("e" + Date.now().toString(36));
+  return {
+    schema: PROJ_SCHEMA, id: "ledger_html_" + eid, name: projName,
+    createdAt: now, updatedAt: now,
+    cases: cases, caseCount: cases.length,
+    ledger: ledger, contractorAssign: assign,
+    contractors: getContractorList(), contractorDigits: getContractorDigitMap(),
+    // 書き出したHTMLを見分ける印。受付台帳ソフトはこの embedId ごとに保存場所を分けるので、
+    // 別々に書き出したHTMLどうしや、受付台帳ソフト本体の中身と混ざらない。
+    embedId: eid, exportedAt: now, embedFrom: "main", appVersion: APP_VERSION
+  };
+}
+/* ひな型に台帳の中身を差し込む。JSON の中の "<" は \u003c に置き換えて、
+   台帳の中身に閉じタグのような文字が現れても、HTMLが途中で切れないようにする。 */
+function buildLedgerHtmlFile(tplText, snap){
+  const json = JSON.stringify(snap).replace(/</g, "\\u003c");
+  return String(tplText).replace(LGHTML_SLOT_RE, (m, head, tail) => head + json + tail);
+}
+async function exportReceptionLedgerAsHtml(repick){
+  const snap = buildLedgerHtmlSnapshot();
+  if(!snap.cases.length){ alert("書き出す受付台帳の行がありません。先に戸別一覧を読み込むか、台帳に行を追加してください。"); return; }
+  let tpl = repick ? null : lghtmlTplGet();
+  if(!tpl){
+    const msg = repick
+      ? "ひな型にする 受付台帳.html を選び直します。\n\n新しい受付台帳.html に入れ替えたときは、ここで選び直してください。"
+      : "受付台帳ソフト（受付台帳.html）の場所を1回だけ教えてください。\n\n"
+        + "「OK」を押すとファイルを選ぶ画面が出ます。メインの index.html と同じフォルダにあります。\n"
+        + "1回選べばこの端末に控えるので、次からは聞きません。";
+    if(!confirm(msg)) return;
+    tpl = await lghtmlTplPick();
+    if(!tpl) return;
+    if(!tpl.stored) alert("ひな型をこの端末に控えられませんでした（保存容量が足りない可能性があります）。\n書き出しはこのまま続けますが、次回もファイルを選ぶ画面が出ます。");
+  }
+  let html = "";
+  try { html = buildLedgerHtmlFile(tpl.text, snap); }
+  catch(e){ alert("HTML を作れませんでした。\n\n" + ((e && e.message) || e)); return; }
+
+  const base = "受付台帳" + (snap.name ? ("_" + snap.name) : "") + "_" + new Date().toISOString().slice(0, 10);
+  const fname = ((typeof sanitizePrintFilename === "function") ? sanitizePrintFilename(base) : base).replace(/\.html?$/i, "") + ".html";
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const done = () => alert("🌐 データ入りHTMLを書き出しました（" + snap.cases.length + "件）。\n"
+    + "ファイル名：" + fname + "\n\n"
+    + "渡した先はブラウザで開くだけで、この受付台帳がそのまま出ます。\n"
+    + "向こうで直した分は「📤 台帳を書き出し」でファイルにしてもらい、\n"
+    + "こちらの「📥 受付台帳」で取り込めば戻せます。\n\n"
+    + "※ 名前・住所・電話が入ったファイルです。渡す相手にご注意ください。\n"
+    + "※ 新しい受付台帳.html に入れ替えたときは、このボタンを Shift を押しながら押すと、ひな型を選び直せます。");
+
+  if(window.showSaveFilePicker){
+    try {
+      const opts = { suggestedName: fname, types: [{ description: "HTML ファイル", accept: { "text/html": [".html"] } }] };
+      if(lastSaveDirHandle) opts.startIn = lastSaveDirHandle;
+      const handle = await window.showSaveFilePicker(opts);
+      const w = await handle.createWritable();
+      await w.write(blob);
+      await w.close();
+      try { lastSaveDirHandle = handle.getParent ? await handle.getParent() : lastSaveDirHandle; } catch(_){}
+      done(); return;
+    } catch(err){
+      if(err && err.name === "AbortError") return;   // ユーザーがキャンセル
+      console.warn("showSaveFilePicker 失敗、ダウンロード方式にフォールバック:", err);
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = fname;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  done();
 }
 /* ============================================================
    📗 Excel（.xlsx）から管理番号を更新 — 受付台帳
@@ -22829,6 +22984,7 @@ function bindLedgerHandlers(container){
     if(e.target.closest("#lg-writeback")){ lgwbButton(); return; }
     if(e.target.closest("#lg-export-set")){ exportGenbaSet(); return; }
     if(e.target.closest("#lg-export-genba")){ exportReceptionLedgerForGenba(); return; }
+    if(e.target.closest("#lg-export-html")){ exportReceptionLedgerAsHtml(!!e.shiftKey); return; }
     // 施工会社チップ：一発割当／会社名クリックで変更モード（セルのみ差し替え＝スクロール位置を保つ）
     const ctrEl = e.target.closest(".lg-ctr-cur, .lg-ctr-chip");
     if(ctrEl){
