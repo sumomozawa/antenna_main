@@ -22077,7 +22077,12 @@ function lghtmlTplPick(){
     const inp = document.createElement("input");
     inp.type = "file"; inp.accept = ".html,.htm,text/html";
     let done = false;
-    inp.addEventListener("cancel", () => { if(!done){ done = true; res(null); } });
+    inp.addEventListener("cancel", () => {
+      if(done) return;
+      done = true;
+      alert("受付台帳.html を選ばなかったので、書き出しをやめました。\n\nもう一度「🌐 HTML」を押すとやり直せます。");
+      res(null);
+    });
     inp.addEventListener("change", async () => {
       if(done) return;
       done = true;
@@ -22088,8 +22093,10 @@ function lghtmlTplPick(){
       catch(_){ alert("ファイルを読み込めませんでした。"); res(null); return; }
       if(!LGHTML_SLOT_RE.test(text)){
         alert("この HTML には台帳の差し込み口がありません。\n\n"
-          + "受付台帳ソフト（受付台帳.html）を選んでください。\n"
-          + "選んでいるのにこれが出る場合は、受付台帳.html が古い版です。新しいものに入れ替えてください。");
+          + "・受付台帳ソフト（受付台帳.html）を選んでください。\n"
+          + "・選んでいるのにこれが出る場合は、その受付台帳.html が古い版です。\n"
+          + "　この書き出しに対応した新しい 受付台帳.html に入れ替えてから、\n"
+          + "　もう一度お試しください（index.html だけ新しくしても書き出せません）。");
         res(null); return;
       }
       res({ text: text, name: f.name, stored: lghtmlTplPut(text, f.name, f.lastModified) });
@@ -22155,15 +22162,23 @@ async function exportReceptionLedgerAsHtml(repick){
   if(!snap.cases.length){ alert("書き出す受付台帳の行がありません。先に戸別一覧を読み込むか、台帳に行を追加してください。"); return; }
   let tpl = repick ? null : lghtmlTplGet();
   if(!tpl){
-    const msg = repick
-      ? "ひな型にする 受付台帳.html を選び直します。\n\n新しい受付台帳.html に入れ替えたときは、ここで選び直してください。"
-      : "受付台帳ソフト（受付台帳.html）の場所を1回だけ教えてください。\n\n"
-        + "「OK」を押すとファイルを選ぶ画面が出ます。メインの index.html と同じフォルダにあります。\n"
-        + "1回選べばこの端末に控えるので、次からは聞きません。";
+    const msg = (repick ? "ひな型にする 受付台帳.html を選び直します。\n\n" : "はじめに、受付台帳ソフト（受付台帳.html）の場所を教えてください。\n\n")
+      + "「OK」を押すと、ファイルを選ぶ画面が出ます。\n"
+      + "★ フォルダではなく、「受付台帳.html」という ファイルそのもの を選んでください。\n"
+      + "　 メインの index.html と同じフォルダにあります。\n\n"
+      + "1回選べばこの端末が覚えるので、次からは聞きません。";
     if(!confirm(msg)) return;
     tpl = await lghtmlTplPick();
-    if(!tpl) return;
-    if(!tpl.stored) alert("ひな型をこの端末に控えられませんでした（保存容量が足りない可能性があります）。\n書き出しはこのまま続けますが、次回もファイルを選ぶ画面が出ます。");
+    if(!tpl) return;                 // 選ばなかった・ひな型でなかった（中で知らせている）
+    if(!tpl.stored){
+      alert("ひな型をこの端末に覚えられませんでした（保存容量が足りない可能性があります）。\n"
+        + "書き出しはできますが、毎回ファイルを選ぶ画面が出ます。");
+    }
+    // ここで一度区切る。保存先を選ぶ画面は「ボタンを押した直後」でないと出せない決まりで、
+    // ファイルを選んだ流れのまま続けると、保存先を選べずにダウンロードへ落ちてしまう。
+    alert("✅ ひな型を覚えました。\n\n"
+      + "もう一度「🌐 HTML」を押すと、保存先を選んで書き出せます。");
+    return;
   }
   let html = "";
   try { html = buildLedgerHtmlFile(tpl.text, snap); }
@@ -22172,8 +22187,8 @@ async function exportReceptionLedgerAsHtml(repick){
   const base = "受付台帳" + (snap.name ? ("_" + snap.name) : "") + "_" + new Date().toISOString().slice(0, 10);
   const fname = ((typeof sanitizePrintFilename === "function") ? sanitizePrintFilename(base) : base).replace(/\.html?$/i, "") + ".html";
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-  const done = () => alert("🌐 データ入りHTMLを書き出しました（" + snap.cases.length + "件）。\n"
-    + "ファイル名：" + fname + "\n\n"
+  const done = where => alert("🌐 データ入りHTMLを書き出しました（" + snap.cases.length + "件）。\n"
+    + "ファイル名：" + fname + (where ? ("\n保存先：" + where) : "") + "\n\n"
     + "渡した先はブラウザで開くだけで、この受付台帳がそのまま出ます。\n"
     + "向こうで直した分は「📤 台帳を書き出し」でファイルにしてもらい、\n"
     + "こちらの「📥 受付台帳」で取り込めば戻せます。\n\n"
@@ -22189,10 +22204,16 @@ async function exportReceptionLedgerAsHtml(repick){
       await w.write(blob);
       await w.close();
       try { lastSaveDirHandle = handle.getParent ? await handle.getParent() : lastSaveDirHandle; } catch(_){}
-      done(); return;
+      done(""); return;
     } catch(err){
       if(err && err.name === "AbortError") return;   // ユーザーがキャンセル
-      console.warn("showSaveFilePicker 失敗、ダウンロード方式にフォールバック:", err);
+      console.warn("showSaveFilePicker 失敗:", err);
+      // 「ボタンを押した直後」でないと保存先の画面は出せない。その時は押し直してもらう。
+      if(err && (err.name === "SecurityError" || err.name === "NotAllowedError")){
+        if(!confirm("保存先を選ぶ画面を出せませんでした。\n\n"
+          + "もう一度「🌐 HTML」を押すと、保存先を選んで書き出せます。\n\n"
+          + "このまま、ブラウザの「ダウンロード」フォルダへ書き出しますか？")) return;
+      }
     }
   }
   const url = URL.createObjectURL(blob);
@@ -22200,7 +22221,7 @@ async function exportReceptionLedgerAsHtml(repick){
   a.href = url; a.download = fname;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
-  done();
+  done("ブラウザの「ダウンロード」フォルダ");
 }
 /* ============================================================
    📗 Excel（.xlsx）から管理番号を更新 — 受付台帳
