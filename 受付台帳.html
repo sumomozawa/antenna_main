@@ -397,7 +397,9 @@ function canEdit(row, f){
   if(!row.hybrid) return true;
   return (f === "mgmt" || f === "date" || f === "status");
 }
-function writeField(row, f, v){
+/* opts.keepStatus … 取込（受付台帳ファイル・Excel）から書くときに付ける。
+   清書の自動昇格をしない＝黙って状態が変わらない。状態はファイルの値を別に入れる。 */
+function writeField(row, f, v, opts){
   const key = FIELD_MAP[f] || f;
   if(f === "addr" || f === "tel") v = toHalfWidthNum(v);
   const oldKey = subKeyOf(row.d.chosho_mgmt_no, row.file);
@@ -409,8 +411,10 @@ function writeField(row, f, v){
   } else {
     row.payload = Object.assign({}, row.payload, { [key]: v });
   }
-  // 仮受付の行に名前・住所・電話のどれかが入ったら「受付済」へ上げる（メインと同じ）
-  if((f === "name" || f === "addr" || f === "tel") && String(v).trim() && row.d.chosho_status === "provisional"){
+  // 仮受付の行に名前・住所・電話のどれかが入ったら「受付済」へ上げる（メインと同じ）。
+  // ただし取込のときはしない。ファイルを読み戻しただけで状態が変わって見えるため。
+  if(!(opts && opts.keepStatus)
+     && (f === "name" || f === "addr" || f === "tel") && String(v).trim() && row.d.chosho_status === "provisional"){
     row.d.chosho_status = "in_progress";
     if(row.hybrid) row.payload.plain.chosho_status = "in_progress";
     else row.payload.chosho_status = "in_progress";
@@ -1092,7 +1096,8 @@ async function xlsxImport(file){
                   tel:"chosho_cust_tel", date:"chosho_date" }[f];
     if(String(r.d[key] || "").trim() === val) return;
     if(!canEdit(r, f)) return;
-    writeField(r, f, val);
+    // 状態の欄が無いExcel（現場の住所表など）でも、読み取っただけで状態が変わらないようにする
+    writeField(r, f, val, { keepStatus:true });
   };
   plan.forEach(p => {
     let r = p.row;
@@ -1115,7 +1120,7 @@ async function xlsxImport(file){
       let st = "";
       if(isYes(p.v.done)) st = "completed";
       else if(p.v.status && ST_CODE[p.v.status]) st = ST_CODE[p.v.status];
-      if(st && st !== statusOf(r) && canEdit(r, "status")) writeField(r, "status", st);
+      if(st && st !== statusOf(r) && canEdit(r, "status")) writeField(r, "status", st, { keepStatus:true });
     }
     const k = subKeyOf(r.d.chosho_mgmt_no, r.file);
     // 台帳の項目。列が無い項目は触らない（消してしまわないため）。
@@ -1334,8 +1339,13 @@ async function importLedgerFile(file){
       ["name","addr","tel","date"].forEach(f => {
         const v = String(x[f] === undefined ? "" : x[f]);
         const key = { name:"chosho_cust_name", addr:"chosho_cust_addr", tel:"chosho_cust_tel", date:"chosho_date" }[f];
-        if(v && String(r.d[key] || "") !== v && canEdit(r, f === "date" ? "date" : f)) writeField(r, f, v);
+        // keepStatus … 名前などを入れても状態は動かさない（状態はこの下でファイルの値を入れる）
+        if(v && String(r.d[key] || "") !== v && canEdit(r, f === "date" ? "date" : f)) writeField(r, f, v, { keepStatus:true });
       });
+      // 状態もファイルの値に合わせる。これまで入れていなかったため、書き出して読み戻すと
+      // 状態だけ元に戻らなかった。ファイルに状態が無いときは触らない。
+      { const st = String(x.status || "").trim();
+        if(st && ST_NAME[st] && st !== statusOf(r) && canEdit(r, "status")) writeField(r, "status", st, { keepStatus:true }); }
       upd++;
     }
     // ファイルに入っていない項目は触らない。古い版のメインが書き出したファイルには
