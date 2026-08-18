@@ -1164,6 +1164,11 @@
     body.list-print-mode * { color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     body.list-print-mode .folder-group-head,
     body.list-print-mode .folder-group-head * { color: #fff !important; background: #1e3a5f !important; }
+    /* 石綿チップは濃い色の下地に白文字。上の一括黒文字に負けないよう戻す
+       （黒文字のままだと濃い赤・濃い緑の上で紙では読めない）。 */
+    body.list-print-mode .asb-badge,
+    body.list-print-mode .lg-asb-chip { color: #fff !important; }
+    body.list-print-mode .lg-asb-chip.asb-blank { color: #667482 !important; }
     /* 費用詳細テーブル内 grand-total（追加工事 総合計 等）は濃紺背景に白文字を維持 */
     body.list-print-mode .cost-detail-section tr.grand-total td,
     body.list-print-mode .cost-detail-section tr.grand-total * { color: #fff !important; background: #1e3a5f !important; }
@@ -1374,7 +1379,8 @@
     body.list-print-mode.photo-only .pj-case:last-child { break-after: auto; page-break-after: auto; }
     body.list-print-mode.photo-only .pj-head {
       overflow: visible; border-bottom: 2px solid #90caf9 !important;
-      padding-bottom: 3mm; margin-bottom: 4mm; height: 16mm; align-items: flex-start;
+      padding-bottom: 3mm; margin-bottom: 4mm; height: 20mm; align-items: flex-start;
+      overflow: hidden;
       -webkit-print-color-adjust: exact; print-color-adjust: exact;
     }
     body.list-print-mode.photo-only .pj-h-k { font-size: 7.5pt; }
@@ -1382,10 +1388,10 @@
     body.list-print-mode.photo-only .pj-h-no .pj-h-v { font-size: 12pt; }
     body.list-print-mode.photo-only table.pj-meas { font-size: 6.5pt; }
     body.list-print-mode.photo-only .pj-grid { gap: 3mm; max-width: none; }
-    /* 見出し 16mm ＋ 下の余白 4mm を引いた残りを、行数で割る（説明の1行 5mm 込み） */
+    /* 見出し 20mm ＋ 下の余白 4mm を引いた残りを、行数で割る（説明の1行 5mm 込み） */
     body.list-print-mode.photo-only .pj-frame {
       aspect-ratio: auto;
-      height: calc((273mm - 20mm - (var(--pj-rows, 3) - 1) * 3mm - var(--pj-rows, 3) * 5mm) / var(--pj-rows, 3));
+      height: calc((273mm - 24mm - (var(--pj-rows, 3) - 1) * 3mm - var(--pj-rows, 3) * 5mm) / var(--pj-rows, 3));
       -webkit-print-color-adjust: exact; print-color-adjust: exact;
     }
     body.list-print-mode.photo-only .pj-box { break-inside: avoid; page-break-inside: avoid; }
@@ -3378,6 +3384,8 @@
   .ph-bar { background: #fff; border: 1px solid #cdd3da; border-radius: 4px; padding: 8px 10px; margin-bottom: 10px; }
   .ph-bar-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .ph-bar-line + .ph-bar-line { margin-top: 7px; padding-top: 7px; border-top: 1px solid #eef2f6; }
+  .pj-warn-line { color: #8a5a00; background: #fff5e8; border: 1px solid #ffcc80;
+                  border-radius: 4px; padding: 5px 8px; font-size: 12px; }
   .ph-bar button { background: #7a4e1e; color: #fff; border: 1px solid #5e3c16; padding: 5px 14px;
     border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: 700; font-family: inherit; }
   .ph-bar button:hover { background: #96632a; }
@@ -5929,7 +5937,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.18k";
+const APP_VERSION = "2026.08.18m";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -24937,7 +24945,8 @@ function matExtraCable5c(row){
 
    写真は戸別ファイルの中にあるので、画面に出すときだけ読み込む（一覧には常駐させない）。
    ============================================================ */
-let _pjCases = null;         // [{ row, key, no, name, addr, tel, photos:[{label,dataUri}], err }]
+let _pjCases = null;
+let _pjRowsRef = null;                 // この写真台帳をどの一覧から作ったか         // [{ row, key, no, name, addr, tel, photos:[{label,dataUri}], err }]
 let _pjDirty = {};           // key → true（回した・消した戸別。書き戻し待ち）
 let _pjOnlyPhoto = true;     // 写真のある戸別だけ出す
 let _pjBusy = false;
@@ -24963,7 +24972,9 @@ function pjGrid(n){
     const area = iw * ih * n - (cols * rows - n) * 30;       // 空きますは少し損とみなす
     if(!best || area > best.area) best = { cols, rows, area };
   }
-  if(!best) return { cols: 5, rows: Math.ceil(n / 5) };
+  /* 6行を超えると1ページに収まらないので、行は6のままで列を増やす。
+     写真は小さくなるが、1枚も欠けさせない。 */
+  if(!best) return { cols: Math.max(1, Math.ceil(n / 6)), rows: 6 };
   return { cols: best.cols, rows: best.rows };
 }
 /* 記録データ3種類（アンテナ端／増幅器出力／端子）。
@@ -25004,20 +25015,30 @@ async function pjLoad(){
     alert("戸別がありません。\n「📁 フォルダ」で工事フォルダを読み込むか、物件を開いてください。");
     return;
   }
+  if(_pjCases && pjDirtyList().length
+     && !confirm("まだ書き戻していない直しが " + pjDirtyList().length + " 件あります。\n\n"
+       + "読み直すと、その直しは消えます。読み直しますか？\n"
+       + "（残したいときは「キャンセル」→「💾 戸別ファイルへ書き戻す」）")) return;
   _pjBusy = true;
   const st = document.getElementById("list-status");
   const cases = [];
+  try {
   for(let i = 0; i < rows.length; i++){
     const r = rows[i];
     if(st){ st.style.display = ""; st.textContent = "📷 写真を読み込み中… " + (i + 1) + " / " + rows.length; }
     const dd = r.data || {};
-    const c = { row: r, key: pjCaseKey(r),
+    /* 合言葉は行ごとに必ず別物にする。管理番号は重なることがあり、
+       重なると別の戸別の写真を回したり消したりしてしまう。 */
+    const c = { row: r, key: "c" + i + ":" + pjCaseKey(r),
                 no: toHalfWidthAn(String(dd.chosho_mgmt_no || "")).trim(),
                 name: String(dd.chosho_cust_name || ""), addr: String(dd.chosho_cust_addr || ""),
                 tel: String(dd.chosho_cust_tel || ""), photos: [], err: "" };
     try {
       const got = await loadRowPhotos(r);
-      if(got && Array.isArray(got.photos)) c.photos = got.photos.map(x => ({ label: x.label || "", dataUri: x.dataUri }));
+      if(got && Array.isArray(got.photos)) c.photos = got.photos.map(x => ({
+        label: x.label || "", dataUri: x.dataUri, id: x.id || "",
+        src0: x.dataUri, rot: 0 }));            // src0＝元の写真。回すときは毎回ここから作り直す
+      c.fp = pjFingerprint(c.photos);           // 読み込んだ時の写真の指紋（外から変わっていないか見る）
       if(got && got.locked)   c.err = "暗号化（パスワード未入力）";
       if(got && got.noSource) c.err = "写真の元ファイルが手元にありません（物件だけを開いている）";
       if(got && got.thumb)    c.err = "物件に控えた小さな写真です（元ファイルを読み込むと原寸になります）";
@@ -25027,9 +25048,17 @@ async function pjLoad(){
   }
   _pjCases = cases;
   _pjDirty = {};
-  _pjBusy = false;
-  if(st) st.style.display = "none";
+  _pjRowsRef = _listRows;            // どの一覧から作った台帳かを覚えておく
+  } finally {
+    _pjBusy = false;
+    if(st) st.style.display = "none";
+  }
   renderListTable();
+}
+/* 写真の並びの指紋。枚数と、それぞれの大きさで見る（中身を全部なぞると重すぎる） */
+function pjFingerprint(photos){
+  return (Array.isArray(photos) ? photos : [])
+    .filter(p => p && p.dataUri).map(p => String(p.dataUri).length).join(",");
 }
 /* 写真を90°回す。見た目だけでなく中身（dataUri）を作り直すので、
    書き戻せば現場入力アプリや工事調書でも回った向きで出る。 */
@@ -25046,9 +25075,12 @@ function pjRotate(dataUri, deg){
         cx.translate(cv.width / 2, cv.height / 2);
         cx.rotate(deg * Math.PI / 180);
         cx.drawImage(img, -w / 2, -h / 2);
-        // 元がJPEGならJPEGのまま（PNGにするとファイルが何倍にもなる）
-        const isJpeg = /^data:image\/jpe?g/i.test(String(dataUri));
-        res(cv.toDataURL(isJpeg ? "image/jpeg" : "image/png", isJpeg ? 0.92 : undefined));
+        /* PNG（透過のある絵）だけPNGのまま。それ以外はJPEGにする。
+           webp や heic を PNG にすると、ファイルが何倍にも膨れて戸別JSONが重くなる。 */
+        const isPng = /^data:image\/png/i.test(String(dataUri));
+        const out = cv.toDataURL(isPng ? "image/png" : "image/jpeg", isPng ? undefined : 0.92);
+        if(!out || out.length < 64) throw new Error("画像を作り直せませんでした");
+        res(out);
       } catch(err){ rej(err); }
     };
     img.onerror = () => rej(new Error("画像を読めませんでした"));
@@ -25058,15 +25090,27 @@ function pjRotate(dataUri, deg){
 function pjFindCase(key){ return (_pjCases || []).find(c => c.key === key) || null; }
 async function pjDoRotate(key, idx, deg){
   const c = pjFindCase(key); if(!c) return;
+  const why = pjWhyLocked(c);
+  if(why){ alert("この戸別の写真は直せません。\n\n" + why); return; }
   const ph = c.photos[idx]; if(!ph || !ph.dataUri) return;
+  if(ph._rotating) return;                       // 続けて押されても二重に走らせない
+  ph._rotating = true;
   try {
-    ph.dataUri = await pjRotate(ph.dataUri, deg);
+    /* ★必ず元の写真から作り直す★
+       回すたびに作り直したものをまた回すと、押した回数だけ画質が落ちていく。 */
+    const base = ph.src0 || ph.dataUri;
+    const rot = (((ph.rot || 0) + deg) % 360 + 360) % 360;
+    ph.dataUri = rot ? await pjRotate(base, rot) : base;
+    ph.rot = rot;
     _pjDirty[key] = true;
     renderListTable();
   } catch(e){ alert("写真を回せませんでした。\n\n" + ((e && e.message) || e)); }
+  finally { ph._rotating = false; }
 }
 function pjDoDelete(key, idx){
   const c = pjFindCase(key); if(!c) return;
+  const why = pjWhyLocked(c);
+  if(why){ alert("この戸別の写真は直せません。\n\n" + why); return; }
   const ph = c.photos[idx]; if(!ph) return;
   if(!confirm("この写真を消しますか？\n\n"
       + "　戸別： " + (c.no || "―") + (c.name ? ("　" + c.name) : "") + "\n"
@@ -25077,33 +25121,77 @@ function pjDoDelete(key, idx){
   renderListTable();
 }
 function pjDirtyList(){ return (_pjCases || []).filter(c => _pjDirty[c.key]); }
+/* この戸別を 管理番号.json へ書き戻してよいか。書き戻せない理由を返す（空文字なら書き戻せる）。
+   ★サムネ（物件に控えた小さな写真）を書き戻すと原寸が失われるので、必ずここで止める。 */
+function pjWhyLocked(c){
+  const r = c && c.row;
+  if(!r) return "戸別の情報がありません";
+  if(c.err) return c.err;
+  if(r.fileType !== "plain") return "暗号化された戸別です（戸別を開いて「💾 上書き保存」してください）";
+  if(!r.fileHandle) return "元ファイルが手元にありません（「📁 フォルダ」で読み込むと書き戻せます）";
+  return "";
+}
+function pjWritable(c){ return !pjWhyLocked(c); }
 /* 直した写真を 管理番号.json へ書き戻す。写真以外の中身には触らない。 */
 async function pjWriteBack(){
+  if(_pjBusy) return;                                   // 読み込み中・書き戻し中の二重押しを止める
+  if(_pjCases && _pjRowsRef !== _listRows){
+    alert("一覧が入れ替わっています。\n\n「📷 写真を読み直す」を押してから、もう一度書き戻してください。");
+    return;
+  }
   const list = pjDirtyList();
   if(!list.length){ alert("書き戻すものはありません。\n写真を回すか消すと、ここから戸別ファイルへ書き戻せます。"); return; }
   /* ★確認を出す前に、書き込みの許可を取り切る★
      ブラウザはフォルダの許可を「押した直後」しか聞けない。先に確認を出すと
      その権利が消え、あとから許可を求めても必ず弾かれる。 */
   await fsPrepRootWritable(list.map(c => c.row));
-  const plain = list.filter(c => c.row && c.row.fileType === "plain" && c.row.fileHandle);
-  const ng = list.filter(c => plain.indexOf(c) < 0);
+  const plain = list.filter(pjWritable);
+  const ng = list.filter(c => !pjWritable(c));
   if(!plain.length){
     alert("書き戻せる戸別がありません。\n\n"
-      + "暗号化された戸別（🔐）と、元ファイルを持たない戸別は、この画面からは書き戻せません。\n"
+      + "暗号化された戸別（🔐）・元ファイルを持たない戸別・物件に控えた小さな写真だけの戸別は、\n"
+      + "この画面からは書き戻せません。\n"
       + "その戸別を開いて「💾 上書き保存」してください。");
     return;
   }
   if(!confirm("写真の直しを、戸別ファイルへ書き戻します。\n\n"
       + plain.slice(0, 12).map(c => "・" + (c.no || "―") + "　写真 " + c.photos.length + " 枚").join("\n")
       + (plain.length > 12 ? ("\n・ほか " + (plain.length - 12) + " 件") : "")
-      + (ng.length ? ("\n\n※ 暗号化・元ファイルなしの " + ng.length + " 件は対象外です") : "")
-      + "\n\n写真以外（氏名・住所・積算・図面・測定値）には触りません。")) return;
+      + (ng.length ? ("\n\n※ 書き戻せない " + ng.length + " 件は対象外です") : "")
+      + "\n\n写真以外（氏名・住所・積算・図面・測定値）には触りません（更新日時だけ新しくなります）。")) return;
+  _pjBusy = true;
   let ok = 0; const fails = [];
+  try {
   for(const c of plain){
     try {
+      /* ★元ファイルを読み直せなかったら、絶対に書かない★
+         画面上のデータは軽くするために中身を削ってあることがある。
+         それを書くと積算・図面・測定値まで痩せた内容で上書きされてしまう。 */
       const full = await rereadRowSource(c.row);
-      const json = (full && typeof full === "object") ? full : Object.assign({}, c.row.data);
-      json.chosho_photos = c.photos.map(x => ({ label: x.label || "", dataUri: x.dataUri }));
+      if(!full || typeof full !== "object"){
+        fails.push("・" + (c.no || c.row.file) + "：元ファイルを読み直せませんでした（安全のため、このファイルには書いていません）");
+        continue;
+      }
+      const json = full;
+      /* ★読み込んだ後に、そのファイルの写真が外から変わっていたら書かない★
+         （戸別を開いて写真を足した／現場データを取り込んだ、など）
+         そのまま書くと、足したばかりの写真が黙って消える。 */
+      const nowFp = pjFingerprint((Array.isArray(json.chosho_photos) ? json.chosho_photos : []));
+      if(c.fp != null && nowFp !== c.fp){
+        fails.push("・" + (c.no || c.row.file) + "：読み込んだ後にファイルの写真が変わっています"
+          + "（「📷 写真を読み直す」でやり直してください）");
+        continue;
+      }
+      /* 写真のID（現場入力アプリとの突合の鍵）は、あるものはそのまま残す。
+         ここを落とすと、次に現場から取り込んだとき同じ写真が二重に入る。 */
+      json.chosho_photos = c.photos.map(x => {
+        const o = { label: x.label || "", dataUri: x.dataUri };
+        const id = x.id || (x.dataUri ? photoContentId(x.dataUri) : "");
+        if(id) o.id = id;
+        return o;
+      });
+      delete json.chosho_photos_thumb;   // 物件専用のしるしは個別ファイルに残さない
+      delete json.chosho_photo_count;
       json.editedAt = new Date().toISOString();
       const res = await writeRowFile({ file: c.row.file, fileHandle: c.row.fileHandle, fileType: "plain" }, json, "json");
       if(res && res.mode === "overwrite"){
@@ -25111,17 +25199,29 @@ async function pjWriteBack(){
         delete _pjDirty[c.key];
         c.row._photoCount = c.photos.length;
         c.row._thumbs = undefined;
-        if(c.row.data) c.row.data.chosho_photo_count = c.photos.length;
+        /* 画面に持っているぶんも書いた内容に合わせる。
+           ここを直さないと、消した写真が読み直しや物件の保存で戻ってくる。 */
+        if(c.row.data){
+          c.row.data.chosho_photos = json.chosho_photos;
+          delete c.row.data.chosho_photos_thumb;
+          c.row.data.chosho_photo_count = c.photos.length;
+          c.row.data.editedAt = json.editedAt;
+        }
+        c.fp = pjFingerprint(c.photos);
+        c.photos.forEach(x => { x.src0 = x.dataUri; x.rot = 0; });
       } else {
         fails.push("・" + (c.no || c.row.file) + "：元ファイルへ書けず、ダウンロードで保存しました");
       }
     } catch(e){ fails.push("・" + (c.no || c.row.file) + "：" + ((e && e.message) || e)); }
   }
-  try { projTouch(); } catch(_){}
+  } finally { _pjBusy = false; }
+  try { if(ok) projTouch(); } catch(_){}
   renderListTable();
-  alert("📷 写真を書き戻しました。\n\n" + ok + " 件の戸別ファイルを更新しました。"
+  alert((ok ? "📷 写真を書き戻しました。\n\n" : "⚠ 写真を書き戻せませんでした。\n\n")
+    + ok + " 件の戸別ファイルを更新しました。"
     + (fails.length ? ("\n\n⚠ できなかったもの:\n" + fails.join("\n")) : "")
-    + (ng.length ? ("\n\n※ 暗号化・元ファイルなしの " + ng.length + " 件は対象外です（戸別を開いて保存してください）") : ""));
+    + (ng.length ? ("\n\n※ 書き戻せない " + ng.length + " 件は対象外です（戸別を開いて保存してください）\n"
+        + ng.slice(0, 6).map(c => "・" + (c.no || "―") + "：" + pjWhyLocked(c)).join("\n")) : ""));
 }
 /* 印刷の見出しに横並びで貼る項目 */
 function pjHeadHtml(c){
@@ -25172,6 +25272,13 @@ function renderListPhotoMode(rows, container){
       +   '💾 戸別ファイルへ書き戻す' + (dirtyN ? ('（' + dirtyN + '件）') : '') + '</button>'
       + '<button type="button" id="pj-print" title="1戸別＝1ページで、A4縦の写真台帳を印刷／PDF出力します">🖨 写真台帳を印刷</button>'
       + '</div>';
+    const hidden = _pjCases.filter(c => !c.photos.length && c.err);
+    if(hidden.length){
+      html += '<div class="ph-bar-line pj-warn-line">⚠ 写真を出せなかった戸別が ' + hidden.length + ' 件あります'
+        + '（' + escapeHtml(hidden.slice(0, 3).map(c => (c.no || "―")).join("・"))
+        + (hidden.length > 3 ? ("　ほか " + (hidden.length - 3) + " 件") : "") + '）。'
+        + '「写真のある戸別だけ」のチェックを外すと、理由が見られます。</div>';
+    }
   }
   html += '</div>';
 
@@ -25204,6 +25311,7 @@ function renderListPhotoMode(rows, container){
     + (_currentProject ? ('　' + escapeHtml(_currentProject.name)) : "")
     + '<span class="pj-doc-date">' + lgDateStrToday(0).replace(/-/g, "/") + ' 現在</span></div>';
   html += shown.map(c => {
+    const why = pjWhyLocked(c), locked = !!why;
     const g = pjGrid(c.photos.length || 1);
     const body = c.photos.length
       ? ('<div class="pj-grid" style="--pj-cols:' + g.cols + ';--pj-rows:' + g.rows + ';">'
@@ -25213,17 +25321,21 @@ function renderListPhotoMode(rows, container){
              +   ' data-pj-zoom="' + escapeHtml(c.key) + '|' + i + '"></div>'
              + '<figcaption><span class="pj-i">' + (i + 1) + '</span>'
              +   '<span class="pj-cap">' + escapeHtml(pjPhotoLabel(ph, i)) + '</span>'
-             +   '<span class="pj-ops no-print">'
+             +   (locked ? "" : ('<span class="pj-ops no-print">'
              +     '<button type="button" data-pj-rot="' + escapeHtml(c.key) + '|' + i + '|-90" title="左に90°回す">⟲</button>'
              +     '<button type="button" data-pj-rot="' + escapeHtml(c.key) + '|' + i + '|90" title="右に90°回す">⟳</button>'
              +     '<button type="button" class="pj-del" data-pj-del="' + escapeHtml(c.key) + '|' + i + '" title="この写真を消す">🗑</button>'
-             +   '</span></figcaption>'
+             +   '</span>'))
+             +   '</figcaption>'
              + '</figure>').join("")
          + '</div>')
       : ('<div class="pj-nophoto">写真はありません' + (c.err ? ('（' + escapeHtml(c.err) + '）') : "") + '</div>');
     return '<section class="pj-case' + (_pjDirty[c.key] ? " pj-dirty" : "") + '">'
       + pjHeadHtml(c)
-      + (c.err && c.photos.length ? ('<div class="pj-note no-print">' + escapeHtml(c.err) + '</div>') : "")
+      + (locked && c.photos.length
+          ? ('<div class="pj-note no-print">🔒 この戸別は書き戻せません（' + escapeHtml(why)
+             + '）。回す・消すはできません。</div>')
+          : "")
       + body
       + '</section>';
   }).join("");
@@ -27757,7 +27869,12 @@ function init(){
   // 初期モードクラスを適用（基本工事プリセットバーの表示制御用）
   document.body.classList.add("list-mode-" + _listMode);
   // PDF出力
-  document.getElementById("btn-list-pdf").onclick = exportListToPdf;
+  /* 写真台帳は 1戸別＝1ページ の専用CSSで刷る必要があるので、
+     上の「🖨 PDF出力」もそちらへ回す（そのまま刷ると戸別が途中で改ページされる）。 */
+  document.getElementById("btn-list-pdf").onclick = () => {
+    if(_listMode === "photos"){ pjPrint(); return; }
+    exportListToPdf();
+  };
   // 基本工事プリセット選択UI
   populateBasePresetSelector();
   document.getElementById("list-base-preset").addEventListener("change", e => {
