@@ -13936,6 +13936,22 @@ function slimListRow(row, canReread){
 }
 
 /* サブフォルダ含む再帰スキャン */
+/* このJSONは戸別ファイルではない、と分かるか。分かるものは「読めなかった」ではなく
+   黙って読み飛ばす（物件ファイルや現場用の書き出しが同じフォルダに置かれていても、
+   毎回エラーとして知らされないように）。判定できないものは今までどおり知らせる。 */
+function listNotACaseFile(data){
+  if(!data || typeof data !== "object") return "";
+  if(data.schema === PROJ_SCHEMA && Array.isArray(data.cases)) return "物件ファイル";
+  const t = String(data.type || data._type || "");
+  if(t === "antenna_map_pack")         return "現場用の地図";
+  if(t === "antenna_genba_set")        return "現場用の一式";
+  if(t === "antenna_reception_ledger") return "現場用の受付台帳";
+  if(t === "antenna_takeout_export")   return "持出材料の控え";
+  // 受付台帳を書き出した古い形（type が無い）。行に mgmt_no が並んでいれば戸別ではない。
+  if(Array.isArray(data.rows) && data.rows.length && data.rows[0] && typeof data.rows[0] === "object"
+     && ("mgmt_no" in data.rows[0]) && !("chosho_mgmt_no" in data)) return "一覧の書き出し";
+  return "";
+}
 /* 読めなかったファイルを控える。skippedPaths は「戸別が消えた」の判定で今までどおり使い、
    badFiles には掃除に必要な手がかり（どのフォルダの何という名前で、大きさはいくつか）を足す。 */
 function junkNote(stats, dirPath, name, dir, file){
@@ -13967,6 +13983,14 @@ async function scanDirRecursive(dirHandle, pathPrefix, rows, stats){
         let data;
         try { data = JSON.parse(text); }
         catch(_){ junkNote(stats, pathPrefix, name, dirHandle, file); continue; }
+        // 戸別ファイルでないと分かるもの（物件ファイル・現場用の書き出し等）は、
+        // エラーではなく読み飛ばし。同じフォルダに置いてあっても邪魔にならないように。
+        const notCase = listNotACaseFile(data);
+        if(notCase){
+          stats.files--;
+          (stats.ignored = stats.ignored || []).push({ path: pathPrefix + name, why: notCase });
+          continue;
+        }
         const row = buildListRow(pathPrefix + name, file.lastModified, data, handle);
         if(row){
           // 重複ファイルの整理で使う：置かれているフォルダ・そこでの名前・大きさ
@@ -14130,7 +14154,7 @@ function dupWhen(ms){
 function lgDupCounts(rows){
   const n = {};
   ((rows && rows.length) ? rows : (_listRows || [])).forEach(r => {
-    const k = ((r && r.data && r.data.chosho_mgmt_no) || "").trim();
+    const k = toHalfWidthAn((r && r.data && r.data.chosho_mgmt_no) || "").trim();
     if(k) n[k] = (n[k] || 0) + 1;
   });
   return n;
@@ -14140,7 +14164,9 @@ function dupFindGroups(rows){
   (rows || []).forEach(r => {
     if(!r || !r._dir || !r._name) return;
     if(r.fileType !== "plain") return;                       // 暗号化ファイルは中身を読めないので対象外
-    const no = String((r.data && r.data.chosho_mgmt_no) || "").trim();
+    // 全角のまま保存された古いファイルも、半角のものと同じ組にする（別戸別に見せない）。
+    // まとめた先の名前 g.canon も半角になるので、1回通せばファイル名までそろう。
+    const no = toHalfWidthAn((r.data && r.data.chosho_mgmt_no) || "").trim();
     if(!no) return;
     const key = (r._dirPath || "") + " " + no;
     if(!by.has(key)) by.set(key, { no, dir: r._dir, dirPath: r._dirPath || "", items: [] });
@@ -16231,7 +16257,8 @@ function subStatusBadgeHtml(status){
 /* 持出フラグの保存キー：管理番号（請求の単位）優先・無ければファイルパス。
    ※ 管理番号重複はアプリ側で警告対象。重複時は同一束として扱う。 */
 function subCaseKey(row){
-  const mg = (row.data && row.data.chosho_mgmt_no || "").trim();
+  // 管理番号は半角でキーにする（全角のまま保存された古いファイルと同じ戸別として扱う）
+  const mg = toHalfWidthAn((row.data && row.data.chosho_mgmt_no || "")).trim();
   return mg ? ("m:" + mg) : ("f:" + (row.file || ""));
 }
 function fmtSubQty(q){
@@ -19496,13 +19523,46 @@ let _ledgerMap = (() => {
 function saveLedgerMap(){
   try { localStorage.setItem(LEDGER_KEY, JSON.stringify(_ledgerMap)); } catch(_){}
 }
+// この端末に残っている分も、起動のときに1回だけ引っ越す
+try { lgMigrateHanKeys(); } catch(_){}
 function getLedger(tk){
   return _ledgerMap[tk] || {};
+}
+/* 管理番号を半角でそろえる前に作られた台帳の記録を引っ越す。
+   キーが "m:２６１１ＡＡＡ００１" のまま残っていると、半角で読み直した戸別と別物になり、
+   保留・ビラ・同意書・備考・打合せ予定が消えたように見える。
+   物件を開いたときにも呼ぶ（物件ファイルの中の台帳にも同じことが起きるため）。 */
+function lgMigrateHanKeys(){
+  let moved = 0;
+  Object.keys(_ledgerMap || {}).forEach(k => {
+    if(k.indexOf("m:") !== 0) return;
+    const no = k.slice(2);
+    const han = toHalfWidthAn(no);
+    if(han === no || !han) return;
+    const nk = "m:" + han;
+    const src = _ledgerMap[k] || {};
+    const dst = _ledgerMap[nk];
+    if(!dst){
+      _ledgerMap[nk] = src;
+    } else {
+      // 両方あるときは、空いているところだけ埋める（すでに入っている記録は上書きしない）
+      Object.keys(src).forEach(f => {
+        const cur = dst[f], v = src[f];
+        const empty = (cur === "" || cur === false || cur === undefined || cur === null);
+        const has   = !(v === "" || v === false || v === undefined || v === null);
+        if(empty && has) dst[f] = v;
+      });
+    }
+    delete _ledgerMap[k];
+    moved++;
+  });
+  if(moved) saveLedgerMap();
+  return moved;
 }
 /* 受付台帳で「保留」にした戸別か（管理番号で判定）。地図の「保」マークがこれを参照する。
    台帳のキーは subCaseKey と同じ "m:<管理番号>" 形式（管理番号なしの行は地図にリンクできないので対象外）。 */
 function isCaseOnHold(mgmtNo){
-  const mg = String(mgmtNo == null ? "" : mgmtNo).trim();
+  const mg = toHalfWidthAn(mgmtNo == null ? "" : mgmtNo).trim();
   if(!mg) return false;
   return !!getLedger("m:" + mg).hold;
 }
@@ -19574,7 +19634,11 @@ function timeResolveRow(row){
    ※ 管理番号はファイル名と結び付いているので触らない。 */
 function lgNormalizeRow(row){
   if(!row || !row.data) return;
-  ["chosho_cust_name", "chosho_cust_addr", "chosho_cust_tel"].forEach(k => {
+  // 管理番号も半角にそろえる。ここをそろえないと、全角のまま保存された古いファイルと
+  // 半角で保存し直したファイルが「別の戸別」になり、台帳に2行出て材料が二重に乗る。
+  // ※ 直すのは画面に出す内容だけで、フォルダのファイル名（row._name）は触らない。
+  //   ファイル名も直したいときは「🧩 重複をまとめる」を1回通せば 管理番号.json になる。
+  ["chosho_mgmt_no", "chosho_cust_name", "chosho_cust_addr", "chosho_cust_tel"].forEach(k => {
     const v = row.data[k];
     if(typeof v !== "string" || !v) return;
     const h = toHalfWidthAn(v);
@@ -20426,6 +20490,7 @@ async function applyProject(p, opts){
       _ledgerMap = {}; _takeoutMap = {}; _reviewMap = {}; _contractorMap = {};
     }
     Object.keys(p.ledger || {}).forEach(k => { _ledgerMap[k] = p.ledger[k]; });
+    try { lgMigrateHanKeys(); } catch(_){}   // 全角の管理番号で作られた記録を半角のキーへ引っ越す
     saveLedgerMap();
     try { noteResolveRows(_listRows); } catch(_){}   // 備考：台帳と戸別で新しい方に揃える
     Object.keys(p.takeout || {}).forEach(k => { _takeoutMap[k] = p.takeout[k]; });
@@ -22271,7 +22336,7 @@ function renderListLedgerMode(rows, container){
     +   '<button id="lg-export-genba" title="受付台帳だけを1ファイルに書き出します（地図は入りません）。スマホの現場入力アプリの「台帳」と、受付台帳ソフトの「📥 台帳を取り込み」の、どちらでもそのまま読めます。左の「📥 受付台帳」で戻せます。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📤 受付台帳</button>'
     +   '<button id="lg-export-html" title="いまの受付台帳を、中身の入った1枚のHTMLにして書き出します。渡した先はブラウザで開くだけで台帳がそのまま出るので、受付台帳ソフトを別に渡さなくて済みます。向こうで直した分は「📤 台帳を書き出し」でファイルにしてもらい、左の「📥 受付台帳」で戻せます。台帳ソフトはこのメインの中に入っているので、ファイルを選ぶ必要はありません（Excel書き出しと同じで、押すだけです）。名前・住所・電話が入るので、渡す相手にご注意ください。" style="background:#00838f;color:#fff;border:1px solid #006064;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">🌐 HTML</button>'
     +   '<button id="lg-xlsx-export" title="いまの受付台帳を Excel（.xlsx）へ書き出します。Excelで直したあと、左の「📗 Excel」でそのまま読み戻せます。" style="background:#1b7a3d;color:#fff;border:1px solid #145c2e;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📘 Excel</button>'
-    +   '<button id="lg-writeback" title="この台帳で直した 名前・住所・電話・工事日程予定・状態・備考・保留・ビラ・同意書・完了書 を、フォルダの戸別ファイルへまとめて書き込みます。台帳のセルで直しただけでは戸別ファイルは変わらないため、フォルダを読み直すと元に戻ってしまいます（工事予定日を消しても消えない等）。戸別を1件ずつ開いて保存しなくて済みます。写真・図面・積算・測定値には触りません。「打合せ予定・受付時刻」は戸別ファイルに置き場所が無いため対象外です（物件ファイルに保存されます）。「📁 フォルダ」で読み込んだ後に使えます。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">💾 戸別ファイルへ反映</button>'
+    +   '<button id="lg-writeback" title="この台帳で直した 名前・住所・電話・工事日程予定（日付・時刻）・打合せ予定・状態・備考・保留・ビラ・同意書・完了書 を、フォルダの戸別ファイルへまとめて書き込みます。台帳のセルで直しただけでは戸別ファイルは変わらないため、フォルダを読み直すと元に戻ってしまいます（工事予定日を消しても消えない等）。戸別を1件ずつ開いて保存しなくて済みます。写真・図面・積算・測定値には触りません。「打合せ予定・受付時刻」は戸別ファイルに置き場所が無いため対象外です（物件ファイルに保存されます）。「📁 フォルダ」で読み込んだ後に使えます。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">💾 戸別ファイルへ反映</button>'
     + '</div>'
     + '<span class="lg-count">全 ' + rows.length + ' 件（仮 ' + prov + ' ／ 完了 ' + done + ' ／ ビラ済 ' + flyered + (held ? ' ／ 保留 ' + held : '') + '）' + (shown.length !== rows.length ? ' → 表示 ' + shown.length + ' 件' : '') + '</span>'
     + '<div class="lgc-note">セルをクリックすると直接編集できます。工事日程・打合せ予定は 📅 予定カレンダーに、名前・住所などは図面にそのまま反映されます。</div>'
@@ -22333,9 +22398,9 @@ function renderListLedgerMode(rows, container){
     const mapReg = isMapRegistered(d.chosho_mgmt_no);
     html += '<td>' + tCell("mgmt", d.chosho_mgmt_no)
       + (isProv ? '<span class="lg-prov-badge">仮</span>' : '')
-      + ((dupN[(d.chosho_mgmt_no || "").trim()] > 1)
+      + ((dupN[toHalfWidthAn(d.chosho_mgmt_no || "").trim()] > 1)
           ? ('<span class="lg-dup-badge" title="同じ管理番号のファイルが '
-             + dupN[(d.chosho_mgmt_no || "").trim()] + ' 件あります。このままだと積算・発注材料数量・費用が'
+             + dupN[toHalfWidthAn(d.chosho_mgmt_no || "").trim()] + ' 件あります。このままだと積算・発注材料数量・費用が'
              + '二重に数えられます。「🧩 重複」でどれを残すか選んでください。">重複</span>') : '')
       + (lg.hold ? '<span class="lg-hold-badge" title="保留（地図でも管理番号の右肩に「保」マークが付きます）">保</span>' : '')
       + (r._detached ? '<span class="lg-nofile-badge' + (r._detached.reason === "pending" ? ' pending' : '')
@@ -23180,7 +23245,7 @@ function lgShowLedgerDiffDialog(payload, items){
     + "</div>"
     + '<div class="lgimp-tog"><label><input type="checkbox" id="lgimp-all-add" checked> 新しい戸別を追加（' + adds.length + "件）</label>"
     + '<label><input type="checkbox" id="lgimp-all-case" checked> 戸別の情報（名前・住所・電話・工事日・状態）を更新</label>'
-    + '<label><input type="checkbox" id="lgimp-all-lg" checked> 台帳の項目（受付時刻・打合せ・ビラ・保留・同意書・完了書・備考・施工会社）を更新</label>'
+    + '<label><input type="checkbox" id="lgimp-all-lg" checked> 台帳の項目（工事時刻・打合せ・ビラ・保留・同意書・完了書・備考・施工会社）を更新</label>'
     + '<span style="flex:1 1 auto;"></span>'
     + '<input type="search" id="lgimp-q" placeholder="管理番号・項目で絞り込み" style="font-family:inherit;font-size:12px;padding:3px 7px;border:1px solid #cdd3da;border-radius:3px;width:190px;">'
     + "</div>"
@@ -30738,7 +30803,7 @@ window.addEventListener("DOMContentLoaded", init);
     for(var i = 0; i < rows.length; i++){
       var r = rows[i];
       if(!r || !r.data) continue;
-      var k = String(r.data.chosho_mgmt_no || "").trim();
+      var k = toHalfWidthAn(r.data.chosho_mgmt_no || "").trim();
       if(k && !idx.has(k)) idx.set(k, r);   // findRowByMgmtNo と同じく、同じ番号なら先頭の1件
     }
     return idx;
@@ -30797,7 +30862,7 @@ window.addEventListener("DOMContentLoaded", init);
      どちらかに付いていれば印を出す（読み合わせは flowResolveRow が済ませている）。
      台帳は物件に入っているので、フォルダを読み込んでいなくてもこれだけで印が出せる。 */
   function bldLedgerFlyer(mgmtNo){
-    var mg = String(mgmtNo == null ? "" : mgmtNo).trim();
+    var mg = toHalfWidthAn(mgmtNo == null ? "" : mgmtNo).trim();
     if(!mg) return false;
     try { return !!(typeof getLedger === "function" && getLedger("m:" + mg).flyer); } catch(_){ return false; }
   }
@@ -30840,7 +30905,7 @@ window.addEventListener("DOMContentLoaded", init);
   /* この建物に付ける印を並び順で返す。idx（bldRowIndex の戻り値）を渡して台帳の総当たりを避ける。 */
   function bldMarksOf(mgmtNo, idx){
     var out = [];
-    var mg = String(mgmtNo || "").trim();
+    var mg = toHalfWidthAn(mgmtNo || "").trim();
     if(!mg) return out;
     if(_bldMarkOn.hold && bldOnHold(mg)) out.push(bldMarkDef("hold"));
     // ビラは受付台帳にも○が付くので、フォルダを読み込んでいなくても印を出せる
@@ -31722,9 +31787,9 @@ window.addEventListener("DOMContentLoaded", init);
   /* ---------- 既存戸別（_listRows）との連携（読み取りのみ） ---------- */
   function findRowByMgmtNo(mgmtNo){
     if(typeof _listRows === "undefined" || !_listRows) return null;
-    var key = String(mgmtNo || "").trim();
+    var key = toHalfWidthAn(mgmtNo || "").trim();      // 全角で登録した建物でも引けるように
     if(!key) return null;
-    return _listRows.find(function(r){ return r && r.data && String(r.data.chosho_mgmt_no || "").trim() === key; }) || null;
+    return _listRows.find(function(r){ return r && r.data && toHalfWidthAn(r.data.chosho_mgmt_no || "").trim() === key; }) || null;
   }
   function statusLabel(s){ return ({ provisional: "仮受付", in_progress: "未完了", completed: "工事完了" })[s] || s || ""; }
 
