@@ -25176,7 +25176,7 @@ const GENBA_HARD_KEEP_MAIN = [
 const GENBA_CUSTOMER_FIELDS = ["chosho_cust_name","chosho_cust_addr","chosho_cust_tel"];
 const GENBA_STATUS_RANK = { provisional:1, in_progress:2, completed:3 };
 // 既定/自動で付く写真ラベル（統合時に「人が付けた具体名」を優先するための判定に使う）
-const GENBA_DEFAULT_PHOTO_LABELS = new Set(["","施工前","施工前②","施工中","施工完了","施工完了②","現地","表札","その他"]);
+const GENBA_DEFAULT_PHOTO_LABELS = new Set(["","施工前","施工前②","施工前③","施工中","施工完了","施工完了②","現地","表札","その他"]);
 function _genbaIsDefaultLabel(l){ l=String(l||""); return GENBA_DEFAULT_PHOTO_LABELS.has(l) || /^写真\d+$/.test(l); }
 function _genbaClone(v){ return v==null ? v : JSON.parse(JSON.stringify(v)); }
 
