@@ -5484,6 +5484,7 @@
         <summary class="map-side-head" title="保留・下見完了・工事完了などの印"><span class="uc-t">印</span></summary>
         <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="受付台帳で「保留」にした戸別に付きます"><input type="checkbox" id="map-mark-hold"> <b style="color:#e65100;">保</b> 保留</label>
         <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="スマホ現場入力で「下見完了」にした戸別に付きます"><input type="checkbox" id="map-mark-surv"> <b style="color:#00838f;">下</b> 下見済み</label>
+        <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="受付台帳の「ビラ」に○が付いた戸別、またはスマホ現場入力で「ビラ配り」を押した戸別に付きます。フォルダを読み込んでいなくても、受付台帳のぶんは出ます。"><input type="checkbox" id="map-mark-flyer"> <b style="color:#7b1fa2;">ビ</b> ビラ配布済み</label>
         <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="工事状態が「工事完了」の戸別に付きます"><input type="checkbox" id="map-mark-done"> <b style="color:#2e7d32;">完</b> 工事完了</label>
         <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="工事状態が「未完了」の戸別に付きます。着工前（仮受付）には付きません。数が多くなるので既定は表示なしです。"><input type="checkbox" id="map-mark-undone"> <b style="color:#1565c0;">未</b> 未完了</label>
         <details class="uc-hint"><summary>くわしく</summary><div>管理番号の右肩に出ます（番号が無い建物は中心）。<b>入れれば印刷にも出ます／外せば印刷にも出ません</b>。この設定はこの端末だけに保存されます。</div></details>
@@ -30698,6 +30699,15 @@ window.addEventListener("DOMContentLoaded", init);
   function bldOnHold(mgmtNo){
     try { return !!(typeof isCaseOnHold === "function" && isCaseOnHold(mgmtNo)); } catch(_){ return false; }
   }
+  /* 受付台帳で「ビラ」に○が付いている戸別か。
+     ビラは事務所（受付台帳）でも現場入力でも付けるので、戸別ファイル側の flyer_done と
+     どちらかに付いていれば印を出す（読み合わせは flowResolveRow が済ませている）。
+     台帳は物件に入っているので、フォルダを読み込んでいなくてもこれだけで印が出せる。 */
+  function bldLedgerFlyer(mgmtNo){
+    var mg = String(mgmtNo == null ? "" : mgmtNo).trim();
+    if(!mg) return false;
+    try { return !!(typeof getLedger === "function" && getLedger("m:" + mg).flyer); } catch(_){ return false; }
+  }
   /* 同じ色のまま、濃くする（管理番号の文字を読みやすくする用）。
      色分けの意味は変えたくないので、色相はそのままに明るさだけ落とす。 */
   function mapDarken(hex, k){
@@ -30717,9 +30727,15 @@ window.addEventListener("DOMContentLoaded", init);
   var MAP_MARK_DEFS = [
     { key: "hold",   ch: "保", color: "#e65100", id: "map-mark-hold",   def: true  },
     { key: "surv",   ch: "下", color: "#00838f", id: "map-mark-surv",   def: true  },
+    { key: "flyer",  ch: "ビ", color: "#7b1fa2", id: "map-mark-flyer",  def: true  },
     { key: "done",   ch: "完", color: "#2e7d32", id: "map-mark-done",   def: true  },
     { key: "undone", ch: "未", color: "#1565c0", id: "map-mark-undone", def: false },
   ];
+  /* 印は key で引く（並びを変えても壊れないように） */
+  function bldMarkDef(key){
+    for(var i = 0; i < MAP_MARK_DEFS.length; i++){ if(MAP_MARK_DEFS[i].key === key) return MAP_MARK_DEFS[i]; }
+    return null;
+  }
   var _bldMarkOn = {};
   MAP_MARK_DEFS.forEach(function(m){
     _bldMarkOn[m.key] = m.def;
@@ -30733,15 +30749,21 @@ window.addEventListener("DOMContentLoaded", init);
     var out = [];
     var mg = String(mgmtNo || "").trim();
     if(!mg) return out;
-    if(_bldMarkOn.hold && bldOnHold(mg)) out.push(MAP_MARK_DEFS[0]);
-    if(!_bldMarkOn.surv && !_bldMarkOn.done && !_bldMarkOn.undone) return out;
+    if(_bldMarkOn.hold && bldOnHold(mg)) out.push(bldMarkDef("hold"));
+    // ビラは受付台帳にも○が付くので、フォルダを読み込んでいなくても印を出せる
+    var lgFlyer = _bldMarkOn.flyer && bldLedgerFlyer(mg);
+    if(!_bldMarkOn.surv && !_bldMarkOn.done && !_bldMarkOn.undone && !_bldMarkOn.flyer){ return out; }
     var row = idx ? idx.get(mg) : findRowByMgmtNo(mg);
     var d = (row && row.data) || null;
-    if(!d) return out;
-    if(_bldMarkOn.surv && d.survey_done) out.push(MAP_MARK_DEFS[1]);
+    if(!d){
+      if(lgFlyer) out.push(bldMarkDef("flyer"));   // 台帳だけで分かるぶんは出す
+      return out;
+    }
+    if(_bldMarkOn.surv && d.survey_done) out.push(bldMarkDef("surv"));
+    if(_bldMarkOn.flyer && (lgFlyer || d.flyer_done)) out.push(bldMarkDef("flyer"));
     var st = String(d.chosho_status || "");
-    if(_bldMarkOn.done && st === "completed") out.push(MAP_MARK_DEFS[2]);
-    if(_bldMarkOn.undone && st === "in_progress") out.push(MAP_MARK_DEFS[3]);   // 仮受付は工事前なので付けない
+    if(_bldMarkOn.done && st === "completed") out.push(bldMarkDef("done"));
+    if(_bldMarkOn.undone && st === "in_progress") out.push(bldMarkDef("undone"));   // 仮受付は工事前なので付けない
     return out;
   }
 
@@ -30751,7 +30773,7 @@ window.addEventListener("DOMContentLoaded", init);
     var minNo = bldMinLabelWorld(MAP_MIN_NO_MM);   // 管理番号の最低文字サイズ（印刷実寸から算出）
     _bldMinLabLast = minNo;
     // 台帳の総当たりを避ける（描画1回につき1回だけ作る）。番地にも状態の印にも使う。
-    var needIdx = _bldShowBanchi || _bldMarkOn.surv || _bldMarkOn.done || _bldMarkOn.undone;
+    var needIdx = _bldShowBanchi || _bldMarkOn.surv || _bldMarkOn.flyer || _bldMarkOn.done || _bldMarkOn.undone;
     var rowIdx = needIdx ? bldRowIndex() : null;
     g.innerHTML = (L.objects || []).map(function(o){
       var bc = bldColors(o);
@@ -30765,7 +30787,7 @@ window.addEventListener("DOMContentLoaded", init);
       // 受付台帳で「保留」にした戸別は、その番号の右肩に橙色の「保」マークを添える（番号が無い場合は中心）
       var lab = "";
       var l3 = linked ? mgmtLast3(o.linkMgmtNo) : "";
-      var marks = linked ? bldMarksOf(o.linkMgmtNo, rowIdx) : [];            // 保・下・完・未
+      var marks = linked ? bldMarksOf(o.linkMgmtNo, rowIdx) : [];            // 保・下・ビ・完・未
       var bt = (linked && _bldShowBanchi) ? bldBanchiText(o, rowIdx) : "";   // 台帳引きは建物1つにつき1回だけ
       if(l3 || marks.length || bt){
         var minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
