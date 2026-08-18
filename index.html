@@ -1349,6 +1349,34 @@
     body.list-print-mode .cal-cell { min-height: 0 !important; height: 100% !important; padding: 1px 2px !important; overflow: hidden; }
     body.list-print-mode .cal-cell .cal-day { font-size: 9px !important; }
     body.list-print-mode .cal-ev { font-size: 8px !important; line-height: 1.2 !important; padding: 0 2px !important; }
+    /* ⑥ 写真台帳：戸別ごとに改ページしてA4縦で出す */
+    body.list-print-mode.photo-only .cost-detail-section,
+    body.list-print-mode.photo-only .list-mode-tabs,
+    body.list-print-mode.photo-only .ph-bar { display: none !important; }
+    body.list-print-mode.photo-only .ph-doc-head { display: flex !important; font-size: 13px; margin-bottom: 6px; }
+    body.list-print-mode.photo-only .ph-grp {
+      display: block !important; border: none !important; border-radius: 0 !important;
+      padding: 0 !important; margin: 0 !important; break-inside: avoid; page-break-inside: avoid;
+    }
+    body.list-print-mode.photo-only .ph-grp + .ph-grp { break-before: page; page-break-before: always; }
+    body.list-print-mode.photo-only .ph-h { border-bottom: 2px solid #90caf9 !important; margin-bottom: 5mm; }
+    body.list-print-mode.photo-only .ph-h .ph-no { font-size: 13px; }
+    body.list-print-mode.photo-only .ph-h .ph-nm { font-size: 12px; }
+    body.list-print-mode.photo-only .ph-h .ph-ad,
+    body.list-print-mode.photo-only .ph-h .ph-dt { font-size: 10px; }
+    body.list-print-mode.photo-only .ph-h .ph-dir,
+    body.list-print-mode.photo-only .ph-h .ph-n { display: none !important; }
+    body.list-print-mode.photo-only .ph-grid { gap: 4mm; }
+    /* 1ページの枚数に合わせて枠の高さを決める（用紙の残りを行数で割る） */
+    body.list-print-mode.photo-only .ph-frame {
+      aspect-ratio: auto; height: calc((247mm - 5mm - (var(--ph-rows, 3) - 1) * 4mm - var(--ph-rows, 3) * 6mm) / var(--ph-rows, 3));
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    body.list-print-mode.photo-only .ph-box { break-inside: avoid; page-break-inside: avoid; }
+    body.list-print-mode.photo-only .ph-box figcaption { font-size: 9px; }
+    body.list-print-mode.photo-only #ph-zoom { display: none !important; }
+    @page photo-portrait { size: A4 portrait; margin: 12mm; }
+    body.list-print-mode.photo-only { page: photo-portrait; }
     /* 「保存の状態」は画面で見るためのもの。紙には出さない。 */
     body.list-print-mode .lg-save { display: none !important; }
     /* 通常のカレンダー印刷では「今後の予定」レポートは出さない（月グリッドのみ） */
@@ -3296,6 +3324,69 @@
   .cal-free-row button { padding: 3px 10px; border: 1px solid #cdd3da; background: #fff; border-radius: 3px; cursor: pointer; font-size: 12px; }
   .cal-free-add { border-top: 1px dashed #d8cfe8; padding-top: 6px; margin-top: 2px; }
   .cal-free-note { font-size: 10.5px; color: #7c6a99; }
+  /* ============================================================
+     📷 写真台帳（フォルダ → 管理番号 → 写真 を戸別ごとの台帳にする）
+     ============================================================ */
+  .ph-bar { background: #fff; border: 1px solid #cdd3da; border-radius: 4px; padding: 8px 10px; margin-bottom: 10px; }
+  .ph-bar-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .ph-bar-line + .ph-bar-line { margin-top: 7px; padding-top: 7px; border-top: 1px solid #eef2f6; }
+  .ph-bar button { background: #7a4e1e; color: #fff; border: 1px solid #5e3c16; padding: 5px 14px;
+    border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: 700; font-family: inherit; }
+  .ph-bar button:hover { background: #96632a; }
+  .ph-bar button:disabled { opacity: .55; cursor: default; }
+  .ph-bar #ph-reload { background: #fff; color: #7a4e1e; }
+  .ph-bar #ph-print { background: #1e3a5f; border-color: #16314f; margin-left: auto; }
+  .ph-bar #ph-print:hover { background: #2e5488; }
+  .ph-root { font-size: 12px; font-weight: 700; color: #33424f; background: #f4f6f8;
+    border: 1px solid #dde3ea; border-radius: 3px; padding: 3px 9px; }
+  .ph-opt { font-size: 12px; color: #33424f; display: inline-flex; align-items: center; gap: 5px; }
+  .ph-opt select { padding: 3px 6px; border: 1px solid #cdd3da; border-radius: 3px; font-size: 12px; font-family: inherit; }
+  .ph-cnt { font-size: 12px; color: #667482; }
+  .ph-hint { font-size: 10.5px; color: #90a0b0; margin-left: -3px; }
+  .ph-guide { background: #fff; border: 1px solid #cdd3da; border-radius: 4px; padding: 14px 18px; color: #33424f; }
+  .ph-guide-h { font-size: 15px; font-weight: 700; color: #1e3a5f; margin-bottom: 6px; }
+  .ph-guide p { font-size: 13px; margin: 0 0 8px; }
+  .ph-guide-s { font-size: 12px; color: #667482; line-height: 1.7; }
+  .ph-tree { background: #f6f8fa; border: 1px solid #e3e8ee; border-radius: 4px; padding: 10px 14px;
+    font-size: 12.5px; line-height: 1.7; color: #33424f; overflow-x: auto; margin: 0 0 10px; }
+  .ph-warn { background: #fff5e8; border: 1px solid #ffcc80; border-radius: 4px;
+    padding: 8px 12px; font-size: 12.5px; color: #bf360c; margin-bottom: 10px; }
+  .ph-doc-head { font-size: 15px; font-weight: 700; color: #1e3a5f; margin: 0 0 8px;
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .ph-doc-head .ph-doc-date { font-size: 11px; color: #667482; font-weight: 400; }
+  /* 戸別ひとかたまり＝紙では1ページ */
+  .ph-grp { background: #fff; border: 1px solid #cdd3da; border-radius: 4px; padding: 10px 12px; margin-bottom: 12px; }
+  .ph-h { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    border-bottom: 2px solid #90caf9; padding-bottom: 4px; margin-bottom: 9px; }
+  .ph-h .ph-no { font-size: 15px; font-weight: 700; color: #0d47a1; }
+  .ph-h .ph-nm { font-size: 14px; font-weight: 700; color: #1e3a5f; }
+  .ph-h .ph-ad { font-size: 12px; color: #33424f; }
+  .ph-h .ph-dt { font-size: 12px; color: #33424f; background: #e3f2fd; border-radius: 3px; padding: 1px 7px; }
+  .ph-h .ph-n  { font-size: 11.5px; color: #667482; margin-left: auto; }
+  .ph-h .ph-dir { font-size: 11px; color: #90a0b0; }
+  .ph-h .ph-miss { font-size: 11px; font-weight: 700; color: #bf360c; background: #fff5e8;
+    border: 1px solid #ffcc80; border-radius: 3px; padding: 1px 7px; }
+  /* 画面では、1枚が大きくなりすぎないように幅を抑える（紙の割り付けは印刷用のCSSで決める）。
+     「1ページの枚数」を減らすと画面でも大きくなるので、刷る前の見当が付く。 */
+  .ph-grid { display: grid; grid-template-columns: repeat(var(--ph-cols, 2), 1fr); gap: 10px;
+    max-width: calc(var(--ph-cols, 2) * 330px); }
+  .ph-box { margin: 0; }
+  .ph-frame { background: #f2f4f7; border: 1px solid #dde3ea; border-radius: 3px; overflow: hidden;
+    aspect-ratio: 4 / 3; display: flex; align-items: center; justify-content: center; }
+  .ph-frame img { width: 100%; height: 100%; object-fit: contain; cursor: zoom-in; display: block; }
+  .ph-box figcaption { font-size: 11.5px; color: #33424f; margin-top: 3px; display: flex; gap: 5px;
+    align-items: baseline; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ph-box figcaption .ph-i { flex: none; font-weight: 700; color: #fff; background: #7a8794;
+    border-radius: 3px; padding: 0 5px; font-size: 10px; }
+  /* 大きく見る（画面のみ） */
+  #ph-zoom { position: fixed; inset: 0; background: rgba(0,0,0,.86); z-index: 4000;
+    display: flex; align-items: center; justify-content: center; padding: 24px; }
+  #ph-zoom .ph-zoom-in { max-width: 96vw; max-height: 92vh; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  #ph-zoom img { max-width: 96vw; max-height: 86vh; object-fit: contain; background: #222; }
+  #ph-zoom .ph-zoom-cap { color: #fff; font-size: 13px; }
+  #ph-zoom .ph-zoom-x { position: absolute; top: 12px; right: 16px; background: rgba(255,255,255,.14);
+    color: #fff; border: 1px solid rgba(255,255,255,.35); border-radius: 4px;
+    padding: 5px 13px; font-size: 15px; cursor: pointer; font-family: inherit; }
   /* --- 受付台帳の「保存の状態」：①物件ファイル（自動）と②戸別ファイル（押したとき）--- */
   .lg-save { background: #fff; border: 1px solid #cdd3da; border-radius: 4px; padding: 7px 10px; margin-bottom: 8px; }
   .lg-save .lgs-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -4956,6 +5047,7 @@
       <button class="mode-tab" data-list-mode="ledger" title="全戸別を1行ずつ一覧・セル直接編集（工事日程・打合せ・ビラ配布・完了・備考）。カレンダーと双方向連動">📒 受付台帳</button>
       <button class="mode-tab" data-list-mode="calendar" title="工事予定（青）と打合せ予定（緑）を月表示。受付台帳と双方向連動">📅 予定</button>
       <button class="mode-tab" data-list-mode="materials" title="現場入力で「下見完了」にした戸別の材料を、工事全体で合計します。まとめ発注の数量表（金額なし）">🧰 発注材料</button>
+      <button class="mode-tab" data-list-mode="photos" title="「指定のフォルダ → 管理番号のフォルダ → 写真が数枚」という置き方の写真をそのまま読み込み、戸別ごとの写真台帳として並べて印刷／PDFにします。写真はこの画面に出すだけで、物件ファイル・戸別ファイルには入りません。">📷 写真台帳</button>
       <button class="list-pdf-btn" id="btn-list-pdf" title="現在のモードの内容をPDF/印刷ダイアログで出力">🖨 PDF出力</button>
     </div>
     <div class="list-base-preset-row">
@@ -5770,7 +5862,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.18";
+const APP_VERSION = "2026.08.18b";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -15648,7 +15740,8 @@ function renderListTable(){
     : "";
 
   // 受付台帳・カレンダーは0件でも表示する（台帳の「＋新規行」／カレンダーのクイック仮入力が戸別作成の起点）
-  const zeroOk = (_listMode === "ledger" || _listMode === "calendar" || _listMode === "materials");
+  const zeroOk = (_listMode === "ledger" || _listMode === "calendar" || _listMode === "materials"
+    || _listMode === "photos");   // 写真台帳は戸別を読み込んでいなくてもフォルダだけで使える
   if(_listRows.length === 0 && !zeroOk){
     tbl.innerHTML = ""; custom.innerHTML = "";
     tbl.style.display = ""; custom.style.display = "none";
@@ -15692,6 +15785,10 @@ function renderListTable(){
     tbl.style.display = "none";
     custom.style.display = "";
     renderListMaterialsMode(rows, custom);
+  } else if(_listMode === "photos"){
+    tbl.style.display = "none";
+    custom.style.display = "";
+    renderListPhotoMode(rows, custom);
   } else {
     tbl.style.display = "";
     custom.style.display = "none";
@@ -17852,7 +17949,7 @@ function setListMode(mode){
     _lgPrintPreview = false;
     document.body.classList.remove("lg-print-preview");
   }
-  document.body.classList.remove("list-mode-standard","list-mode-by_folder","list-mode-cost_detail","list-mode-subcontractor","list-mode-ledger","list-mode-calendar","list-mode-materials");
+  document.body.classList.remove("list-mode-standard","list-mode-by_folder","list-mode-cost_detail","list-mode-subcontractor","list-mode-ledger","list-mode-calendar","list-mode-materials","list-mode-photos");
   document.body.classList.add("list-mode-" + mode);
   renderListTable();
 }
@@ -21797,6 +21894,7 @@ const MENU_FEATS = [
   { icon: "📒", title: "受付台帳", desc: "全戸別を1行ずつ一覧。日程・打合せ・ビラ配布・完了・備考をその場で直接編集", mode: "ledger" },
   { icon: "📄", title: "戸別一覧（読込・積算）", desc: "保存済ファイルの一覧・検索・読込。フォルダからの取り込みもここから", mode: "standard" },
   { icon: "🧰", title: "発注材料数量", desc: "現場入力で「下見完了」にした戸別の材料を工事全体で合計。まとめ発注用の数量表（金額なし）", mode: "materials" },
+  { icon: "📷", title: "写真台帳", desc: "「フォルダ → 管理番号 → 写真」の置き方の写真を読み込み、戸別ごと1ページの写真台帳として印刷／PDF", mode: "photos" },
   { icon: "💴", title: "全体費用詳細", desc: "読み込んだ全戸別の材料費・労務費を工事全体で集計", mode: "cost_detail" },
   { icon: "🤝", title: "協力会社請求内訳", desc: "労務費＋協力会社諸経費＋持出材料の請求集計・明細PDF", mode: "subcontractor" },
   { icon: "✏️", title: "積算・図面編集", desc: "現在開いている戸別の積算入力と系統図（図面）の編集画面へ", mode: "" },
@@ -24289,6 +24387,277 @@ function matExtraCable5c(row){
     push("宅内新規の標準2m", Math.min(num(d.cable_indoor_new), 2));
   }
   return out;
+}
+/* ============================================================
+   📷 写真台帳（一覧の第8モード）
+   「指定のフォルダ → 管理番号のフォルダ → 写真が数枚」という置き方の写真を
+   そのまま読み込み、戸別ごとに1ページの写真台帳として出す。
+
+   ・写真はこの画面に出すためだけに読む。物件ファイル・戸別ファイルには入れない
+     （何百枚もの写真をJSONに入れると、ファイルが開けない大きさになるため）。
+   ・受付台帳に同じ管理番号があれば、氏名・住所・工事日を見出しに入れる。
+   ・管理番号のフォルダの中がさらに枝分かれしていても、写真は全部拾う。
+   ============================================================ */
+const PH_EXT = /\.(jpe?g|png|gif|webp|heic|heif|bmp|avif)$/i;
+let _phAlbum = null;        // { root, groups:[...], loose:[名前], skipped:数 }
+let _phRootHandle = null;   // 読み直し用
+let _phUrls = [];           // 画面に出すために作った一時アドレス（読み直すとき捨てる）
+let _phPerPage = 6;         // 1ページに並べる枚数
+let _phOnlyLedger = false;  // 受付台帳にある管理番号だけ出す
+const PH_PAGE_OPTS = [
+  { n: 2, cols: 1, rows: 2, label: "2枚（大きく）" },
+  { n: 4, cols: 2, rows: 2, label: "4枚" },
+  { n: 6, cols: 2, rows: 3, label: "6枚（標準）" },
+  { n: 9, cols: 3, rows: 3, label: "9枚（小さく）" },
+];
+function phPageDef(){ return PH_PAGE_OPTS.find(o => o.n === _phPerPage) || PH_PAGE_OPTS[2]; }
+
+/* フォルダ名から管理番号を読み取る。「2611AAA001」でも「2611AAA001_佐藤」でも拾えるように、
+   先頭の英数字のかたまりを管理番号とみなす（全角で作られたフォルダ名も半角へ直してから見る）。 */
+function phNoFromDirName(s){
+  const t = toHalfWidthAn(String(s || "")).trim();
+  const m = /^([0-9A-Za-z][0-9A-Za-z\-]*)/.exec(t);
+  return m ? m[1] : t;
+}
+/* ファイル名から見出しを作る。「01_施工前.jpg」→「01_施工前」 */
+function phLabelOf(name){
+  return String(name || "").replace(/^.*[\/\\]/, "").replace(/\.[^.]+$/, "");
+}
+/* 受付台帳の行を探す。フォルダ名そのもの → 先頭の英数字、の順に当てる。 */
+function phRowOf(g){
+  const rows = Array.isArray(_listRows) ? _listRows : [];
+  const cand = [toHalfWidthAn(String(g.dirName || "")).trim(), g.no];
+  for(const c of cand){
+    if(!c) continue;
+    const r = rows.find(x => x && x.data && toHalfWidthAn(String(x.data.chosho_mgmt_no || "")).trim() === c);
+    if(r) return r;
+  }
+  return null;
+}
+function phSortPhotos(a){
+  return a.sort((x, y) => String(x.name).localeCompare(String(y.name), "ja", { numeric: true, sensitivity: "base" }));
+}
+function phFreeUrls(){
+  _phUrls.forEach(u => { try { URL.revokeObjectURL(u); } catch(_){} });
+  _phUrls = [];
+}
+/* 管理番号のフォルダの中を、枝分かれしていても全部たどって写真を集める */
+async function phCollect(dir, prefix, out, stat){
+  for await (const [name, h] of dir.entries()){
+    if(h.kind === "directory"){
+      await phCollect(h, prefix + name + "/", out, stat);
+    } else if(h.kind === "file"){
+      if(!PH_EXT.test(name)){ stat.skipped++; continue; }
+      let f = null;
+      try { f = await h.getFile(); } catch(_){ stat.skipped++; continue; }
+      const url = URL.createObjectURL(f);
+      _phUrls.push(url);
+      out.push({ name: prefix + name, label: phLabelOf(name), size: f.size, at: f.lastModified, url });
+    }
+  }
+}
+async function phLoad(root){
+  if(!root) return;
+  phFreeUrls();
+  _phRootHandle = root;
+  const status = document.getElementById("list-status");
+  if(status){ status.style.display = ""; status.textContent = "📷 写真フォルダを読み込み中..."; }
+  const groups = [], loose = [];
+  const stat = { skipped: 0 };
+  try {
+    for await (const [name, h] of root.entries()){
+      if(h.kind === "directory"){
+        const photos = [];
+        await phCollect(h, "", photos, stat);
+        if(photos.length) groups.push({ dirName: name, no: phNoFromDirName(name), photos: phSortPhotos(photos) });
+      } else if(h.kind === "file" && PH_EXT.test(name)){
+        loose.push(name);      // 管理番号のフォルダに入っていない写真＝置き場所が違う
+      }
+    }
+  } catch(err){
+    if(status) status.textContent = "写真フォルダを読み込めませんでした。";
+    alert("写真フォルダを読み込めませんでした。\n\n" + ((err && err.message) || err));
+    return;
+  }
+  groups.sort((a, b) => String(a.no).localeCompare(String(b.no), "ja", { numeric: true }));
+  _phAlbum = { root: root.name || "", groups, loose, skipped: stat.skipped };
+  if(status) status.style.display = "none";
+  renderListTable();
+  if(!groups.length){
+    alert("管理番号のフォルダが見つかりませんでした。\n\n"
+      + "「選んだフォルダ → 管理番号のフォルダ → 写真」という置き方にしてください。\n"
+      + (loose.length ? ("※ 選んだフォルダの直下に写真が " + loose.length + " 枚ありました。"
+          + "管理番号のフォルダを作って、その中へ入れてください。") : ""));
+  }
+}
+async function phPick(){
+  if(!window.showDirectoryPicker){
+    alert("このブラウザはフォルダを選ぶ操作に対応していません。\n（Chrome / Edge でお試しください）");
+    return;
+  }
+  let root;
+  try { root = await window.showDirectoryPicker(); }
+  catch(err){
+    if(err && err.name === "AbortError") return;
+    alert("フォルダを選べませんでした。\n\nもう一度「📁 写真フォルダを選ぶ」を押してください。\n\n"
+      + (err && err.message ? err.message : err));
+    return;
+  }
+  await phLoad(root);
+}
+/* 画面に出す組（絞り込みの結果） */
+function phShownGroups(){
+  const gs = (_phAlbum && _phAlbum.groups) || [];
+  return _phOnlyLedger ? gs.filter(g => !!phRowOf(g)) : gs;
+}
+function phTotalPhotos(gs){ return gs.reduce((n, g) => n + g.photos.length, 0); }
+
+function renderListPhotoMode(rows, container){
+  const pg = phPageDef();
+  let html = renderSelectedFolderBanner();
+  html += '<div class="ph-bar cost-detail-section">'
+    + '<div class="ph-bar-line">'
+    +   '<button type="button" id="ph-pick" title="「選んだフォルダ → 管理番号のフォルダ → 写真」の置き方のフォルダを選びます。写真はこの画面に出すだけで、ファイルには書き込みません。">📁 写真フォルダを選ぶ</button>'
+    +   (_phRootHandle ? '<button type="button" id="ph-reload" title="同じフォルダを読み直します（写真を足したあとに押してください）">🔄 読み直す</button>' : '')
+    +   (_phAlbum ? '<span class="ph-root" title="いま見ている写真フォルダ">📁 ' + escapeHtml(_phAlbum.root) + '</span>' : '')
+    + '</div>';
+  if(_phAlbum){
+    const gs = phShownGroups();
+    html += '<div class="ph-bar-line">'
+      + '<label class="ph-opt">1ページの枚数 '
+      +   '<select id="ph-perpage">'
+      +     PH_PAGE_OPTS.map(o => '<option value="' + o.n + '"' + (o.n === _phPerPage ? " selected" : "") + '>'
+              + escapeHtml(o.label) + '</option>').join("")
+      +   '</select></label>'
+      + '<span class="ph-hint" title="紙1ページに並べる枚数です。減らすと1枚が大きくなります。">（紙1ページあたり）</span>'
+      + '<label class="ph-opt" title="受付台帳に同じ管理番号がある戸別だけを出します"><input type="checkbox" id="ph-only-ledger"'
+      +   (_phOnlyLedger ? " checked" : "") + '> 台帳にある番号だけ</label>'
+      + '<button type="button" id="ph-print" title="戸別ごとに改ページして、写真台帳をA4縦で印刷／PDF出力します">🖨 写真台帳を印刷</button>'
+      + '<span class="ph-cnt">' + gs.length + ' 戸別 ／ 写真 ' + phTotalPhotos(gs) + ' 枚</span>'
+      + '</div>';
+  }
+  html += '</div>';
+
+  if(!_phAlbum){
+    html += '<div class="ph-guide cost-detail-section">'
+      + '<div class="ph-guide-h">📷 写真台帳</div>'
+      + '<p>まとめて作った写真フォルダを、そのまま戸別ごとの写真台帳にします。'
+      + '上の「📁 写真フォルダを選ぶ」から、いちばん外側のフォルダを選んでください。</p>'
+      + '<pre class="ph-tree">選んだフォルダ\n'
+      + '├ 2611AAA001        ← 管理番号のフォルダ\n'
+      + '│  ├ 施工前.jpg\n'
+      + '│  ├ 施工中.jpg\n'
+      + '│  └ 施工完了.jpg\n'
+      + '└ 2611AAA002\n'
+      + '   └ …</pre>'
+      + '<p class="ph-guide-s">・フォルダ名は「2611AAA001」でも「2611AAA001_佐藤」でも構いません（先頭の英数字を管理番号として読みます）。<br>'
+      + '・管理番号のフォルダの中がさらに分かれていても、写真は全部拾います。<br>'
+      + '・受付台帳に同じ管理番号があれば、氏名・住所・工事日を見出しに入れます。<br>'
+      + '・写真はこの画面に出すだけです。物件ファイル・戸別ファイルには書き込みません。</p>'
+      + '</div>';
+    container.innerHTML = html;
+    bindPhotoHandlers(container);
+    return;
+  }
+
+  const gs = phShownGroups();
+  if(_phAlbum.loose.length){
+    html += '<div class="ph-warn cost-detail-section">⚠ 選んだフォルダの直下に写真が '
+      + _phAlbum.loose.length + ' 枚あります（管理番号のフォルダに入っていないので出していません）。</div>';
+  }
+  if(!gs.length){
+    html += '<div class="ph-warn cost-detail-section">出せる戸別がありません。'
+      + (_phOnlyLedger ? '「台帳にある番号だけ」のチェックを外すと、台帳に無い番号も出ます。' : '') + '</div>';
+    container.innerHTML = html;
+    bindPhotoHandlers(container);
+    return;
+  }
+  // 印刷の見出しに出す物件名と日付
+  html += '<div class="ph-doc-head">写真台帳'
+    + (_currentProject ? ('　' + escapeHtml(_currentProject.name)) : "")
+    + '<span class="ph-doc-date">' + lgDateStrToday(0).replace(/-/g, "/") + ' 現在</span></div>';
+  html += gs.map(g => {
+    const r = phRowOf(g);
+    const dd = (r && r.data) || null;
+    const head = '<div class="ph-h">'
+      + '<span class="ph-no">' + escapeHtml(g.no || g.dirName) + '</span>'
+      + (dd ? '<span class="ph-nm">' + escapeHtml(dd.chosho_cust_name || "") + '</span>' : '')
+      + (dd && dd.chosho_cust_addr ? '<span class="ph-ad">' + escapeHtml(dd.chosho_cust_addr) + '</span>' : '')
+      + (dd && dd.chosho_date ? '<span class="ph-dt">工事 ' + escapeHtml(dd.chosho_date.replace(/-/g, "/")) + '</span>' : '')
+      + (dd ? '' : '<span class="ph-miss" title="この管理番号は受付台帳にありません">台帳に無い番号</span>')
+      + '<span class="ph-n">写真 ' + g.photos.length + ' 枚</span>'
+      + (g.dirName !== g.no ? '<span class="ph-dir" title="フォルダ名">📁 ' + escapeHtml(g.dirName) + '</span>' : '')
+      + '</div>';
+    const grid = '<div class="ph-grid" style="--ph-cols:' + pg.cols + ';--ph-rows:' + pg.rows + ';">'
+      + g.photos.map((ph, i) =>
+          '<figure class="ph-box">'
+          + '<div class="ph-frame"><img src="' + escapeHtml(ph.url) + '" alt="" loading="lazy"'
+          +   ' data-ph-zoom="' + escapeHtml(ph.url) + '" data-ph-cap="' + escapeHtml(ph.label) + '"></div>'
+          + '<figcaption><span class="ph-i">' + (i + 1) + '</span>' + escapeHtml(ph.label) + '</figcaption>'
+          + '</figure>').join("")
+      + '</div>';
+    return '<section class="ph-grp">' + head + grid + '</section>';
+  }).join("");
+  container.innerHTML = html;
+  bindPhotoHandlers(container);
+}
+/* 印刷の前に、まだ読み込んでいない写真を全部読み終える（遅れて出る＝白い枠のまま刷られるのを防ぐ） */
+async function phEnsureLoaded(container){
+  const imgs = [...(container || document).querySelectorAll(".ph-grid img")];
+  imgs.forEach(im => { im.loading = "eager"; });
+  await Promise.all(imgs.map(im => (im.complete && im.naturalWidth)
+    ? Promise.resolve()
+    : new Promise(res => { im.addEventListener("load", res, { once: true }); im.addEventListener("error", res, { once: true }); })));
+}
+async function phPrint(){
+  if(_listMode !== "photos" || !_phAlbum) return;
+  const btn = document.getElementById("ph-print");
+  if(btn){ btn.disabled = true; btn.textContent = "🖨 写真を読み込み中..."; }
+  try { await phEnsureLoaded(document.getElementById("list-content-custom")); } catch(_){}
+  if(btn){ btn.disabled = false; btn.textContent = "🖨 写真台帳を印刷"; }
+  document.body.classList.add("list-print-mode", "photo-only");
+  const cleanup = () => {
+    document.body.classList.remove("list-print-mode", "photo-only");
+    window.removeEventListener("afterprint", cleanup);
+  };
+  window.addEventListener("afterprint", cleanup);
+  setTimeout(cleanup, 120000);
+  setTimeout(() => printWithFilename("写真台帳_" + lgDateStrToday(0)), 200);
+}
+/* 写真を大きく見る（画面のみ。枠外・✕・Escで閉じる） */
+function phZoom(url, cap){
+  phZoomClose();
+  const bd = document.createElement("div");
+  bd.id = "ph-zoom";
+  bd.innerHTML = '<div class="ph-zoom-in"><img src="' + escapeHtml(url) + '" alt="">'
+    + '<div class="ph-zoom-cap">' + escapeHtml(cap || "") + '</div></div>'
+    + '<button type="button" class="ph-zoom-x" aria-label="閉じる">✕</button>';
+  bd.addEventListener("click", e => { if(e.target === bd || e.target.closest(".ph-zoom-x")) phZoomClose(); });
+  document.body.appendChild(bd);
+  document.addEventListener("keydown", phZoomEsc);
+}
+function phZoomEsc(e){ if(e.key === "Escape") phZoomClose(); }
+function phZoomClose(){
+  const bd = document.getElementById("ph-zoom");
+  if(bd) bd.remove();
+  document.removeEventListener("keydown", phZoomEsc);
+}
+function bindPhotoHandlers(container){
+  if(container._phBound) return;
+  container._phBound = true;
+  container.addEventListener("click", e => {
+    if(_listMode !== "photos") return;
+    if(e.target.closest("#ph-pick")){ phPick(); return; }
+    if(e.target.closest("#ph-reload")){ if(_phRootHandle) phLoad(_phRootHandle); return; }
+    if(e.target.closest("#ph-print")){ phPrint(); return; }
+    const im = e.target.closest("[data-ph-zoom]");
+    if(im){ phZoom(im.dataset.phZoom, im.dataset.phCap); return; }
+  });
+  container.addEventListener("change", e => {
+    if(_listMode !== "photos") return;
+    if(e.target.id === "ph-perpage"){ _phPerPage = parseInt(e.target.value, 10) || 6; renderListTable(); return; }
+    if(e.target.id === "ph-only-ledger"){ _phOnlyLedger = !!e.target.checked; renderListTable(); return; }
+  });
 }
 function renderListMaterialsMode(rows, container){
   const target = _matOnlyDone ? rows.filter(surveyDoneOf) : rows.slice();
