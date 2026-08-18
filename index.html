@@ -1349,8 +1349,13 @@
     body.list-print-mode .cal-cell { min-height: 0 !important; height: 100% !important; padding: 1px 2px !important; overflow: hidden; }
     body.list-print-mode .cal-cell .cal-day { font-size: 9px !important; }
     body.list-print-mode .cal-ev { font-size: 8px !important; line-height: 1.2 !important; padding: 0 2px !important; }
+    /* 「保存の状態」は画面で見るためのもの。紙には出さない。 */
+    body.list-print-mode .lg-save { display: none !important; }
     /* 通常のカレンダー印刷では「今後の予定」レポートは出さない（月グリッドのみ） */
     body.list-print-mode .cal-upcoming { display: none !important; }
+    /* 予定を足す欄・行末の直し／削除ボタンは、紙には要らない */
+    body.list-print-mode .cu-add,
+    body.list-print-mode .cu-free-ops { display: none !important; }
 
     /* ⑤「今後の予定（先の工程）」レポート印刷：schedule-only 時は月グリッド等を隠し、レポートのみをA4縦で出力 */
     body.list-print-mode.schedule-only .cost-detail-section,
@@ -3287,10 +3292,28 @@
   .cal-free-sec { margin-top: 10px; padding: 8px 10px; background: #faf7fd; border: 1px solid #e4dcf0; border-radius: 5px; }
   .cal-free-head { font-size: 12px; font-weight: 700; color: #4527a0; margin-bottom: 6px; }
   .cal-free-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 5px; }
-  .cal-free-row input { padding: 4px 6px; border: 1px solid #cdd3da; border-radius: 3px; font-size: 12.5px; font-family: inherit; }
+  .cal-free-row input, .cal-free-row select { padding: 4px 6px; border: 1px solid #cdd3da; border-radius: 3px; font-size: 12.5px; font-family: inherit; }
   .cal-free-row button { padding: 3px 10px; border: 1px solid #cdd3da; background: #fff; border-radius: 3px; cursor: pointer; font-size: 12px; }
   .cal-free-add { border-top: 1px dashed #d8cfe8; padding-top: 6px; margin-top: 2px; }
   .cal-free-note { font-size: 10.5px; color: #7c6a99; }
+  /* --- 受付台帳の「保存の状態」：①物件ファイル（自動）と②戸別ファイル（押したとき）--- */
+  .lg-save { background: #fff; border: 1px solid #cdd3da; border-radius: 4px; padding: 7px 10px; margin-bottom: 8px; }
+  .lg-save .lgs-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .lg-save .lgs-ttl { font-size: 12px; font-weight: 700; color: #1e3a5f; flex: none; }
+  .lg-save .lgs-item { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+    border-left: 4px solid #cdd3da; padding: 2px 8px; border-radius: 3px; background: #f6f8fa; }
+  .lg-save .lgs-item.lgs-ok   { border-left-color: #2e7d32; background: #eef7ef; }
+  .lg-save .lgs-item.lgs-warn { border-left-color: #ef6c00; background: #fff5e8; }
+  .lg-save .lgs-item.lgs-none { border-left-color: #b0bec5; }
+  .lg-save .lgs-k { font-size: 11.5px; font-weight: 700; color: #33424f; white-space: nowrap; }
+  .lg-save .lgs-v { font-size: 12.5px; font-weight: 700; color: #1e3a5f; }
+  .lg-save .lgs-item.lgs-ok   .lgs-v { color: #1b5e20; }
+  .lg-save .lgs-item.lgs-warn .lgs-v { color: #bf360c; }
+  .lg-save .lgs-s { font-size: 10.5px; color: #667482; }
+  .lg-save #lgs-writeback { margin-left: auto; background: #00695c; color: #fff; border: 1px solid #004d40;
+    padding: 5px 14px; border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: 700; font-family: inherit; }
+  .lg-save #lgs-writeback:hover { background: #00796b; }
+  .lg-save > .uc-hint { margin-top: 5px; }
   /* --- 今後の予定（先の工程）レポート：カレンダーと同じ予定データから自動生成 --- */
   .cal-upcoming { margin-top: 14px; background: #fff; border: 1px solid #cdd3da; border-radius: 4px; padding: 12px 16px; }
   .cal-upcoming .cu-head { font-size: 15px; font-weight: 700; color: #1e3a5f; margin-bottom: 4px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
@@ -3308,6 +3331,24 @@
   .cal-upcoming .cu-prov { color: #b05a00; font-weight: 700; }
   .cal-upcoming tr.cu-done { opacity: .55; }
   .cal-upcoming .cu-empty { color: #667482; padding: 6px 0; font-size: 12px; }
+  /* 今後の予定レポートから、その場で「その他の予定」を足す欄（印刷には出さない） */
+  .cal-upcoming .cu-add { display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+    background: #faf7fd; border: 1px solid #e4dcf0; border-radius: 5px; padding: 7px 10px; margin: 6px 0 2px; }
+  .cal-upcoming .cu-add-lbl { font-size: 12px; font-weight: 700; color: #4527a0; }
+  .cal-upcoming .cu-add input, .cal-upcoming .cu-add select {
+    padding: 4px 6px; border: 1px solid #cdd3da; border-radius: 3px; font-size: 12.5px; font-family: inherit; }
+  .cal-upcoming .cu-add button {
+    padding: 4px 16px; border: 1px solid #7a4e1e; background: #fff; color: #7a4e1e;
+    border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: 700; }
+  .cal-upcoming .cu-add button:hover { background: #fff3e0; }
+  .cal-upcoming .cu-add-note { flex: 1 1 100%; font-size: 10.5px; color: #7c6a99; }
+  .cal-upcoming .cu-free-ops { float: right; white-space: nowrap; }
+  .cal-upcoming .cu-free-ops button {
+    padding: 1px 7px; border: 1px solid #cdd3da; background: #fff; border-radius: 3px;
+    cursor: pointer; font-size: 11px; margin-left: 3px; }
+  .cal-upcoming .cu-free-ops button:hover { background: #eef2f6; }
+  /* 種別の色は紙にも出す（印で見分けるため） */
+  .cal-upcoming .cu-type, .cal-ev-type, .cal-free-mark { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   /* メニューのサマリ（仮受付・今日の工事） */
   .menu-summary { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; }
   .menu-summary .ms-item {
@@ -5729,7 +5770,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.17";
+const APP_VERSION = "2026.08.18";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -14062,6 +14103,8 @@ async function listReloadRemembered(ask){
     if(!ok && ask) ok = (await dh.requestPermission({ mode: "read" })) === "granted";
   } catch(_){ ok = false; }
   if(!ok) return false;
+  // 台帳で直したままの分があれば、上書きして消える前に知らせる
+  if(!lgConfirmDiscardCaseEdits("読み込む")) return true;   // true＝案内は出さない（利用者が自分で止めた）
   const st = document.getElementById("list-status");
   const nm = dh.name || "";
   if(st){ st.style.display = ""; st.textContent = "📁 前回のフォルダ「" + nm + "」を読み込み中..."; }
@@ -14609,6 +14652,43 @@ const LGWB_FIELDS = [
 const LGWB_LEDGER_ONLY = "";
 const LGWB_STATUS = { provisional:"仮受付", in_progress:"受付済", completed:"完了" };
 function lgwbField(k){ for(const f of LGWB_FIELDS){ if(f.k === k) return f; } return null; }
+/* 受付台帳で直したのに、まだ戸別ファイルへ書いていない行の数。
+   名前・住所・電話・工事日・状態は台帳の控え（_ledgerMap）ではなく行そのものを直すので、
+   フォルダを読み直すとファイルの中身に戻ってしまう。読み直す前に必ず知らせるために数える。 */
+/* 受付台帳で直した戸別（管理番号）の控え。
+   ここに入っている間は「まだ戸別ファイルへ入っていない直し」がある、ということ。
+   ・入れる … 台帳で直したとき（行そのものの欄も、台帳の控えの欄も）
+   ・出す   … 「💾 戸別ファイルへ反映」で、そのファイルを書けたとき
+   ※ 画面を開き直すと消える（この画面で直した分だけを数えるため）。
+      前に直した分は「💾 戸別ファイルへ反映」を押せば、ちがいを一覧で確かめられる。 */
+const _lgTouched = new Set();
+function lgMarkTouched(rowOrTk){
+  const tk = (typeof rowOrTk === "string") ? rowOrTk : subCaseKey(rowOrTk);
+  if(tk) _lgTouched.add(tk);
+}
+function lgTouchedCount(){ return _lgTouched.size; }
+function lgClearTouched(tks){
+  if(!tks) _lgTouched.clear();
+  else (tks || []).forEach(k => { if(k) _lgTouched.delete(k); });
+}
+function lgUnsavedCaseEdits(){
+  return (Array.isArray(_listRows) ? _listRows : []).filter(r => r && r._lgEdited).length;
+}
+function lgClearCaseEdited(rows){
+  (Array.isArray(rows) ? rows : (Array.isArray(_listRows) ? _listRows : [])).forEach(r => { if(r) delete r._lgEdited; });
+}
+/* 読み直すと消えてしまう直しが残っていないか、読み込みの直前に確かめる。
+   true＝このまま読み込んでよい／false＝利用者が「先に反映する」を選んだので中止。
+   ※ フォルダを選ぶ画面より後に呼ぶこと（先に confirm を出すと選ぶ画面が開けなくなる）。 */
+function lgConfirmDiscardCaseEdits(what){
+  const n = lgUnsavedCaseEdits();
+  if(!n) return true;
+  return !confirm("⚠ 受付台帳で直した " + n + " 件が、まだ戸別ファイルへ入っていません。\n"
+    + "（名前・住所・電話・工事日程予定・状態は、台帳で直しただけでは戸別ファイルに入りません）\n\n"
+    + "このまま" + (what || "読み込む") + "と、直した内容はファイルの中身で上書きされて消えます。\n\n"
+    + "OK＝中止する（先に受付台帳の「💾 戸別ファイルへ反映」を押してください）\n"
+    + "キャンセル＝直した内容を捨てて" + (what || "読み込む"));
+}
 function lgwbShow(k, v){
   const f = lgwbField(k);
   if(f && f.bool) return v ? "○" : "―";
@@ -14654,7 +14734,7 @@ async function lgwbScan(rows){
   return { list, skipped, unreadable };
 }
 async function lgwbApply(list){
-  let ok = 0; const fails = [];
+  let ok = 0; const fails = []; const okRows = [];
   for(const it of list){
     try {
       if(!(await dupEnsureWritable(it.row._dir))) throw new Error("フォルダへの書き込み許可が得られませんでした");
@@ -14665,20 +14745,97 @@ async function lgwbApply(list){
       const w = await fh.createWritable();
       await w.write(JSON.stringify(json, null, 2));
       await w.close();
-      ok++;
+      ok++; okRows.push(it.row);
     } catch(e){ fails.push("・" + it.name + "：" + ((e && e.message) || e)); }
   }
-  return { ok, fails };
+  return { ok, fails, okRows };
+}
+/* 一覧の行と、フォルダの中の戸別ファイルを結び付ける。
+   ★読み直さない★のが肝心。行の中身はそのままで、置き場所（どのフォルダのどの名前か）
+   だけを付けるので、台帳で打ち込んだ内容が古いファイルの中身に戻ってしまわない。
+   戻り値＝結び付いた件数（0 なら書き戻せない）。 */
+async function lgwbAttachDir(){
+  if(_listRows.some(r => r && r._dir && r._name)) return -1;   // すでに掴んでいる
+  // 覚えているフォルダがあれば選び直さない（許可だけ聞き直す）
+  let dh = null;
+  try { dh = await listDirRestore(); } catch(_){ dh = null; }
+  if(dh && dh.requestPermission){
+    try {
+      let ok = (await dh.queryPermission({ mode: "read" })) === "granted";
+      if(!ok) ok = (await dh.requestPermission({ mode: "read" })) === "granted";
+      if(!ok) dh = null;
+    } catch(_){ dh = null; }
+  }
+  if(!dh){
+    if(!window.showDirectoryPicker){
+      alert("このブラウザはフォルダを掴めません。\n「📁 フォルダ」でフォルダを読み込んでから、もう一度押してください。\n"
+        + "（Chrome / Edge でお試しください）");
+      return 0;
+    }
+    /* ★フォルダを選ぶ画面は「押した直後」しか開けない。ここまで確認（confirm）を
+       1つも出していないのはそのため。説明は選んだ後に出す。 */
+    try { dh = await window.showDirectoryPicker(); }
+    catch(err){
+      if(err && err.name === "AbortError") return 0;           // 自分で閉じた
+      alert("フォルダを選べませんでした。\n\nもう一度「💾 戸別ファイルへ反映」を押してください。\n\n"
+        + (err && err.message ? err.message : err));
+      return 0;
+    }
+    try { await listDirRemember(dh); } catch(_){}
+  }
+  const found = [];
+  const stats = { dirs: 0, files: 0, skipped: 0, errDirs: [], skippedPaths: [] };
+  try { await scanDirRecursive(dh, "", found, stats); }
+  catch(err){
+    alert("フォルダを読めませんでした。\n\n" + ((err && err.message) || err));
+    return 0;
+  }
+  const byNo = {}, byPath = {};
+  found.forEach(f => {
+    const no = toHalfWidthAn(String((f.data && f.data.chosho_mgmt_no) || "")).trim();
+    if(no) (byNo[no] = byNo[no] || []).push(f);
+    const fp = String(f.file || "");
+    if(fp && !byPath[fp]) byPath[fp] = f;
+  });
+  let hit = 0, ambiguous = 0, miss = 0;
+  _listRows.forEach(r => {
+    if(!r || (r._dir && r._name)) return;
+    const same = byPath[String(r.file || "")] || null;         // 道のりごと同じ名前＝いちばん確か
+    let m = same;
+    if(!m){
+      const no = toHalfWidthAn(String((r.data && r.data.chosho_mgmt_no) || "")).trim();
+      const cand = (no && byNo[no]) || [];
+      if(cand.length === 1) m = cand[0];
+      else if(cand.length > 1){ ambiguous++; return; }          // 同じ番号が複数＝どれか決められない
+    }
+    if(!m){ miss++; return; }
+    r._dir = m._dir; r._name = m._name; r._dirPath = m._dirPath; r._size = m._size;
+    hit++;
+  });
+  if(!hit){
+    alert("選んだフォルダの中に、いま一覧に出ている戸別のファイルが見つかりませんでした。\n\n"
+      + "フォルダの中の戸別： " + found.length + " 件\n"
+      + (ambiguous ? ("同じ管理番号が重なっていて決められない： " + ambiguous + " 件\n") : "")
+      + "\n工事フォルダを選び直してください。");
+    return 0;
+  }
+  alert("📁 フォルダ「" + (dh.name || "") + "」の戸別ファイルと結び付けました。\n\n"
+    + "結び付いた： " + hit + " 件\n"
+    + (miss ? ("見つからなかった： " + miss + " 件（このフォルダに無い戸別）\n") : "")
+    + (ambiguous ? ("同じ管理番号が重なっていて決められない： " + ambiguous + " 件（先に重複の整理を）\n") : "")
+    + "\n台帳の内容はそのままです。続けて書き戻す内容を確かめます。");
+  return hit;
 }
 async function lgwbButton(){
   if(!_listRows || !_listRows.length){
     alert("先に「📁 フォルダ」で戸別ファイルのフォルダを読み込んでください。");
     return;
   }
+  /* フォルダを掴んでいないときは、ここで掴む。
+     以前は「先に📁フォルダで読み直してください」と断っていたが、その読み直しで
+     台帳に打ち込んだ内容がファイルの中身に戻ってしまい、書き戻すものが消えていた。 */
   if(!_listRows.some(r => r && r._dir && r._name)){
-    alert("「📁 フォルダ」で読み込んだ一覧でのみ使えます。\n"
-      + "（ファイルへ書き戻すには、そのフォルダを掴んでいる必要があります）");
-    return;
+    if(!(await lgwbAttachDir())) return;
   }
   const { list, skipped, unreadable } = await lgwbScan(_listRows);
   const note = (skipped.length ? ("\n※ 暗号化ファイル " + skipped.length + " 件は対象外です（戸別を開いて保存してください）") : "")
@@ -14697,6 +14854,9 @@ async function lgwbButton(){
       + "写真・図面・積算・測定値には触りません。\n"
       + (LGWB_LEDGER_ONLY ? ("（「" + LGWB_LEDGER_ONLY + "」は戸別ファイルに置き場所が無いため対象外です）") : "") + note)) return;
   const res = await lgwbApply(list);
+  // 書けたファイルの分だけ「まだ入っていない直し」から外す（できなかった分は残す）
+  lgClearCaseEdited(res.okRows);
+  lgClearTouched(res.okRows.map(r => { try { return subCaseKey(r); } catch(_){ return ""; } }));
   alert("📤 台帳の内容を書き戻しました。\n\n" + res.ok + " 件のファイルを更新しました"
     + (res.fails.length ? ("\n\n⚠ できなかったもの:\n" + res.fails.join("\n")) : "")
     + "\n\n一覧を読み直します。");
@@ -14749,6 +14909,8 @@ async function listSelectFolder(){
   }
   const loadMode = resolveListLoadWithProject(); // 物件を開いたまま＝取り込み/切り離し/中止を選択
   if(loadMode === "cancel") return;
+  // 台帳で直したままの分があれば、上書きして消える前に知らせる
+  if(!lgConfirmDiscardCaseEdits("読み込む")) return;
   try {
     await listDirRemember(dirHandle);    // 次からは選び直さずに読み込む（重複整理にも使う）
     const rows = [];
@@ -14880,6 +15042,8 @@ async function listSelectFolder(){
 function listSelectFiles(){
   const loadMode = resolveListLoadWithProject(); // 物件を開いたまま＝取り込み/切り離し/中止を選択
   if(loadMode === "cancel") return;
+  // 台帳で直したままの分があれば、上書きして消える前に知らせる
+  if(!lgConfirmDiscardCaseEdits("読み込む")) return;
   pickFile({
     accept: ".json,.hyb,.enc,.antenna,application/json,application/octet-stream,text/plain",
     multiple: true
@@ -22049,6 +22213,11 @@ function lgWriteCaseField(row, f, v, opts){
     }
   };
   writeBoth(key, v);
+  /* ここで直しているのは「読み込んだ行そのもの」で、戸別ファイルにはまだ入っていない。
+     フォルダを読み直すとファイルの中身で上書きされて消えるので、印を付けておき、
+     読み直す前に知らせる／「💾 戸別ファイルへ反映」で消す。 */
+  row._lgEdited = true;
+  try { lgMarkTouched(row); } catch(_){}
   // 清書による自動昇格：仮受付 ＋ 名前/住所/電話の記入 → 受付済
   if(!(opts && opts.keepStatus)
      && (f === "name" || f === "addr" || f === "tel") && v && row.data.chosho_status === "provisional"){
@@ -22252,6 +22421,57 @@ function lgBindPrintWPanel(container){
     renderListTable();
   });
 }
+/* 受付台帳の上に出す「保存の状態」。
+   入力したものは行き先が2つあり、片方は自動・片方は押したときだけ、という違いが
+   分かりにくい。専門用語を使わず、①②に分けて、いまどうなっているかを1本で出す。 */
+function lgSaveStateHtml(){
+  // ① 物件ファイル（この画面の台帳・地図・予定の一式。ふだんは自動保存）
+  let c1 = "lgs-warn", t1 = "", s1 = "";
+  if(!_currentProject){
+    c1 = "lgs-none"; t1 = "物件を開いていません";
+    s1 = "メニューの「📂 共有ファイルを開く」で開くと、以後は自動で保存されます";
+  } else if(_projPendingHandle && !_projFileHandle){
+    t1 = "共有ファイルとつながっていません（この端末の中だけ）";
+    s1 = "メニューの「🔗 共有ファイルを再接続」を押すと、また自動で保存されます";
+  } else if(_projFileHandle){
+    c1 = "lgs-ok"; t1 = "自動で保存されています";
+    s1 = _projLastSaved ? ("最後の保存 " + _projLastSaved) : "保存ボタンを押す必要はありません";
+  } else {
+    t1 = "この端末の中だけに保存されています";
+    s1 = "メニューの「🔗 共有ファイルに連動」を押すと、共有ファイルにも自動で保存されます";
+  }
+  // ② 戸別ファイル（現場用のスマホが読み書きする、戸別1件ずつのファイル）
+  const n = lgTouchedCount();
+  const c2 = n ? "lgs-warn" : "lgs-none";
+  const t2 = n ? ("台帳で直した " + n + " 件が、まだ入っていません") : "この画面で直した分はありません";
+  const s2 = n ? "右の「💾 戸別ファイルへ反映」を押すと入ります"
+               : "前に直した分があるかは、「💾 戸別ファイルへ反映」を押すと一覧で確かめられます";
+  return '<div class="lg-save cost-detail-section" id="lg-save-bar">'
+    + '<div class="lgs-line">'
+    +   '<span class="lgs-ttl">保存の状態</span>'
+    +   '<span class="lgs-item ' + c1 + '"><span class="lgs-k">① 物件ファイル</span>'
+    +     '<span class="lgs-v">' + escapeHtml(t1) + '</span><span class="lgs-s">' + escapeHtml(s1) + '</span></span>'
+    +   '<span class="lgs-item ' + c2 + '"><span class="lgs-k">② 戸別ファイル</span>'
+    +     '<span class="lgs-v">' + escapeHtml(t2) + '</span><span class="lgs-s">' + escapeHtml(s2) + '</span></span>'
+    +   '<button type="button" id="lgs-writeback" title="台帳で直した内容を、現場用が読む戸別ファイルへ書き込みます。押すと、まず何がどう変わるかを一覧で確かめられます。">💾 戸別ファイルへ反映'
+    +     (n ? '（' + n + '件）' : '') + '</button>'
+    + '</div>'
+    + '<details class="uc-hint"><summary>この2つは何がちがうの？</summary><div>'
+    +   '<b>① 物件ファイル</b>＝この画面の一式（受付台帳・地図・予定・積算）。'
+    +   '共有ファイルを開いていれば、直したそばから<b>自動で</b>入ります。押す必要はありません。<br>'
+    +   '<b>② 戸別ファイル</b>＝工事フォルダの中にある、戸別1件ずつのファイル。'
+    +   '<b>現場用（スマホ）が読み書きするのはこちら</b>です。'
+    +   '台帳で直した 名前・住所・電話・工事日程予定・打合せ・状態・備考・保留・ビラ・同意書・完了書 は、'
+    +   '②へは自動では入りません。<b>「💾 戸別ファイルへ反映」を押したときだけ</b>入ります。<br>'
+    +   'なので、台帳を直したら → ②へ反映 → 「📦 現場用」で書き出す、の順にすると食い違いません。'
+    + '</div></details>'
+    + '</div>';
+}
+/* 表を作り直さずに、この1本だけ出し直す（打合せ・備考など、打っている途中で表を作り直さない欄用） */
+function lgSaveStateRefresh(){
+  const el = document.getElementById("lg-save-bar");
+  if(el) el.outerHTML = lgSaveStateHtml();
+}
 function renderListLedgerMode(rows, container){
   _ledgerShown = {};
   const todayS = lgDateStrToday(0), tomoS = lgDateStrToday(1);
@@ -22301,6 +22521,7 @@ function renderListLedgerMode(rows, container){
   const arrow = k => (_ledgerSort.key === k ? '<span class="lg-arrow">' + (_ledgerSort.dir > 0 ? "▲" : "▼") + '</span>' : "");
   let html = renderSelectedFolderBanner();
   html += lgPrintWPanelHtml();
+  html += lgSaveStateHtml();      // 入力したものがどこへ入るのか、台帳の上で分かるようにする
   // 操作は「行を足す」「絞り込む」「印刷する」「やりとりする」の4つにまとめる。
   // 探さずに済むよう、それぞれに小見出しを付けて枠で囲う。
   const nFilters = (_ledgerOnlyProv ? 1 : 0) + (_ledgerOnlyPending ? 1 : 0) + (_ledgerOnlyNoFlyer ? 1 : 0)
@@ -22336,7 +22557,7 @@ function renderListLedgerMode(rows, container){
     +   '<button id="lg-export-genba" title="受付台帳だけを1ファイルに書き出します（地図は入りません）。スマホの現場入力アプリの「台帳」と、受付台帳ソフトの「📥 台帳を取り込み」の、どちらでもそのまま読めます。左の「📥 受付台帳」で戻せます。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📤 受付台帳</button>'
     +   '<button id="lg-export-html" title="いまの受付台帳を、中身の入った1枚のHTMLにして書き出します。渡した先はブラウザで開くだけで台帳がそのまま出るので、受付台帳ソフトを別に渡さなくて済みます。向こうで直した分は「📤 台帳を書き出し」でファイルにしてもらい、左の「📥 受付台帳」で戻せます。台帳ソフトはこのメインの中に入っているので、ファイルを選ぶ必要はありません（Excel書き出しと同じで、押すだけです）。名前・住所・電話が入るので、渡す相手にご注意ください。" style="background:#00838f;color:#fff;border:1px solid #006064;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">🌐 HTML</button>'
     +   '<button id="lg-xlsx-export" title="いまの受付台帳を Excel（.xlsx）へ書き出します。Excelで直したあと、左の「📗 Excel」でそのまま読み戻せます。" style="background:#1b7a3d;color:#fff;border:1px solid #145c2e;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📘 Excel</button>'
-    +   '<button id="lg-writeback" title="この台帳で直した 名前・住所・電話・工事日程予定（日付・時刻）・打合せ予定・状態・備考・保留・ビラ・同意書・完了書 を、フォルダの戸別ファイルへまとめて書き込みます。台帳のセルで直しただけでは戸別ファイルは変わらないため、フォルダを読み直すと元に戻ってしまいます（工事予定日を消しても消えない等）。戸別を1件ずつ開いて保存しなくて済みます。写真・図面・積算・測定値には触りません。「打合せ予定・受付時刻」は戸別ファイルに置き場所が無いため対象外です（物件ファイルに保存されます）。「📁 フォルダ」で読み込んだ後に使えます。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">💾 戸別ファイルへ反映</button>'
+    +   '<button id="lg-writeback" title="この台帳で直した 名前・住所・電話・工事日程予定（日付・時刻）・打合せ予定・状態・備考・保留・ビラ・同意書・完了書 を、フォルダの戸別ファイルへまとめて書き込みます。台帳のセルで直しただけでは戸別ファイルは変わらないため、フォルダを読み直すと元に戻ってしまいます（工事予定日を消しても消えない等）。戸別を1件ずつ開いて保存しなくて済みます。写真・図面・積算・測定値には触りません。「打合せ予定・受付時刻」は戸別ファイルに置き場所が無いため対象外です（物件ファイルに保存されます）。フォルダをまだ掴んでいないときは、この操作の中でフォルダを聞きます（台帳の内容は読み直さないので消えません）。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">💾 戸別ファイルへ反映</button>'
     + '</div>'
     + '<span class="lg-count">全 ' + rows.length + ' 件（仮 ' + prov + ' ／ 完了 ' + done + ' ／ ビラ済 ' + flyered + (held ? ' ／ 保留 ' + held : '') + '）' + (shown.length !== rows.length ? ' → 表示 ' + shown.length + ' 件' : '') + '</span>'
     + '<div class="lgc-note">セルをクリックすると直接編集できます。工事日程・打合せ予定は 📅 予定カレンダーに、名前・住所などは図面にそのまま反映されます。</div>'
@@ -23865,7 +24086,7 @@ function bindLedgerHandlers(container){
     if(e.target.closest("#lg-import-ledger")){ lgPickLedgerFile(); return; }
     if(e.target.closest("#lg-xlsx-import")){ ledgerXlsxImportFlow(); return; }
     if(e.target.closest("#lg-xlsx-export")){ exportReceptionLedgerToXlsx(); return; }
-    if(e.target.closest("#lg-writeback")){ lgwbButton(); return; }
+    if(e.target.closest("#lg-writeback, #lgs-writeback")){ lgwbButton(); return; }
     if(e.target.closest("#lg-export-set")){ exportGenbaSet(); return; }
     if(e.target.closest("#lg-export-genba")){ exportReceptionLedgerForGenba(); return; }
     if(e.target.closest("#lg-export-html")){ exportReceptionLedgerAsHtml(!!e.shiftKey); return; }
@@ -23999,15 +24220,16 @@ function bindLedgerHandlers(container){
     if(f === "printsel"){ if(t.checked) _ledgerPrintSel.add(tk); else _ledgerPrintSel.delete(tk); refreshLedgerPrintSelUI(); }
     else if(f === "st"){ lgWriteCaseField(row, "status", t.value); renderListTable(); }
     else if(f === "date"){ lgWriteCaseField(row, "date", t.value); renderListTable(); }
-    else if(f === "time"){ setLedger(tk, { time: t.value }); }
-    else if(f === "meet"){ setLedger(tk, { meetAt: t.value }); }
-    else if(f === "flyer"){ setLedger(tk, { flyer: t.checked }); renderListTable(); }
-    else if(f === "consent"){ setLedger(tk, { consent: t.checked }); renderListTable(); }
-    else if(f === "compdoc"){ setLedger(tk, { compdoc: t.checked }); renderListTable(); }
+    // 台帳の控えの欄も、戸別ファイルへは「反映」を押すまで入らない。直したら控えておく。
+    else if(f === "time"){ setLedger(tk, { time: t.value }); lgMarkTouched(tk); lgSaveStateRefresh(); }
+    else if(f === "meet"){ setLedger(tk, { meetAt: t.value }); lgMarkTouched(tk); lgSaveStateRefresh(); }
+    else if(f === "flyer"){ setLedger(tk, { flyer: t.checked }); lgMarkTouched(tk); renderListTable(); }
+    else if(f === "consent"){ setLedger(tk, { consent: t.checked }); lgMarkTouched(tk); renderListTable(); }
+    else if(f === "compdoc"){ setLedger(tk, { compdoc: t.checked }); lgMarkTouched(tk); renderListTable(); }
     // 保留は地図の「保」マークに直結するので、地図を開いたままでも即座に描き直す
-    else if(f === "hold"){ setLedger(tk, { hold: t.checked }); try { if(window.__mapRefreshObjects) window.__mapRefreshObjects(); } catch(_){} renderListTable(); }
+    else if(f === "hold"){ setLedger(tk, { hold: t.checked }); lgMarkTouched(tk); try { if(window.__mapRefreshObjects) window.__mapRefreshObjects(); } catch(_){} renderListTable(); }
     else if(f === "done"){ lgWriteCaseField(row, "status", t.checked ? "completed" : "in_progress"); row._amtCache = undefined; renderListTable(); }
-    else if(f === "note"){ setLedger(tk, { note: toHalfWidthAn(t.value).trim() }); }
+    else if(f === "note"){ setLedger(tk, { note: toHalfWidthAn(t.value).trim() }); lgMarkTouched(tk); lgSaveStateRefresh(); }
     else if(f === "contractor"){ setContractor(tk, t.value); }
   });
 }
@@ -24247,11 +24469,33 @@ function saveCalFreeEvents(){
   try { markProjMetaEdited("calEvents"); } catch(_){}   // 競合マージでこの変更が disk へ戻らないように
   projTouch();
 }
-function calFreeAdd(date, time, title, note){
+/* その他の予定の「種別」。〇〇検査・立会いなど、戸別に紐づかない出来事を種類で見分ける。
+   種類を増やしたいときは、ここに1行足すだけでよい（印・色・並び順が全部ここから決まる）。
+   ch＝カレンダーの小さな印の文字。 */
+const CAL_FREE_KINDS = [
+  { k: "inspect", ch: "検", name: "検査",   bg: "#fff3e0", fg: "#e65100", bd: "#ffb74d" },
+  { k: "meet",    ch: "打", name: "打合せ", bg: "#ede7f6", fg: "#4527a0", bd: "#b39ddb" },
+  { k: "attend",  ch: "立", name: "立会い", bg: "#e0f7fa", fg: "#006064", bd: "#4dd0e1" },
+  { k: "deliver", ch: "納", name: "納品",   bg: "#f1f8e9", fg: "#33691e", bd: "#aed581" },
+  { k: "other",   ch: "他", name: "その他", bg: "#eceff1", fg: "#37474f", bd: "#b0bec5" },
+];
+/* 見つからない／古い予定（種別が無いころに作ったもの）は「その他」に寄せる＝これまでの見え方のまま */
+function calFreeKind(k){
+  const s = String(k == null ? "" : k);
+  return CAL_FREE_KINDS.find(x => x.k === s) || CAL_FREE_KINDS[CAL_FREE_KINDS.length - 1];
+}
+function calFreeKindOptions(sel){
+  const s = String(sel == null ? "" : sel);
+  return CAL_FREE_KINDS.map(x => '<option value="' + x.k + '"' + (x.k === s ? " selected" : "") + '>'
+    + x.ch + "　" + x.name + "</option>").join("");
+}
+function calFreeAdd(date, time, title, note, kind){
   const t = String(title || "").trim();
   if(!date) return null;
+  const kd = calFreeKind(kind);
   const ev = { id: "cf" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
-    date: date, time: String(time || "").slice(0, 5), title: t || "打合せ", note: String(note || "") };
+    date: date, time: String(time || "").slice(0, 5), title: t || kd.name, note: String(note || ""),
+    kind: kd.k };
   _calFreeEvents = getCalFreeEvents().concat([ev]);
   saveCalFreeEvents();
   return ev;
@@ -24304,7 +24548,10 @@ function calWorkCountOn(dateS, exceptTk){
   return n;
 }
 function calEvLabel(ev){
-  if(ev.type === "free"){ return (ev.time ? ev.time + " " : "") + ((ev.free && ev.free.title) || "打合せ"); }
+  if(ev.type === "free"){
+    const kd = calFreeKind(ev.free && ev.free.kind);
+    return (ev.time ? ev.time + " " : "") + ((ev.free && ev.free.title) || kd.name);
+  }
   const d = ev.row.data || {};
   const no = (d.chosho_mgmt_no || "").trim() || (d.chosho_cust_name || "―");
   return (ev.time ? ev.time + " " : "") + no;
@@ -24312,7 +24559,9 @@ function calEvLabel(ev){
 function calEvTitle(ev){
   if(ev.type === "free"){
     const f = ev.free || {};
-    return "その他の予定（戸別に紐づかない）\n" + (f.title || "打合せ") + (f.time ? "　" + f.time : "") + (f.note ? "\n" + f.note : "");
+    const kd = calFreeKind(f.kind);
+    return kd.name + "（戸別に紐づかない予定）\n" + (f.title || kd.name) + (f.time ? "　" + f.time : "")
+      + (f.note ? "\n" + f.note : "") + "\nクリックすると、この日の欄で直せます";
   }
   const d = ev.row.data || {};
   const cc = getContractor(ev.tk);
@@ -24356,8 +24605,22 @@ function renderUpcomingSchedule(rows){
       || String(a.time || "").padStart(5, "0").localeCompare(String(b.time || "").padStart(5, "0")));
   const workN = evs.filter(e => e.type === "work").length;
   const meetN = evs.filter(e => e.type === "meet").length;
+  const freeN = evs.filter(e => e.type === "free").length;
   let html = '<div class="cal-upcoming"><div class="cu-head">📋 今後の予定（先の工程）'
-    + '<span class="cu-sub">' + todayS.replace(/-/g, "/") + ' 現在 ／ 工事 ' + workN + ' 件・打合せ ' + meetN + ' 件</span></div>';
+    + '<span class="cu-sub">' + todayS.replace(/-/g, "/") + ' 現在 ／ 工事 ' + workN + ' 件・打合せ ' + meetN + ' 件'
+    + (freeN ? "・その他 " + freeN + " 件" : "") + '</span></div>';
+  // 〇〇検査・立会いなど、戸別に紐づかない予定はここから直接入れられる（印刷には出さない）
+  html += '<div class="cu-add">'
+    + '<span class="cu-add-lbl">＋ 予定を追加</span>'
+    + '<input type="date" id="cu-add-date" value="' + escapeHtml(todayS) + '" title="予定の日">'
+    + '<input type="time" id="cu-add-time" value="09:00" title="時刻（空でも可）">'
+    + '<select id="cu-add-kind" title="予定の種類">' + calFreeKindOptions("inspect") + '</select>'
+    + '<input type="text" id="cu-add-title" placeholder="件名（例：完了検査／元請と現場打合せ）" style="flex:1 1 230px;">'
+    + '<input type="text" id="cu-add-note" placeholder="メモ（任意）" style="flex:1 1 150px;">'
+    + '<button type="button" id="cu-add-btn">追加</button>'
+    + '<span class="cu-add-note">戸別（管理番号）に紐づかない予定です。上のカレンダーにも同じ印で出ます。'
+    +   '戸別の工事日・打合せ日は、受付台帳またはカレンダーの日付から入れてください。</span>'
+    + '</div>';
   if(!evs.length){
     return html + '<div class="cu-empty">今後の予定はありません（工事日・打合せ日を設定すると、ここに日付順＝近い日から表示されます）。</div></div>';
   }
@@ -24373,12 +24636,17 @@ function renderUpcomingSchedule(rows){
     }
     if(ev.type === "free"){
       const f = ev.free || {};
+      const kd = calFreeKind(f.kind);
       html += '<tr>'
-        + '<td style="width:60px;"><span class="cu-type t-free">その他</span></td>'
+        + '<td style="width:60px;"><span class="cu-type t-free" style="background:' + kd.bg + ';color:' + kd.fg + ';border:1px solid ' + kd.bd + ';">' + escapeHtml(kd.name) + '</span></td>'
         + '<td class="cu-time" style="width:48px;">' + escapeHtml(f.time || "―") + '</td>'
-        + '<td>' + escapeHtml(f.title || "打合せ") + '</td>'
+        + '<td>' + escapeHtml(f.title || kd.name) + '</td>'
         + '<td class="cu-ctr" style="width:130px;"></td>'
-        + '<td style="color:#667482;">' + escapeHtml(f.note || "") + '</td>'
+        + '<td style="color:#667482;">' + escapeHtml(f.note || "")
+        +   '<span class="cu-free-ops">'
+        +     '<button type="button" data-cal-open-day="' + escapeHtml(ev.date) + '" title="この日をカレンダーで開いて直す">✏</button>'
+        +     '<button type="button" data-cal-free-del="' + escapeHtml(f.id) + '" title="この予定を削除">🗑</button>'
+        +   '</span></td>'
         + '</tr>';
       return;
     }
@@ -24447,6 +24715,8 @@ function renderListCalendarMode(rows, container){
     + '<span class="cal-legend">'
     + '<span><span class="cal-chip-sample" style="background:#e3f2fd;border:1px solid #90caf9;"></span>工事予定</span>'
     + '<span><span class="cal-chip-sample" style="background:#e8f5e9;border:1px solid #a5d6a7;"></span>打合せ</span>'
+    + '<span title="戸別に紐づかない予定。日をクリックするか、下の「今後の予定」の＋から入れられます">'
+    +   '<span class="cal-chip-sample" style="background:#ede7f6;border:1px solid #b39ddb;"></span>その他（検査・立会いなど）</span>'
     + '<span><span class="cal-chip-sample" style="background:#fff3e0;border:1px solid #ffcc80;"></span>満枠（' + CAL_MAX_PER_DAY + '件）</span>'
     + '<span>予定はドラッグ＆ドロップで日付変更できます</span>'
     + '</span>'
@@ -24485,8 +24755,12 @@ function renderListCalendarMode(rows, container){
       dayEvs.forEach(ev => {
         if(ev.type === "free"){
           // 戸別に紐づかない予定（元請打合せ・社内会議など）
-          html += '<span class="cal-ev cal-free" draggable="true" data-free="' + escapeHtml(ev.free.id) + '" data-evtype="free" title="' + escapeHtml(calEvTitle(ev)) + '">'
-            + '<b class="cal-free-mark">他</b>' + escapeHtml(calEvLabel(ev)) + '</span>';
+          const kd = calFreeKind(ev.free && ev.free.kind);
+          html += '<span class="cal-ev cal-free" draggable="true" data-free="' + escapeHtml(ev.free.id) + '" data-evtype="free"'
+            + ' style="background:' + kd.bg + ';color:' + kd.fg + ';border-left:4px solid ' + kd.fg + ';"'
+            + ' title="' + escapeHtml(calEvTitle(ev)) + '">'
+            + '<b class="cal-free-mark" style="background:' + kd.fg + ';">' + kd.ch + '</b>'
+            + escapeHtml(calEvLabel(ev)) + '</span>';
           return;
         }
         const cls = ["cal-ev", ev.type === "work" ? "cal-work" : "cal-meet"];
@@ -24531,10 +24805,11 @@ function renderCalPanel(byDate){
       evs.forEach(ev => {
         if(ev.type === "free"){
           const f = ev.free || {};
+          const kd = calFreeKind(f.kind);
           html += '<tr>'
-            + '<td style="width:70px;"><span class="cal-ev-type t-free">その他</span></td>'
+            + '<td style="width:70px;"><span class="cal-ev-type t-free" style="background:' + kd.bg + ';color:' + kd.fg + ';border:1px solid ' + kd.bd + ';">' + escapeHtml(kd.name) + '</span></td>'
             + '<td style="width:52px;">' + escapeHtml(f.time || "―") + '</td>'
-            + '<td>' + escapeHtml(f.title || "打合せ") + (f.note ? ' <span style="color:#8a95a1;font-size:11px;">' + escapeHtml(f.note) + '</span>' : '') + '</td>'
+            + '<td>' + escapeHtml(f.title || kd.name) + (f.note ? ' <span style="color:#8a95a1;font-size:11px;">' + escapeHtml(f.note) + '</span>' : '') + '</td>'
             + '<td style="width:150px;"><span class="cal-ctr-tag cal-ctr-none">戸別なし</span></td>'
             + '<td style="width:70px;text-align:right;"><button data-cal-free-del="' + escapeHtml(f.id) + '" title="この予定を削除">🗑</button></td>'
             + '</tr>';
@@ -24575,21 +24850,23 @@ function renderCalPanel(byDate){
     const frees = getCalFreeEvents().filter(f => f && f.date === ds)
       .sort((a, b) => String(a.time || "").localeCompare(String(b.time || "")));
     html += '<div class="cal-free-sec">'
-      + '<div class="cal-free-head">🗓 その他の予定（戸別に紐づかない打合せ・会議など）</div>'
+      + '<div class="cal-free-head">🗓 その他の予定（〇〇検査・立会い・元請との打合せなど）</div>'
       + frees.map(f =>
           '<div class="cal-free-row" data-freeid="' + escapeHtml(f.id) + '">'
           + '<input type="time" data-ff="time" value="' + escapeHtml(f.time || "") + '">'
+          + '<select data-ff="kind" title="予定の種類">' + calFreeKindOptions(calFreeKind(f.kind).k) + '</select>'
           + '<input type="text" data-ff="title" value="' + escapeHtml(f.title || "") + '" placeholder="件名" style="flex:1 1 200px;">'
           + '<input type="text" data-ff="note" value="' + escapeHtml(f.note || "") + '" placeholder="メモ（任意）" style="flex:1 1 160px;">'
           + '<button data-cal-free-del="' + escapeHtml(f.id) + '" title="削除">🗑</button>'
           + '</div>').join("")
       + '<div class="cal-free-row cal-free-add">'
       +   '<input type="time" id="cal-free-time" value="09:00">'
-      +   '<input type="text" id="cal-free-title" placeholder="件名（例：元請と現場打合せ）" style="flex:1 1 220px;">'
+      +   '<select id="cal-free-kind" title="予定の種類">' + calFreeKindOptions("inspect") + '</select>'
+      +   '<input type="text" id="cal-free-title" placeholder="件名（例：完了検査／元請と現場打合せ）" style="flex:1 1 220px;">'
       +   '<input type="text" id="cal-free-note" placeholder="メモ（任意）" style="flex:1 1 160px;">'
       +   '<button id="cal-free-add" style="border-color:#7a4e1e;color:#7a4e1e;">＋ 追加</button>'
       + '</div>'
-      + '<div class="cal-free-note">戸別（管理番号）と関係のない予定をこの日に登録できます。カレンダーには「他」印で表示され、.ics書き出しにも含まれます。</div>'
+      + '<div class="cal-free-note">戸別（管理番号）と関係のない予定をこの日に登録できます。カレンダーには種別の印（検・打・立・納・他）で表示され、.ics書き出しにも含まれます。</div>'
       + '</div>';
     return html;
   }
@@ -24661,6 +24938,14 @@ function bindCalendarHandlers(container){
     }
     const evEl = e.target.closest(".cal-ev");
     if(evEl){
+      // その他の予定は戸別（管理番号）に紐づかないので、戸別の詳細ではなく
+      // その日の欄を開いて直せるようにする（以前は「予定が見つかりません」と出ていた）
+      if(evEl.dataset.evtype === "free"){
+        const cell = evEl.closest("[data-date]");
+        _calPanel = { type: "day", date: (cell && cell.dataset.date) || (_calPanel && _calPanel.date) || lgDateStrToday(0) };
+        renderListTable();
+        return;
+      }
       _calPanel = { type: "event", tk: evEl.dataset.tk, evType: evEl.dataset.evtype };
       renderListTable();
       return;
@@ -24700,21 +24985,50 @@ function bindCalendarHandlers(container){
       if(_calPanel && _calPanel.type === "event") calMoveEvent(_calPanel.tk, _calPanel.evType, ds, ts);
       return;
     }
+    // 今後の予定レポートからの追加（カレンダーの日を開かなくても入れられる）
+    if(e.target.id === "cu-add-btn"){
+      const ds = (document.getElementById("cu-add-date") || {}).value || "";
+      const t  = (document.getElementById("cu-add-time") || {}).value || "";
+      const kd = (document.getElementById("cu-add-kind") || {}).value || "";
+      const ti = ((document.getElementById("cu-add-title") || {}).value || "").trim();
+      const nt = ((document.getElementById("cu-add-note") || {}).value || "").trim();
+      if(!ds){ alert("日付を入れてください"); return; }
+      if(!ti){ alert("件名を入れてください（例：完了検査、元請と現場打合せ）"); return; }
+      calFreeAdd(ds, t, ti, nt, kd);
+      // 入れた予定がカレンダーでも見えるよう、その月へ移動してその日を開く
+      const pa = ds.split("-").map(Number);
+      if(pa.length === 3 && pa[0]){ _calY = pa[0]; _calM = pa[1] - 1; }
+      _calPanel = { type: "day", date: ds };
+      renderListTable();
+      return;
+    }
+    // レポートの ✏ ：その日をカレンダーで開く（時刻・件名の直しはそこで）
+    if(e.target.dataset && e.target.dataset.calOpenDay){
+      const ds = e.target.dataset.calOpenDay;
+      const pa = ds.split("-").map(Number);
+      if(pa.length === 3 && pa[0]){ _calY = pa[0]; _calM = pa[1] - 1; }
+      _calPanel = { type: "day", date: ds };
+      renderListTable();
+      const pn = document.getElementById("cal-panel");
+      if(pn && pn.scrollIntoView) { try { pn.scrollIntoView({ block: "center" }); } catch(_){ pn.scrollIntoView(); } }
+      return;
+    }
     // 戸別に紐づかない予定：追加／削除
     if(e.target.id === "cal-free-add"){
       if(_calPanel && _calPanel.type === "day"){
         const t = (document.getElementById("cal-free-time") || {}).value || "";
+        const kd = (document.getElementById("cal-free-kind") || {}).value || "";
         const ti = ((document.getElementById("cal-free-title") || {}).value || "").trim();
         const nt = ((document.getElementById("cal-free-note") || {}).value || "").trim();
-        if(!ti){ alert("件名を入力してください（例：元請と現場打合せ）"); return; }
-        calFreeAdd(_calPanel.date, t, ti, nt);
+        if(!ti){ alert("件名を入力してください（例：完了検査、元請と現場打合せ）"); return; }
+        calFreeAdd(_calPanel.date, t, ti, nt, kd);
         renderListTable();
       }
       return;
     }
     if(e.target.dataset && e.target.dataset.calFreeDel){
       const f = calFreeById(e.target.dataset.calFreeDel);
-      if(f && confirm("「" + (f.title || "打合せ") + "」を削除しますか？")){ calFreeDelete(f.id); renderListTable(); }
+      if(f && confirm("「" + (f.title || calFreeKind(f.kind).name) + "」を削除しますか？")){ calFreeDelete(f.id); renderListTable(); }
       return;
     }
     if(e.target.id === "cal-ev-del"){
@@ -24881,10 +25195,11 @@ function calBuildICS(rows){
     const nm = (d.chosho_cust_name || "").trim();
     const addr = (d.chosho_cust_addr || "").trim();
     const isFree = (ev.type === "free");
-    const kindJP = isFree ? "その他" : (ev.prov ? "仮受付" : (ev.type === "work" ? "工事" : "打合せ"));
+    const freeKd = isFree ? calFreeKind(ev.free && ev.free.kind) : null;
+    const kindJP = isFree ? freeKd.name : (ev.prov ? "仮受付" : (ev.type === "work" ? "工事" : "打合せ"));
     const doneJP = ev.done ? "（完了）" : "";
     const sum = isFree
-      ? ("【その他】" + ((ev.free && ev.free.title) || "打合せ"))
+      ? ("【" + freeKd.name + "】" + ((ev.free && ev.free.title) || freeKd.name))
       : ("【" + kindJP + "】" + (no || "―") + (nm ? " " + nm : "") + doneJP);
     const uid = (ev.tk || (isFree ? ((ev.free && ev.free.id) || ("free" + i)) : ("row" + i))).replace(/[^0-9A-Za-z_\-]/g, "_") + "-" + ev.type + "@antenna-app";
     lines.push("BEGIN:VEVENT");
@@ -24907,7 +25222,7 @@ function calBuildICS(rows){
     lines.push("SUMMARY:" + icsEsc(sum));
     if(addr) lines.push("LOCATION:" + icsEsc(addr));
     const descParts = (isFree
-      ? ["種別: その他（戸別に紐づかない予定）", (ev.free && ev.free.note) ? ("メモ: " + ev.free.note) : ""]
+      ? ["種別: " + freeKd.name + "（戸別に紐づかない予定）", (ev.free && ev.free.note) ? ("メモ: " + ev.free.note) : ""]
       : [no ? "管理番号: " + no : "", nm ? "氏名: " + nm : "", "種別: " + kindJP + doneJP])
       .filter(Boolean).map(icsEsc);
     if(descParts.length) lines.push("DESCRIPTION:" + descParts.join("\\n"));
