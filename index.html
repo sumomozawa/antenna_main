@@ -5862,7 +5862,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.18e";
+const APP_VERSION = "2026.08.18f";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -12761,6 +12761,16 @@ async function overwriteSaveCurrent(){
     alert("上書き保存できる元ファイルがありません。\n\n📁 フォルダ から戸別を読み込んだ場合のみ、その元ファイルへ上書きできます。\nそれ以外は「保存」で名前を付けて保存してください。");
     return;
   }
+  /* ★確認を出す前に、元ファイルへの書き込み許可を取り切る★
+     確認を先に出すと「押した直後」の扱いが切れ、許可が下りず、
+     元ファイルではなくダウンロードへ落ちてしまう（元ファイルは変わらない）。 */
+  if(!(await dupEnsureWritable(origin.fileHandle))){
+    alert("元ファイルへの書き込みが許可されませんでした。\n\n"
+      + "もう一度「💾 上書き保存」を押してください。\n"
+      + "（許可は押した直後にしか聞けない決まりのため、間に別の窓を挟むと通りません）\n\n"
+      + "入力した内容はそのままです。");
+    return;
+  }
   // 写真が復元できていない戸別をそのまま上書きすると、元ファイルの写真を無言で失う → 明示確認
   if(_editorPhotosStripped){
     if(!confirm("⚠ この戸別の写真は復元できていません（共有物件由来などで剥がれています）。\n\nこのまま上書き保存すると、元ファイルに入っていた写真が失われます。\n\nそれでも上書きしますか？\n（写真を残したい場合はキャンセルし、元の個別ファイル(.hyb)から開き直してください）")) return;
@@ -12830,9 +12840,13 @@ async function overwriteSaveCurrentToProject(){
       alert("✅ 物件ファイルに上書き保存しました（変更を反映）\n  物件: " + pname + indivMsg);
     }
   } else {
-    if(confirm("✅ 物件（端末内）に保存しました。" + indivMsg + "\n\n⚠ この物件はまだ共有ファイルに連動していないため、ドライブ等の共有ファイルには反映されていません（他のPCで開くと古いままです）。\n\n今すぐ共有ファイルへ保存（連動）しますか？")){
-      if(typeof attachProjectFile === "function") await attachProjectFile();
-    }
+    /* ここで「連動しますか？」と聞いて、その場でファイル選びを開くことはできない。
+       確認の窓を出した時点で「押した直後」の扱いが切れ、選ぶ画面が開かず
+       何も起きないように見えていた。案内だけ出して、ボタンを押してもらう。 */
+    alert("✅ 物件（端末内）に保存しました。" + indivMsg
+      + "\n\n⚠ この物件はまだ共有ファイルに連動していないため、ドライブ等の共有ファイルには"
+      + "反映されていません（他のPCで開くと古いままです）。\n\n"
+      + "メニューの「🔗 共有ファイルに連動」を押すと、以後は自動で共有ファイルにも保存されます。");
   }
 }
 
@@ -12855,7 +12869,9 @@ async function ensureProjDirHandle(){
   }
   // 未リンク → ユーザーに工事フォルダを指定してもらう（次回から記憶）
   if(!window.showDirectoryPicker) return null;
-  if(!confirm("戸別の個別JSONも一緒に更新するため、この物件の『工事フォルダ』を一度だけ指定してください。\n（次回からは記憶され、起動後の最初の保存時に許可1クリックで再リンクします）\n\nフォルダを選びますか？\n（キャンセル＝今回は物件JSONのみ保存）")) return null;
+  /* ここで確認（confirm）を出すと「押した直後」の扱いが切れ、フォルダを選ぶ画面が
+     開けなくなる。フォルダを選ぶこと自体が確認になるので、そのまま開く。
+     選ばずに閉じれば「今回は物件JSONだけ保存」で進む（今までと同じ）。 */
   try {
     const dh = await window.showDirectoryPicker({ mode: "readwrite" });
     _projDirHandle = dh;
@@ -12863,11 +12879,10 @@ async function ensureProjDirHandle(){
     return dh;
   } catch(err){
     if(err && err.name === "AbortError") return null;   // 自分で閉じた
-    // 上の確認（confirm）で「押した直後」の扱いが切れると、ここで弾かれることがある。
+    // 前に別の窓が出ていると「押した直後」の扱いが切れて、ここで弾かれることがある。
     // 黙って諦めると「何も起きない」ように見えるので、もう一度押せばよいことを伝える。
     console.warn(err);
-    alert("フォルダを選ぶ画面を開けませんでした。\n\nもう一度同じ操作をすると、今度は確認なしで\n"
-      + "フォルダ選びが開きます。");
+    alert("フォルダを選ぶ画面を開けませんでした。\n\nもう一度同じ操作をしてください。");
     return null;
   }
 }
@@ -14354,6 +14369,27 @@ function dupFindGroups(rows){
   return groups;
 }
 /* 書き込み許可を取る（読むだけで開いたフォルダを、この操作の時だけ書けるようにする） */
+/* ★ここは「押した直後」に呼ぶこと★
+   フォルダを選ぶ画面も、書き込みの許可も、ブラウザは押した直後しか出してくれない。
+   window.confirm / alert / prompt を1つ挟むと、その扱いが消えて必ず弾かれる。
+   （症状：押しても何も起きない／勝手にダウンロードに落ちる／0件のまま終わる）
+
+   一括の書き込みでは、ファイルを1つずつ許可してもらうことはできない（聞けるのは1回だけ）。
+   ルート（工事フォルダ）にまとめて許可を取れば、その下のファイルは聞き直さずに書ける。
+   取れなくても止めない（今までどおりダウンロードで残せる）。 */
+async function fsPrepRootWritable(rows){
+  const root = (typeof _listDirHandle !== "undefined") ? _listDirHandle : null;
+  if(root){
+    try { if((await root.queryPermission({ mode: "readwrite" })) === "granted") return true; } catch(_){}
+    try { if(await dupEnsureWritable(root)) return true; } catch(_){}
+    return false;
+  }
+  // ルートが無い（📄 ファイルで1つずつ読んだ等）＝対象が1つだけならそのファイルに聞ける
+  const fhs = [];
+  (rows || []).forEach(r => { if(r && r.fileHandle && fhs.indexOf(r.fileHandle) < 0) fhs.push(r.fileHandle); });
+  if(fhs.length === 1){ try { return await dupEnsureWritable(fhs[0]); } catch(_){ return false; } }
+  return false;
+}
 async function dupEnsureWritable(dir){
   if(!dir || !dir.queryPermission) return false;
   try{
@@ -14476,6 +14512,10 @@ async function dupCleanupFlow(rows, quietIfNone){
   }
   const picks = await dupDialog(groups);
   if(!picks) return null;
+  /* ★窓の「この内容で整理する」を押した直後に、ルートへ1回だけ許可を取る★
+     1フォルダずつ聞くと、押した直後の1回を最初のフォルダで使い切ってしまい、
+     2つ目以降のフォルダのファイルが消えずに残る。 */
+  await fsPrepRootWritable(rows && rows.length ? rows : _listRows);
   const res = await dupApply(groups, picks);
   // 残した中に住所が全角のものがあれば、そのままにすると
   // 「現場で全戸が未保存になる → 全部保存し直す → また重複」のループになる。
@@ -14674,6 +14714,8 @@ async function junkCleanupFlow(badList, rows, quietIfNone){
     return null;
   }
   if(!(await junkDialog(found))) return null;
+  // 窓の「消す」を押した直後に、ルートへ1回だけ許可を取る（上と同じ理由）
+  await fsPrepRootWritable(rows && rows.length ? rows : _listRows);
   const res = await junkApply(found.empty);
   alert("🧹 掃除が終わりました。\n\n"
     + "消した空のファイル： " + res.done + " 件\n"
@@ -15472,6 +15514,10 @@ async function applyBulkReenc(){
     newPw = pwManual;
   }
 
+  /* ★確認を出す前に、書き込みの許可を取っておく★
+     確認を先に出すと「押した直後」の扱いが切れ、元ファイルへ上書きできず
+     全部ダウンロードに落ちてしまう（上書き 0 / ダウンロード N になる）。 */
+  await fsPrepRootWritable(targets);
   // 確認
   const modeLabel = { keep:"方式維持", hybrid:"ハイブリッド(.hyb)", full:"全暗号化(.enc)", plain:"平文(.json)" }[newFormat];
   const pwLabel = (pwSrc === "keep") ? "現状維持" : "手入力";
@@ -15515,6 +15561,8 @@ async function bulkConvertToPlain(){
     : (hybN)        ? "ハイブリッド " + hybN + " 件"
     :                 "全暗号化 " + fullN + " 件";
 
+  /* ★確認を出す前に、書き込みの許可を取っておく（上と同じ理由）★ */
+  await fsPrepRootWritable(targets);
   if(!confirm(
     "【⚠ 一括平文化の確認】\n"
     + kind + " を復号し、暗号化なしの平文(.json)として保存し直します。\n\n"
@@ -18404,10 +18452,14 @@ async function bulkExportPhotosToFolders(){
     alert("戸別がありません。物件を開くか、フォルダ/ファイルを読み込んでください。");
     return;
   }
-  // 書き出し先の親フォルダ（工事フォルダ等）を毎回ピッカーで選ぶ（前回の場所から開く）
-  if(!confirm("この物件（一覧）の全戸別の写真を、これから選ぶフォルダの中に「管理番号」フォルダを作って一括書き出しします。\n\n通常はこの物件の『工事フォルダ』を選んでください（管理番号.json と並んで管理番号フォルダが作られます）。\n\nフォルダを選びますか？")) return;
+  /* ★フォルダを選ぶ画面を先に開く★
+     ここで確認（confirm）を出すと「押した直後」の扱いが切れて、
+     フォルダを選ぶ画面そのものが開けなくなる（「フォルダを開けませんでした。」で終わっていた）。
+     どこへ書き出すかはピッカーで選ぶこと自体が確認になるので、説明は選んだあとに出す。 */
   const parent = await _pickPhotoExportDir();
   if(!parent) return;
+  if(!confirm("「" + (parent.name || "選んだフォルダ") + "」の中に、管理番号のフォルダを作って"
+      + "全戸別の写真を書き出します。\n\n（管理番号.json と並んで、管理番号のフォルダができます）\n\n進めますか？")) return;
   // 暗号化戸別の写真復号に使う候補パスワード（記憶中のもの）
   const pwCandidates = [];
   if(typeof _sessionPassword !== "undefined" && _sessionPassword) pwCandidates.push(_sessionPassword);
@@ -21103,18 +21155,10 @@ async function projWriteFile(snap, marks){
 /* 物件JSONファイルを『書き戻し可』で開く（Chrome/Edge）。以後の編集はこの共有ファイルへ自動保存。
    非対応(Safari/iPad等)は従来のインポート（読み取りのみ・編集後は手動エクスポートで上書き）にフォールバック。 */
 async function openProjectFromFile(){
-  // 事故防止：ファイルを選ぶ前に、いまの入力を先に保存しておく。
-  // これで「入力直後に開いたので自動保存が間に合わず、警告も出ないまま消える」経路を塞ぐ。
-  if(_currentProject){
-    if(!confirm(
-      "📂 共有ファイルを開きます。\n\n"
-      + "いま画面に出ている内容は、選んだファイルの中身に入れ替わります。\n"
-      + "（受付台帳に書いた内容も入れ替わります）\n\n"
-      + "念のため、いまの内容は先に保存してから開きます。\n\n"
-      + "続けますか？"
-    )) return;
-    try { await projSaveNow(); } catch(_){}
-  }
+  /* ★順番に意味がある★
+     ファイルを選ぶ画面は「押した直後」しか開けない。確認（confirm）を先に出すと
+     その扱いが切れ、物件を開いているときだけ何も起きない、という出方をする。
+     だからファイル選びを先に済ませ、入れ替えてよいかは選んだあとに聞く。 */
   if(!window.showOpenFilePicker){
     alert("この端末（ブラウザ）は共有ファイルへの直接保存に対応していません。\n「📥 インポート」と同じ方法で取り込みます（読み取り専用）。編集後は各物件の「出力」でダウンロードして、ドライブ上の共有ファイルへ上書きしてください。");
     pickAndImportProject();
@@ -21126,6 +21170,17 @@ async function openProjectFromFile(){
     handle = picked && picked[0];
   } catch(err){ if(err && err.name === "AbortError") return; console.warn(err); return; }
   if(!handle) return;
+  // 物件を開いているときだけ、入れ替えてよいか確かめる（ファイルを選んだあとに聞く）
+  if(_currentProject){
+    if(!confirm(
+      "📂 共有ファイルを開きます。\n\n"
+      + "いま画面に出ている内容は、選んだファイルの中身に入れ替わります。\n"
+      + "（受付台帳に書いた内容も入れ替わります）\n\n"
+      + "念のため、いまの内容は先に保存してから開きます。\n\n"
+      + "続けますか？"
+    )) return;
+    try { await projSaveNow(); } catch(_){}
+  }
   let p;
   try { const file = await handle.getFile(); p = JSON.parse(await file.text()); }
   catch(_){ alert("ファイルを読み込めませんでした。"); return; }
@@ -21161,6 +21216,8 @@ function projOpenPickerOpts(){
   return { types: [{ description: "物件JSON", accept: { "application/json": [".json"] } }] };
 }
 /* 現在の物件を共有ファイルへ連動（書込先を選択/作成）。ハンドル非保持(menu/インポート起点)の物件用。 */
+/* Android で「どちらの方法で連動するか」を1回目に覚えておく置き場（2回目の押下で使う） */
+let _projAttachChoice = null;
 async function attachProjectFile(){
   if(!_currentProject) return;
   if(!window.showSaveFilePicker && !window.showOpenFilePicker){ return exportProjectFlow(_currentProject.id); } // 非対応→ダウンロード
@@ -21168,10 +21225,20 @@ async function attachProjectFile(){
   // Android の保存ダイアログ(SAF)は「新規作成のみ・既存ファイル選択不可・同名指定は連番付き別ファイル化」のため、
   // 既存の共有ファイルへ連動するときは「開く」ダイアログ（既存ファイルを選べる）を使う。
   if(isAndroid && window.showOpenFilePicker){
-    const useExisting = confirm(
-      "共有ファイルへの連動方法を選んでください。\n\n"
-      + "OK＝既存の共有ファイルを選んで連動（Dropbox等に既にあるファイルへ書き込む）\n"
-      + "キャンセル＝新しいファイルを作成して連動");
+    /* ここで確認（confirm）を出すと「押した直後」の扱いが切れ、どちらを選んでも
+       ファイルを選ぶ画面が開かない（何も起きないように見える）。
+       1回目は選び方だけ聞いて覚え、2回目の押下でその画面を開く。 */
+    if(_projAttachChoice === null){
+      _projAttachChoice = confirm(
+        "共有ファイルへの連動方法を選んでください。\n\n"
+        + "OK＝既存の共有ファイルを選んで連動（Dropbox等に既にあるファイルへ書き込む）\n"
+        + "キャンセル＝新しいファイルを作成して連動") ? "open" : "new";
+      alert("もう一度「🔗 共有ファイルに連動」を押してください。\n"
+        + "（ファイルを選ぶ画面は、押した直後にしか開けない決まりのためです）");
+      return;
+    }
+    const useExisting = (_projAttachChoice === "open");
+    _projAttachChoice = null;
     if(useExisting){
       let handle = null;
       try {
@@ -21878,6 +21945,9 @@ async function restoreTrashedProject(){
   renderMenuView();
   alert("物件「" + (p.name || "") + "」を復元しました");
 }
+/* 「出力」で “別ファイル（コピー）として保存” を選んだときの予約。
+   確認の窓を出すと保存先を選ぶ画面が開けなくなるので、次の1回で開く。 */
+let _projExportCopyOnce = false;
 async function exportProjectFlow(id){
   let p = await projIdbGet(id);
   if(!p) return;
@@ -21892,8 +21962,17 @@ async function exportProjectFlow(id){
   // 連動中の物件は、保存ダイアログを出さずに連動ファイルへ“その場で上書き”する（推奨）。
   // 特に Android の保存ダイアログ(SAF)は既存ファイルへ上書きできず連番付き別ファイルを作ってしまうため、
   // 上書きは必ずこの経路（既存ハンドルへの直接書込）で行う。
-  if(_currentProject && _currentProject.id === id && _projFileHandle){
+  if(_currentProject && _currentProject.id === id && _projFileHandle && !_projExportCopyOnce){
     const ow = confirm("この物件は共有ファイルに連動しています。\n\nOK＝連動中のファイルへ上書き保存（別ファイルは作りません・推奨）\nキャンセル＝別ファイル（コピー）として保存");
+    if(!ow){
+      /* コピー保存には保存先を選ぶ画面が要るが、いま確認の窓を出したので
+         「押した直後」の扱いが切れていて開けない（黙ってダウンロードに落ちていた）。
+         次の1回はコピー保存と決めておいて、押し直してもらう。 */
+      _projExportCopyOnce = true;
+      alert("別ファイル（コピー）として保存します。\n\nもう一度「出力」を押してください。\n"
+        + "（保存先を選ぶ画面は、押した直後にしか開けない決まりのためです）");
+      return;
+    }
     if(ow){
       try {
         await projSaveNow();
@@ -21903,6 +21982,7 @@ async function exportProjectFlow(id){
       return;
     }
   }
+  _projExportCopyOnce = false;      // ここまで来たらコピー保存の予約は使い切り
   // PC（Chrome/Edge）: 保存ダイアログで既存ファイルへ“その場で上書き”できる。日付は付けない
   // （既存の物件ファイルを選べば上書き。別名を付ければコピーも可）。
   if(window.showSaveFilePicker){
@@ -23226,9 +23306,10 @@ async function exportGenbaSet(){
       }
     }
   } catch(e){ console.warn("[現場用] 地図の採取に失敗", e); }
-  if(!map){
-    if(!confirm("この物件には、書き出せる地図がありません。\n（地図を描いていないか、建物に管理番号が付いていません）\n\n受付台帳だけを書き出しますか？")) return;
-  }
+  /* 地図が無いことの断りは、ここでは出さない。
+     ここで確認（confirm）を出すと「押した直後」の扱いが切れ、保存先を選ぶ画面が
+     開けなくなって、黙ってダウンロードフォルダへ落ちてしまう。
+     地図の有無は、書き出したあとの知らせに入れる。 */
   const payload = { type: "antenna_genba_set", version: 1, app: APP_VERSION,
                     project: ledger.project, exportedAt: ledger.exportedAt,
                     caseCount: ledger.rows.length,
@@ -23466,9 +23547,10 @@ async function exportReceptionLedgerAsHtml(repick){
       + "★ フォルダではなく、「受付台帳.html」という ファイルそのもの を選んでください。\n"
       + "　 メインの index.html と同じフォルダにあります。\n\n"
       + "1回選べばこの端末が覚えるので、次からは聞きません。";
-    if(!confirm(msg)) return;
+    /* ここで確認（confirm）を出すと「押した直後」の扱いが切れ、
+       ファイルを選ぶ画面そのものが開かなくなる。先に開いて、説明は開けなかった時に出す。 */
     tpl = await lghtmlTplPick();
-    if(!tpl) return;                 // 選ばなかった・ひな型でなかった（中で知らせている）
+    if(!tpl){ alert(msg.replace("「OK」を押すと、ファイルを選ぶ画面が出ます。\n", "")); return; }
     if(!tpl.stored){
       alert("ひな型をこの端末に覚えられませんでした（保存容量が足りない可能性があります）。\n"
         + "書き出しはできますが、毎回ファイルを選ぶ画面が出ます。");
