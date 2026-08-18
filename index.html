@@ -1365,6 +1365,8 @@
     body.list-print-mode.photo-only .ph-bar,
     body.list-print-mode.photo-only .pj-note,
     body.list-print-mode.photo-only .pj-ops,
+    /* フォルダ名の帯が残ると、その高さのぶん1戸別目が次のページへ押し出される */
+    body.list-print-mode.photo-only .list-origin-banner,
     body.list-print-mode.photo-only .no-print { display: none !important; }
     body.list-print-mode.photo-only .pj-doc-head { display: none !important; }
     /* 高さを用紙ぴったりに固定し、はみ出しは切る＝2ページ目に流れない。
@@ -3384,6 +3386,10 @@
   .ph-bar { background: #fff; border: 1px solid #cdd3da; border-radius: 4px; padding: 8px 10px; margin-bottom: 10px; }
   .ph-bar-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .ph-bar-line + .ph-bar-line { margin-top: 7px; padding-top: 7px; border-top: 1px solid #eef2f6; }
+  .pj-lowres { display: inline-block; margin-left: 6px; padding: 0 4px; border-radius: 3px;
+               background: #fff3e0; color: #8a5a00; border: 1px solid #ffcc80;
+               font-size: 9px; font-weight: 700; vertical-align: 2px; white-space: nowrap;
+               -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .pj-warn-line { color: #8a5a00; background: #fff5e8; border: 1px solid #ffcc80;
                   border-radius: 4px; padding: 5px 8px; font-size: 12px; }
   .ph-bar button { background: #7a4e1e; color: #fff; border: 1px solid #5e3c16; padding: 5px 14px;
@@ -5937,7 +5943,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.18m";
+const APP_VERSION = "2026.08.18n";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -25041,7 +25047,7 @@ async function pjLoad(){
       c.fp = pjFingerprint(c.photos);           // 読み込んだ時の写真の指紋（外から変わっていないか見る）
       if(got && got.locked)   c.err = "暗号化（パスワード未入力）";
       if(got && got.noSource) c.err = "写真の元ファイルが手元にありません（物件だけを開いている）";
-      if(got && got.thumb)    c.err = "物件に控えた小さな写真です（元ファイルを読み込むと原寸になります）";
+      if(got && got.thumb){ c.err = "物件に控えた小さな写真です（元ファイルを読み込むと原寸になります）"; c.lowres = true; }
       if(got && got.error)    c.err = "読み込めませんでした";
     } catch(e){ c.err = "読み込めませんでした（" + ((e && e.message) || e) + "）"; }
     cases.push(c);
@@ -25239,7 +25245,8 @@ function pjHeadHtml(c){
        + '</table>')
     : '<span class="pj-none">記録なし</span>';
   return '<div class="pj-head">'
-    + cell("管理番号", '<b>' + escapeHtml(c.no || "") + '</b>', "pj-h-no")
+    + cell("管理番号", '<b>' + escapeHtml(c.no || "") + '</b>'
+        + (c.lowres ? '<span class="pj-lowres">⚠ 原寸ではありません</span>' : ''), "pj-h-no")
     + cell("氏名", escapeHtml(c.name))
     + cell("住所", escapeHtml(c.addr), "pj-h-addr")
     + cell("電話", escapeHtml(c.tel))
@@ -25249,8 +25256,14 @@ function pjHeadHtml(c){
     + cell("記録データ", measHtml, "pj-h-meas")
     + '</div>';
 }
-function pjShownCases(){
-  const all = _pjCases || [];
+/* 上の絞り込み検索・「重複を隠す」で残った戸別だけにする。
+   ここを見ていないと、検索欄に打っても写真台帳が何も変わらない。 */
+function pjShownCases(rows){
+  let all = _pjCases || [];
+  if(Array.isArray(rows)){
+    const keep = new Set(rows);
+    all = all.filter(c => keep.has(c.row));
+  }
   return _pjOnlyPhoto ? all.filter(c => c.photos.length) : all;
 }
 function renderListPhotoMode(rows, container){
@@ -25260,8 +25273,9 @@ function renderListPhotoMode(rows, container){
     + '<div class="ph-bar-line">'
     +   '<button type="button" id="pj-load" title="いま読み込んでいる戸別（受付台帳と同じ一覧）の中から、戸別ファイルに入っている写真を読み出して並べます。">'
     +     (_pjCases ? '🔄 写真を読み直す' : '📥 写真を読み込む') + '</button>'
-    +   (_pjCases ? ('<span class="ph-root">戸別 ' + _pjCases.length + ' 件／写真 '
-          + _pjCases.reduce((n, c) => n + c.photos.length, 0) + ' 枚</span>') : '')
+    +   (_pjCases ? ('<span class="ph-root">戸別 ' + pjShownCases(rows).length + ' 件／写真 '
+          + pjShownCases(rows).reduce((n, c) => n + c.photos.length, 0) + ' 枚'
+          + ((rows && rows.length < _pjCases.length) ? '（絞り込み中）' : '') + '</span>') : '')
     + '</div>';
   if(_pjCases){
     html += '<div class="ph-bar-line">'
@@ -25272,7 +25286,9 @@ function renderListPhotoMode(rows, container){
       +   '💾 戸別ファイルへ書き戻す' + (dirtyN ? ('（' + dirtyN + '件）') : '') + '</button>'
       + '<button type="button" id="pj-print" title="1戸別＝1ページで、A4縦の写真台帳を印刷／PDF出力します">🖨 写真台帳を印刷</button>'
       + '</div>';
-    const hidden = _pjCases.filter(c => !c.photos.length && c.err);
+    const inScope = Array.isArray(rows)
+      ? _pjCases.filter(c => rows.indexOf(c.row) >= 0) : _pjCases;
+    const hidden = inScope.filter(c => !c.photos.length && c.err);
     if(hidden.length){
       html += '<div class="ph-bar-line pj-warn-line">⚠ 写真を出せなかった戸別が ' + hidden.length + ' 件あります'
         + '（' + escapeHtml(hidden.slice(0, 3).map(c => (c.no || "―")).join("・"))
@@ -25299,9 +25315,16 @@ function renderListPhotoMode(rows, container){
     return;
   }
 
-  const shown = pjShownCases();
+  if(_pjRowsRef !== _listRows){
+    html += '<div class="ph-warn cost-detail-section">⚠ 一覧が入れ替わりました。'
+      + '上の「🔄 写真を読み直す」を押してください（いま出ているのは前の一覧の写真です）。</div>';
+  }
+  const shown = pjShownCases(rows);
   if(!shown.length){
-    html += '<div class="ph-warn cost-detail-section">写真の入っている戸別がありませんでした。'
+    html += '<div class="ph-warn cost-detail-section">'
+      + ((rows && rows.length < (_pjCases || []).length)
+          ? '上の絞り込みに当てはまる戸別がありませんでした。'
+          : '写真の入っている戸別がありませんでした。')
       + '「写真のある戸別だけ」のチェックを外すと、写真の無い戸別も出ます。</div>';
     container.innerHTML = html;
     bindPhotoHandlers(container);
@@ -25351,7 +25374,15 @@ async function pjEnsureLoaded(container){
     : new Promise(res => { im.addEventListener("load", res, { once: true }); im.addEventListener("error", res, { once: true }); })));
 }
 async function pjPrint(){
-  if(_listMode !== "photos" || !_pjCases) return;
+  if(_listMode !== "photos") return;
+  if(!_pjCases){
+    alert("先に「📥 写真を読み込む」を押してください。\n\n戸別ファイルの中の写真を読み出してから印刷します。");
+    return;
+  }
+  if(!pjShownCases().length){
+    alert("刷るものがありません。\n\n写真の入っている戸別が見つかりませんでした。");
+    return;
+  }
   const btn = document.getElementById("pj-print");
   if(btn){ btn.disabled = true; btn.textContent = "🖨 写真を読み込み中..."; }
   try { await pjEnsureLoaded(document.getElementById("list-content-custom")); } catch(_){}
