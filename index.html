@@ -5862,7 +5862,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.18f";
+const APP_VERSION = "2026.08.18g";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -14281,13 +14281,34 @@ function dupNeedsHan(row){
   const a = String((row && row.data && row.data.chosho_cust_addr) || "").trim();
   return !!a && !dupHalfWidthAddr(row);
 }
+/* 中身の多さ。ファイルの大きさ（バイト数）では測らない。
+   メインは読みやすいように字下げして書き、現場用は詰めて書くので、
+   同じ中身でも「あとから現場用で保存した方が小さい」ことが起きる。
+   それで新しい方が「中身が少ない」と判断され、古い方が既定になっていた。
+   埋まっている項目の数なら、書き方の違いに左右されない。 */
+function dupFilledCount(row){
+  const dd = (row && row.data) || {};
+  let n = 0;
+  Object.keys(dd).forEach(k => {
+    if(k === "chosho_photos" || k.charAt(0) === "_") return;   // 写真は枚数で別に見る
+    const v = dd[k];
+    if(v == null) return;
+    if(typeof v === "string"){ if(v.trim() !== "") n++; return; }
+    if(typeof v === "number"){ if(v !== 0) n++; return; }
+    if(typeof v === "boolean"){ if(v) n++; return; }
+    if(Array.isArray(v)){ if(v.length) n++; return; }
+    if(typeof v === "object"){ if(Object.keys(v).length) n++; return; }
+  });
+  return n;
+}
 function dupWhyKeep(it, others){
   const why = [];
   const maxPh = Math.max.apply(null, others.map(x => x._photoCount || 0).concat([0]));
   if((it._photoCount || 0) > 0 && (it._photoCount || 0) >= maxPh) why.push("写真" + it._photoCount + "枚");
   if(dupHalfWidthAddr(it) && others.some(x => x !== it && !dupHalfWidthAddr(x))) why.push("住所が半角");
-  const maxSz = Math.max.apply(null, others.map(x => x._size || 0).concat([0]));
-  if((it._size || 0) >= maxSz && others.some(x => x !== it && (x._size || 0) < (it._size || 0))) why.push("中身が多い");
+  const mine = dupFilledCount(it);
+  const maxFill = Math.max.apply(null, others.map(x => dupFilledCount(x)).concat([0]));
+  if(mine >= maxFill && others.some(x => x !== it && dupFilledCount(x) < mine)) why.push("中身が多い");
   const maxWhen = Math.max.apply(null, others.map(x => dupWhenMs(x) || 0).concat([0]));
   if(dupWhenMs(it) >= maxWhen && others.some(x => x !== it && dupWhenMs(x) < dupWhenMs(it))) why.push("新しい");
   return why.length ? why.join("・") : "ほかと同じ内容";
@@ -14341,12 +14362,16 @@ function dupFindGroups(rows){
     //   ① 中身のあるもの（0バイトは選ばない）
     //   ② 写真が減らないもの（写真は戻せないので、ここだけは何より優先）
     //   ③ 住所が半角の方
-    //   ④ 写真の枚数が多い方 → ⑤ ファイルが大きい方
-    //   ⑥ 中の更新日時が新しい方 → ⑦ ファイルの更新日時が新しい方
+    //   ④ 写真の枚数が多い方 → ⑤ 埋まっている項目が多い方
+    //   ⑥ 中の更新日時が新しい方 → ⑦ ファイルが大きい方 → ⑧ ファイルの更新日時が新しい方
     //
     // 日時を先に見ない理由：保存に失敗した小さいファイルの方が新しいことがあり、
     // 写真の入った大きいファイルを消してしまう（Androidは保存のたび別ファイルを作るため
     // 「いちばん新しい＝いちばん中身がある」とは限らない）。
+    //
+    // 中身の多さをファイルの大きさで測らない理由：メインは読みやすいように字下げして書き、
+    // 現場用は詰めて書くので、同じ中身でも「あとから現場用で保存した方が小さい」ことが起きる。
+    // 大きさで測ると、その差だけで新しい方が「中身が少ない」と判断されてしまう。
     //
     // 住所の半角を写真の次に置く理由：ここで古い（住所が全角の）ファイルを残すと、
     // メインが画面上で半角にそろえる → 現場へ渡すと中身が違うので全戸「未保存」になる →
@@ -14354,13 +14379,20 @@ function dupFindGroups(rows){
     // 写真さえ減らなければ半角側を残すのが、このループを断つ唯一の手。
     const maxPh = g.items.reduce((m, x) => Math.max(m, x._photoCount || 0), 0);
     const phLoss = x => (maxPh > 0 && (x._photoCount || 0) < maxPh) ? 1 : 0;
+    /* 中身の多さは「埋まっている項目の数」で見る。ファイルの大きさで見ると、
+       メイン（字下げして書く）と現場用（詰めて書く）の書き方の違いだけで
+       新しい方が小さく見え、古い方を残してしまう。
+       項目の数が同じなら、新しい方（editedAt）を残す。 */
+    const fill = new Map();
+    const fillOf = x => { if(!fill.has(x)) fill.set(x, dupFilledCount(x)); return fill.get(x); };
     g.items.sort((a, b) =>
          (((b._size > 0) ? 1 : 0) - ((a._size > 0) ? 1 : 0))
       || (phLoss(a) - phLoss(b))
       || (dupHalfWidthAddr(b) - dupHalfWidthAddr(a))
       || ((b._photoCount || 0) - (a._photoCount || 0))
-      || ((b._size || 0) - (a._size || 0))
+      || (fillOf(b) - fillOf(a))
       || (dupWhenMs(b) - dupWhenMs(a))
+      || ((b._size || 0) - (a._size || 0))
       || ((b.lastModified || 0) - (a.lastModified || 0)));
     g.canon = g.no + ".json";
     g.pick = g.items[0]._name;                               // 既定は先頭（いちばん新しい）
