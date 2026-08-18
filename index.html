@@ -3206,6 +3206,35 @@
   }
   table.ledger-table .lg-open-btns button:hover { background: #eef2f6; }
   .lg-note-input { color: #5d4037; }
+  /* ↩ 備考の履歴 */
+  #lg-notelog-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 3200;
+    display: flex; align-items: center; justify-content: center; padding: 24px; }
+  #lg-notelog-backdrop .nl-box { background: #fff; border-radius: 6px; width: min(1100px, 96vw);
+    max-height: 88vh; display: flex; flex-direction: column; box-shadow: 0 8px 30px rgba(0,0,0,.3); }
+  #lg-notelog-backdrop .nl-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    padding: 10px 14px; border-bottom: 1px solid #dde3ea; font-size: 15px; font-weight: 700; color: #1e3a5f; }
+  #lg-notelog-backdrop .nl-sub { font-size: 11px; color: #667482; font-weight: 400; }
+  #lg-notelog-backdrop .nl-x { margin-left: auto; background: #fff; border: 1px solid #cdd3da;
+    border-radius: 3px; padding: 2px 10px; cursor: pointer; font-size: 13px; }
+  #lg-notelog-backdrop .nl-body { overflow: auto; padding: 10px 14px; }
+  #lg-notelog-backdrop table.nl-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+  #lg-notelog-backdrop .nl-tbl th { background: #f4f6f8; border: 1px solid #dde3ea; padding: 4px 6px;
+    text-align: left; font-weight: 700; color: #33424f; position: sticky; top: 0; }
+  #lg-notelog-backdrop .nl-tbl td { border: 1px solid #e3e8ee; padding: 4px 6px; vertical-align: top; }
+  #lg-notelog-backdrop .nl-nm { color: #667482; font-size: 11px; }
+  #lg-notelog-backdrop .nl-before { color: #1b5e20; background: #f1f8f3; font-weight: 600; }
+  #lg-notelog-backdrop .nl-after { color: #667482; }
+  #lg-notelog-backdrop .nl-why { color: #7a6a30; font-size: 11px; }
+  #lg-notelog-backdrop .nl-empty { color: #b8c2cc; }
+  #lg-notelog-backdrop .nl-tbl button { background: #1b7a3d; color: #fff; border: 1px solid #145c2e;
+    border-radius: 3px; padding: 2px 10px; cursor: pointer; font-size: 11.5px; }
+  #lg-notelog-backdrop .nl-tbl button:disabled { background: #cfd8dc; border-color: #b0bec5; cursor: default; }
+  #lg-notelog-backdrop .nl-none { color: #667482; padding: 24px; text-align: center; font-size: 13px; line-height: 1.8; }
+  #lg-notelog-backdrop .nl-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 8px 14px; border-top: 1px solid #dde3ea; }
+  #lg-notelog-backdrop .nl-note { font-size: 11px; color: #667482; }
+  #lg-notelog-backdrop .nl-clear { margin-left: auto; background: #fff; color: #c62828;
+    border: 1px solid #ef9a9a; border-radius: 3px; padding: 3px 12px; cursor: pointer; font-size: 11.5px; }
   /* 同じ管理番号の戸別が2つ以上ある行の備考。どの行から書いても同じ内容になるので印を出す。 */
   td.lg-note-dup { background: #fff8e1; }
   td.lg-note-dup::before { content: "⚠"; color: #b05a00; font-size: 10px; margin-right: 2px; }
@@ -5865,7 +5894,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.18h";
+const APP_VERSION = "2026.08.18i";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -14860,6 +14889,114 @@ function lgFillEmptyFrom(target, src){
     if(empty && has) target[k] = src[k];
   });
 }
+/* ---------- 備考の履歴（元に戻せるようにする） ----------
+   受付台帳の備考は管理番号でひとまとめにしているので、番号を直したり
+   同じ番号の戸別が重なったりすると、持ち主が入れ替わることがある。
+   気づかずに上書きしても手で打ち直さずに済むよう、書き換えるたびに前の内容を控え、
+   「↩ 備考の履歴」からいつでも戻せるようにする。この端末に残る（物件ファイルには入れない）。 */
+const LG_NOTE_LOG_KEY = "antenna_ledger_note_log_v1";
+const LG_NOTE_LOG_MAX = 100;
+let _lgNoteLog = (() => {
+  try { const a = JSON.parse(localStorage.getItem(LG_NOTE_LOG_KEY)); return Array.isArray(a) ? a : []; }
+  catch(_){ return []; }
+})();
+function lgNoteLogSave(){
+  try { localStorage.setItem(LG_NOTE_LOG_KEY, JSON.stringify(_lgNoteLog.slice(0, LG_NOTE_LOG_MAX))); } catch(_){}
+}
+/* 備考が変わるとき、変わる前の内容を控える。同じ中身なら控えない。 */
+function lgNoteLogPush(tk, before, after, why){
+  const b = String(before == null ? "" : before), a = String(after == null ? "" : after);
+  if(b === a) return;
+  let mgmt = "", name = "";
+  try {
+    const row = (Array.isArray(_listRows) ? _listRows : []).find(r => { try { return subCaseKey(r) === tk; } catch(_){ return false; } });
+    if(row && row.data){ mgmt = row.data.chosho_mgmt_no || ""; name = row.data.chosho_cust_name || ""; }
+  } catch(_){}
+  if(!mgmt && String(tk).indexOf("m:") === 0) mgmt = String(tk).slice(2);
+  _lgNoteLog.unshift({ tk, before: b, after: a, why: why || "",
+                       mgmt, name, at: new Date().toISOString() });
+  if(_lgNoteLog.length > LG_NOTE_LOG_MAX) _lgNoteLog.length = LG_NOTE_LOG_MAX;
+  lgNoteLogSave();
+}
+/* 備考を書く（控えを取ってから書く）。備考の書き込みは必ずここを通す。 */
+function lgSetNote(tk, note, why){
+  if(!tk) return;
+  const cur = String((getLedger(tk) || {}).note || "");
+  const nx = String(note == null ? "" : note);
+  if(cur === nx) return;
+  lgNoteLogPush(tk, cur, nx, why);
+  setLedger(tk, { note: nx });
+}
+/* 「↩ 備考の履歴」。書き換わる前の備考を並べて、押せば戻せる。
+   受付台帳の備考は管理番号でひとまとめにしているので、番号を直したり
+   同じ番号の戸別が重なったりすると持ち主が入れ替わることがある。
+   気づかずに上書きしても、手で打ち直さずに済むようにするための逃げ道。 */
+function lgNoteLogWhen(iso){
+  const t = Date.parse(String(iso || "")); if(!isFinite(t)) return "";
+  const dt = new Date(t), pz = n => String(n).padStart(2, "0");
+  return (dt.getMonth() + 1) + "/" + dt.getDate() + " " + pz(dt.getHours()) + ":" + pz(dt.getMinutes());
+}
+function closeNoteLog(){
+  const bd = document.getElementById("lg-notelog-backdrop");
+  if(bd) bd.remove();
+  document.removeEventListener("keydown", lgNoteLogEsc);
+}
+function lgNoteLogEsc(e){ if(e.key === "Escape") closeNoteLog(); }
+function openNoteLog(){
+  closeNoteLog();
+  const bd = document.createElement("div");
+  bd.id = "lg-notelog-backdrop";
+  const rows = _lgNoteLog.slice(0, 60);
+  const body = rows.length
+    ? ('<table class="nl-tbl"><thead><tr>'
+        + '<th style="width:70px;">いつ</th><th style="width:150px;">戸別</th>'
+        + '<th>書き換わる前（この内容に戻せます）</th><th style="width:150px;">書き換えたあと</th>'
+        + '<th style="width:170px;">きっかけ</th><th style="width:70px;"></th>'
+        + '</tr></thead><tbody>'
+        + rows.map((x, i) =>
+            '<tr><td>' + escapeHtml(lgNoteLogWhen(x.at)) + '</td>'
+            + '<td>' + escapeHtml(x.mgmt || "―") + (x.name ? ("<br><span class=\"nl-nm\">" + escapeHtml(x.name) + "</span>") : "") + '</td>'
+            + '<td class="nl-before">' + (x.before ? escapeHtml(x.before) : '<span class="nl-empty">（空欄）</span>') + '</td>'
+            + '<td class="nl-after">' + (x.after ? escapeHtml(x.after) : '<span class="nl-empty">（空欄）</span>') + '</td>'
+            + '<td class="nl-why">' + escapeHtml(x.why || "") + '</td>'
+            + '<td><button data-nl-undo="' + i + '"' + ((String((getLedger(x.tk) || {}).note || "")) === String(x.before || "") ? " disabled" : "") + '>戻す</button></td></tr>').join("")
+        + '</tbody></table>')
+    : '<div class="nl-none">まだ履歴はありません。<br>受付台帳の備考を書き換えると、書き換わる前の内容がここに残ります。</div>';
+  bd.innerHTML = '<div class="nl-box">'
+    + '<div class="nl-head">↩ 備考の履歴'
+    +   '<span class="nl-sub">書き換わる前の備考です。「戻す」でその内容に戻せます（この端末に最大100件）</span>'
+    +   '<button class="nl-x" aria-label="閉じる">✕</button></div>'
+    + '<div class="nl-body">' + body + '</div>'
+    + '<div class="nl-foot">'
+    +   '<span class="nl-note">受付台帳の備考は<b>管理番号ごとに1つ</b>です。'
+    +     '同じ管理番号の戸別が重なっていると、どの行から書いても同じ内容になります。</span>'
+    +   (rows.length ? '<button class="nl-clear">履歴を消す</button>' : '')
+    + '</div></div>';
+  bd.addEventListener("click", e => {
+    if(e.target === bd || e.target.closest(".nl-x")){ closeNoteLog(); return; }
+    if(e.target.closest(".nl-clear")){
+      if(confirm("備考の履歴を全部消しますか？\n（戻せなくなります。備考そのものは消えません）")){
+        _lgNoteLog = []; lgNoteLogSave(); openNoteLog();
+      }
+      return;
+    }
+    const ub = e.target.closest("[data-nl-undo]");
+    if(ub){
+      const x = rows[parseInt(ub.dataset.nlUndo, 10)];
+      if(!x) return;
+      if(!confirm("この戸別（" + (x.mgmt || "―") + (x.name ? ("　" + x.name) : "") + "）の備考を、\n\n"
+          + "　いま　： " + (String((getLedger(x.tk) || {}).note || "") || "（空欄）") + "\n"
+          + "　戻す先： " + (x.before || "（空欄）") + "\n\nに戻しますか？")) return;
+      lgSetNote(x.tk, x.before, "履歴から戻した");
+      try { lgMarkTouched(x.tk); } catch(_){}
+      renderListTable();
+      openNoteLog();
+      return;
+    }
+  });
+  document.body.appendChild(bd);
+  document.addEventListener("keydown", lgNoteLogEsc);
+}
 function lgwbField(k){ for(const f of LGWB_FIELDS){ if(f.k === k) return f; } return null; }
 /* 受付台帳で直したのに、まだ戸別ファイルへ書いていない行の数。
    名前・住所・電話・工事日・状態は台帳の控え（_ledgerMap）ではなく行そのものを直すので、
@@ -20087,10 +20224,17 @@ function lgTextResolve(row, fileKey, lgKey, srcKey){
     return;
   }
   const known = (srcKey in lg) ? String(lg[srcKey] || "") : null;
-  if(fileVal && fileVal !== known) setLedger(tk, { [lgKey]: fileVal, [srcKey]: fileVal }); // 現場が直した → 現場を採る
+  if(fileVal && fileVal !== known){
+    // 備考が現場の内容へ入れ替わる分も、あとで戻せるように控える
+    if(lgKey === "note"){ try { lgNoteLogPush(tk, lgVal, fileVal, "戸別ファイル（現場）の内容を採り込んだ"); } catch(_){} }
+    setLedger(tk, { [lgKey]: fileVal, [srcKey]: fileVal }); // 現場が直した → 現場を採る
+  }
   else row.data[fileKey] = lgVal;                                                          // 台帳が新しい → 戸別へ配る
 }
-function noteAdopt(tk, s){ setLedger(tk, { note: s, noteSrc: s }); }
+function noteAdopt(tk, s){
+  try { lgNoteLogPush(tk, (getLedger(tk) || {}).note, s, "戸別の備考欄から取り込んだ"); } catch(_){}
+  setLedger(tk, { note: s, noteSrc: s });
+}
 function noteResolveRow(row){
   if(!row || !row.data) return;
   lgTextResolve(row, "chosho_note", "note", "noteSrc");
@@ -22600,6 +22744,27 @@ function lgWriteCaseField(row, f, v, opts){
          変更先の番号にすでに控えがあると、その内容（＝他の戸別の備考）が
          そのままこの行の備考になり、いま書いていた備考は消えたように見える。
          黙って入れ替えず、必ず知らせて、やめられるようにする。 */
+      /* いま読み込んでいる別の行が、その管理番号をすでに使っていないか。
+         同じ番号にすると、受付台帳の備考・ビラ・保留がひとまとめになり、
+         どちらから書いても同じ内容が出るようになってしまう。作る前に止める。 */
+      if(!(opts && opts.quiet) && String(v || "").trim()){
+        const twin = (Array.isArray(_listRows) ? _listRows : []).find(r => {
+          if(!r || r === row) return false;
+          return toHalfWidthAn((r.data && r.data.chosho_mgmt_no) || "").trim() === toHalfWidthAn(v).trim();
+        });
+        if(twin){
+          const tn = (twin.data && twin.data.chosho_cust_name) || "";
+          if(!confirm("管理番号「" + v + "」は、すでに別の行が使っています。\n\n"
+              + "　その行： " + (tn || "（氏名なし）") + "（" + ((twin.file || "").split(/[\\/]/).pop() || "") + "）\n\n"
+              + "同じ番号にすると、受付台帳の 備考・ビラ・保留・同意書・完了書 は\n"
+              + "管理番号ごとに1つになるため、どちらの行から書いても同じ内容が出ます。\n"
+              + "（重複ファイルなら「🧹 重複ファイルの整理」でまとめてください）\n\n"
+              + "このまま同じ番号にしますか？\n（キャンセル＝管理番号を元に戻す）")){
+            writeBoth(key, oldMgmtValue);
+            return;
+          }
+        }
+      }
       if(!(opts && opts.quiet) && lgEntryHasContent(_ledgerMap[oldTk]) && lgEntryHasContent(_ledgerMap[nk])){
         const oldNote = String((_ledgerMap[oldTk] || {}).note || "");
         const newNote = String((_ledgerMap[nk] || {}).note || "");
@@ -22613,6 +22778,12 @@ function lgWriteCaseField(row, f, v, opts){
           return;
         }
       }
+      // 備考が入れ替わる分は、あとで戻せるように控えておく
+      try {
+        const wasNote = String((_ledgerMap[oldTk] || {}).note || "");
+        const willNote = String((_ledgerMap[nk] || {}).note || "");
+        if(wasNote !== willNote) lgNoteLogPush(nk, wasNote, willNote, "管理番号を " + (oldMgmtValue || "（なし）") + " → " + (v || "（なし）") + " に変えた");
+      } catch(_){}
       [_ledgerMap, _takeoutMap, _reviewMap, _contractorMap].forEach(m => {
         if(!m[oldTk]) return;
         if(!m[nk]){ m[nk] = m[oldTk]; }
@@ -22920,6 +23091,8 @@ function renderListLedgerMode(rows, container){
     // ① 行を足す
     + '<div class="lgc-grp"><span class="lgc-ttl">追加</span>'
     +   '<button id="lg-add-row" title="台帳に新しい戸別行を追加します。受付の電話を受けたらここから1行足してください（台帳が戸別作成の起点です）。" style="background:#1e3a5f;color:#fff;border:1px solid #16314f;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">＋ 新規行</button>'
+    +   '<button id="lg-note-log" title="備考が書き換わる前の内容を、この端末に最大100件控えています。押すと一覧が出て、いつでもその内容に戻せます。受付台帳の備考は管理番号ごとに1つなので、番号を直したり同じ番号の戸別が重なったりすると持ち主が入れ替わることがあります。そのときの逃げ道です。" style="background:#fff;color:#5d4037;border:1px solid #b08a55;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">↩ 備考の履歴'
+    +     (_lgNoteLog.length ? ('（' + _lgNoteLog.length + '）') : '') + '</button>'
     + '</div>'
     // ② 絞り込む
     + '<div class="lgc-grp"><span class="lgc-ttl">絞り込み' + (nFilters ? '（' + nFilters + '）' : '') + '</span>'
@@ -24488,6 +24661,7 @@ function bindLedgerHandlers(container){
     if(e.target.closest("#lg-xlsx-import")){ ledgerXlsxImportFlow(); return; }
     if(e.target.closest("#lg-xlsx-export")){ exportReceptionLedgerToXlsx(); return; }
     if(e.target.closest("#lg-writeback, #lgs-writeback")){ lgwbButton(); return; }
+    if(e.target.closest("#lg-note-log")){ openNoteLog(); return; }
     if(e.target.closest("#lg-export-set")){ exportGenbaSet(); return; }
     if(e.target.closest("#lg-export-genba")){ exportReceptionLedgerForGenba(); return; }
     if(e.target.closest("#lg-export-html")){ exportReceptionLedgerAsHtml(!!e.shiftKey); return; }
@@ -24630,7 +24804,7 @@ function bindLedgerHandlers(container){
     // 保留は地図の「保」マークに直結するので、地図を開いたままでも即座に描き直す
     else if(f === "hold"){ setLedger(tk, { hold: t.checked }); lgMarkTouched(tk); try { if(window.__mapRefreshObjects) window.__mapRefreshObjects(); } catch(_){} renderListTable(); }
     else if(f === "done"){ lgWriteCaseField(row, "status", t.checked ? "completed" : "in_progress"); row._amtCache = undefined; renderListTable(); }
-    else if(f === "note"){ setLedger(tk, { note: toHalfWidthAn(t.value).trim() }); lgMarkTouched(tk); lgSaveStateRefresh(); }
+    else if(f === "note"){ lgSetNote(tk, toHalfWidthAn(t.value).trim(), "受付台帳で直した"); lgMarkTouched(tk); lgSaveStateRefresh(); }
     else if(f === "contractor"){ setContractor(tk, t.value); }
   });
 }
