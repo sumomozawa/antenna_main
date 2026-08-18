@@ -1354,32 +1354,43 @@
     body.list-print-mode .cal-cell { min-height: 0 !important; height: 100% !important; padding: 1px 2px !important; overflow: hidden; }
     body.list-print-mode .cal-cell .cal-day { font-size: 9px !important; }
     body.list-print-mode .cal-ev { font-size: 8px !important; line-height: 1.2 !important; padding: 0 2px !important; }
-    /* ⑥ 写真台帳：戸別ごとに改ページしてA4縦で出す */
+    /* ⑥ 写真台帳：1戸別＝必ず1ページ。A4縦・余白12mm＝中身は 186mm × 273mm。 */
     body.list-print-mode.photo-only .cost-detail-section,
     body.list-print-mode.photo-only .list-mode-tabs,
-    body.list-print-mode.photo-only .ph-bar { display: none !important; }
-    body.list-print-mode.photo-only .ph-doc-head { display: flex !important; font-size: 13px; margin-bottom: 6px; }
-    body.list-print-mode.photo-only .ph-grp {
+    body.list-print-mode.photo-only .ph-bar,
+    body.list-print-mode.photo-only .pj-note,
+    body.list-print-mode.photo-only .pj-ops,
+    body.list-print-mode.photo-only .no-print { display: none !important; }
+    body.list-print-mode.photo-only .pj-doc-head { display: none !important; }
+    /* 高さを用紙ぴったりに固定し、はみ出しは切る＝2ページ目に流れない。
+       写真の枚数から升目を決めてあるので、ふつうは切れずに収まる。 */
+    body.list-print-mode.photo-only .pj-case {
       display: block !important; border: none !important; border-radius: 0 !important;
-      padding: 0 !important; margin: 0 !important; break-inside: avoid; page-break-inside: avoid;
+      box-shadow: none !important; padding: 0 !important; margin: 0 !important;
+      height: 273mm; max-height: 273mm; overflow: hidden;
+      break-inside: avoid; page-break-inside: avoid;
+      break-after: page; page-break-after: always;
     }
-    body.list-print-mode.photo-only .ph-grp + .ph-grp { break-before: page; page-break-before: always; }
-    body.list-print-mode.photo-only .ph-h { border-bottom: 2px solid #90caf9 !important; margin-bottom: 5mm; }
-    body.list-print-mode.photo-only .ph-h .ph-no { font-size: 13px; }
-    body.list-print-mode.photo-only .ph-h .ph-nm { font-size: 12px; }
-    body.list-print-mode.photo-only .ph-h .ph-ad,
-    body.list-print-mode.photo-only .ph-h .ph-dt { font-size: 10px; }
-    body.list-print-mode.photo-only .ph-h .ph-dir,
-    body.list-print-mode.photo-only .ph-h .ph-n { display: none !important; }
-    body.list-print-mode.photo-only .ph-grid { gap: 4mm; }
-    /* 1ページの枚数に合わせて枠の高さを決める（用紙の残りを行数で割る） */
-    body.list-print-mode.photo-only .ph-frame {
-      aspect-ratio: auto; height: calc((247mm - 5mm - (var(--ph-rows, 3) - 1) * 4mm - var(--ph-rows, 3) * 6mm) / var(--ph-rows, 3));
+    body.list-print-mode.photo-only .pj-case:last-child { break-after: auto; page-break-after: auto; }
+    body.list-print-mode.photo-only .pj-head {
+      overflow: visible; border-bottom: 2px solid #90caf9 !important;
+      padding-bottom: 3mm; margin-bottom: 4mm; height: 16mm; align-items: flex-start;
       -webkit-print-color-adjust: exact; print-color-adjust: exact;
     }
-    body.list-print-mode.photo-only .ph-box { break-inside: avoid; page-break-inside: avoid; }
-    body.list-print-mode.photo-only .ph-box figcaption { font-size: 9px; }
-    body.list-print-mode.photo-only #ph-zoom { display: none !important; }
+    body.list-print-mode.photo-only .pj-h-k { font-size: 7.5pt; }
+    body.list-print-mode.photo-only .pj-h-v { font-size: 9pt; }
+    body.list-print-mode.photo-only .pj-h-no .pj-h-v { font-size: 12pt; }
+    body.list-print-mode.photo-only table.pj-meas { font-size: 6.5pt; }
+    body.list-print-mode.photo-only .pj-grid { gap: 3mm; max-width: none; }
+    /* 見出し 16mm ＋ 下の余白 4mm を引いた残りを、行数で割る（説明の1行 5mm 込み） */
+    body.list-print-mode.photo-only .pj-frame {
+      aspect-ratio: auto;
+      height: calc((273mm - 20mm - (var(--pj-rows, 3) - 1) * 3mm - var(--pj-rows, 3) * 5mm) / var(--pj-rows, 3));
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    body.list-print-mode.photo-only .pj-box { break-inside: avoid; page-break-inside: avoid; }
+    body.list-print-mode.photo-only .pj-box figcaption { font-size: 7.5pt; margin-top: 1mm; }
+    body.list-print-mode.photo-only #pj-zoom { display: none !important; }
     @page photo-portrait { size: A4 portrait; margin: 12mm; }
     body.list-print-mode.photo-only { page: photo-portrait; }
     /* 「保存の状態」は画面で見るためのもの。紙には出さない。 */
@@ -3388,40 +3399,59 @@
     font-size: 12.5px; line-height: 1.7; color: #33424f; overflow-x: auto; margin: 0 0 10px; }
   .ph-warn { background: #fff5e8; border: 1px solid #ffcc80; border-radius: 4px;
     padding: 8px 12px; font-size: 12.5px; color: #bf360c; margin-bottom: 10px; }
-  .ph-doc-head { font-size: 15px; font-weight: 700; color: #1e3a5f; margin: 0 0 8px;
+  /* 写真台帳（戸別JSONの中の写真） */
+  .pj-doc-head { font-size: 15px; font-weight: 700; color: #1e3a5f; margin: 0 0 8px;
     display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-  .ph-doc-head .ph-doc-date { font-size: 11px; color: #667482; font-weight: 400; }
+  .pj-doc-head .pj-doc-date { font-size: 11px; color: #667482; font-weight: 400; }
   /* 戸別ひとかたまり＝紙では1ページ */
-  .ph-grp { background: #fff; border: 1px solid #cdd3da; border-radius: 4px; padding: 10px 12px; margin-bottom: 12px; }
-  .ph-h { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
-    border-bottom: 2px solid #90caf9; padding-bottom: 4px; margin-bottom: 9px; }
-  .ph-h .ph-no { font-size: 15px; font-weight: 700; color: #0d47a1; }
-  .ph-h .ph-nm { font-size: 14px; font-weight: 700; color: #1e3a5f; }
-  .ph-h .ph-ad { font-size: 12px; color: #33424f; }
-  .ph-h .ph-dt { font-size: 12px; color: #33424f; background: #e3f2fd; border-radius: 3px; padding: 1px 7px; }
-  .ph-h .ph-n  { font-size: 11.5px; color: #667482; margin-left: auto; }
-  .ph-h .ph-dir { font-size: 11px; color: #90a0b0; }
-  .ph-h .ph-miss { font-size: 11px; font-weight: 700; color: #bf360c; background: #fff5e8;
-    border: 1px solid #ffcc80; border-radius: 3px; padding: 1px 7px; }
-  /* 画面では、1枚が大きくなりすぎないように幅を抑える（紙の割り付けは印刷用のCSSで決める）。
-     「1ページの枚数」を減らすと画面でも大きくなるので、刷る前の見当が付く。 */
-  .ph-grid { display: grid; grid-template-columns: repeat(var(--ph-cols, 2), 1fr); gap: 10px;
-    max-width: calc(var(--ph-cols, 2) * 330px); }
-  .ph-box { margin: 0; }
-  .ph-frame { background: #f2f4f7; border: 1px solid #dde3ea; border-radius: 3px; overflow: hidden;
+  .pj-case { background: #fff; border: 1px solid #cdd3da; border-radius: 4px;
+    padding: 10px 12px; margin-bottom: 12px; }
+  .pj-case.pj-dirty { border-color: #ef6c00; box-shadow: inset 3px 0 0 #ef6c00; }
+  /* 見出しは横一列。1件1ページに収めたいので、ここは低く抑える。 */
+  .pj-head { display: flex; align-items: stretch; gap: 8px; flex-wrap: nowrap;
+    border-bottom: 2px solid #90caf9; padding-bottom: 5px; margin-bottom: 8px; overflow-x: auto; }
+  .pj-h-cell { flex: 0 0 auto; min-width: 0; }
+  .pj-h-cell.pj-h-addr { flex: 1 1 auto; }
+  .pj-h-cell.pj-h-meas { flex: 0 0 auto; margin-left: auto; }
+  .pj-h-k { font-size: 9.5px; color: #7a8794; line-height: 1.2; }
+  .pj-h-v { font-size: 12.5px; color: #1e3a5f; line-height: 1.3; word-break: break-all; }
+  .pj-h-no .pj-h-v { font-size: 15px; color: #0d47a1; }
+  .pj-none { color: #b8c2cc; }
+  table.pj-meas { border-collapse: collapse; font-size: 9.5px; }
+  table.pj-meas th, table.pj-meas td { border: 1px solid #dde3ea; padding: 0 4px; text-align: right; white-space: nowrap; }
+  table.pj-meas th { background: #f4f6f8; color: #33424f; text-align: center; }
+  table.pj-meas tr th:first-child { text-align: left; }
+  .pj-note { font-size: 11px; color: #bf360c; background: #fff5e8; border: 1px solid #ffcc80;
+    border-radius: 3px; padding: 3px 8px; margin-bottom: 6px; }
+  .pj-nophoto { color: #90a0b0; font-size: 12px; padding: 10px 0; }
+  .pj-grid { display: grid; grid-template-columns: repeat(var(--pj-cols, 3), 1fr); gap: 8px;
+    max-width: calc(var(--pj-cols, 3) * 290px); }
+  .pj-box { margin: 0; }
+  .pj-frame { background: #f2f4f7; border: 1px solid #dde3ea; border-radius: 3px; overflow: hidden;
     aspect-ratio: 4 / 3; display: flex; align-items: center; justify-content: center; }
-  .ph-frame img { width: 100%; height: 100%; object-fit: contain; cursor: zoom-in; display: block; }
-  .ph-box figcaption { font-size: 11.5px; color: #33424f; margin-top: 3px; display: flex; gap: 5px;
-    align-items: baseline; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .ph-box figcaption .ph-i { flex: none; font-weight: 700; color: #fff; background: #7a8794;
+  .pj-frame img { width: 100%; height: 100%; object-fit: contain; cursor: zoom-in; display: block; }
+  .pj-box figcaption { font-size: 11px; color: #33424f; margin-top: 3px;
+    display: flex; gap: 4px; align-items: center; }
+  .pj-box figcaption .pj-i { flex: none; font-weight: 700; color: #fff; background: #7a8794;
     border-radius: 3px; padding: 0 5px; font-size: 10px; }
+  .pj-box figcaption .pj-cap { flex: 1 1 auto; min-width: 0; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+  .pj-ops { flex: none; display: flex; gap: 2px; }
+  .pj-ops button { border: 1px solid #cdd3da; background: #fff; border-radius: 3px;
+    padding: 0 5px; cursor: pointer; font-size: 12px; line-height: 1.5; font-family: inherit; }
+  .pj-ops button:hover { background: #eef2f6; }
+  .pj-ops button.pj-del { border-color: #ef9a9a; color: #c62828; }
+  .pj-ops button.pj-del:hover { background: #ffebee; }
+  .ph-bar #pj-writeback { background: #00695c; border-color: #004d40; }
+  .ph-bar #pj-writeback.pj-need { background: #ef6c00; border-color: #bf360c; }
+  .ph-bar #pj-print { background: #1e3a5f; border-color: #16314f; margin-left: auto; }
   /* 大きく見る（画面のみ） */
-  #ph-zoom { position: fixed; inset: 0; background: rgba(0,0,0,.86); z-index: 4000;
+  #pj-zoom { position: fixed; inset: 0; background: rgba(0,0,0,.86); z-index: 4000;
     display: flex; align-items: center; justify-content: center; padding: 24px; }
-  #ph-zoom .ph-zoom-in { max-width: 96vw; max-height: 92vh; display: flex; flex-direction: column; gap: 8px; align-items: center; }
-  #ph-zoom img { max-width: 96vw; max-height: 86vh; object-fit: contain; background: #222; }
-  #ph-zoom .ph-zoom-cap { color: #fff; font-size: 13px; }
-  #ph-zoom .ph-zoom-x { position: absolute; top: 12px; right: 16px; background: rgba(255,255,255,.14);
+  #pj-zoom .pj-zoom-in { max-width: 96vw; max-height: 92vh; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  #pj-zoom img { max-width: 96vw; max-height: 86vh; object-fit: contain; background: #222; }
+  #pj-zoom .pj-zoom-cap { color: #fff; font-size: 13px; }
+  #pj-zoom .pj-zoom-x { position: absolute; top: 12px; right: 16px; background: rgba(255,255,255,.14);
     color: #fff; border: 1px solid rgba(255,255,255,.35); border-radius: 4px;
     padding: 5px 13px; font-size: 15px; cursor: pointer; font-family: inherit; }
   /* --- 受付台帳の「保存の状態」：①物件ファイル（自動）と②戸別ファイル（押したとき）--- */
@@ -5899,7 +5929,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.18j";
+const APP_VERSION = "2026.08.18k";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -24897,230 +24927,322 @@ function matExtraCable5c(row){
 }
 /* ============================================================
    📷 写真台帳（一覧の第8モード）
-   「指定のフォルダ → 管理番号のフォルダ → 写真が数枚」という置き方の写真を
-   そのまま読み込み、戸別ごとに1ページの写真台帳として出す。
+   受付台帳と同じ「読み込んだ戸別の一覧（_listRows）」を対象にして、
+   戸別JSONの中に入っている写真（chosho_photos）を並べる。
 
-   ・写真はこの画面に出すためだけに読む。物件ファイル・戸別ファイルには入れない
-     （何百枚もの写真をJSONに入れると、ファイルが開けない大きさになるため）。
-   ・受付台帳に同じ管理番号があれば、氏名・住所・工事日を見出しに入れる。
-   ・管理番号のフォルダの中がさらに枝分かれしていても、写真は全部拾う。
+   ・写真1枚ずつ、左右90°ずつ回せる／要らない写真を消せる
+   ・直した結果は「💾 戸別ファイルへ書き戻す」で 管理番号.json へ書き戻す
+   ・印刷は 1戸別＝必ず1ページ。上に 管理番号・氏名・住所・電話・石綿・
+     高所作業車・記録データ（アンテナ／増幅器／端子）を横に並べ、下に写真を敷く
+
+   写真は戸別ファイルの中にあるので、画面に出すときだけ読み込む（一覧には常駐させない）。
    ============================================================ */
-const PH_EXT = /\.(jpe?g|png|gif|webp|heic|heif|bmp|avif)$/i;
-let _phAlbum = null;        // { root, groups:[...], loose:[名前], skipped:数 }
-let _phRootHandle = null;   // 読み直し用
-let _phUrls = [];           // 画面に出すために作った一時アドレス（読み直すとき捨てる）
-let _phPerPage = 6;         // 1ページに並べる枚数
-let _phOnlyLedger = false;  // 受付台帳にある管理番号だけ出す
-const PH_PAGE_OPTS = [
-  { n: 2, cols: 1, rows: 2, label: "2枚（大きく）" },
-  { n: 4, cols: 2, rows: 2, label: "4枚" },
-  { n: 6, cols: 2, rows: 3, label: "6枚（標準）" },
-  { n: 9, cols: 3, rows: 3, label: "9枚（小さく）" },
+let _pjCases = null;         // [{ row, key, no, name, addr, tel, photos:[{label,dataUri}], err }]
+let _pjDirty = {};           // key → true（回した・消した戸別。書き戻し待ち）
+let _pjOnlyPhoto = true;     // 写真のある戸別だけ出す
+let _pjBusy = false;
+
+/* 印刷で1ページに収めるための升目。写真の枚数から、いちばん収まりのよい割り付けを選ぶ。
+   A4縦・余白12mm＝中身は 186mm×273mm。見出し16mm＋下の余白4mm を引いた 253mm に写真を敷く。
+   ますの縦横が写真（だいたい4:3）に近いほど、上下の余白が減って写真が大きく写る。
+   1枚も欠かさず1ページに入れるのが第一なので、行数は増やしても収める。 */
+const PJ_PAGE_W = 186, PJ_PAGE_H = 253, PJ_GAP = 3, PJ_CAP = 5;
+function pjGrid(n){
+  n = Math.max(1, n | 0);
+  let best = null;
+  for(let cols = 1; cols <= 5; cols++){
+    const rows = Math.ceil(n / cols);
+    if(rows > 6) continue;
+    const cw = (PJ_PAGE_W - (cols - 1) * PJ_GAP) / cols;
+    const ch = (PJ_PAGE_H - (rows - 1) * PJ_GAP - rows * PJ_CAP) / rows;
+    if(ch <= 12) continue;                                  // ますが小さすぎる
+    /* そのますに写真（だいたい4:3）を入れたとき、実際に写る大きさ。
+       これを全部の写真ぶん足した面積がいちばん大きい割り付けを選ぶ。
+       ますの形が写真から離れているほど上下か左右が余り、写真は小さくなる。 */
+    const iw = Math.min(cw, ch * 4 / 3), ih = Math.min(ch, cw * 3 / 4);
+    const area = iw * ih * n - (cols * rows - n) * 30;       // 空きますは少し損とみなす
+    if(!best || area > best.area) best = { cols, rows, area };
+  }
+  if(!best) return { cols: 5, rows: Math.ceil(n / 5) };
+  return { cols: best.cols, rows: best.rows };
+}
+/* 記録データ3種類（アンテナ端／増幅器出力／端子）。
+   チャンネルごとに dB・MER・BER を持っているので、幅に収まるよう最小〜最大にまとめる。 */
+const PJ_MEAS_KINDS = [
+  { k: "antenna",   name: "アンテナ" },
+  { k: "amplifier", name: "増幅器" },
+  { k: "terminal",  name: "端子" },
 ];
-function phPageDef(){ return PH_PAGE_OPTS.find(o => o.n === _phPerPage) || PH_PAGE_OPTS[2]; }
-
-/* フォルダ名から管理番号を読み取る。「2611AAA001」でも「2611AAA001_佐藤」でも拾えるように、
-   先頭の英数字のかたまりを管理番号とみなす（全角で作られたフォルダ名も半角へ直してから見る）。 */
-function phNoFromDirName(s){
-  const t = toHalfWidthAn(String(s || "")).trim();
-  const m = /^([0-9A-Za-z][0-9A-Za-z\-]*)/.exec(t);
-  return m ? m[1] : t;
+function pjMeasRows(dd){
+  const m = dd && dd.measurements;
+  if(!m) return [];
+  const out = [];
+  PJ_MEAS_KINDS.forEach(x => {
+    const arr = Array.isArray(m[x.k]) ? m[x.k] : [];
+    const rng = k => {
+      const a = arr.map(o => (o && o[k] !== "" && o[k] != null) ? Number(o[k]) : NaN).filter(v => isFinite(v));
+      if(!a.length) return "―";
+      const mn = Math.min.apply(null, a), mx = Math.max.apply(null, a);
+      const f = v => String(Math.round(v * 10) / 10);
+      return (mn === mx) ? f(mn) : (f(mn) + "〜" + f(mx));
+    };
+    const has = arr.some(o => o && (o.db != null && o.db !== "" || o.mer != null && o.mer !== "" || o.ber != null && o.ber !== ""));
+    if(has) out.push({ name: x.name, db: rng("db"), mer: rng("mer"), ber: rng("ber") });
+  });
+  return out;
 }
-/* ファイル名から見出しを作る。「01_施工前.jpg」→「01_施工前」 */
-function phLabelOf(name){
-  return String(name || "").replace(/^.*[\/\\]/, "").replace(/\.[^.]+$/, "");
+function pjCaseKey(row){ try { return subCaseKey(row); } catch(_){ return ""; } }
+function pjPhotoLabel(ph, i){
+  const l = String((ph && ph.label) || "").trim();
+  return l || ("写真" + (i + 1));
 }
-/* 受付台帳の行を探す。フォルダ名そのもの → 先頭の英数字、の順に当てる。 */
-function phRowOf(g){
-  const rows = Array.isArray(_listRows) ? _listRows : [];
-  const cand = [toHalfWidthAn(String(g.dirName || "")).trim(), g.no];
-  for(const c of cand){
-    if(!c) continue;
-    const r = rows.find(x => x && x.data && toHalfWidthAn(String(x.data.chosho_mgmt_no || "")).trim() === c);
-    if(r) return r;
-  }
-  return null;
-}
-function phSortPhotos(a){
-  return a.sort((x, y) => String(x.name).localeCompare(String(y.name), "ja", { numeric: true, sensitivity: "base" }));
-}
-function phFreeUrls(){
-  _phUrls.forEach(u => { try { URL.revokeObjectURL(u); } catch(_){} });
-  _phUrls = [];
-}
-/* 管理番号のフォルダの中を、枝分かれしていても全部たどって写真を集める */
-async function phCollect(dir, prefix, out, stat){
-  for await (const [name, h] of dir.entries()){
-    if(h.kind === "directory"){
-      await phCollect(h, prefix + name + "/", out, stat);
-    } else if(h.kind === "file"){
-      if(!PH_EXT.test(name)){ stat.skipped++; continue; }
-      let f = null;
-      try { f = await h.getFile(); } catch(_){ stat.skipped++; continue; }
-      const url = URL.createObjectURL(f);
-      _phUrls.push(url);
-      out.push({ name: prefix + name, label: phLabelOf(name), size: f.size, at: f.lastModified, url });
-    }
-  }
-}
-async function phLoad(root){
-  if(!root) return;
-  phFreeUrls();
-  _phRootHandle = root;
-  const status = document.getElementById("list-status");
-  if(status){ status.style.display = ""; status.textContent = "📷 写真フォルダを読み込み中..."; }
-  const groups = [], loose = [];
-  const stat = { skipped: 0 };
-  try {
-    for await (const [name, h] of root.entries()){
-      if(h.kind === "directory"){
-        const photos = [];
-        await phCollect(h, "", photos, stat);
-        if(photos.length) groups.push({ dirName: name, no: phNoFromDirName(name), photos: phSortPhotos(photos) });
-      } else if(h.kind === "file" && PH_EXT.test(name)){
-        loose.push(name);      // 管理番号のフォルダに入っていない写真＝置き場所が違う
-      }
-    }
-  } catch(err){
-    if(status) status.textContent = "写真フォルダを読み込めませんでした。";
-    alert("写真フォルダを読み込めませんでした。\n\n" + ((err && err.message) || err));
+/* 一覧の戸別から写真を読み込む（戸別ファイルを1件ずつ読む。時間がかかるので進み具合を出す） */
+async function pjLoad(){
+  if(_pjBusy) return;
+  const rows = Array.isArray(_listRows) ? _listRows.slice() : [];
+  if(!rows.length){
+    alert("戸別がありません。\n「📁 フォルダ」で工事フォルダを読み込むか、物件を開いてください。");
     return;
   }
-  groups.sort((a, b) => String(a.no).localeCompare(String(b.no), "ja", { numeric: true }));
-  _phAlbum = { root: root.name || "", groups, loose, skipped: stat.skipped };
-  if(status) status.style.display = "none";
+  _pjBusy = true;
+  const st = document.getElementById("list-status");
+  const cases = [];
+  for(let i = 0; i < rows.length; i++){
+    const r = rows[i];
+    if(st){ st.style.display = ""; st.textContent = "📷 写真を読み込み中… " + (i + 1) + " / " + rows.length; }
+    const dd = r.data || {};
+    const c = { row: r, key: pjCaseKey(r),
+                no: toHalfWidthAn(String(dd.chosho_mgmt_no || "")).trim(),
+                name: String(dd.chosho_cust_name || ""), addr: String(dd.chosho_cust_addr || ""),
+                tel: String(dd.chosho_cust_tel || ""), photos: [], err: "" };
+    try {
+      const got = await loadRowPhotos(r);
+      if(got && Array.isArray(got.photos)) c.photos = got.photos.map(x => ({ label: x.label || "", dataUri: x.dataUri }));
+      if(got && got.locked)   c.err = "暗号化（パスワード未入力）";
+      if(got && got.noSource) c.err = "写真の元ファイルが手元にありません（物件だけを開いている）";
+      if(got && got.thumb)    c.err = "物件に控えた小さな写真です（元ファイルを読み込むと原寸になります）";
+      if(got && got.error)    c.err = "読み込めませんでした";
+    } catch(e){ c.err = "読み込めませんでした（" + ((e && e.message) || e) + "）"; }
+    cases.push(c);
+  }
+  _pjCases = cases;
+  _pjDirty = {};
+  _pjBusy = false;
+  if(st) st.style.display = "none";
   renderListTable();
-  if(!groups.length){
-    alert("管理番号のフォルダが見つかりませんでした。\n\n"
-      + "「選んだフォルダ → 管理番号のフォルダ → 写真」という置き方にしてください。\n"
-      + (loose.length ? ("※ 選んだフォルダの直下に写真が " + loose.length + " 枚ありました。"
-          + "管理番号のフォルダを作って、その中へ入れてください。") : ""));
-  }
 }
-async function phPick(){
-  if(!window.showDirectoryPicker){
-    alert("このブラウザはフォルダを選ぶ操作に対応していません。\n（Chrome / Edge でお試しください）");
+/* 写真を90°回す。見た目だけでなく中身（dataUri）を作り直すので、
+   書き戻せば現場入力アプリや工事調書でも回った向きで出る。 */
+function pjRotate(dataUri, deg){
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const w = img.naturalWidth, h = img.naturalHeight;
+        const cv = document.createElement("canvas");
+        cv.width = (deg === 180) ? w : h;
+        cv.height = (deg === 180) ? h : w;
+        const cx = cv.getContext("2d");
+        cx.translate(cv.width / 2, cv.height / 2);
+        cx.rotate(deg * Math.PI / 180);
+        cx.drawImage(img, -w / 2, -h / 2);
+        // 元がJPEGならJPEGのまま（PNGにするとファイルが何倍にもなる）
+        const isJpeg = /^data:image\/jpe?g/i.test(String(dataUri));
+        res(cv.toDataURL(isJpeg ? "image/jpeg" : "image/png", isJpeg ? 0.92 : undefined));
+      } catch(err){ rej(err); }
+    };
+    img.onerror = () => rej(new Error("画像を読めませんでした"));
+    img.src = dataUri;
+  });
+}
+function pjFindCase(key){ return (_pjCases || []).find(c => c.key === key) || null; }
+async function pjDoRotate(key, idx, deg){
+  const c = pjFindCase(key); if(!c) return;
+  const ph = c.photos[idx]; if(!ph || !ph.dataUri) return;
+  try {
+    ph.dataUri = await pjRotate(ph.dataUri, deg);
+    _pjDirty[key] = true;
+    renderListTable();
+  } catch(e){ alert("写真を回せませんでした。\n\n" + ((e && e.message) || e)); }
+}
+function pjDoDelete(key, idx){
+  const c = pjFindCase(key); if(!c) return;
+  const ph = c.photos[idx]; if(!ph) return;
+  if(!confirm("この写真を消しますか？\n\n"
+      + "　戸別： " + (c.no || "―") + (c.name ? ("　" + c.name) : "") + "\n"
+      + "　写真： " + pjPhotoLabel(ph, idx) + "\n\n"
+      + "画面から消えます。戸別ファイルから消えるのは「💾 戸別ファイルへ書き戻す」を押したときです。")) return;
+  c.photos.splice(idx, 1);
+  _pjDirty[key] = true;
+  renderListTable();
+}
+function pjDirtyList(){ return (_pjCases || []).filter(c => _pjDirty[c.key]); }
+/* 直した写真を 管理番号.json へ書き戻す。写真以外の中身には触らない。 */
+async function pjWriteBack(){
+  const list = pjDirtyList();
+  if(!list.length){ alert("書き戻すものはありません。\n写真を回すか消すと、ここから戸別ファイルへ書き戻せます。"); return; }
+  /* ★確認を出す前に、書き込みの許可を取り切る★
+     ブラウザはフォルダの許可を「押した直後」しか聞けない。先に確認を出すと
+     その権利が消え、あとから許可を求めても必ず弾かれる。 */
+  await fsPrepRootWritable(list.map(c => c.row));
+  const plain = list.filter(c => c.row && c.row.fileType === "plain" && c.row.fileHandle);
+  const ng = list.filter(c => plain.indexOf(c) < 0);
+  if(!plain.length){
+    alert("書き戻せる戸別がありません。\n\n"
+      + "暗号化された戸別（🔐）と、元ファイルを持たない戸別は、この画面からは書き戻せません。\n"
+      + "その戸別を開いて「💾 上書き保存」してください。");
     return;
   }
-  let root;
-  try { root = await window.showDirectoryPicker(); }
-  catch(err){
-    if(err && err.name === "AbortError") return;
-    alert("フォルダを選べませんでした。\n\nもう一度「📁 写真フォルダを選ぶ」を押してください。\n\n"
-      + (err && err.message ? err.message : err));
-    return;
+  if(!confirm("写真の直しを、戸別ファイルへ書き戻します。\n\n"
+      + plain.slice(0, 12).map(c => "・" + (c.no || "―") + "　写真 " + c.photos.length + " 枚").join("\n")
+      + (plain.length > 12 ? ("\n・ほか " + (plain.length - 12) + " 件") : "")
+      + (ng.length ? ("\n\n※ 暗号化・元ファイルなしの " + ng.length + " 件は対象外です") : "")
+      + "\n\n写真以外（氏名・住所・積算・図面・測定値）には触りません。")) return;
+  let ok = 0; const fails = [];
+  for(const c of plain){
+    try {
+      const full = await rereadRowSource(c.row);
+      const json = (full && typeof full === "object") ? full : Object.assign({}, c.row.data);
+      json.chosho_photos = c.photos.map(x => ({ label: x.label || "", dataUri: x.dataUri }));
+      json.editedAt = new Date().toISOString();
+      const res = await writeRowFile({ file: c.row.file, fileHandle: c.row.fileHandle, fileType: "plain" }, json, "json");
+      if(res && res.mode === "overwrite"){
+        ok++;
+        delete _pjDirty[c.key];
+        c.row._photoCount = c.photos.length;
+        c.row._thumbs = undefined;
+        if(c.row.data) c.row.data.chosho_photo_count = c.photos.length;
+      } else {
+        fails.push("・" + (c.no || c.row.file) + "：元ファイルへ書けず、ダウンロードで保存しました");
+      }
+    } catch(e){ fails.push("・" + (c.no || c.row.file) + "：" + ((e && e.message) || e)); }
   }
-  await phLoad(root);
+  try { projTouch(); } catch(_){}
+  renderListTable();
+  alert("📷 写真を書き戻しました。\n\n" + ok + " 件の戸別ファイルを更新しました。"
+    + (fails.length ? ("\n\n⚠ できなかったもの:\n" + fails.join("\n")) : "")
+    + (ng.length ? ("\n\n※ 暗号化・元ファイルなしの " + ng.length + " 件は対象外です（戸別を開いて保存してください）") : ""));
 }
-/* 画面に出す組（絞り込みの結果） */
-function phShownGroups(){
-  const gs = (_phAlbum && _phAlbum.groups) || [];
-  return _phOnlyLedger ? gs.filter(g => !!phRowOf(g)) : gs;
+/* 印刷の見出しに横並びで貼る項目 */
+function pjHeadHtml(c){
+  const dd = (c.row && c.row.data) || {};
+  const asb = asbestosStatusBadge(c.row);
+  const high = (String(dd.high_work) === "yes") ? "必要" : (dd.high_work == null ? "―" : "不要");
+  const meas = pjMeasRows(dd);
+  const cell = (k, v, cls) => '<div class="pj-h-cell' + (cls ? (" " + cls) : "") + '">'
+    + '<div class="pj-h-k">' + escapeHtml(k) + '</div>'
+    + '<div class="pj-h-v">' + (v || '<span class="pj-none">―</span>') + '</div></div>';
+  const measHtml = meas.length
+    ? ('<table class="pj-meas"><tr><th></th><th>dB</th><th>MER</th><th>BER</th></tr>'
+       + meas.map(m => '<tr><th>' + escapeHtml(m.name) + '</th><td>' + escapeHtml(m.db)
+           + '</td><td>' + escapeHtml(m.mer) + '</td><td>' + escapeHtml(m.ber) + '</td></tr>').join("")
+       + '</table>')
+    : '<span class="pj-none">記録なし</span>';
+  return '<div class="pj-head">'
+    + cell("管理番号", '<b>' + escapeHtml(c.no || "") + '</b>', "pj-h-no")
+    + cell("氏名", escapeHtml(c.name))
+    + cell("住所", escapeHtml(c.addr), "pj-h-addr")
+    + cell("電話", escapeHtml(c.tel))
+    + cell("石綿", '<span class="asb-badge" style="background:' + asb.color + ';" title="'
+        + escapeHtml(asb.title || "") + '">' + escapeHtml(asb.label) + '</span>')
+    + cell("高所作業車", escapeHtml(high))
+    + cell("記録データ", measHtml, "pj-h-meas")
+    + '</div>';
 }
-function phTotalPhotos(gs){ return gs.reduce((n, g) => n + g.photos.length, 0); }
-
+function pjShownCases(){
+  const all = _pjCases || [];
+  return _pjOnlyPhoto ? all.filter(c => c.photos.length) : all;
+}
 function renderListPhotoMode(rows, container){
-  const pg = phPageDef();
   let html = renderSelectedFolderBanner();
+  const dirtyN = pjDirtyList().length;
   html += '<div class="ph-bar cost-detail-section">'
     + '<div class="ph-bar-line">'
-    +   '<button type="button" id="ph-pick" title="「選んだフォルダ → 管理番号のフォルダ → 写真」の置き方のフォルダを選びます。写真はこの画面に出すだけで、ファイルには書き込みません。">📁 写真フォルダを選ぶ</button>'
-    +   (_phRootHandle ? '<button type="button" id="ph-reload" title="同じフォルダを読み直します（写真を足したあとに押してください）">🔄 読み直す</button>' : '')
-    +   (_phAlbum ? '<span class="ph-root" title="いま見ている写真フォルダ">📁 ' + escapeHtml(_phAlbum.root) + '</span>' : '')
+    +   '<button type="button" id="pj-load" title="いま読み込んでいる戸別（受付台帳と同じ一覧）の中から、戸別ファイルに入っている写真を読み出して並べます。">'
+    +     (_pjCases ? '🔄 写真を読み直す' : '📥 写真を読み込む') + '</button>'
+    +   (_pjCases ? ('<span class="ph-root">戸別 ' + _pjCases.length + ' 件／写真 '
+          + _pjCases.reduce((n, c) => n + c.photos.length, 0) + ' 枚</span>') : '')
     + '</div>';
-  if(_phAlbum){
-    const gs = phShownGroups();
+  if(_pjCases){
     html += '<div class="ph-bar-line">'
-      + '<label class="ph-opt">1ページの枚数 '
-      +   '<select id="ph-perpage">'
-      +     PH_PAGE_OPTS.map(o => '<option value="' + o.n + '"' + (o.n === _phPerPage ? " selected" : "") + '>'
-              + escapeHtml(o.label) + '</option>').join("")
-      +   '</select></label>'
-      + '<span class="ph-hint" title="紙1ページに並べる枚数です。減らすと1枚が大きくなります。">（紙1ページあたり）</span>'
-      + '<label class="ph-opt" title="受付台帳に同じ管理番号がある戸別だけを出します"><input type="checkbox" id="ph-only-ledger"'
-      +   (_phOnlyLedger ? " checked" : "") + '> 台帳にある番号だけ</label>'
-      + '<button type="button" id="ph-print" title="戸別ごとに改ページして、写真台帳をA4縦で印刷／PDF出力します">🖨 写真台帳を印刷</button>'
-      + '<span class="ph-cnt">' + gs.length + ' 戸別 ／ 写真 ' + phTotalPhotos(gs) + ' 枚</span>'
+      + '<label class="ph-opt" title="写真の入っていない戸別を出しません"><input type="checkbox" id="pj-only-photo"'
+      +   (_pjOnlyPhoto ? " checked" : "") + '> 写真のある戸別だけ</label>'
+      + '<button type="button" id="pj-writeback" class="' + (dirtyN ? "pj-need" : "") + '"'
+      +   ' title="回した・消した写真を、管理番号.json へ書き戻します。写真以外（氏名・住所・積算・図面・測定値）には触りません。">'
+      +   '💾 戸別ファイルへ書き戻す' + (dirtyN ? ('（' + dirtyN + '件）') : '') + '</button>'
+      + '<button type="button" id="pj-print" title="1戸別＝1ページで、A4縦の写真台帳を印刷／PDF出力します">🖨 写真台帳を印刷</button>'
       + '</div>';
   }
   html += '</div>';
 
-  if(!_phAlbum){
+  if(!_pjCases){
     html += '<div class="ph-guide cost-detail-section">'
       + '<div class="ph-guide-h">📷 写真台帳</div>'
-      + '<p>まとめて作った写真フォルダを、そのまま戸別ごとの写真台帳にします。'
-      + '上の「📁 写真フォルダを選ぶ」から、いちばん外側のフォルダを選んでください。</p>'
-      + '<pre class="ph-tree">選んだフォルダ\n'
-      + '├ 2611AAA001        ← 管理番号のフォルダ\n'
-      + '│  ├ 施工前.jpg\n'
-      + '│  ├ 施工中.jpg\n'
-      + '│  └ 施工完了.jpg\n'
-      + '└ 2611AAA002\n'
-      + '   └ …</pre>'
-      + '<p class="ph-guide-s">・フォルダ名は「2611AAA001」でも「2611AAA001_佐藤」でも構いません（先頭の英数字を管理番号として読みます）。<br>'
-      + '・管理番号のフォルダの中がさらに分かれていても、写真は全部拾います。<br>'
-      + '・受付台帳に同じ管理番号があれば、氏名・住所・工事日を見出しに入れます。<br>'
-      + '・写真はこの画面に出すだけです。物件ファイル・戸別ファイルには書き込みません。</p>'
+      + '<p>戸別ファイル（管理番号.json）の中に入っている写真を、戸別ごとに並べます。'
+      + '受付台帳と同じ一覧が対象です。上の「📥 写真を読み込む」を押してください。</p>'
+      + '<p class="ph-guide-s">・写真は1枚ずつ <b>⟲ 左90°</b> ／ <b>⟳ 右90°</b> で回せます。<br>'
+      + '・要らない写真・撮り損ねた写真は <b>🗑</b> で消せます。<br>'
+      + '・回した・消した結果は <b>「💾 戸別ファイルへ書き戻す」</b>で 管理番号.json へ書き戻します'
+      + '（押すまでファイルは変わりません）。<br>'
+      + '・印刷は <b>1戸別＝必ず1ページ</b>。上に 管理番号・氏名・住所・電話・石綿・高所作業車・'
+      + '記録データ（アンテナ／増幅器／端子）を横に並べ、下に写真を敷きます。</p>'
       + '</div>';
     container.innerHTML = html;
     bindPhotoHandlers(container);
     return;
   }
 
-  const gs = phShownGroups();
-  if(_phAlbum.loose.length){
-    html += '<div class="ph-warn cost-detail-section">⚠ 選んだフォルダの直下に写真が '
-      + _phAlbum.loose.length + ' 枚あります（管理番号のフォルダに入っていないので出していません）。</div>';
-  }
-  if(!gs.length){
-    html += '<div class="ph-warn cost-detail-section">出せる戸別がありません。'
-      + (_phOnlyLedger ? '「台帳にある番号だけ」のチェックを外すと、台帳に無い番号も出ます。' : '') + '</div>';
+  const shown = pjShownCases();
+  if(!shown.length){
+    html += '<div class="ph-warn cost-detail-section">写真の入っている戸別がありませんでした。'
+      + '「写真のある戸別だけ」のチェックを外すと、写真の無い戸別も出ます。</div>';
     container.innerHTML = html;
     bindPhotoHandlers(container);
     return;
   }
-  // 印刷の見出しに出す物件名と日付
-  html += '<div class="ph-doc-head">写真台帳'
+  html += '<div class="pj-doc-head">写真台帳'
     + (_currentProject ? ('　' + escapeHtml(_currentProject.name)) : "")
-    + '<span class="ph-doc-date">' + lgDateStrToday(0).replace(/-/g, "/") + ' 現在</span></div>';
-  html += gs.map(g => {
-    const r = phRowOf(g);
-    const dd = (r && r.data) || null;
-    const head = '<div class="ph-h">'
-      + '<span class="ph-no">' + escapeHtml(g.no || g.dirName) + '</span>'
-      + (dd ? '<span class="ph-nm">' + escapeHtml(dd.chosho_cust_name || "") + '</span>' : '')
-      + (dd && dd.chosho_cust_addr ? '<span class="ph-ad">' + escapeHtml(dd.chosho_cust_addr) + '</span>' : '')
-      + (dd && dd.chosho_date ? '<span class="ph-dt">工事 ' + escapeHtml(dd.chosho_date.replace(/-/g, "/")) + '</span>' : '')
-      + (dd ? '' : '<span class="ph-miss" title="この管理番号は受付台帳にありません">台帳に無い番号</span>')
-      + '<span class="ph-n">写真 ' + g.photos.length + ' 枚</span>'
-      + (g.dirName !== g.no ? '<span class="ph-dir" title="フォルダ名">📁 ' + escapeHtml(g.dirName) + '</span>' : '')
-      + '</div>';
-    const grid = '<div class="ph-grid" style="--ph-cols:' + pg.cols + ';--ph-rows:' + pg.rows + ';">'
-      + g.photos.map((ph, i) =>
-          '<figure class="ph-box">'
-          + '<div class="ph-frame"><img src="' + escapeHtml(ph.url) + '" alt="" loading="lazy"'
-          +   ' data-ph-zoom="' + escapeHtml(ph.url) + '" data-ph-cap="' + escapeHtml(ph.label) + '"></div>'
-          + '<figcaption><span class="ph-i">' + (i + 1) + '</span>' + escapeHtml(ph.label) + '</figcaption>'
-          + '</figure>').join("")
-      + '</div>';
-    return '<section class="ph-grp">' + head + grid + '</section>';
+    + '<span class="pj-doc-date">' + lgDateStrToday(0).replace(/-/g, "/") + ' 現在</span></div>';
+  html += shown.map(c => {
+    const g = pjGrid(c.photos.length || 1);
+    const body = c.photos.length
+      ? ('<div class="pj-grid" style="--pj-cols:' + g.cols + ';--pj-rows:' + g.rows + ';">'
+         + c.photos.map((ph, i) =>
+             '<figure class="pj-box">'
+             + '<div class="pj-frame"><img src="' + escapeHtml(ph.dataUri || "") + '" alt="" loading="lazy"'
+             +   ' data-pj-zoom="' + escapeHtml(c.key) + '|' + i + '"></div>'
+             + '<figcaption><span class="pj-i">' + (i + 1) + '</span>'
+             +   '<span class="pj-cap">' + escapeHtml(pjPhotoLabel(ph, i)) + '</span>'
+             +   '<span class="pj-ops no-print">'
+             +     '<button type="button" data-pj-rot="' + escapeHtml(c.key) + '|' + i + '|-90" title="左に90°回す">⟲</button>'
+             +     '<button type="button" data-pj-rot="' + escapeHtml(c.key) + '|' + i + '|90" title="右に90°回す">⟳</button>'
+             +     '<button type="button" class="pj-del" data-pj-del="' + escapeHtml(c.key) + '|' + i + '" title="この写真を消す">🗑</button>'
+             +   '</span></figcaption>'
+             + '</figure>').join("")
+         + '</div>')
+      : ('<div class="pj-nophoto">写真はありません' + (c.err ? ('（' + escapeHtml(c.err) + '）') : "") + '</div>');
+    return '<section class="pj-case' + (_pjDirty[c.key] ? " pj-dirty" : "") + '">'
+      + pjHeadHtml(c)
+      + (c.err && c.photos.length ? ('<div class="pj-note no-print">' + escapeHtml(c.err) + '</div>') : "")
+      + body
+      + '</section>';
   }).join("");
   container.innerHTML = html;
   bindPhotoHandlers(container);
 }
-/* 印刷の前に、まだ読み込んでいない写真を全部読み終える（遅れて出る＝白い枠のまま刷られるのを防ぐ） */
-async function phEnsureLoaded(container){
-  const imgs = [...(container || document).querySelectorAll(".ph-grid img")];
+/* 印刷の前に、まだ読み込んでいない写真を全部読み終える（白い枠のまま刷られるのを防ぐ） */
+async function pjEnsureLoaded(container){
+  const imgs = [...(container || document).querySelectorAll(".pj-grid img")];
   imgs.forEach(im => { im.loading = "eager"; });
   await Promise.all(imgs.map(im => (im.complete && im.naturalWidth)
     ? Promise.resolve()
     : new Promise(res => { im.addEventListener("load", res, { once: true }); im.addEventListener("error", res, { once: true }); })));
 }
-async function phPrint(){
-  if(_listMode !== "photos" || !_phAlbum) return;
-  const btn = document.getElementById("ph-print");
+async function pjPrint(){
+  if(_listMode !== "photos" || !_pjCases) return;
+  const btn = document.getElementById("pj-print");
   if(btn){ btn.disabled = true; btn.textContent = "🖨 写真を読み込み中..."; }
-  try { await phEnsureLoaded(document.getElementById("list-content-custom")); } catch(_){}
+  try { await pjEnsureLoaded(document.getElementById("list-content-custom")); } catch(_){}
   if(btn){ btn.disabled = false; btn.textContent = "🖨 写真台帳を印刷"; }
   document.body.classList.add("list-print-mode", "photo-only");
   const cleanup = () => {
@@ -25132,40 +25254,46 @@ async function phPrint(){
   setTimeout(() => printWithFilename("写真台帳_" + lgDateStrToday(0)), 200);
 }
 /* 写真を大きく見る（画面のみ。枠外・✕・Escで閉じる） */
-function phZoom(url, cap){
-  phZoomClose();
+function pjZoom(key, idx){
+  pjZoomClose();
+  const c = pjFindCase(key); if(!c) return;
+  const ph = c.photos[idx]; if(!ph) return;
   const bd = document.createElement("div");
-  bd.id = "ph-zoom";
-  bd.innerHTML = '<div class="ph-zoom-in"><img src="' + escapeHtml(url) + '" alt="">'
-    + '<div class="ph-zoom-cap">' + escapeHtml(cap || "") + '</div></div>'
-    + '<button type="button" class="ph-zoom-x" aria-label="閉じる">✕</button>';
-  bd.addEventListener("click", e => { if(e.target === bd || e.target.closest(".ph-zoom-x")) phZoomClose(); });
+  bd.id = "pj-zoom";
+  bd.innerHTML = '<div class="pj-zoom-in"><img src="' + escapeHtml(ph.dataUri || "") + '" alt="">'
+    + '<div class="pj-zoom-cap">' + escapeHtml((c.no || "") + "　" + pjPhotoLabel(ph, idx)) + '</div></div>'
+    + '<button type="button" class="pj-zoom-x" aria-label="閉じる">✕</button>';
+  bd.addEventListener("click", e => { if(e.target === bd || e.target.closest(".pj-zoom-x")) pjZoomClose(); });
   document.body.appendChild(bd);
-  document.addEventListener("keydown", phZoomEsc);
+  document.addEventListener("keydown", pjZoomEsc);
 }
-function phZoomEsc(e){ if(e.key === "Escape") phZoomClose(); }
-function phZoomClose(){
-  const bd = document.getElementById("ph-zoom");
+function pjZoomEsc(e){ if(e.key === "Escape") pjZoomClose(); }
+function pjZoomClose(){
+  const bd = document.getElementById("pj-zoom");
   if(bd) bd.remove();
-  document.removeEventListener("keydown", phZoomEsc);
+  document.removeEventListener("keydown", pjZoomEsc);
 }
 function bindPhotoHandlers(container){
   if(container._phBound) return;
   container._phBound = true;
   container.addEventListener("click", e => {
     if(_listMode !== "photos") return;
-    if(e.target.closest("#ph-pick")){ phPick(); return; }
-    if(e.target.closest("#ph-reload")){ if(_phRootHandle) phLoad(_phRootHandle); return; }
-    if(e.target.closest("#ph-print")){ phPrint(); return; }
-    const im = e.target.closest("[data-ph-zoom]");
-    if(im){ phZoom(im.dataset.phZoom, im.dataset.phCap); return; }
+    if(e.target.closest("#pj-load")){ pjLoad(); return; }
+    if(e.target.closest("#pj-writeback")){ pjWriteBack(); return; }
+    if(e.target.closest("#pj-print")){ pjPrint(); return; }
+    const rot = e.target.closest("[data-pj-rot]");
+    if(rot){ const a = rot.dataset.pjRot.split("|"); pjDoRotate(a[0], parseInt(a[1], 10), parseInt(a[2], 10)); return; }
+    const del = e.target.closest("[data-pj-del]");
+    if(del){ const a = del.dataset.pjDel.split("|"); pjDoDelete(a[0], parseInt(a[1], 10)); return; }
+    const im = e.target.closest("[data-pj-zoom]");
+    if(im){ const a = im.dataset.pjZoom.split("|"); pjZoom(a[0], parseInt(a[1], 10)); return; }
   });
   container.addEventListener("change", e => {
     if(_listMode !== "photos") return;
-    if(e.target.id === "ph-perpage"){ _phPerPage = parseInt(e.target.value, 10) || 6; renderListTable(); return; }
-    if(e.target.id === "ph-only-ledger"){ _phOnlyLedger = !!e.target.checked; renderListTable(); return; }
+    if(e.target.id === "pj-only-photo"){ _pjOnlyPhoto = !!e.target.checked; renderListTable(); return; }
   });
 }
+
 function renderListMaterialsMode(rows, container){
   const target = _matOnlyDone ? rows.filter(surveyDoneOf) : rows.slice();
   const doneN = rows.filter(surveyDoneOf).length;
