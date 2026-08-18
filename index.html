@@ -5862,7 +5862,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.18c";
+const APP_VERSION = "2026.08.18e";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -14189,10 +14189,18 @@ async function listDirRestore(){
 async function listReloadRemembered(ask){
   const dh = await listDirRestore();
   if(!dh || !dh.queryPermission) return false;
+  /* 許可を聞けるのは「押した直後」の1回だけ。ここは押した直後なので、
+     読むだけでなく書き込みまで一度に取っておく。読むだけで取ると、あとの
+     「重複の整理」「ごみ掃除」「💾 戸別ファイルへ反映」で許可が要るのに、
+     その時にはもう聞ける状態ではなくなっている。 */
   let ok = false;
   try {
-    ok = (await dh.queryPermission({ mode: "read" })) === "granted";
-    if(!ok && ask) ok = (await dh.requestPermission({ mode: "read" })) === "granted";
+    ok = (await dh.queryPermission({ mode: "readwrite" })) === "granted";
+    if(!ok && ask) ok = (await dh.requestPermission({ mode: "readwrite" })) === "granted";
+    if(!ok){                                   // 書き込みは断られた＝読むだけでも読み込む
+      ok = (await dh.queryPermission({ mode: "read" })) === "granted";
+      if(!ok && ask) ok = (await dh.requestPermission({ mode: "read" })) === "granted";
+    }
   } catch(_){ ok = false; }
   if(!ok) return false;
   // 台帳で直したままの分があれば、上書きして消える前に知らせる
@@ -14703,9 +14711,20 @@ async function dupCleanupButton(){
 /* 整理のあと、同じフォルダを読み直して一覧を作り直す */
 async function listReloadFolder(expectedGone){
   if(!_listDirHandle) return;
+  /* 読み直すとフォルダのファイルの中身が一覧に入り直る＝台帳に打ち込んだだけの内容
+     （名前・住所・電話・工事日程予定・状態）は消える。消える前に必ず知らせる。 */
+  if(!lgConfirmDiscardCaseEdits("読み直す")) return;
   const rows = [];
   const stats = { dirs: 0, files: 0, skipped: 0, errDirs: [], skippedPaths: [] };
-  await scanDirRecursive(_listDirHandle, "", rows, stats);
+  try { await scanDirRecursive(_listDirHandle, "", rows, stats); }
+  catch(err){
+    // 黙って終わると、整理したはずのファイルが一覧に残って見える。理由を出す。
+    console.warn("[一覧] フォルダの読み直しに失敗", err);
+    const st = document.getElementById("list-status");
+    if(st){ st.style.display = "";
+      st.textContent = "フォルダを読み直せませんでした（移動・削除されたかもしれません）。「📁 フォルダ」から選び直してください。"; }
+    return;
+  }
   _listRows = await mergeRowsWithManual(rows, { source: "folder", stats,
     root: _listDirHandle.name || "", expectedGone: expectedGone || [] });
   renderListTable();
@@ -14801,6 +14820,9 @@ function lgwbWanted(row){
   });
   if(lg.note) o.chosho_note = String(lg.note);         // 備考も台帳側が持ち主
   o.chosho_meet_at = String(lg.meetAt || "");          // 打合せ予定は台帳側が持ち主
+  /* 工事の時刻も受付台帳が持ち主。ただし台帳が空のときは行の値をそのまま使う
+     （台帳にまだ取り込めていない戸別で、ファイルの時刻を空で消さないため）。 */
+  if(String(lg.time || "")) o.chosho_time = String(lg.time);
   return o;
 }
 /* フォルダから読んだ行を1件ずつ実ファイルと突き合わせ、違うところだけ拾う */
@@ -14847,41 +14869,68 @@ async function lgwbApply(list){
    ★読み直さない★のが肝心。行の中身はそのままで、置き場所（どのフォルダのどの名前か）
    だけを付けるので、台帳で打ち込んだ内容が古いファイルの中身に戻ってしまわない。
    戻り値＝結び付いた件数（0 なら書き戻せない）。 */
-async function lgwbAttachDir(){
-  if(_listRows.some(r => r && r._dir && r._name)) return -1;   // すでに掴んでいる
-  // 覚えているフォルダがあれば選び直さない（許可だけ聞き直す）
-  let dh = null;
-  try { dh = await listDirRestore(); } catch(_){ dh = null; }
-  if(dh && dh.requestPermission){
+/* 書き込みの許可を、押した直後のうちに取り切る。
+   ★これより前に確認（alert / confirm）を出してはいけない★
+   ブラウザはフォルダの許可を「押した直後」しか求められず、確認を1つ出すと
+   その権利が消える。あとから許可を求めても必ず弾かれ、
+   「フォルダへの書き込み許可が得られませんでした」で0件のまま終わっていた。
+   戻り値＝許可の取れなかったフォルダ名（空なら全部書ける）。 */
+/* ルート（工事フォルダ）を掴む。「💾 戸別ファイルへ反映」はここから始まる。
+   戻り値 { dir, picked } … picked=true なら、いま選び直したフォルダ。掴めなければ null。
+
+   ★確認（alert / confirm）を出す前に呼ぶこと★
+   ブラウザはフォルダの許可を「押した直後」しか聞けない。先に確認を出すと
+   その権利が消え、あとから許可を求めても必ず弾かれる（0件のまま終わる）。 */
+async function lgwbEnsureRoot(){
+  let dh = _listDirHandle || null;
+  if(!dh){ try { dh = await listDirRestore(); } catch(_){ dh = null; } }
+  if(dh){
+    let granted = false;
+    try { granted = (await dh.queryPermission({ mode: "readwrite" })) === "granted"; } catch(_){ granted = false; }
+    if(granted) return { dir: dh, picked: false };      // もう掴んでいる＝何も聞かない
+  }
+  /* 掴んでいない／書き込みが許されていない → ここでルートを選んでもらう。
+     選んだその場で書き込みまで許してもらえるので、あとから許可を求めるより確実。 */
+  if(window.showDirectoryPicker){
     try {
-      let ok = (await dh.queryPermission({ mode: "read" })) === "granted";
-      if(!ok) ok = (await dh.requestPermission({ mode: "read" })) === "granted";
-      if(!ok) dh = null;
-    } catch(_){ dh = null; }
-  }
-  if(!dh){
-    if(!window.showDirectoryPicker){
-      alert("このブラウザはフォルダを掴めません。\n「📁 フォルダ」でフォルダを読み込んでから、もう一度押してください。\n"
-        + "（Chrome / Edge でお試しください）");
-      return 0;
+      const picked = await window.showDirectoryPicker({ mode: "readwrite" });
+      try { await listDirRemember(picked); } catch(_){}
+      return { dir: picked, picked: true };
+    } catch(err){
+      if(err && err.name === "AbortError") return null;   // 自分で閉じた
     }
-    /* ★フォルダを選ぶ画面は「押した直後」しか開けない。ここまで確認（confirm）を
-       1つも出していないのはそのため。説明は選んだ後に出す。 */
-    try { dh = await window.showDirectoryPicker(); }
-    catch(err){
-      if(err && err.name === "AbortError") return 0;           // 自分で閉じた
-      alert("フォルダを選べませんでした。\n\nもう一度「💾 戸別ファイルへ反映」を押してください。\n\n"
-        + (err && err.message ? err.message : err));
-      return 0;
-    }
-    try { await listDirRemember(dh); } catch(_){}
   }
+  // フォルダを選ぶ画面が使えない端末だけ、いま持っているハンドルに許可を聞く
+  if(dh){ try { if(await dupEnsureWritable(dh)) return { dir: dh, picked: false }; } catch(_){} }
+  return null;
+}
+/* 行に付いているフォルダが本当に書けるか確かめる（聞き直さない。確かめるだけ）。
+   戻り値＝書けないフォルダ名の一覧。 */
+async function lgwbCheckWritable(rows){
+  const ng = [], dirs = [];
+  (rows || []).forEach(r => { if(r && r._dir && dirs.indexOf(r._dir) < 0) dirs.push(r._dir); });
+  for(const dh of dirs){
+    let ok = false;
+    try { ok = (await dh.queryPermission({ mode: "readwrite" })) === "granted"; } catch(_){ ok = false; }
+    if(!ok){
+      const nm = dh.name || "（名前のわからないフォルダ）";
+      if(ng.indexOf(nm) < 0) ng.push(nm);
+    }
+  }
+  return ng;
+}
+/* ルートの中を見て、一覧の行と戸別ファイルを結び付ける。
+   ★読み直さない★のが肝心。行の中身はそのままで、置き場所（どのフォルダのどの名前か）
+   だけを付けるので、台帳に打ち込んだ内容が古いファイルの中身に戻ってしまわない。
+   force=true … 前に付いていた結び付けも、このルートのもので付け直す。
+   知らせは呼び出し側が出す（ここで出すと、そのあとの許可が取れなくなるため）。 */
+async function lgwbAttachFrom(root, force){
   const found = [];
   const stats = { dirs: 0, files: 0, skipped: 0, errDirs: [], skippedPaths: [] };
-  try { await scanDirRecursive(dh, "", found, stats); }
+  try { await scanDirRecursive(root, "", found, stats); }
   catch(err){
     alert("フォルダを読めませんでした。\n\n" + ((err && err.message) || err));
-    return 0;
+    return { hit: 0, msg: "" };
   }
   const byNo = {}, byPath = {};
   found.forEach(f => {
@@ -14892,14 +14941,15 @@ async function lgwbAttachDir(){
   });
   let hit = 0, ambiguous = 0, miss = 0;
   _listRows.forEach(r => {
-    if(!r || (r._dir && r._name)) return;
-    const same = byPath[String(r.file || "")] || null;         // 道のりごと同じ名前＝いちばん確か
-    let m = same;
+    if(!r) return;
+    if(!force && r._dir && r._name){ hit++; return; }        // すでに結び付いている
+    const samePath = byPath[String(r.file || "")] || null;   // 道のりごと同じ名前＝いちばん確か
+    let m = samePath;
     if(!m){
       const no = toHalfWidthAn(String((r.data && r.data.chosho_mgmt_no) || "")).trim();
       const cand = (no && byNo[no]) || [];
       if(cand.length === 1) m = cand[0];
-      else if(cand.length > 1){ ambiguous++; return; }          // 同じ番号が複数＝どれか決められない
+      else if(cand.length > 1){ ambiguous++; return; }        // 同じ番号が複数＝どれか決められない
     }
     if(!m){ miss++; return; }
     r._dir = m._dir; r._name = m._name; r._dirPath = m._dirPath; r._size = m._size;
@@ -14909,27 +14959,51 @@ async function lgwbAttachDir(){
     alert("選んだフォルダの中に、いま一覧に出ている戸別のファイルが見つかりませんでした。\n\n"
       + "フォルダの中の戸別： " + found.length + " 件\n"
       + (ambiguous ? ("同じ管理番号が重なっていて決められない： " + ambiguous + " 件\n") : "")
-      + "\n工事フォルダを選び直してください。");
-    return 0;
+      + "\n工事フォルダ（戸別の .json が入っている、いちばん外側のフォルダ）を選び直してください。");
+    return { hit: 0, msg: "" };
   }
-  alert("📁 フォルダ「" + (dh.name || "") + "」の戸別ファイルと結び付けました。\n\n"
-    + "結び付いた： " + hit + " 件\n"
-    + (miss ? ("見つからなかった： " + miss + " 件（このフォルダに無い戸別）\n") : "")
-    + (ambiguous ? ("同じ管理番号が重なっていて決められない： " + ambiguous + " 件（先に重複の整理を）\n") : "")
-    + "\n台帳の内容はそのままです。続けて書き戻す内容を確かめます。");
-  return hit;
+  const msg = (miss || ambiguous)
+    ? ("📁 フォルダ「" + (root.name || "") + "」の戸別ファイルと結び付けました。\n\n"
+       + "結び付いた： " + hit + " 件\n"
+       + (miss ? ("見つからなかった： " + miss + " 件（このフォルダに無い戸別）\n") : "")
+       + (ambiguous ? ("同じ管理番号が重なっていて決められない： " + ambiguous + " 件（先に重複の整理を）\n") : "")
+       + "\n台帳の内容はそのままです。続けて書き戻す内容を確かめます。")
+    : "";      // 全部そろっているときは黙って先へ進む（窓を減らす）
+  return { hit: hit, msg: msg };
 }
 async function lgwbButton(){
   if(!_listRows || !_listRows.length){
     alert("先に「📁 フォルダ」で戸別ファイルのフォルダを読み込んでください。");
     return;
   }
-  /* フォルダを掴んでいないときは、ここで掴む。
+  /* ★★ ここから「書き込みの許可を取り切る」まで、確認（alert / confirm）を出さないこと ★★
+     ブラウザはフォルダの許可を「押した直後」しか求められない。先に確認を出すと
+     その権利が消え、あとから許可を求めても必ず弾かれる（0件のまま終わる）。
+
+     フォルダを掴んでいないときは、ここで掴む。
      以前は「先に📁フォルダで読み直してください」と断っていたが、その読み直しで
      台帳に打ち込んだ内容がファイルの中身に戻ってしまい、書き戻すものが消えていた。 */
-  if(!_listRows.some(r => r && r._dir && r._name)){
-    if(!(await lgwbAttachDir())) return;
+  // ① まずルート（工事フォルダ）を掴む。掴めていれば何も聞かない。
+  const root = await lgwbEnsureRoot();
+  if(!root) return;                       // 自分で閉じた／掴めなかった
+  // ② 行と戸別ファイルを結び付ける（ルートを選び直したときは付け直す）
+  let attachMsg = "";
+  if(root.picked || !_listRows.some(r => r && r._dir && r._name)){
+    const res = await lgwbAttachFrom(root.dir, !!root.picked);
+    if(!res.hit) return;                  // 中で理由を出している
+    attachMsg = res.msg;
   }
+  // ③ 本当に書けるかを確かめる（ここまでで確認の窓は1つも出していない）
+  const ngDirs = await lgwbCheckWritable(_listRows);
+  if(ngDirs.length){
+    alert("フォルダへの書き込みが許可されませんでした。\n\n"
+      + "対象のフォルダ： " + ngDirs.join("、") + "\n\n"
+      + "もう一度「💾 戸別ファイルへ反映」を押して、フォルダを選び直してください。\n"
+      + "（選ぶ画面で工事フォルダを選ぶと、その場で書き込みまで許可されます）\n\n"
+      + "台帳の内容はそのままです。何も書き換えていません。");
+    return;
+  }
+  if(attachMsg) alert(attachMsg);
   const { list, skipped, unreadable, same } = await lgwbScan(_listRows);
   /* 戸別ファイルと突き合わせて「同じ」と分かった分は、もう反映するものが無い。
      ここで下ろさないと、書いてから消して元に戻したときなどに
@@ -14956,9 +15030,26 @@ async function lgwbButton(){
   // 書けたファイルの分だけ「まだ入っていない直し」から外す（できなかった分は残す）
   lgClearCaseEdited(res.okRows);
   lgClearTouched(res.okRows.map(r => { try { return subCaseKey(r); } catch(_){ return ""; } }));
-  alert("📤 台帳の内容を書き戻しました。\n\n" + res.ok + " 件のファイルを更新しました"
-    + (res.fails.length ? ("\n\n⚠ できなかったもの:\n" + res.fails.join("\n")) : "")
-    + "\n\n一覧を読み直します。");
+  /* ★一覧を読み直すのは「全部書けたとき」だけ★
+     読み直すとフォルダのファイルの中身が一覧に入り直るので、書けなかった分は
+     台帳に打ち込んだ内容がファイルの古い中身で上書きされて消えてしまう。
+     1件でも書けなかったら読み直さず、打ち込んだ内容をそのまま残す。 */
+  if(!res.ok){
+    renderListTable();
+    alert("⚠ 1件も書き戻せませんでした。\n\n" + res.fails.join("\n")
+      + "\n\n台帳に打ち込んだ内容はそのまま残してあります（一覧は読み直していません）。\n"
+      + "フォルダへの書き込みを許可してから、もう一度「💾 戸別ファイルへ反映」を押してください。");
+    return;
+  }
+  if(res.fails.length){
+    renderListTable();
+    alert("📤 " + res.ok + " 件のファイルを更新しました。\n\n"
+      + "⚠ できなかったもの:\n" + res.fails.join("\n")
+      + "\n\nできなかった分の直しは、台帳にそのまま残してあります。\n"
+      + "（消えないよう、一覧の読み直しはしていません。もう一度押すと残りを書き戻せます）");
+    return;
+  }
+  alert("📤 台帳の内容を書き戻しました。\n\n" + res.ok + " 件のファイルを更新しました。\n\n一覧を読み直します。");
   await listReloadFolder();
 }
 
@@ -14999,7 +15090,10 @@ async function listSelectFolder(){
      「何度かやると偶然できる」ように見える）。だからフォルダ選びを先に済ませる。 */
   let dirHandle;
   try {
-    dirHandle = await window.showDirectoryPicker();
+    /* mode:"readwrite" で掴む。読むだけで掴むと、あとの
+       「重複の整理」「ごみ掃除」「💾 戸別ファイルへ反映」で書き込みの許可が要るのに、
+       その時にはもう許可を聞ける状態ではなくなっている（押した直後しか聞けないため）。 */
+    dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
   } catch(err){
     if(err && err.name === "AbortError") return;    // 自分で閉じた＝何もしない
     alert("フォルダを選べませんでした。\n\nもう一度「📁 フォルダ」を押してください。\n"
@@ -17855,12 +17949,24 @@ async function showPhotoPreviewForRow(row){
   }
 }
 
+/* フォルダのファイルを読み直した中身に、受付台帳が持ち主の欄をかぶせる。
+   台帳で直した内容は「💾 戸別ファイルへ反映」を押すまでファイルには入っていないので、
+   これをしないと、戸別を開いた時点で直した内容が消え、一覧へ戻ると台帳も巻き戻る。
+   写真・図面・積算・測定値はファイルの側をそのまま使う（台帳は持っていないため）。 */
+function lgOverlayLedger(fresh, row){
+  if(!fresh || typeof fresh !== "object" || !row || !row.data) return fresh;
+  try {
+    const want = lgwbWanted(row);          // 台帳が「こうなっているはず」と思っている内容
+    Object.keys(want).forEach(k => { fresh[k] = want[k]; });
+  } catch(_){}
+  return fresh;
+}
 async function listLoadRow(target){
   if(!target) return;
   // --- 平文: 写真を常駐させていないため元ファイルを読み直して完全復元 ---
   if(target.fileType === "plain"){
     let d = target.data;
-    if(target._slim){ const fresh = await rereadRowSource(target); if(fresh) d = fresh; }
+    if(target._slim){ const fresh = await rereadRowSource(target); if(fresh) d = lgOverlayLedger(fresh, target); }
     applyStateData(d);
     setLoadedOrigin(target);
     closeListView();
@@ -17871,7 +17977,7 @@ async function listLoadRow(target){
     if(_sessionPassword){
       try {
         const env = await getFullEnvelope(target);
-        const full = await decryptHybrid(env, _sessionPassword);
+        const full = lgOverlayLedger(await decryptHybrid(env, _sessionPassword), target);
         const lite = Object.assign({}, full); lite.chosho_photos = null; // 一覧側は写真を保持しない
         target.data = lite; target.unlocked = true; target._slim = true;
         target._amtCache = undefined; target._bomCache = undefined;
@@ -17900,7 +18006,7 @@ async function listLoadRow(target){
     }
     try {
       const env = await getFullEnvelope(target);
-      const full = await decryptHybrid(env, pw);
+      const full = lgOverlayLedger(await decryptHybrid(env, pw), target);
       const lite = Object.assign({}, full); lite.chosho_photos = null;
       target.data = lite; target.unlocked = true; target._slim = true;
       target._amtCache = undefined; target._bomCache = undefined;
@@ -17919,7 +18025,7 @@ async function listLoadRow(target){
       try {
         const env = await getFullEnvelope(target);
         const pt = await decryptJsonString(env, _sessionPassword);
-        applyStateData(JSON.parse(pt));
+        applyStateData(lgOverlayLedger(JSON.parse(pt), target));
         setLoadedOrigin(target);
         closeListView();
         return;
@@ -22662,7 +22768,7 @@ function renderListLedgerMode(rows, container){
     +   '<button id="lg-export-genba" title="受付台帳だけを1ファイルに書き出します（地図は入りません）。スマホの現場入力アプリの「台帳」と、受付台帳ソフトの「📥 台帳を取り込み」の、どちらでもそのまま読めます。左の「📥 受付台帳」で戻せます。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📤 受付台帳</button>'
     +   '<button id="lg-export-html" title="いまの受付台帳を、中身の入った1枚のHTMLにして書き出します。渡した先はブラウザで開くだけで台帳がそのまま出るので、受付台帳ソフトを別に渡さなくて済みます。向こうで直した分は「📤 台帳を書き出し」でファイルにしてもらい、左の「📥 受付台帳」で戻せます。台帳ソフトはこのメインの中に入っているので、ファイルを選ぶ必要はありません（Excel書き出しと同じで、押すだけです）。名前・住所・電話が入るので、渡す相手にご注意ください。" style="background:#00838f;color:#fff;border:1px solid #006064;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">🌐 HTML</button>'
     +   '<button id="lg-xlsx-export" title="いまの受付台帳を Excel（.xlsx）へ書き出します。Excelで直したあと、左の「📗 Excel」でそのまま読み戻せます。" style="background:#1b7a3d;color:#fff;border:1px solid #145c2e;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📘 Excel</button>'
-    +   '<button id="lg-writeback" title="この台帳で直した 名前・住所・電話・工事日程予定（日付・時刻）・打合せ予定・状態・備考・保留・ビラ・同意書・完了書 を、フォルダの戸別ファイルへまとめて書き込みます。台帳のセルで直しただけでは戸別ファイルは変わらないため、フォルダを読み直すと元に戻ってしまいます（工事予定日を消しても消えない等）。戸別を1件ずつ開いて保存しなくて済みます。写真・図面・積算・測定値には触りません。「打合せ予定・受付時刻」は戸別ファイルに置き場所が無いため対象外です（物件ファイルに保存されます）。フォルダをまだ掴んでいないときは、この操作の中でフォルダを聞きます（台帳の内容は読み直さないので消えません）。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">💾 戸別ファイルへ反映</button>'
+    +   '<button id="lg-writeback" title="この台帳で直した 名前・住所・電話・工事日程予定（日付・時刻）・打合せ予定・状態・備考・保留・ビラ・同意書・完了書 を、フォルダの戸別ファイルへまとめて書き込みます。台帳のセルで直しただけでは戸別ファイルは変わらないため、フォルダを読み直すと元に戻ってしまいます（工事予定日を消しても消えない等）。戸別を1件ずつ開いて保存しなくて済みます。写真・図面・積算・測定値には触りません。「打合せ予定・受付時刻」は戸別ファイルに置き場所が無いため対象外です（物件ファイルに保存されます）。押すと、まず工事フォルダ（ルート）を掴むところから始めます。すでに掴んでいれば何も聞きません。掴んでいないときだけフォルダを選ぶ画面が出ます。どちらの場合も台帳の内容は読み直さないので、打ち込んだ内容は消えません。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">💾 戸別ファイルへ反映</button>'
     + '</div>'
     + '<span class="lg-count">全 ' + rows.length + ' 件（仮 ' + prov + ' ／ 完了 ' + done + ' ／ ビラ済 ' + flyered + (held ? ' ／ 保留 ' + held : '') + '）' + (shown.length !== rows.length ? ' → 表示 ' + shown.length + ' 件' : '') + '</span>'
     + '<div class="lgc-note">セルをクリックすると直接編集できます。工事日程・打合せ予定は 📅 予定カレンダーに、名前・住所などは図面にそのまま反映されます。</div>'
@@ -25730,6 +25836,15 @@ function noteSyncToEditor(row){
     if(lgNote){ el.value = lgNote; if(row.data) row.data.chosho_note = lgNote; }
     else if(el.value) noteAdopt(tk, el.value);            // 台帳が空なら戸別側を台帳へ
   }catch(_){}
+  // 工事の時刻・打合せ予定も、受付台帳の内容に合わせる（備考と同じ扱い）
+  try{
+    const tk = subCaseKey(row); if(!tk) return;
+    const lg = getLedger(tk) || {};
+    const put = (id, v) => { const e = document.getElementById(id); if(!e) return;
+      e.value = v; if(row.data) row.data[id] = v; };
+    put("chosho_time", String(lg.time || ""));
+    put("chosho_meet_at", String(lg.meetAt || ""));
+  }catch(_){}
 }
 /* エディタの内容（積算・図面・写真除く）を、開いた元の一覧行へ丸ごと取り込む。
    一覧へ戻る時・保存時に呼ばれ、台帳・物件自動保存へ編集内容を反映する。 */
@@ -25769,6 +25884,20 @@ function syncEditorToRowData(force){
     // 備考は台帳と共通の1つの欄なので、受付台帳の備考列へも同じ内容を書く
     try{ const ntk = subCaseKey(_editingRow);
          if(ntk) noteAdopt(ntk, String(s.chosho_note || "")); }catch(_){}
+    /* 工事の時刻・打合せ予定も、備考と同じ「同じ1つの欄」。
+       持ち主は受付台帳（_ledgerMap）なので、積算で直した分をここで台帳へ入れる。
+       これをしないと、積算で時刻を直しても受付台帳の「工事日程予定」に出ない。 */
+    try{ const ntk = subCaseKey(_editingRow);
+         /* 画面にその欄が無いときは触らない。欄が無いのに空で入れると、
+            積算を開いて戻っただけで台帳の予定が消えてしまう。 */
+         if(ntk && document.getElementById("chosho_time")){
+           const t = String(s.chosho_time || "");
+           if(String((getLedger(ntk) || {}).time || "") !== t) setLedger(ntk, { time: t, timeSrc: t });
+         }
+         if(ntk && document.getElementById("chosho_meet_at")){
+           const m = String(s.chosho_meet_at || "");
+           if(String((getLedger(ntk) || {}).meetAt || "") !== m) setLedger(ntk, { meetAt: m, meetSrc: m });
+         } }catch(_){}
     clearEditorDirty();              // 行へ取り込んだ＝フォームと行が一致した状態
     _editingRow._photoCount = _photos.length;
     _editingRow._thumbs = undefined; // 旧サムネ破棄 → 保存時に最新写真から再生成
