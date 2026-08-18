@@ -5862,7 +5862,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.18b";
+const APP_VERSION = "2026.08.18c";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -14805,7 +14805,7 @@ function lgwbWanted(row){
 }
 /* フォルダから読んだ行を1件ずつ実ファイルと突き合わせ、違うところだけ拾う */
 async function lgwbScan(rows){
-  const list = [], skipped = [], unreadable = [];
+  const list = [], skipped = [], unreadable = [], same = [];
   for(const row of (rows || [])){
     if(!row || !row._dir || !row._name) continue;      // フォルダから読んでいない行
     if(row.fileType !== "plain"){ skipped.push(row._name); continue; }  // 暗号化ファイルは対象外
@@ -14822,8 +14822,9 @@ async function lgwbScan(rows){
       if(now !== want[f.k]) diffs.push({ k:f.k, label:f.label, from:now, to:want[f.k] });
     });
     if(diffs.length) list.push({ row, name:row._name, dirPath:row._dirPath || "", diffs });
+    else same.push(row);          // 戸別ファイルと同じ＝もう反映するものは無い
   }
-  return { list, skipped, unreadable };
+  return { list, skipped, unreadable, same };
 }
 async function lgwbApply(list){
   let ok = 0; const fails = []; const okRows = [];
@@ -14929,10 +14930,16 @@ async function lgwbButton(){
   if(!_listRows.some(r => r && r._dir && r._name)){
     if(!(await lgwbAttachDir())) return;
   }
-  const { list, skipped, unreadable } = await lgwbScan(_listRows);
+  const { list, skipped, unreadable, same } = await lgwbScan(_listRows);
+  /* 戸別ファイルと突き合わせて「同じ」と分かった分は、もう反映するものが無い。
+     ここで下ろさないと、書いてから消して元に戻したときなどに
+     「台帳で直した N 件がまだ入っていません」が消えないまま残ってしまう。 */
+  lgClearCaseEdited(same);
+  lgClearTouched(same.map(r => { try { return subCaseKey(r); } catch(_){ return ""; } }));
   const note = (skipped.length ? ("\n※ 暗号化ファイル " + skipped.length + " 件は対象外です（戸別を開いて保存してください）") : "")
              + (unreadable.length ? ("\n※ 読めなかったファイル " + unreadable.length + " 件は飛ばします") : "");
   if(!list.length){
+    try { renderListTable(); } catch(_){}      // 「まだ入っていません」の表示も下ろす
     alert("受付台帳の内容と、戸別ファイルの中身は一致しています。\n書き戻すものはありません。\n\n"
       + (LGWB_LEDGER_ONLY ? ("※ 台帳の「" + LGWB_LEDGER_ONLY + "」は戸別ファイルに置き場所が無いため、この操作の対象外です。\n") : "")
       + "　 これらは物件ファイルとこの端末に保存されているので、書き戻さなくても消えません。" + note);
