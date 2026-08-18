@@ -767,6 +767,11 @@
   .folder-table col.col-load   { width: auto; }
   .folder-table col.col-addr   { width: auto; }
   /* 石綿バッジ共通スタイル */
+  /* 受付台帳の行に出す、石綿の可否の小さなチップ */
+  .lg-asb-chip { display: inline-block; margin-left: 3px; padding: 0 4px; border-radius: 3px;
+    color: #fff; font-size: 9px; font-weight: 700; vertical-align: 1px; white-space: nowrap;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .lg-asb-chip.asb-blank { color: #667482; background: #eceff1 !important; border: 1px solid #cfd8dc; }
   .asb-badge { display: inline-block; padding: 1px 5px; border-radius: 3px;
                font-size: 10px; color: #fff; white-space: nowrap;
                -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -5894,7 +5899,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.18i";
+const APP_VERSION = "2026.08.18j";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -12213,6 +12218,25 @@ function asbestosStatusBadge(row){
   return { label:"🟠 みなしLV3", color:"#fb8c00",
            title:"みなし適用 / 着工日: " + (a.construction_date||"-") + " / 建材: " + matLabel + " / 確認: " + srcLabel,
            cat:"mnashi" };
+}
+/* 受付台帳の行に出す、石綿の可否の短いチップ。
+   長い言い回しは表に入らないので、印と2〜4文字にする（くわしくは吹き出しに出す）。 */
+const ASB_CHIP_SHORT = {
+  blank:  "石綿?",
+  noneed: "石綿不要",
+  l12:    "石綿L1/2",
+  mnashi: "石綿みなし",
+  nodust: "石綿非発じん",
+  locked: "石綿🔐",
+};
+function asbestosChipHtml(row){
+  const b = asbestosStatusBadge(row);
+  if(!b) return "";
+  const short = ASB_CHIP_SHORT[b.cat] || b.label;
+  const tip = b.label + "\n" + (b.title || "")
+    + "\n（石綿判定は、戸別を開いて「🏢 石綿判定」の欄で決めます）";
+  return '<span class="lg-asb-chip asb-' + b.cat + '" style="background:' + b.color + ';" title="'
+    + escapeHtml(tip) + '">' + escapeHtml(short) + '</span>';
 }
 function aggregateAsbestos(list){
   const s = { mnashi:0, nodust:0, noneed:0, blank:0, l12:0, locked:0 };
@@ -23187,6 +23211,7 @@ function renderListLedgerMode(rows, container){
              + dupN[toHalfWidthAn(d.chosho_mgmt_no || "").trim()] + ' 件あります。このままだと積算・発注材料数量・費用が'
              + '二重に数えられます。「🧩 重複」でどれを残すか選んでください。">重複</span>') : '')
       + (lg.hold ? '<span class="lg-hold-badge" title="保留（地図でも管理番号の右肩に「保」マークが付きます）">保</span>' : '')
+      + asbestosChipHtml(r)     // 石綿の可否（⚪未入力／🟢不要／⚠L1・L2／🟠みなし／🟡非発じん）
       + (r._detached ? '<span class="lg-nofile-badge' + (r._detached.reason === "pending" ? ' pending' : '')
           + '" title="' + (r._detached.reason === "pending" ? "ファイルが見当たりません（次に読み込んだ時にまた確認します）" : "戸別ファイルが無い行です（名前だけ残しています）。ファイルが戻れば自動で元に戻ります")
           + (r._detached.path ? "。前の場所: " + escapeHtml(r._detached.path) : "") + '">ファイル無</span>' : '')
@@ -23233,8 +23258,13 @@ function renderListLedgerMode(rows, container){
     html += '<td class="lg-open-btns">'
       + '<button data-open="cal" title="カレンダーで該当月を表示">📅</button>'
       + '<button data-open="map" title="この戸別を地図で開く（管理番号でリンクした建物へジャンプ）">🗺️</button>'
-      + '<button data-open="est" title="この戸別の積算を開く">✏️ 積算</button>'
-      + '<button data-open="dwg" title="' + (lgHasDrawing(r) ? "この戸別の図面を開く" : "台帳の情報を流し込んで図面を新規作成") + '">📐' + (lgHasDrawing(r) ? '' : '作成') + '</button>'
+      /* 「積算」と「図面」は同じ画面（積算・図面編集）を開くだけで、違いは
+         開いたあとに図面まで画面を送るかどうかだけだった。押し分ける意味が薄く
+         列も狭いので1つにまとめ、図面の有無は左の 📄／－ の印で分かるようにする。 */
+      + '<button data-open="est" title="' + (lgHasDrawing(r)
+            ? "この戸別の積算・図面を開きます（図面データあり）"
+            : "この戸別の積算・図面を開きます（図面はまだありません。台帳の情報を流し込んで作れます）")
+        + '">✏️ 開く</button>'
       + '<button data-open="del" title="' + escapeHtml(
             r._manual   ? "この行を削除します（受付台帳で作った行）"
           : r._detached ? "この行を削除します（戸別ファイルが見当たらない行）"
