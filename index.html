@@ -3045,6 +3045,16 @@
     font-size:10px;font-weight:700;vertical-align:middle;}
   .mat-dup-warn{margin:0 0 10px;padding:8px 10px;border:1px solid #f5c6cb;background:#fdf3f4;border-radius:5px;
     font-size:12px;color:#8e0000;line-height:1.7;}
+  /* 重複整理：ふだんは1行、押すと中身を見比べられる */
+  .dup-grp > summary.dup-grp-h { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .dup-grp > summary.dup-grp-h::-webkit-details-marker { display: none; }
+  .dup-grp > summary.dup-grp-h::marker { content: ""; }
+  .dup-grp > summary.dup-grp-h::after { content: "▾"; margin-left: auto; font-size: 11px; color: #2e5488; transform: rotate(-90deg); }
+  .dup-grp[open] > summary.dup-grp-h::after { transform: rotate(0deg); }
+  .dup-keep-note { font-weight: 400; font-size: 11.5px; color: #1b5e20; }
+  .dup-why { color: #667482; }
+  .dup-han-warn { margin-left: 6px; padding: 0 6px; border-radius: 8px;
+    background: #fff3e0; color: #8a4b1f; font-size: 10.5px; font-weight: 700; }
   /* --- 受付台帳 --- */
   .ledger-controls {
     display: flex; align-items: stretch; gap: 6px 10px; flex-wrap: wrap;
@@ -4003,7 +4013,7 @@
         <button id="btn-reset" title="入力をすべて消して、新しい戸別をはじめる">＋ 新規</button>
         <button id="btn-load" title="保存したファイル（.json）を読み込む">📂 読込</button>
         <button id="btn-save" title="この戸別をファイル（.json）として保存する">💾 保存</button>
-        <button id="btn-save-overwrite" title="📁フォルダ選択 から読み込んだ戸別を、元のファイルへ同じ形式で上書き保存" disabled>💾 上書き</button>
+        <button id="btn-save-overwrite" title="📁 フォルダ から読み込んだ戸別を、元のファイルへ同じ形式で上書き保存" disabled>💾 上書き</button>
       </span>
       <span class="tb-div" aria-hidden="true"></span>
       <!-- 出力 -->
@@ -4080,6 +4090,7 @@
           <div class="field">
             <label>施工日</label>
             <input type="date" id="chosho_date">
+            <input type="time" id="chosho_time" title="工事の開始時刻。受付台帳の「工事日程予定」の時刻と同じものです（現場入力アプリでも直せます）" style="flex:0 0 auto;width:104px;">
           </div>
           <div class="field">
             <label>お客様氏名</label>
@@ -4859,21 +4870,16 @@
       <span class="tb-div" aria-hidden="true"></span>
       <!-- 読み込む -->
       <span class="tb-grp">
-        <span class="tb-split">
-          <button id="btn-list-select-folder" title="フォルダの中を、下のフォルダまで全部読み込みます (Chrome/Edge)。一度選ぶとそのフォルダを覚えるので、次からは一覧を開いたときに自動で読み込みます（別のフォルダにしたいときだけ押してください）。">📁 フォルダ</button>
-          <details class="uc-menu"><summary class="tb-caret" title="ほかの読み込み方">▾</summary>
-            <div class="uc-menu-pop">
-              <button id="btn-list-select-files" title="JSON/.hyb/.enc ファイルを1つずつ／まとめて選ぶ">📄 ファイルを選ぶ</button>
-              <button id="btn-list-clear" title="読み込んだ一覧を空にする">🧽 一覧を空にする</button>
-            </div>
-          </details>
-        </span>
+        <button id="btn-list-select-folder" title="フォルダの中を、下のフォルダまで全部読み込みます (Chrome/Edge)。一度選ぶとそのフォルダを覚えるので、次からは一覧を開いたときに自動で読み込みます（別のフォルダにしたいときだけ押してください）。">📁 フォルダ</button>
+        <button id="btn-list-select-files" title="ファイル（.json / .hyb / .enc）を1つずつ／まとめて選んで読み込みます。フォルダ選択に対応していない端末（iPad など）はこちらから。">📄 ファイル</button>
         <button id="btn-genba-import" title="スマホ現場入力が書き出した「管理番号.json」を、開いている物件の同じ管理番号の戸別へ取り込みます。顧客情報は台帳を優先し、アンテナ・部材・測定・写真・配線は現場を採用。料金・石綿・図面レイアウトはPCを保持。取込前に中身を確かめられます。" style="background:#1565c0;">📥 現場取込</button>
       </span>
       <span class="tb-div" aria-hidden="true"></span>
       <!-- 物件のはじめ／終わりにだけ使うもの -->
       <details class="uc-menu"><summary class="tb-caret tb-lbl" title="ときどき使うもの（ファイルの整理・暗号化・写真のまとめ書き出し）">⋯ まとめて</summary>
         <div class="uc-menu-pop">
+          <div class="uc-menu-cap">一覧</div>
+          <button id="btn-list-clear" title="読み込んだ一覧を空にする（ファイルは消えません）">🧽 一覧を空にする</button>
           <div class="uc-menu-cap">ファイルを整える</div>
           <button id="btn-list-dup" title="同じ管理番号のファイルが重なっているところ（iPad/iPhoneで保存すると増える「◯◯ 2.json」など）を探し、残す方を選んで「管理番号.json」にまとめます。フォルダを読み込んだ後に使えます。">🧩 重複をまとめる</button>
           <button id="btn-list-junk" title="中身が空（0KB）のファイルを探して消します。スマホで同じ戸別を保存し直すと「管理番号_長い数字.json」という別ファイルが増え、そのうち空のものは読めないため戸別が一覧から抜けます。消す前に一覧で確かめられます。中身のある壊れたファイルは消しません。">🗑 空ファイルを消す</button>
@@ -5095,7 +5101,7 @@
     <h3>🔄 一括 パスワード／暗号化方式 変更</h3>
     <div style="font-size:11px;color:#555;line-height:1.5;margin-bottom:8px;padding:6px 10px;background:#eef2f6;border:1px solid #cdd3da;border-radius:3px;">
       選択された戸別を復号して、新しい方式/パスワードで再保存します。<br>
-      書き戻しには <b>📁 フォルダ選択</b> 経由で読み込んだファイル（書込み権限付きハンドル）が必要です。<br>
+      書き戻しには <b>📁 フォルダ</b> 経由で読み込んだファイル（書込み権限付きハンドル）が必要です。<br>
       復号はセッション記憶中のパスワードで自動試行。足りない分は個別入力を求めます。
     </div>
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px;padding:6px 8px;background:#fff8e1;border:1px solid #ffe0a3;border-radius:3px;">
@@ -5484,6 +5490,7 @@
         <summary class="map-side-head" title="保留・下見完了・工事完了などの印"><span class="uc-t">印</span></summary>
         <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="受付台帳で「保留」にした戸別に付きます"><input type="checkbox" id="map-mark-hold"> <b style="color:#e65100;">保</b> 保留</label>
         <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="スマホ現場入力で「下見完了」にした戸別に付きます"><input type="checkbox" id="map-mark-surv"> <b style="color:#00838f;">下</b> 下見済み</label>
+        <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="受付台帳の「ビラ」に○が付いた戸別、またはスマホ現場入力で「ビラ配り」を押した戸別に付きます。フォルダを読み込んでいなくても、受付台帳のぶんは出ます。"><input type="checkbox" id="map-mark-flyer"> <b style="color:#7b1fa2;">ビ</b> ビラ配布済み</label>
         <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="工事状態が「工事完了」の戸別に付きます"><input type="checkbox" id="map-mark-done"> <b style="color:#2e7d32;">完</b> 工事完了</label>
         <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="工事状態が「未完了」の戸別に付きます。着工前（仮受付）には付きません。数が多くなるので既定は表示なしです。"><input type="checkbox" id="map-mark-undone"> <b style="color:#1565c0;">未</b> 未完了</label>
         <details class="uc-hint"><summary>くわしく</summary><div>管理番号の右肩に出ます（番号が無い建物は中心）。<b>入れれば印刷にも出ます／外せば印刷にも出ません</b>。この設定はこの端末だけに保存されます。</div></details>
@@ -5598,7 +5605,7 @@
     <h3>🧹 同じ管理番号のファイルが重なっています</h3>
     <div id="dup-body"></div>
     <div style="display:flex;gap:6px;margin-top:10px;justify-content:flex-end;">
-      <button id="dup-ok" style="background:#00838f;color:#fff;border:1px solid #00666f;padding:6px 14px;border-radius:3px;cursor:pointer;font-size:12px;">選んだ方を残して整理する</button>
+      <button id="dup-ok" style="background:#00838f;color:#fff;border:1px solid #00666f;padding:6px 14px;border-radius:3px;cursor:pointer;font-size:12px;">この内容で整理する</button>
       <button id="dup-cancel" style="background:#666;color:#fff;border:1px solid #444;padding:6px 14px;border-radius:3px;cursor:pointer;font-size:12px;">何もしない</button>
     </div>
   </div>
@@ -12102,7 +12109,7 @@ function collectState(){
     "cable_new_len","cable_main_len","cable_ch46_len","cable_ch50_len","cable_amp_next_len",
     "cable_indoor_new","cable_vvf_len","cable_s5cfb_power","ext_power_conn",
     "att_main","att_46","att_50","box_consent","ofmu_qty","wire_sus16_len",
-    "chosho_mgmt_no","chosho_date","chosho_cust_name","chosho_cust_addr","chosho_cust_tel",
+    "chosho_mgmt_no","chosho_date","chosho_time","chosho_cust_name","chosho_cust_addr","chosho_cust_tel",
     "chosho_status","chosho_note"];
   const s = {};
   ids.forEach(id => {
@@ -12564,7 +12571,7 @@ function showPhotoStrippedBanner(on){
 }
 
 /* ============================================================
-   上書き保存：📁フォルダ選択 から読み込んだ戸別を、元ファイルへ同じ形式で書き戻す。
+   上書き保存：📁 フォルダ から読み込んだ戸別を、元ファイルへ同じ形式で書き戻す。
    _loadedOrigin に読込元（書込み権限付きハンドル＋方式）を保持。applyStateData で
    一旦クリアし、listLoadRow の完全読込時のみ再設定する（プリセット適用・新規・伏字閲覧
    では null のままになり、誤って別データを元ファイルへ上書きするのを防ぐ）。
@@ -12607,7 +12614,7 @@ function updateOverwriteSaveBtn(){
       + (_projFileHandle ? "（共有ファイルへ反映）" : "（端末内に保存。共有ファイルへ反映するには連動が必要）");
   } else {
     b.textContent = "💾 上書き保存";
-    b.title = "📁フォルダ選択 から戸別を読み込むか、物件を開くと、その元へ保存できます（ファイル選択／非対応ブラウザは「保存」で名前を付けて保存）";
+    b.title = "📁 フォルダ から戸別を読み込むか、物件を開くと、その元へ保存できます（ファイル選択／非対応ブラウザは「保存」で名前を付けて保存）";
   }
 }
 async function overwriteSaveCurrent(){
@@ -12618,7 +12625,7 @@ async function overwriteSaveCurrent(){
       await overwriteSaveCurrentToProject();
       return;
     }
-    alert("上書き保存できる元ファイルがありません。\n\n📁 フォルダ選択 から戸別を読み込んだ場合のみ、その元ファイルへ上書きできます。\nそれ以外は「保存」で名前を付けて保存してください。");
+    alert("上書き保存できる元ファイルがありません。\n\n📁 フォルダ から戸別を読み込んだ場合のみ、その元ファイルへ上書きできます。\nそれ以外は「保存」で名前を付けて保存してください。");
     return;
   }
   // 写真が復元できていない戸別をそのまま上書きすると、元ファイルの写真を無言で失う → 明示確認
@@ -12721,7 +12728,15 @@ async function ensureProjDirHandle(){
     _projDirHandle = dh;
     if(_currentProject){ try { await projHandlePut(_currentProject.id + ":dir", dh); } catch(_){} }
     return dh;
-  } catch(err){ if(err && err.name === "AbortError") return null; console.warn(err); return null; }
+  } catch(err){
+    if(err && err.name === "AbortError") return null;   // 自分で閉じた
+    // 上の確認（confirm）で「押した直後」の扱いが切れると、ここで弾かれることがある。
+    // 黙って諦めると「何も起きない」ように見えるので、もう一度押せばよいことを伝える。
+    console.warn(err);
+    alert("フォルダを選ぶ画面を開けませんでした。\n\nもう一度同じ操作をすると、今度は確認なしで\n"
+      + "フォルダ選びが開きます。");
+    return null;
+  }
 }
 /* ディレクトリハンドル配下の相対パスのファイルハンドルを取得（create=true で無ければ作成） */
 async function resolveFileHandleInDir(dir, relpath, create){
@@ -13366,7 +13381,7 @@ function setupDragDropLoad(){
    ============================================================ */
 let _listRows = [];
 let _listMode = "standard"; // "standard" / "by_folder" / "cost_detail"
-let _listSelectedFolderName = ""; // 📁 フォルダ選択 で指定されたフォルダ名（印刷ヘッダに表示）
+let _listSelectedFolderName = ""; // 📁 フォルダ で指定されたフォルダ名（印刷ヘッダに表示）
 let _listSearchTimer = null; // 絞り込み検索の debounce 用（100件規模で毎打鍵の全件再計算を防ぐ）
 let _hideDuplicates = false; // 重複を隠す（同一管理番号は最新ファイル日付の1件のみ表示・既定OFF）
 /* 全体費用詳細「📐 図面データありのみ」。図面（＝積算）が組まれている戸別だけを集計対象にする。
@@ -13864,7 +13879,7 @@ function buildListRow(filePath, lastModified, data, fileHandle){
    一覧ではメモリに常駐させず、復号・読込・再暗号化など実際に必要に
    なった時だけ元ファイル(fileHandle / srcFile)から読み直す。
    ============================================================ */
-/* 行の元ファイルを丸ごと読み直して parse（フォルダ選択=fileHandle / ファイル選択=srcFile） */
+/* 行の元ファイルを丸ごと読み直して parse（📁 フォルダ=fileHandle / 📄 ファイル=srcFile） */
 async function rereadRowSource(row){
   try {
     let text = null;
@@ -13978,7 +13993,7 @@ async function scanDirRecursive(dirHandle, pathPrefix, rows, stats){
    ・消す操作なので、必ず一覧を見せて選ばせてから実行する
    ・書き込み許可は、整理を押した時にだけ求める（読むだけの時は求めない）
    ============================================================ */
-let _listDirHandle = null;        // 最後にフォルダ選択で読んだフォルダ（整理に使う）
+let _listDirHandle = null;        // 最後に📁 フォルダ で読んだフォルダ（整理に使う）
 
 /* ============================================================
    前回のフォルダを覚えて、次からは選び直さずに読み込む
@@ -14006,7 +14021,7 @@ async function listDirForget(){
   try { localStorage.removeItem(LS_LIST_DIR_NAME); } catch(_){}
   listCensusClear();                    // 前回そのフォルダで見えていた戸別の控えも消す
   const st = document.getElementById("list-status");
-  if(st) st.textContent = "前回のフォルダを忘れました。「📁 フォルダ選択(再帰)」から選び直してください。";
+  if(st) st.textContent = "前回のフォルダを忘れました。「📁 フォルダ」から選び直してください。";
 }
 async function listDirRestore(){
   if(_listDirHandle) return _listDirHandle;
@@ -14031,13 +14046,13 @@ async function listReloadRemembered(ask){
   try { await scanDirRecursive(dh, "", rows, stats); }
   catch(err){
     console.warn("[一覧] 前回のフォルダの読込に失敗", err);
-    if(st) st.textContent = "前回のフォルダを読み込めませんでした（移動・削除されたかもしれません）。「📁 フォルダ選択(再帰)」から選び直してください。";
+    if(st) st.textContent = "前回のフォルダを読み込めませんでした（移動・削除されたかもしれません）。「📁 フォルダ」から選び直してください。";
     return false;
   }
   _listRows = await mergeRowsWithManual(rows, { source: "folder", stats, root: nm });
   _listSelectedFolderName = nm;
   renderListTable();
-  if(st) st.textContent = "📁 前回のフォルダ「" + nm + "」から " + rows.length + " 件を読み込みました（別のフォルダにするときは「📁 フォルダ選択(再帰)」）";
+  if(st) st.textContent = "📁 前回のフォルダ「" + nm + "」から " + rows.length + " 件を読み込みました（別のフォルダにするときは「📁 フォルダ」）";
   missShowNote();
   return true;
 }
@@ -14070,6 +14085,30 @@ function listDirAutoLoad(){
 function dupWhenMs(row){
   const t = Date.parse(String((row.data && row.data.editedAt) || "").trim());
   return isFinite(t) ? t : 0;
+}
+/* 住所が半角で入っているか。全角の英数字が混じっていれば 0。
+   住所を半角にそろえたのは新しい版なので、これが 1 の方が新しい保存＝残したい方。 */
+function dupHalfWidthAddr(row){
+  const a = String((row && row.data && row.data.chosho_cust_addr) || "").trim();
+  if(!a) return 0;
+  try { return (toHalfWidthAn(a) === a) ? 1 : 0; } catch(_){ return 0; }
+}
+/* なぜこのファイルを残すのか、ひとことで。判断の根拠が見えないと選べないため。 */
+/* 残すファイルの住所がまだ全角か（＝あとで書き戻さないとループのもとになる） */
+function dupNeedsHan(row){
+  const a = String((row && row.data && row.data.chosho_cust_addr) || "").trim();
+  return !!a && !dupHalfWidthAddr(row);
+}
+function dupWhyKeep(it, others){
+  const why = [];
+  const maxPh = Math.max.apply(null, others.map(x => x._photoCount || 0).concat([0]));
+  if((it._photoCount || 0) > 0 && (it._photoCount || 0) >= maxPh) why.push("写真" + it._photoCount + "枚");
+  if(dupHalfWidthAddr(it) && others.some(x => x !== it && !dupHalfWidthAddr(x))) why.push("住所が半角");
+  const maxSz = Math.max.apply(null, others.map(x => x._size || 0).concat([0]));
+  if((it._size || 0) >= maxSz && others.some(x => x !== it && (x._size || 0) < (it._size || 0))) why.push("中身が多い");
+  const maxWhen = Math.max.apply(null, others.map(x => dupWhenMs(x) || 0).concat([0]));
+  if(dupWhenMs(it) >= maxWhen && others.some(x => x !== it && dupWhenMs(x) < dupWhenMs(it))) why.push("新しい");
+  return why.length ? why.join("・") : "ほかと同じ内容";
 }
 function dupSizeLabel(n){
   if(!isFinite(n) || n <= 0) return "0 B（空）";
@@ -14116,14 +14155,25 @@ function dupFindGroups(rows){
     if(g.items.length < 2 && g.items[0]._name === (g.no + ".json")) return;
     // 残す既定の決め方。いちばん失いたくないのは写真なので「中身の多さ」を先に見る。
     //   ① 中身のあるもの（0バイトは選ばない）
-    //   ② 写真の枚数が多い方
-    //   ③ ファイルが大きい方
-    //   ④ 中の更新日時が新しい方 → ⑤ ファイルの更新日時が新しい方
-    // 日時を先に見ると、保存に失敗した小さいファイルの方が新しいことがあり、
+    //   ② 写真が減らないもの（写真は戻せないので、ここだけは何より優先）
+    //   ③ 住所が半角の方
+    //   ④ 写真の枚数が多い方 → ⑤ ファイルが大きい方
+    //   ⑥ 中の更新日時が新しい方 → ⑦ ファイルの更新日時が新しい方
+    //
+    // 日時を先に見ない理由：保存に失敗した小さいファイルの方が新しいことがあり、
     // 写真の入った大きいファイルを消してしまう（Androidは保存のたび別ファイルを作るため
     // 「いちばん新しい＝いちばん中身がある」とは限らない）。
+    //
+    // 住所の半角を写真の次に置く理由：ここで古い（住所が全角の）ファイルを残すと、
+    // メインが画面上で半角にそろえる → 現場へ渡すと中身が違うので全戸「未保存」になる →
+    // 現場で全部保存し直す → また別ファイルが増えて重複…というループに入る。
+    // 写真さえ減らなければ半角側を残すのが、このループを断つ唯一の手。
+    const maxPh = g.items.reduce((m, x) => Math.max(m, x._photoCount || 0), 0);
+    const phLoss = x => (maxPh > 0 && (x._photoCount || 0) < maxPh) ? 1 : 0;
     g.items.sort((a, b) =>
          (((b._size > 0) ? 1 : 0) - ((a._size > 0) ? 1 : 0))
+      || (phLoss(a) - phLoss(b))
+      || (dupHalfWidthAddr(b) - dupHalfWidthAddr(a))
       || ((b._photoCount || 0) - (a._photoCount || 0))
       || ((b._size || 0) - (a._size || 0))
       || (dupWhenMs(b) - dupWhenMs(a))
@@ -14155,30 +14205,41 @@ function dupDialog(groups){
           ? ('<span style="color:#1b5e20;">うち <b>' + renameOnly + '</b> 組は、ファイルが1つだけで名前が <b>管理番号_長い数字.json</b> になっているものです。'
              + '（スマホの保存でこの名前になります）中身はそのままに <b>管理番号.json</b> へ付け直します。</span><br>')
           : "")
-      + '<b>残す</b>を選んだファイルの中身を <b>管理番号.json</b> という名前で書き直し、同じ組の他のファイルは削除します。'
+      + '<b>残す方はこちらで選んであります。</b>そのまま下の「この内容で整理する」を押せば済みます。<br>'
+      + '残す方の中身を <b>管理番号.json</b> という名前で書き直し、同じ組の他のファイルは削除します。'
       + '<span style="color:#c62828;font-weight:600;">削除したファイルは元に戻せません。</span><br>'
-      + '<span style="color:#555;">※ 既定では<b>中身がいちばん多いもの</b>を選んでいます'
-      + '（写真の枚数 → ファイルの大きさ → 中の更新日時 の順に見ます）。'
-      + '<b>いちばん新しいものではありません。</b>スマホの保存は失敗すると小さいファイル・空のファイルが'
+      + '<span style="color:#555;">※ 選び方は <b>写真の多い方 → 住所が半角の方 → 中身の多い方 → 新しい方</b> の順です。'
+      + '<b>いちばん新しいものとは限りません。</b>スマホの保存は失敗すると小さいファイル・空のファイルが'
       + 'あとから作られるため、新しい方を残すと写真の入ったファイルを消してしまうことがあるためです。'
-      + '大きさはバイト数も添えてあるので、近い大きさでも見分けられます。</span></div>';
+      + '中身を自分で見て選び直したいときは、各行を開いてください。</span></div>';
     groups.forEach((g, gi) => {
-      html += '<div class="dup-grp"><div class="dup-grp-h">📄 ' + escapeHtml(g.no)
+      const keep = g.items.filter(x => x._name === g.pick)[0] || g.items[0];
+      const why = dupWhyKeep(keep, g.items);
+      // ふだんは1行だけ見せる。中身を見比べたいときだけ開く（組数が多いと選びようがないため）
+      html += '<details class="dup-grp"><summary class="dup-grp-h">📄 ' + escapeHtml(g.no)
         + (g.dirPath ? ' <span style="color:#777;font-weight:400;">（' + escapeHtml(g.dirPath) + '）</span>' : '')
-        + ' → <b>' + escapeHtml(g.canon) + '</b> にまとめます</div>'
+        + ' → <b>' + escapeHtml(g.canon) + '</b>'
+        + '<span class="dup-keep-note">残す: ' + escapeHtml(keep._name)
+        + ' <span class="dup-why">' + escapeHtml(why) + '</span>'
+        + (dupNeedsHan(keep) ? '<span class="dup-han-warn" title="このファイルは住所が全角のままです。整理のあと「💾 戸別ファイルへ反映」を1度押すと半角になり、現場入力で全戸が「未保存」になるのを防げます。">住所が全角</span>' : '')
+        + '</span></summary>'
         + '<table class="dup-tbl"><tr><th style="width:52px;">残す</th><th>ファイル名</th>'
-        + '<th>中の更新</th><th>ファイルの更新日時</th><th>サイズ</th><th>写真</th></tr>';
+        + '<th>住所</th><th>中の更新</th><th>ファイルの更新日時</th><th>サイズ</th><th>写真</th></tr>';
       g.items.forEach(it => {
         const on = it._name === g.pick;
+        const han = String((it.data && it.data.chosho_cust_addr) || "").trim()
+          ? (dupHalfWidthAddr(it) ? '<span style="color:#1b5e20;">半角</span>' : '<span style="color:#8a6d1f;">全角</span>')
+          : "―";
         html += '<tr' + (on ? ' class="dup-keep"' : '') + '>'
           + '<td style="text-align:center;"><input type="radio" name="dup' + gi + '" value="' + escapeHtml(it._name) + '"' + (on ? ' checked' : '') + '></td>'
           + '<td>' + escapeHtml(it._name) + '</td>'
+          + '<td>' + han + '</td>'
           + '<td>' + escapeHtml(dupWhen(dupWhenMs(it)) || "―") + '</td>'
           + '<td>' + escapeHtml(dupWhen(it.lastModified) || "―") + '</td>'
           + '<td>' + escapeHtml(dupSizeLabel(it._size)) + '</td>'
           + '<td>' + (it._photoCount > 0 ? (it._photoCount + "枚") : "なし") + '</td></tr>';
       });
-      html += '</table></div>';
+      html += '</table></details>';
     });
     body.innerHTML = html;
     body.querySelectorAll('input[type=radio]').forEach(r => r.addEventListener("change", () => {
@@ -14247,10 +14308,20 @@ async function dupCleanupFlow(rows, quietIfNone){
   const picks = await dupDialog(groups);
   if(!picks) return null;
   const res = await dupApply(groups, picks);
+  // 残した中に住所が全角のものがあれば、そのままにすると
+  // 「現場で全戸が未保存になる → 全部保存し直す → また重複」のループになる。
+  const hanLeft = groups.filter((g, i) => {
+    const nm = picks[i] || g.pick;
+    const keep = g.items.filter(x => x._name === nm)[0];
+    return keep && dupNeedsHan(keep);
+  }).length;
   alert("🧹 重複ファイルの整理が終わりました。\n\n"
     + res.done + " 組をまとめました（余分な " + res.dropped + " ファイルが減りました）\n"
     + "うち名前を付け直した: " + res.renamed + " 件"
     + (res.fails.length ? ("\n\n⚠ できなかったもの:\n" + res.fails.join("\n")) : "")
+    + (hanLeft ? ("\n\n⚠ 残したファイルのうち " + hanLeft + " 件は住所が全角のままです。\n"
+        + "受付台帳の「💾 戸別ファイルへ反映」を1度押してください。\n"
+        + "そのままだと、現場入力で全戸が「未保存」に見えます。") : "")
     + "\n\n一覧を読み直します。");
   return res.removed || [];      // 自分が消したファイル＝読み直しで「消えた」と数えない
 }
@@ -14448,7 +14519,7 @@ async function junkCleanupFlow(badList, rows, quietIfNone){
 }
 async function junkCleanupButton(){
   if(!_listDirHandle){
-    alert("先に「📁 フォルダ選択(再帰)」でフォルダを読み込んでください。\n（掃除には、そのフォルダを掴んでいる必要があります）");
+    alert("先に「📁 フォルダ」でフォルダを読み込んでください。\n（掃除には、そのフォルダを掴んでいる必要があります）");
     return;
   }
   const status = document.getElementById("list-status");
@@ -14462,7 +14533,7 @@ async function junkCleanupButton(){
 }
 async function dupCleanupButton(){
   if(!_listDirHandle){
-    alert("先に「📁 フォルダ選択(再帰)」でフォルダを読み込んでください。\n（重複の整理には、そのフォルダを掴んでいる必要があります）");
+    alert("先に「📁 フォルダ」でフォルダを読み込んでください。\n（重複の整理には、そのフォルダを掴んでいる必要があります）");
     return;
   }
   const gone = await dupCleanupFlow(_listRows, false);
@@ -14497,6 +14568,7 @@ const LGWB_FIELDS = [
   { k:"chosho_cust_tel",   label:"電話" },
   { k:"chosho_date",       label:"工事日程予定" },
   // 打合せ予定は台帳が持ち主だが、現場でも決められるよう戸別ファイルへ入れて往復させる
+  { k:"chosho_time",       label:"工事時刻",   lg:"time" },
   { k:"chosho_meet_at",    label:"打合せ予定", lg:"meetAt" },
   { k:"chosho_status",     label:"状態" },
   { k:"chosho_note",       label:"備考" },
@@ -14505,9 +14577,10 @@ const LGWB_FIELDS = [
   { k:"consent_received",  label:"同意書", bool:true, lg:"consent" },
   { k:"compdoc_received",  label:"完了書", bool:true, lg:"compdoc" }
 ];
-/* 戸別ファイルに置き場所が無く、書き戻せない台帳の欄（物件ファイルとこの端末に保存されます）。
-   「書き戻すものはありません」と出たときに、何が対象外なのかを伝えるために使う。 */
-const LGWB_LEDGER_ONLY = "受付時刻";
+/* 戸別ファイルに置き場所が無く、書き戻せない台帳の欄。
+   工事時刻（chosho_time）と打合せ予定（chosho_meet_at）を戸別ファイルへ入れたので、
+   いまは対象外の欄は無い。空文字なら案内文にも出さない。 */
+const LGWB_LEDGER_ONLY = "";
 const LGWB_STATUS = { provisional:"仮受付", in_progress:"受付済", completed:"完了" };
 function lgwbField(k){ for(const f of LGWB_FIELDS){ if(f.k === k) return f; } return null; }
 function lgwbShow(k, v){
@@ -14573,11 +14646,11 @@ async function lgwbApply(list){
 }
 async function lgwbButton(){
   if(!_listRows || !_listRows.length){
-    alert("先に「📁 フォルダ選択(再帰)」で戸別ファイルのフォルダを読み込んでください。");
+    alert("先に「📁 フォルダ」で戸別ファイルのフォルダを読み込んでください。");
     return;
   }
   if(!_listRows.some(r => r && r._dir && r._name)){
-    alert("「📁 フォルダ選択(再帰)」で読み込んだ一覧でのみ使えます。\n"
+    alert("「📁 フォルダ」で読み込んだ一覧でのみ使えます。\n"
       + "（ファイルへ書き戻すには、そのフォルダを掴んでいる必要があります）");
     return;
   }
@@ -14586,7 +14659,7 @@ async function lgwbButton(){
              + (unreadable.length ? ("\n※ 読めなかったファイル " + unreadable.length + " 件は飛ばします") : "");
   if(!list.length){
     alert("受付台帳の内容と、戸別ファイルの中身は一致しています。\n書き戻すものはありません。\n\n"
-      + "※ 台帳の「" + LGWB_LEDGER_ONLY + "」は戸別ファイルに置き場所が無いため、この操作の対象外です。\n"
+      + (LGWB_LEDGER_ONLY ? ("※ 台帳の「" + LGWB_LEDGER_ONLY + "」は戸別ファイルに置き場所が無いため、この操作の対象外です。\n") : "")
       + "　 これらは物件ファイルとこの端末に保存されているので、書き戻さなくても消えません。" + note);
     return;
   }
@@ -14596,7 +14669,7 @@ async function lgwbButton(){
       + lines.join("\n") + (list.length > 12 ? ("\n・ほか " + (list.length - 12) + " 件") : "")
       + "\n\n書き込むのは 名前・住所・電話・工事日程予定・打合せ予定・状態・備考・保留・ビラ・同意書・完了書 だけです。\n"
       + "写真・図面・積算・測定値には触りません。\n"
-      + "（「" + LGWB_LEDGER_ONLY + "」は戸別ファイルに置き場所が無いため対象外です）" + note)) return;
+      + (LGWB_LEDGER_ONLY ? ("（「" + LGWB_LEDGER_ONLY + "」は戸別ファイルに置き場所が無いため対象外です）") : "") + note)) return;
   const res = await lgwbApply(list);
   alert("📤 台帳の内容を書き戻しました。\n\n" + res.ok + " 件のファイルを更新しました"
     + (res.fails.length ? ("\n\n⚠ できなかったもの:\n" + res.fails.join("\n")) : "")
@@ -14631,13 +14704,26 @@ function resolveListLoadWithProject(){
 
 async function listSelectFolder(){
   if(!window.showDirectoryPicker){
-    alert("このブラウザはフォルダ選択に対応していません。\n「ファイル選択」ボタンでファイルを複数選択してください。");
+    alert("このブラウザはフォルダをまとめて選ぶ操作に対応していません。\n「📄 ファイル」ボタンでファイルを複数選択してください。");
+    return;
+  }
+  /* ★順番に意味がある★
+     フォルダを選ぶ画面は「ボタンを押した直後」しか開けない決まりになっている。
+     確認（confirm）を先に出すと、その時点で「押した直後」の扱いが切れてしまい、
+     あとから開こうとしても弾かれる（物件を開いているときだけ失敗する＝
+     「何度かやると偶然できる」ように見える）。だからフォルダ選びを先に済ませる。 */
+  let dirHandle;
+  try {
+    dirHandle = await window.showDirectoryPicker();
+  } catch(err){
+    if(err && err.name === "AbortError") return;    // 自分で閉じた＝何もしない
+    alert("フォルダを選べませんでした。\n\nもう一度「📁 フォルダ」を押してください。\n"
+      + "（それでも開かないときは Chrome / Edge でお試しください）\n\n" + (err && err.message ? err.message : err));
     return;
   }
   const loadMode = resolveListLoadWithProject(); // 物件を開いたまま＝取り込み/切り離し/中止を選択
   if(loadMode === "cancel") return;
   try {
-    const dirHandle = await window.showDirectoryPicker();
     await listDirRemember(dirHandle);    // 次からは選び直さずに読み込む（重複整理にも使う）
     const rows = [];
     const stats = { dirs: 0, files: 0, skipped: 0, errDirs: [], skippedPaths: [] };
@@ -14761,7 +14847,7 @@ async function listSelectFolder(){
     }
   } catch(err){
     if(err && err.name === "AbortError") return;
-    alert("フォルダ選択エラー: " + (err.message || err));
+    alert("フォルダの読み込みでエラー: " + (err.message || err));
   }
 }
 
@@ -14801,7 +14887,7 @@ function listSelectFiles(){
    ============================================================ */
 function openBulkReencModal(){
   if(!_listRows || _listRows.length === 0){
-    alert("先に 📁 フォルダ選択 または 📄 ファイル選択 でファイルを読み込んでください");
+    alert("先に 📁 フォルダ または 📄 ファイル でファイルを読み込んでください");
     return;
   }
   document.getElementById("bulk-target").value = "encrypted";
@@ -15021,7 +15107,7 @@ async function applyBulkReenc(){
     + "  失敗: " + r.ng + " 件\n"
     + "  スキップ: " + r.skip + " 件\n"
     + (r.photoSkip ? "  写真未復元のため保全スキップ: " + r.photoSkip + " 件（元の.hybから開き直してください）\n" : "")
-    + "\n再読込するにはもう一度 📁 フォルダ選択 を実行してください");
+    + "\n再読込するにはもう一度 📁 フォルダ を実行してください");
   closeBulkReencModal();
 }
 
@@ -15031,7 +15117,7 @@ async function applyBulkReenc(){
    復号はセッション記憶中パスワードで自動試行、足りない分は個別入力を求める。 */
 async function bulkConvertToPlain(){
   if(!_listRows || _listRows.length === 0){
-    alert("先に 📁 フォルダ選択 または 📄 ファイル選択 でファイルを読み込んでください");
+    alert("先に 📁 フォルダ または 📄 ファイル でファイルを読み込んでください");
     return;
   }
   const targets = _listRows.filter(r => r.fileType === "hybrid" || r.fileType === "full");
@@ -15066,7 +15152,7 @@ async function bulkConvertToPlain(){
     + "  失敗: " + r.ng + " 件\n"
     + "  スキップ: " + r.skip + " 件\n"
     + (r.photoSkip ? "  写真未復元のため保全スキップ: " + r.photoSkip + " 件（元の.hybから開き直してください）\n" : "")
-    + "\n再読込するにはもう一度 📁 フォルダ選択 を実行してください");
+    + "\n再読込するにはもう一度 📁 フォルダ を実行してください");
 }
 
 /* 一覧画面: ハイブリッド(.hyb) / 全暗号化(.enc) ファイルを一括復号
@@ -15377,7 +15463,7 @@ function renderListTable(){
     tbl.innerHTML = ""; custom.innerHTML = "";
     tbl.style.display = ""; custom.style.display = "none";
     status.style.display = "";
-    status.textContent = "📁 フォルダ選択 または 📄 ファイル選択 ボタンで保存済JSONを読み込んでください";
+    status.textContent = "📁 フォルダ または 📄 ファイル ボタンで保存済JSONを読み込んでください";
     return;
   }
   if(rows.length === 0 && _listRows.length > 0 && !zeroOk){
@@ -17174,7 +17260,7 @@ function renderSubMatrixPrint(opts, data){
 function doSubFullPrint(){
   const statusEl = document.getElementById("sfp-status");
   const data = buildSubFullPrintData();
-  if(data.length === 0){ if(statusEl) statusEl.textContent = "出力対象の戸別がありません（先に 📁フォルダ選択／📄ファイル選択 で読み込んでください）"; return; }
+  if(data.length === 0){ if(statusEl) statusEl.textContent = "出力対象の戸別がありません（先に 📁 フォルダ／📄 ファイル で読み込んでください）"; return; }
   const layout = document.getElementById("sfp-layout").value || "matrix";
   const paper = (document.querySelector('input[name="sfp-paper"]:checked') || {}).value || "A4";
   const orient = (document.querySelector('input[name="sfp-orient"]:checked') || {}).value || "portrait";
@@ -17239,7 +17325,7 @@ function doSubFullPrint(){
    ============================================================ */
 const CASE_KEEP_ON_REVERT = [
   "chosho_mgmt_no", "chosho_cust_name", "chosho_cust_addr", "chosho_cust_tel",
-  "chosho_date", "chosho_status", "chosho_note",
+  "chosho_date", "chosho_time", "chosho_status", "chosho_note",
   "chosho_photos", "chosho_photo_count", "chosho_photos_thumb", "_photosStripped",
   "asbestos",
   // 受付台帳の記入（保留・ビラ・同意書・完了書）と下見は残す。
@@ -17615,7 +17701,7 @@ function printWithFilename(filename, callerCleanup){
 /* PDF出力（印刷ダイアログ）- ファイル名はブラウザ既定のまま */
 function exportListToPdf(){
   if(_listRows.length === 0){
-    alert("先にフォルダ選択／ファイル選択で戸別を読み込んでください");
+    alert("先に「📁 フォルダ」／「📄 ファイル」で戸別を読み込んでください");
     return;
   }
   document.body.classList.add("list-print-mode");
@@ -17839,7 +17925,7 @@ async function exportPhotosToFolder(){
   const msg = "📁 管理番号フォルダ『" + mgmtNo + "』へ写真を書き出しました。\n\n"
     + "・書き出し: " + r.written + " 枚（無劣化・原本のまま）\n"
     + (r.failed ? ("・失敗: " + r.failed + " 枚\n") : "")
-    + "\n次回は前回と同じ場所からフォルダ選択が開きます。";
+    + "\n次回は前回と同じ場所から「📁 フォルダ」でフォルダを選ぶ画面が開きます。";
   alert(msg);
   uiToast("写真 " + r.written + " 枚を『" + mgmtNo + "』へ書き出しました");
 }
@@ -19422,13 +19508,13 @@ function isCaseOnHold(mgmtNo){
 }
 function setLedger(tk, patch){
   const next = Object.assign({ time: "", meetAt: "", flyer: false, consent: false, compdoc: false, hold: false, note: "", noteSrc: "",
-                               meetSrc: "",
+                               meetSrc: "", timeSrc: "",
                                flyerSrc: false, consentSrc: false, compdocSrc: false, holdSrc: false }, _ledgerMap[tk] || {}, patch);
   let removed = false;
   // 既定値だけのエントリは持たない（肥大化防止）。※Src は「前回ファイルから採り込んだ値」の控えで、
   // これを落とすと現場と台帳のどちらが新しいか分からなくなるので、空判定に必ず含めること。
   if(!next.time && !next.meetAt && !next.flyer && !next.consent && !next.compdoc && !next.hold && !next.note && !next.noteSrc
-     && !next.meetSrc
+     && !next.meetSrc && !next.timeSrc
      && !next.flyerSrc && !next.consentSrc && !next.compdocSrc && !next.holdSrc){ delete _ledgerMap[tk]; removed = true; }
   else _ledgerMap[tk] = next;
   saveLedgerMap();
@@ -19474,6 +19560,13 @@ function meetResolveRow(row){
   if(!("chosho_meet_at" in row.data)) return;
   lgTextResolve(row, "chosho_meet_at", "meetAt", "meetSrc");
 }
+/* 工事の時刻（受付台帳の「工事日程予定」の時刻の側）。打合せ予定と同じ突き合わせ方。
+   欄そのものが無い古いファイルは触らない＝台帳の時刻を消さない。 */
+function timeResolveRow(row){
+  if(!row || !row.data) return;
+  if(!("chosho_time" in row.data)) return;
+  lgTextResolve(row, "chosho_time", "time", "timeSrc");
+}
 /* 読み込んだ戸別の 名前・住所・電話 も、受付台帳と同じく英数字を半角にそろえる。
    直すのは画面に出す内容（この端末が持っている分）だけで、フォルダの戸別ファイルは
    そのまま。ファイルの中身まで半角にしたいときは「💾 戸別ファイルへ反映」を押すと、
@@ -19500,6 +19593,7 @@ function noteResolveRows(rows){
     try { lgNormalizeRow(r); } catch(_){}   // 英数字を半角へ（受付台帳と同じ規則）
     try { noteResolveRow(r); } catch(_){}
     try { meetResolveRow(r); } catch(_){}   // 打合せ予定：現場で決めた分を台帳へ取り込む
+    try { timeResolveRow(r); } catch(_){}   // 工事時刻：同上
     try { flowResolveRow(r); } catch(_){}   // 工程：現場入力の下見→ビラ→工事→完了を台帳へ取り込む
   });
   return rows;
@@ -22177,7 +22271,7 @@ function renderListLedgerMode(rows, container){
     +   '<button id="lg-export-genba" title="受付台帳だけを1ファイルに書き出します（地図は入りません）。スマホの現場入力アプリの「台帳」と、受付台帳ソフトの「📥 台帳を取り込み」の、どちらでもそのまま読めます。左の「📥 受付台帳」で戻せます。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📤 受付台帳</button>'
     +   '<button id="lg-export-html" title="いまの受付台帳を、中身の入った1枚のHTMLにして書き出します。渡した先はブラウザで開くだけで台帳がそのまま出るので、受付台帳ソフトを別に渡さなくて済みます。向こうで直した分は「📤 台帳を書き出し」でファイルにしてもらい、左の「📥 受付台帳」で戻せます。台帳ソフトはこのメインの中に入っているので、ファイルを選ぶ必要はありません（Excel書き出しと同じで、押すだけです）。名前・住所・電話が入るので、渡す相手にご注意ください。" style="background:#00838f;color:#fff;border:1px solid #006064;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">🌐 HTML</button>'
     +   '<button id="lg-xlsx-export" title="いまの受付台帳を Excel（.xlsx）へ書き出します。Excelで直したあと、左の「📗 Excel」でそのまま読み戻せます。" style="background:#1b7a3d;color:#fff;border:1px solid #145c2e;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📘 Excel</button>'
-    +   '<button id="lg-writeback" title="この台帳で直した 名前・住所・電話・工事日程予定・状態・備考・保留・ビラ・同意書・完了書 を、フォルダの戸別ファイルへまとめて書き込みます。台帳のセルで直しただけでは戸別ファイルは変わらないため、フォルダを読み直すと元に戻ってしまいます（工事予定日を消しても消えない等）。戸別を1件ずつ開いて保存しなくて済みます。写真・図面・積算・測定値には触りません。「打合せ予定・受付時刻」は戸別ファイルに置き場所が無いため対象外です（物件ファイルに保存されます）。「📁 フォルダ選択(再帰)」で読み込んだ後に使えます。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">💾 戸別ファイルへ反映</button>'
+    +   '<button id="lg-writeback" title="この台帳で直した 名前・住所・電話・工事日程予定・状態・備考・保留・ビラ・同意書・完了書 を、フォルダの戸別ファイルへまとめて書き込みます。台帳のセルで直しただけでは戸別ファイルは変わらないため、フォルダを読み直すと元に戻ってしまいます（工事予定日を消しても消えない等）。戸別を1件ずつ開いて保存しなくて済みます。写真・図面・積算・測定値には触りません。「打合せ予定・受付時刻」は戸別ファイルに置き場所が無いため対象外です（物件ファイルに保存されます）。「📁 フォルダ」で読み込んだ後に使えます。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">💾 戸別ファイルへ反映</button>'
     + '</div>'
     + '<span class="lg-count">全 ' + rows.length + ' 件（仮 ' + prov + ' ／ 完了 ' + done + ' ／ ビラ済 ' + flyered + (held ? ' ／ 保留 ' + held : '') + '）' + (shown.length !== rows.length ? ' → 表示 ' + shown.length + ' 件' : '') + '</span>'
     + '<div class="lgc-note">セルをクリックすると直接編集できます。工事日程・打合せ予定は 📅 予定カレンダーに、名前・住所などは図面にそのまま反映されます。</div>'
@@ -22944,7 +23038,7 @@ const LGIMP_FIELDS = [
   { f: "tel",     label: "電話番号", kind: "case", key: "chosho_cust_tel" },
   { f: "date",    label: "工事日程", kind: "case", key: "chosho_date" },
   { f: "status",  label: "状態",     kind: "case", key: "chosho_status", edit: "done", pick: "status" },
-  { f: "time",    label: "受付時刻", kind: "lg",   key: "time" },
+  { f: "time",    label: "工事時刻", kind: "lg",   key: "time" },
   { f: "meet",    label: "打合せ",   kind: "lg",   key: "meetAt" },
   { f: "flyer",   label: "ビラ",     kind: "lg",   key: "flyer",   bool: true },
   { f: "hold",    label: "保留",     kind: "lg",   key: "hold",    bool: true },
@@ -23319,7 +23413,7 @@ const LGX_ALIAS = {
   tel:["電話番号","電話","TEL","連絡先"],
   status:["状態","ステータス","受付状態"],
   date:["工事日程予定","工事日","工事日程","施工日"],
-  time:["受付時刻","受付時間"],
+  time:["工事時刻","工事時間","受付時刻","受付時間"],
   meet:["打合せ予定","打合せ","打ち合わせ予定","打ち合わせ"],
   flyer:["ビラ","ビラ配布","チラシ"],
   done:["完了","完了済"],
@@ -25612,7 +25706,7 @@ function lgMissingDialog(items, info){
       + (many
           ? 'まとまって見当たらないので、<b>フォルダを整理して動かした</b>のかもしれません。'
             + '別の場所へ移しただけなら、いったん<b>「あとで決める」</b>で閉じて、'
-            + '<b>「📁 フォルダ選択(再帰)」でそのフォルダを選び直す</b>のがいちばん確実です。'
+            + '<b>「📁 フォルダ」でそのフォルダを選び直す</b>のがいちばん確実です。'
           : '他のファイルは読めているので、この戸別だけ<b>消された・別の場所へ移された</b>のかもしれません。')
       + '</div>'
       + '<div class="lgmiss-lead2">「名前だけ残す」を選ぶと、受付台帳の記入（打合せ・ビラ・備考など）はそのまま残ります。'
@@ -25707,7 +25801,7 @@ async function listMissingFlow(newRows, opts){
   if(baseN && (!(stats.files > 0) || !aliveN)){
     out.keepAll = true;
     out.warn = "⚠ このフォルダから戸別を読み取れませんでした（フォルダごと移動・名前変更・別のドライブになった等）。"
-             + "一覧はそのまま残しています。「📁 フォルダ選択(再帰)」で場所を選び直してください。";
+             + "一覧はそのまま残しています。「📁 フォルダ」で場所を選び直してください。";
     return out;
   }
   if(!baseN){ listCensusSave(root, newRows, null); return out; }          // 初回
@@ -30698,6 +30792,15 @@ window.addEventListener("DOMContentLoaded", init);
   function bldOnHold(mgmtNo){
     try { return !!(typeof isCaseOnHold === "function" && isCaseOnHold(mgmtNo)); } catch(_){ return false; }
   }
+  /* 受付台帳で「ビラ」に○が付いている戸別か。
+     ビラは事務所（受付台帳）でも現場入力でも付けるので、戸別ファイル側の flyer_done と
+     どちらかに付いていれば印を出す（読み合わせは flowResolveRow が済ませている）。
+     台帳は物件に入っているので、フォルダを読み込んでいなくてもこれだけで印が出せる。 */
+  function bldLedgerFlyer(mgmtNo){
+    var mg = String(mgmtNo == null ? "" : mgmtNo).trim();
+    if(!mg) return false;
+    try { return !!(typeof getLedger === "function" && getLedger("m:" + mg).flyer); } catch(_){ return false; }
+  }
   /* 同じ色のまま、濃くする（管理番号の文字を読みやすくする用）。
      色分けの意味は変えたくないので、色相はそのままに明るさだけ落とす。 */
   function mapDarken(hex, k){
@@ -30717,9 +30820,15 @@ window.addEventListener("DOMContentLoaded", init);
   var MAP_MARK_DEFS = [
     { key: "hold",   ch: "保", color: "#e65100", id: "map-mark-hold",   def: true  },
     { key: "surv",   ch: "下", color: "#00838f", id: "map-mark-surv",   def: true  },
+    { key: "flyer",  ch: "ビ", color: "#7b1fa2", id: "map-mark-flyer",  def: true  },
     { key: "done",   ch: "完", color: "#2e7d32", id: "map-mark-done",   def: true  },
     { key: "undone", ch: "未", color: "#1565c0", id: "map-mark-undone", def: false },
   ];
+  /* 印は key で引く（並びを変えても壊れないように） */
+  function bldMarkDef(key){
+    for(var i = 0; i < MAP_MARK_DEFS.length; i++){ if(MAP_MARK_DEFS[i].key === key) return MAP_MARK_DEFS[i]; }
+    return null;
+  }
   var _bldMarkOn = {};
   MAP_MARK_DEFS.forEach(function(m){
     _bldMarkOn[m.key] = m.def;
@@ -30733,15 +30842,21 @@ window.addEventListener("DOMContentLoaded", init);
     var out = [];
     var mg = String(mgmtNo || "").trim();
     if(!mg) return out;
-    if(_bldMarkOn.hold && bldOnHold(mg)) out.push(MAP_MARK_DEFS[0]);
-    if(!_bldMarkOn.surv && !_bldMarkOn.done && !_bldMarkOn.undone) return out;
+    if(_bldMarkOn.hold && bldOnHold(mg)) out.push(bldMarkDef("hold"));
+    // ビラは受付台帳にも○が付くので、フォルダを読み込んでいなくても印を出せる
+    var lgFlyer = _bldMarkOn.flyer && bldLedgerFlyer(mg);
+    if(!_bldMarkOn.surv && !_bldMarkOn.done && !_bldMarkOn.undone && !_bldMarkOn.flyer){ return out; }
     var row = idx ? idx.get(mg) : findRowByMgmtNo(mg);
     var d = (row && row.data) || null;
-    if(!d) return out;
-    if(_bldMarkOn.surv && d.survey_done) out.push(MAP_MARK_DEFS[1]);
+    if(!d){
+      if(lgFlyer) out.push(bldMarkDef("flyer"));   // 台帳だけで分かるぶんは出す
+      return out;
+    }
+    if(_bldMarkOn.surv && d.survey_done) out.push(bldMarkDef("surv"));
+    if(_bldMarkOn.flyer && (lgFlyer || d.flyer_done)) out.push(bldMarkDef("flyer"));
     var st = String(d.chosho_status || "");
-    if(_bldMarkOn.done && st === "completed") out.push(MAP_MARK_DEFS[2]);
-    if(_bldMarkOn.undone && st === "in_progress") out.push(MAP_MARK_DEFS[3]);   // 仮受付は工事前なので付けない
+    if(_bldMarkOn.done && st === "completed") out.push(bldMarkDef("done"));
+    if(_bldMarkOn.undone && st === "in_progress") out.push(bldMarkDef("undone"));   // 仮受付は工事前なので付けない
     return out;
   }
 
@@ -30751,7 +30866,7 @@ window.addEventListener("DOMContentLoaded", init);
     var minNo = bldMinLabelWorld(MAP_MIN_NO_MM);   // 管理番号の最低文字サイズ（印刷実寸から算出）
     _bldMinLabLast = minNo;
     // 台帳の総当たりを避ける（描画1回につき1回だけ作る）。番地にも状態の印にも使う。
-    var needIdx = _bldShowBanchi || _bldMarkOn.surv || _bldMarkOn.done || _bldMarkOn.undone;
+    var needIdx = _bldShowBanchi || _bldMarkOn.surv || _bldMarkOn.flyer || _bldMarkOn.done || _bldMarkOn.undone;
     var rowIdx = needIdx ? bldRowIndex() : null;
     g.innerHTML = (L.objects || []).map(function(o){
       var bc = bldColors(o);
@@ -30765,7 +30880,7 @@ window.addEventListener("DOMContentLoaded", init);
       // 受付台帳で「保留」にした戸別は、その番号の右肩に橙色の「保」マークを添える（番号が無い場合は中心）
       var lab = "";
       var l3 = linked ? mgmtLast3(o.linkMgmtNo) : "";
-      var marks = linked ? bldMarksOf(o.linkMgmtNo, rowIdx) : [];            // 保・下・完・未
+      var marks = linked ? bldMarksOf(o.linkMgmtNo, rowIdx) : [];            // 保・下・ビ・完・未
       var bt = (linked && _bldShowBanchi) ? bldBanchiText(o, rowIdx) : "";   // 台帳引きは建物1つにつき1回だけ
       if(l3 || marks.length || bt){
         var minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
