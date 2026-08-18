@@ -3206,6 +3206,9 @@
   }
   table.ledger-table .lg-open-btns button:hover { background: #eef2f6; }
   .lg-note-input { color: #5d4037; }
+  /* 同じ管理番号の戸別が2つ以上ある行の備考。どの行から書いても同じ内容になるので印を出す。 */
+  td.lg-note-dup { background: #fff8e1; }
+  td.lg-note-dup::before { content: "⚠"; color: #b05a00; font-size: 10px; margin-right: 2px; }
   /* 📥 受付台帳の差分取り込み */
   #lgimp-ov { position: fixed; inset: 0; background: rgba(20,30,45,.55); z-index: 9000; display: flex; align-items: center; justify-content: center; }
   #lgimp-ov .lgimp-box { background: #fff; border-radius: 8px; width: min(1040px, 94vw); max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 8px 30px rgba(0,0,0,.3); }
@@ -5862,7 +5865,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.18g";
+const APP_VERSION = "2026.08.18h";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -14836,6 +14839,27 @@ const LGWB_FIELDS = [
    いまは対象外の欄は無い。空文字なら案内文にも出さない。 */
 const LGWB_LEDGER_ONLY = "";
 const LGWB_STATUS = { provisional:"仮受付", in_progress:"受付済", completed:"完了" };
+/* 受付台帳の控えに、失って困る中身が入っているか（備考・○×・時刻・打合せ）。
+   「◯◯Src」は前回ファイルから採り込んだ控えなので、中身とは数えない。 */
+function lgEntryHasContent(e){
+  if(!e || typeof e !== "object") return false;
+  return Object.keys(e).some(k => {
+    if(/Src$/.test(k)) return false;
+    const v = e[k];
+    if(v === undefined || v === null || v === "" || v === false) return false;
+    return true;
+  });
+}
+/* 受け側の空いている欄だけ、元の内容で埋める（受け側の中身は上書きしない）。 */
+function lgFillEmptyFrom(target, src){
+  if(!target || typeof target !== "object" || !src || typeof src !== "object") return;
+  Object.keys(src).forEach(k => {
+    const cur = target[k];
+    const empty = (cur === undefined || cur === null || cur === "" || cur === false);
+    const has = !(src[k] === undefined || src[k] === null || src[k] === "" || src[k] === false);
+    if(empty && has) target[k] = src[k];
+  });
+}
 function lgwbField(k){ for(const f of LGWB_FIELDS){ if(f.k === k) return f; } return null; }
 /* 受付台帳で直したのに、まだ戸別ファイルへ書いていない行の数。
    名前・住所・電話・工事日・状態は台帳の控え（_ledgerMap）ではなく行そのものを直すので、
@@ -20111,14 +20135,36 @@ function lgNormalizeRow(row){
   });
 }
 function noteResolveRows(rows){
-  (rows || []).forEach(r => {
-    try { lgNormalizeRow(r); } catch(_){}   // 英数字を半角へ（受付台帳と同じ規則）
+  const list = rows || [];
+  list.forEach(r => { try { lgNormalizeRow(r); } catch(_){} });   // 先に英数字を半角へそろえる
+  /* ★同じ管理番号の戸別が2つ以上あるとき（重複ファイル）★
+     受付台帳の控えは管理番号ごとに1つなので、全部の行を突き合わせると
+     あとに並んでいた行の備考で上書きされ、前の行にもその備考が出る
+     （行と中身が食い違う＝備考が他の戸別のものへズレて見える）。
+     いちばん新しい1件だけを突き合わせて、残りは触らない。
+     どちらを残すかは「🧹 重複ファイルの整理」で決める。 */
+  const best = new Map();
+  list.forEach(r => {
+    let k = ""; try { k = subCaseKey(r); } catch(_){}
+    if(!k) return;
+    const cur = best.get(k);
+    if(!cur || lgRowWhenMs(r) > lgRowWhenMs(cur)) best.set(k, r);
+  });
+  list.forEach(r => {
+    let k = ""; try { k = subCaseKey(r); } catch(_){}
+    if(k && best.get(k) !== r) return;     // 同じ番号の古い方は、台帳の控えを書き換えない
     try { noteResolveRow(r); } catch(_){}
     try { meetResolveRow(r); } catch(_){}   // 打合せ予定：現場で決めた分を台帳へ取り込む
     try { timeResolveRow(r); } catch(_){}   // 工事時刻：同上
     try { flowResolveRow(r); } catch(_){}   // 工程：現場入力の下見→ビラ→工事→完了を台帳へ取り込む
   });
-  return rows;
+  return list;
+}
+/* その行の新しさ。ファイルの中の更新日時を第一に見る（コピーで変わる外側の日時より確か）。 */
+function lgRowWhenMs(row){
+  const t = Date.parse(String((row && row.data && row.data.editedAt) || "").trim());
+  if(isFinite(t)) return t;
+  return (row && row.lastModified) || 0;
 }
 
 /* ---------- 工程の突き合わせ（現場入力の「工程」 ＝ 受付台帳の ビラ／同意書／完了書） ----------
@@ -22522,6 +22568,7 @@ function lgWriteCaseField(row, f, v, opts){
   // （全角のままだと検索・並び替え・下三桁の突き合わせ・印刷幅がそろわないため）
   if(f === "mgmt" || f === "name" || f === "addr" || f === "tel") v = toHalfWidthAn(v);
   const oldTk = subCaseKey(row);
+  const oldMgmtValue = (row.data && row.data.chosho_mgmt_no) || "";   // 取り消したときに戻す用
   const writeBoth = (k2, v2) => {
     row.data = Object.assign({}, row.data);
     row.data[k2] = v2;
@@ -22549,8 +22596,28 @@ function lgWriteCaseField(row, f, v, opts){
   if(f === "mgmt"){
     const nk = subCaseKey(row);
     if(nk !== oldTk){
+      /* ★受付台帳の控え（備考・ビラ・保留など）は管理番号でひとまとめにしている★
+         変更先の番号にすでに控えがあると、その内容（＝他の戸別の備考）が
+         そのままこの行の備考になり、いま書いていた備考は消えたように見える。
+         黙って入れ替えず、必ず知らせて、やめられるようにする。 */
+      if(!(opts && opts.quiet) && lgEntryHasContent(_ledgerMap[oldTk]) && lgEntryHasContent(_ledgerMap[nk])){
+        const oldNote = String((_ledgerMap[oldTk] || {}).note || "");
+        const newNote = String((_ledgerMap[nk] || {}).note || "");
+        if(!confirm("管理番号「" + v + "」には、すでに受付台帳の内容があります。\n\n"
+            + "　「" + v + "」の備考： " + (newNote || "（なし）") + "\n"
+            + "　いまの行の備考　： " + (oldNote || "（なし）") + "\n\n"
+            + "受付台帳は管理番号ごとに1つの内容を持つため、番号を変えると\n"
+            + "「" + v + "」側の内容が使われます（空いている欄だけ、いまの内容で埋めます）。\n\n"
+            + "続けますか？\n（キャンセル＝管理番号を元に戻す）")){
+          writeBoth(key, oldMgmtValue);      // 番号を元に戻す＝控えも動かさない
+          return;
+        }
+      }
       [_ledgerMap, _takeoutMap, _reviewMap, _contractorMap].forEach(m => {
-        if(m[oldTk] && !m[nk]){ m[nk] = m[oldTk]; delete m[oldTk]; }
+        if(!m[oldTk]) return;
+        if(!m[nk]){ m[nk] = m[oldTk]; }
+        else lgFillEmptyFrom(m[nk], m[oldTk]);   // ぶつかった分は、空いている欄だけ引き継ぐ
+        delete m[oldTk];
       });
       saveLedgerMap(); saveTakeoutMap(); saveReviewMap(); saveContractorMap();
       // 選択印刷のチェック状態も新キーへ追従（採番後にチェックが無言で外れるのを防ぐ）
@@ -22979,7 +23046,16 @@ function renderListLedgerMode(rows, container){
     html += '<td class="lg-c"><input type="checkbox" data-f="compdoc"' + (lg.compdoc ? " checked" : "") + (enabled ? "" : " disabled") + ' title="完了書 受領／提出済み"></td>';
     // 備考
     const lgNote1 = String(lg.note || "").replace(/\s*\n\s*/g, " ");   // 改行は1行に丸める（全文は吹き出し・印刷欄）
-    html += '<td data-col="note"><input type="text" class="lg-note-input" data-f="note" maxlength="200" value="' + escapeHtml(lgNote1) + '" title="' + escapeHtml(lg.note || "") + '" placeholder=""' + (enabled ? "" : " disabled") + '><span class="lg-note-print">' + escapeHtml(lg.note || "") + '</span></td>';
+    /* 受付台帳の備考は「管理番号ごとに1つ」。同じ管理番号の戸別が2つ以上あると、
+       どの行から書いても同じ内容が出る。黙っていると「他の戸別のものへズレた」ように
+       見えるので、その行の吹き出しでそう伝える。 */
+    const dupNoteN = dupN[toHalfWidthAn(d.chosho_mgmt_no || "").trim()] || 0;
+    const noteTip = (dupNoteN > 1)
+      ? ("⚠ この管理番号の戸別は " + dupNoteN + " 件あります。\n"
+         + "受付台帳の備考は管理番号ごとに1つなので、どの行から書いても同じ内容が出ます。\n"
+         + "「🧹 重複ファイルの整理」でまとめてください。\n\n" + (lg.note || ""))
+      : (lg.note || "");
+    html += '<td data-col="note"' + (dupNoteN > 1 ? ' class="lg-note-dup"' : '') + '><input type="text" class="lg-note-input" data-f="note" maxlength="200" value="' + escapeHtml(lgNote1) + '" title="' + escapeHtml(noteTip) + '" placeholder=""' + (enabled ? "" : " disabled") + '><span class="lg-note-print">' + escapeHtml(lg.note || "") + '</span></td>';
     // 開く
     html += '<td class="lg-open-btns">'
       + '<button data-open="cal" title="カレンダーで該当月を表示">📅</button>'
