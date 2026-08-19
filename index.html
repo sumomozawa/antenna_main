@@ -565,6 +565,19 @@
     border: 1px solid #cdd3da;
     border-radius: 4px;
   }
+  /* 読み込み中の「動いています」表示。数百件あると時間がかかるので、
+     止まって見えないよう、くるくる回る印と数を出す。 */
+  @keyframes scan-spin-kf { to { transform: rotate(360deg); } }
+  .scan-spin {
+    display: inline-block; width: 14px; height: 14px; vertical-align: -2px;
+    margin-right: 7px; border-radius: 50%;
+    border: 2px solid #c7d4e2; border-top-color: #2e5488;
+    animation: scan-spin-kf .8s linear infinite;
+  }
+  .scan-sub { display: block; margin-top: 4px; font-size: 11px; color: #8a97a5; }
+  @media (prefers-reduced-motion: reduce){
+    .scan-spin { animation-duration: 2.4s; }
+  }
   .list-status {
     padding: 14px;
     text-align: center;
@@ -5943,7 +5956,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.19a";
+const APP_VERSION = "2026.08.19b";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -14210,10 +14223,32 @@ function junkNote(stats, dirPath, name, dir, file){
     size: file ? file.size : -1, lastModified: file ? file.lastModified : 0
   });
 }
+/* 読み込みの進み具合を #list-status に出す。
+   ・数百件だと1分近くかかることがあり、何も動かないと固まったように見える
+   ・毎回書き替えると重いので、少し間を空けて書き替える */
+let _scanUiAt = 0;
+function scanProgressShow(stats, label, force){
+  const st = document.getElementById("list-status");
+  if(!st) return;
+  const now = Date.now();
+  if(!force && (now - _scanUiAt) < 120) return;
+  _scanUiAt = now;
+  st.style.display = "";
+  st.innerHTML = '<span class="scan-spin" aria-hidden="true"></span>'
+    + escapeHtml(label || "フォルダを読んでいます")
+    + '　<b>' + (stats.files | 0) + '</b> 件'
+    + ((stats.dirs | 0) ? ('（フォルダ ' + (stats.dirs | 0) + '）') : '')
+    + '<span class="scan-sub">そのままお待ちください。件数が多いと少し時間がかかります。</span>';
+}
+function scanProgressStart(label){
+  _scanUiAt = 0;
+  scanProgressShow({ files: 0, dirs: 0 }, label, true);
+}
 async function scanDirRecursive(dirHandle, pathPrefix, rows, stats){
   for await (const [name, handle] of dirHandle.entries()){
     if(handle.kind === "directory"){
       stats.dirs++;
+      scanProgressShow(stats, stats._label);
       try {
         await scanDirRecursive(handle, pathPrefix + name + "/", rows, stats);
       } catch(err){
@@ -14224,6 +14259,10 @@ async function scanDirRecursive(dirHandle, pathPrefix, rows, stats){
       // 対象拡張子: .json / .hyb / .enc / .antenna.hyb / .antenna.enc
       if(!/\.(json|hyb|enc)$/i.test(name)) continue;
       stats.files++;
+      scanProgressShow(stats, stats._label);
+      /* たまに処理を手放して、画面を描き直させる。
+         これをしないと、くるくるが止まったまま最後まで固まって見える。 */
+      if((stats.files % 20) === 0) await new Promise(r => setTimeout(r, 0));
       let file = null;
       try {
         file = await handle.getFile();
@@ -14322,9 +14361,10 @@ async function listReloadRemembered(ask){
   if(!lgConfirmDiscardCaseEdits("読み込む")) return true;   // true＝案内は出さない（利用者が自分で止めた）
   const st = document.getElementById("list-status");
   const nm = dh.name || "";
-  if(st){ st.style.display = ""; st.textContent = "📁 前回のフォルダ「" + nm + "」を読み込み中..."; }
   const rows = [];
-  const stats = { dirs: 0, files: 0, skipped: 0, errDirs: [], skippedPaths: [] };
+  const stats = { dirs: 0, files: 0, skipped: 0, errDirs: [], skippedPaths: [],
+                  _label: "📁 前回のフォルダ「" + nm + "」を読んでいます" };
+  scanProgressStart(stats._label);
   try { await scanDirRecursive(dh, "", rows, stats); }
   catch(err){
     console.warn("[一覧] 前回のフォルダの読込に失敗", err);
@@ -14889,7 +14929,9 @@ async function listReloadFolder(expectedGone){
      （名前・住所・電話・工事日程予定・状態）は消える。消える前に必ず知らせる。 */
   if(!lgConfirmDiscardCaseEdits("読み直す")) return;
   const rows = [];
-  const stats = { dirs: 0, files: 0, skipped: 0, errDirs: [], skippedPaths: [] };
+  const stats = { dirs: 0, files: 0, skipped: 0, errDirs: [], skippedPaths: [],
+                  _label: "📁 フォルダを読み直しています" };
+  scanProgressStart(stats._label);
   try { await scanDirRecursive(_listDirHandle, "", rows, stats); }
   catch(err){
     // 黙って終わると、整理したはずのファイルが一覧に残って見える。理由を出す。
@@ -15230,6 +15272,8 @@ async function lgwbCheckWritable(rows){
 async function lgwbAttachFrom(root, force){
   const found = [];
   const stats = { dirs: 0, files: 0, skipped: 0, errDirs: [], skippedPaths: [] };
+  stats._label = "📁 戸別ファイルを探しています";
+  scanProgressStart(stats._label);
   try { await scanDirRecursive(root, "", found, stats); }
   catch(err){
     alert("フォルダを読めませんでした。\n\n" + ((err && err.message) || err));
@@ -15412,10 +15456,8 @@ async function listSelectFolder(){
     const rows = [];
     const stats = { dirs: 0, files: 0, skipped: 0, errDirs: [], skippedPaths: [] };
     const status = document.getElementById("list-status");
-    if(status){
-      status.style.display = "";
-      status.textContent = "📁 サブフォルダを再帰スキャン中...";
-    }
+    stats._label = "📁 フォルダを読んでいます";
+    scanProgressStart(stats._label);
     await scanDirRecursive(dirHandle, "", rows, stats);
     // 同じ管理番号のファイルが重なっていたら（iPadの「◯◯ 2.json」など）、先に整理を提案する
     let expectedGone = [];
@@ -15428,7 +15470,8 @@ async function listSelectFolder(){
         if(gone){
           expectedGone = gone;              // 整理で自分が消したファイルは「消えた」と数えない
           rows.length = 0;
-          stats.errDirs = []; stats.skippedPaths = [];
+          stats.errDirs = []; stats.skippedPaths = []; stats.files = 0; stats.dirs = 0;
+          scanProgressStart(stats._label);
           await scanDirRecursive(dirHandle, "", rows, stats);
         }
       }
@@ -15459,6 +15502,8 @@ async function listSelectFolder(){
           expectedGone = expectedGone.concat(gone);   // 自分が消したぶんは「消えた」と数えない
           rows.length = 0;
           stats.errDirs = []; stats.skippedPaths = []; stats.badFiles = [];
+          stats.files = 0; stats.dirs = 0;
+          scanProgressStart(stats._label);
           await scanDirRecursive(dirHandle, "", rows, stats);
           jf = junkClassify(stats.badFiles, rows);
         }
