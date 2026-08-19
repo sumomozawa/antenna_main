@@ -5943,7 +5943,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.18n";
+const APP_VERSION = "2026.08.19a";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -23718,6 +23718,8 @@ function buildReceptionLedgerPayload(){
       meet:    lg.meetAt          || "",
       status:  d.chosho_status    || "",
       contractor: ctr,
+      survey:  !!d.survey_done,    // 下見済み（現場で押した印。戸別ファイルから来る）
+      survey_at: String(d.survey_done_at || ""),
       flyer:   !!lg.flyer,         // ビラ配布済み
       hold:    !!lg.hold,          // 保留（現場入力アプリの一覧に「保」バッジを出す）
       consent: !!lg.consent,       // 同意書 受領済み
@@ -23726,7 +23728,9 @@ function buildReceptionLedgerPayload(){
     };
   }).filter(x => x.mgmt_no || x.name || x.addr);
   const projName = (typeof _currentProject !== "undefined" && _currentProject && _currentProject.name) ? String(_currentProject.name) : "";
-  return { type: "antenna_reception_ledger", version: 2, appVersion: APP_VERSION,
+  /* version 3 で「下見済み(survey / survey_at)」を足した。
+     古い現場入力アプリは知らない欄として読み飛ばすだけなので、そのまま渡してよい。 */
+  return { type: "antenna_reception_ledger", version: 3, appVersion: APP_VERSION,
            exportedAt: new Date().toISOString(), project: projName, count: rows.length, rows };
 }
 async function exportReceptionLedgerForGenba(){
