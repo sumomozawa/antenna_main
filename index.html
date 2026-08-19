@@ -1369,6 +1369,9 @@
     body.list-print-mode .cal-toolbar { padding: 0 0 4px 0 !important; margin: 0 0 4px 0 !important; }
     body.list-print-mode .cal-toolbar .cal-legend { font-size: 9px !important; }
     body.list-print-mode .cal-panel { display: none !important; }
+    body.list-print-mode .cal-ctr-pick,
+    body.list-print-mode .cal-ctr-clear { display: none !important; }
+    body.list-print-mode .cal-filter-note { border: none !important; background: none !important; padding: 0 !important; }
     body.list-print-mode table.cal-table { page-break-inside: avoid; table-layout: fixed; width: 100%; }
     body.list-print-mode table.cal-table td { height: 22mm !important; }
     body.list-print-mode .cal-cell { min-height: 0 !important; height: 100% !important; padding: 1px 2px !important; overflow: hidden; }
@@ -3396,6 +3399,36 @@
   .cal-quick-row .cal-quick-note { font-size: 10px; color: #7a6a30; }
   /* 戸別に紐づかない予定（その他） */
   .cal-ev.cal-free { background: #ede7f6; color: #4527a0; border-left: 4px solid #6a1b9a; padding-left: 4px; }
+  /* 会社の頭文字バッジ。色が見分けにくい人・白黒印刷でも会社が分かるようにする */
+  .cal-ctr-badge {
+    display: inline-block; min-width: 13px; padding: 0 3px; margin-right: 3px;
+    border-radius: 3px; background: #90a0b0; color: #fff;
+    font-size: 9px; font-weight: 700; line-height: 14px; text-align: center; vertical-align: 1px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .cal-ctr-badge-none { background: #b0bec5; }
+  /* 会社で分ける札（押すとその会社だけになる） */
+  .cal-ctr-pick {
+    display: inline-flex; align-items: center; gap: 3px;
+    background: #fff; border: 1px solid #cdd3da; border-radius: 12px;
+    padding: 1px 8px 1px 5px; font-size: 11px; color: #33424f; cursor: pointer;
+  }
+  .cal-ctr-pick:hover { background: #eef2f6; }
+  .cal-ctr-pick.on { border-color: var(--ctr, #1e3a5f); box-shadow: inset 0 0 0 1px var(--ctr, #1e3a5f);
+                     background: #f2f7ff; font-weight: 700; }
+  .cal-ctr-n { color: #667482; font-size: 10px; margin-left: 2px; }
+  .cal-ctr-pick.on .cal-ctr-n { color: #33424f; }
+  .cal-filter-note {
+    background: #f2f7ff; border: 1px solid #b6d4f5; color: #1e3a5f;
+    font-size: 12px; padding: 6px 10px; margin-bottom: 8px;
+  }
+  .cal-ctr-clear { margin-left: 8px; background: #fff; border: 1px solid #90a0b0; color: #33424f;
+                   border-radius: 3px; padding: 1px 9px; font-size: 11px; cursor: pointer; }
+  .cal-day-ctr { font-size: 11px; color: #33424f; margin: 4px 0 6px 0; display: flex; flex-wrap: wrap; gap: 4px 12px; }
+  .cal-day-ctr-1 { white-space: nowrap; }
+  .cu-ctr-only { background: #1e3a5f; color: #fff; font-size: 11px; border-radius: 10px;
+                 padding: 1px 9px; margin-left: 8px; font-weight: 700;
+                 -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .cal-free-mark { background: #6a1b9a; color: #fff; border-radius: 3px; padding: 0 3px; margin-right: 3px; font-size: 9px; }
   .cal-ev-type.t-free, .cu-type.t-free { background: #ede7f6; color: #4527a0; }
   .cal-free-sec { margin-top: 10px; padding: 8px 10px; background: #faf7fd; border: 1px solid #e4dcf0; border-radius: 5px; }
@@ -5968,7 +6001,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.19c";
+const APP_VERSION = "2026.08.19d";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -20590,7 +20623,10 @@ const CAL_CTR_COLORS = ["#1565c0", "#c62828", "#2e7d32", "#6a1b9a", "#e65100", "
    （以前は①だけを見ていたため、施工業者マスターが入っていない端末では全社が名前ハッシュ色に落ち、
      別の色になったり複数社が同じ色に重なったりしていた。） */
 let _ctrColorOrder = null;   // 上の並びのキャッシュ。マスター/割当/業者番号表を変えたら捨てる
-function invalidateContractorColors(){ _ctrColorOrder = null; }
+function invalidateContractorColors(){
+  _ctrColorOrder = null;
+  try { invalidateCalCtrShort(); } catch(_){}
+}
 function contractorColorOrder(){
   if(_ctrColorOrder) return _ctrColorOrder;
   const out = [], seen = Object.create(null);
@@ -25710,18 +25746,28 @@ function calFreeKind(k){
   const s = String(k == null ? "" : k);
   return CAL_FREE_KINDS.find(x => x.k === s) || CAL_FREE_KINDS[CAL_FREE_KINDS.length - 1];
 }
+/* 「どの会社の予定か」を選ぶ札。会社を1つも登録していなければ空の選択肢だけ出す */
+function calCtrOptions(sel){
+  const list = contractorColorOrder();
+  let h = '<option value="">会社なし</option>';
+  list.forEach(c => {
+    h += '<option value="' + escapeHtml(c) + '"' + (String(sel || "") === c ? " selected" : "") + '>'
+      + escapeHtml(c) + '</option>';
+  });
+  return h;
+}
 function calFreeKindOptions(sel){
   const s = String(sel == null ? "" : sel);
   return CAL_FREE_KINDS.map(x => '<option value="' + x.k + '"' + (x.k === s ? " selected" : "") + '>'
     + x.ch + "　" + x.name + "</option>").join("");
 }
-function calFreeAdd(date, time, title, note, kind){
+function calFreeAdd(date, time, title, note, kind, ctr){
   const t = String(title || "").trim();
   if(!date) return null;
   const kd = calFreeKind(kind);
   const ev = { id: "cf" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
     date: date, time: String(time || "").slice(0, 5), title: t || kd.name, note: String(note || ""),
-    kind: kd.k };
+    kind: kd.k, ctr: String(ctr || "").trim() };
   _calFreeEvents = getCalFreeEvents().concat([ev]);
   saveCalFreeEvents();
   return ev;
@@ -25742,6 +25788,58 @@ function calRowByTk(tk){
   return _listRows.find(r => subCaseKey(r) === tk) || null;
 }
 /* 全読込行から日別の予定を構築（検索絞り込みの影響を受けない物理枠の判定用は allRows） */
+/* ============================================================
+   カレンダーを会社別に見分ける
+   3社が同じカレンダーを使うので、「どれが自分の会社の予定か」が
+   ひと目で分かる必要がある。次の3つでそれをやる。
+     ① 色おび … 予定の左に会社の色
+     ② 頭文字バッジ … 色が見分けにくい人・白黒印刷でも分かるように
+     ③ 絞り込み … 会社の札を押すと、その会社の予定だけになる
+   ============================================================ */
+let _calCtrFilter = (() => {
+  try { return localStorage.getItem("antenna_cal_ctr_filter_v1") || ""; } catch(_){ return ""; }
+})();
+function setCalCtrFilter(v){
+  _calCtrFilter = String(v || "");
+  try { localStorage.setItem("antenna_cal_ctr_filter_v1", _calCtrFilter); } catch(_){}
+}
+/* この予定の施工会社。戸別は「割当 → 管理番号の4桁目」の順で決める
+   （割当は端末ごとの控えなので、それが無い端末でも管理番号だけで会社が付く）。
+   戸別に紐づかない予定は、入れるときに選んだ会社。 */
+function calEvContractor(ev){
+  if(!ev) return "";
+  if(ev.type === "free") return String((ev.free && ev.free.ctr) || "").trim();
+  const d = (ev.row && ev.row.data) || {};
+  try { return String(contractorForMgmtNo(d.chosho_mgmt_no || "") || "").trim(); } catch(_){ return ""; }
+}
+/* いま出す予定だけに絞る（"" ＝ぜんぶ、"__none__" ＝会社の決まっていないもの） */
+function calFilterEvents(evs){
+  const f = _calCtrFilter;
+  if(!f) return evs;
+  if(f === "__none__") return evs.filter(ev => !calEvContractor(ev));
+  return evs.filter(ev => calEvContractor(ev) === f);
+}
+/* 会社の「頭文字」。会社名が長くても1〜4文字で見分けがつくところまで伸ばす */
+let _calCtrShort = null;
+function invalidateCalCtrShort(){ _calCtrShort = null; }
+function calCtrShort(name){
+  name = String(name || "").trim();
+  if(!name) return "";
+  if(!_calCtrShort){
+    const order = contractorColorOrder();
+    const labels = contractorShortLabels(order);
+    const map = Object.create(null);
+    order.forEach((n, i) => { map[n] = labels[i]; });
+    _calCtrShort = map;
+  }
+  return _calCtrShort[name] || contractorStripCorp(name).slice(0, 2) || "？";
+}
+/* 会社の色おびと頭文字バッジ（予定のチップに付ける） */
+function calCtrBadge(name){
+  if(!name) return "";
+  return '<b class="cal-ctr-badge" style="background:' + calContractorColor(name) + ';" title="施工会社：'
+    + escapeHtml(name) + '">' + escapeHtml(calCtrShort(name)) + '</b>';
+}
 function calBuildEvents(rows){
   const evs = [];
   rows.forEach(r => {
@@ -25824,7 +25922,7 @@ function calFmtDateJP(ds){
    カレンダーと同じ calBuildEvents から生成するため、予定を動かすと自動で追従する。 */
 function renderUpcomingSchedule(rows){
   const todayS = lgDateStrToday(0);
-  const evs = calBuildEvents(rows)
+  const evs = calFilterEvents(calBuildEvents(rows))
     .filter(ev => ev.date >= todayS)
     .sort((a, b) => a.date.localeCompare(b.date)
       || (a.type === b.type ? 0 : (a.type === "work" ? -1 : 1))
@@ -25833,6 +25931,9 @@ function renderUpcomingSchedule(rows){
   const meetN = evs.filter(e => e.type === "meet").length;
   const freeN = evs.filter(e => e.type === "free").length;
   let html = '<div class="cal-upcoming"><div class="cu-head">📋 今後の予定（先の工程）'
+    + (_calCtrFilter
+        ? ('<span class="cu-ctr-only">' + escapeHtml(_calCtrFilter === "__none__" ? "会社なし" : _calCtrFilter) + ' のみ</span>')
+        : '')
     + '<span class="cu-sub">' + todayS.replace(/-/g, "/") + ' 現在 ／ 工事 ' + workN + ' 件・打合せ ' + meetN + ' 件'
     + (freeN ? "・その他 " + freeN + " 件" : "") + '</span></div>';
   // 〇〇検査・立会いなど、戸別に紐づかない予定はここから直接入れられる（印刷には出さない）
@@ -25841,6 +25942,8 @@ function renderUpcomingSchedule(rows){
     + '<input type="date" id="cu-add-date" value="' + escapeHtml(todayS) + '" title="予定の日">'
     + '<input type="time" id="cu-add-time" value="09:00" title="時刻（空でも可）">'
     + '<select id="cu-add-kind" title="予定の種類">' + calFreeKindOptions("inspect") + '</select>'
+    + '<select id="cu-add-ctr" title="どの会社の予定か（決まっていなければ空のまま）">'
+    +   calCtrOptions("") + '</select>'
     + '<input type="text" id="cu-add-title" placeholder="件名（例：完了検査／元請と現場打合せ）" style="flex:1 1 230px;">'
     + '<input type="text" id="cu-add-note" placeholder="メモ（任意）" style="flex:1 1 150px;">'
     + '<button type="button" id="cu-add-btn">追加</button>'
@@ -25867,7 +25970,9 @@ function renderUpcomingSchedule(rows){
         + '<td style="width:60px;"><span class="cu-type t-free" style="background:' + kd.bg + ';color:' + kd.fg + ';border:1px solid ' + kd.bd + ';">' + escapeHtml(kd.name) + '</span></td>'
         + '<td class="cu-time" style="width:48px;">' + escapeHtml(f.time || "―") + '</td>'
         + '<td>' + escapeHtml(f.title || kd.name) + '</td>'
-        + '<td class="cu-ctr" style="width:130px;"></td>'
+        + '<td class="cu-ctr" style="width:130px;">' + (f.ctr
+            ? '<span class="cal-ctr-tag" style="border-left:4px solid ' + calContractorColor(f.ctr) + ';">' + escapeHtml(f.ctr) + '</span>'
+            : '') + '</td>'
         + '<td style="color:#667482;">' + escapeHtml(f.note || "")
         +   '<span class="cu-free-ops">'
         +     '<button type="button" data-cal-open-day="' + escapeHtml(ev.date) + '" title="この日をカレンダーで開いて直す">✏</button>'
@@ -25880,7 +25985,7 @@ function renderUpcomingSchedule(rows){
     const no = (d.chosho_mgmt_no || "").trim();
     const nm = (d.chosho_cust_name || "").trim();
     const addr = (d.chosho_cust_addr || "").trim();
-    const cc = getContractor(ev.tk);
+    const cc = calEvContractor(ev);
     html += '<tr class="' + (ev.done ? "cu-done" : "") + '">'
       + '<td style="width:60px;"><span class="cu-type ' + (ev.type === "work" ? "t-work" : "t-meet") + '">' + (ev.type === "work" ? "工事" : "打合せ") + '</span></td>'
       + '<td class="cu-time" style="width:48px;">' + escapeHtml(ev.time || "―") + '</td>'
@@ -25898,7 +26003,8 @@ function renderListCalendarMode(rows, container){
   const today = new Date();
   if(_calY == null){ _calY = today.getFullYear(); _calM = today.getMonth(); }
   const todayS = lgDateStrToday(0);
-  const evs = calBuildEvents(rows);
+  const evsAll = calBuildEvents(rows);
+  const evs = calFilterEvents(evsAll);            // 会社の絞り込みを効かせる
   const byDate = {};
   evs.forEach(ev => { (byDate[ev.date] = byDate[ev.date] || []).push(ev); });
   const padT = t => String(t || "").padStart(5, "0"); // "9:00"→"09:00"（時刻順を正しく）
@@ -25907,16 +26013,20 @@ function renderListCalendarMode(rows, container){
 
   // 凡例用：この月ではなく「読み込み中の全予定」に出てくる施工会社を、業者マスターの登録順で集める。
   // （月を移動しても凡例の色が動かないよう、表示中の月ではなく全 evs を基準にする）
-  const ctrOrder = getContractorList();
-  const ctrSeen = {}; let ctrHasUnassigned = false;
-  evs.forEach(ev => {
-    const c = getContractor(ev.tk);
-    if(c) ctrSeen[c] = 1; else ctrHasUnassigned = true;
+  const ctrOrder = contractorColorOrder();
+  const ctrCount = {}; let ctrNoneN = 0;
+  evsAll.forEach(ev => {
+    const c = calEvContractor(ev);
+    if(c) ctrCount[c] = (ctrCount[c] | 0) + 1; else ctrNoneN++;
   });
-  const ctrInView = Object.keys(ctrSeen).sort((a, b) => {
+  const ctrInView = Object.keys(ctrCount).sort((a, b) => {
     const ia = ctrOrder.indexOf(a), ib = ctrOrder.indexOf(b);
     return (ia < 0 ? 1e9 : ia) - (ib < 0 ? 1e9 : ib) || a.localeCompare(b, "ja");
   });
+  /* 絞り込んだ会社が1件も無くなっていたら、黙って空にせず「ぜんぶ」に戻す
+     （会社を消した・別の物件を開いた、で予定が0になり「壊れた」ように見えるため） */
+  if(_calCtrFilter && _calCtrFilter !== "__none__" && !ctrCount[_calCtrFilter]) setCalCtrFilter("");
+  if(_calCtrFilter === "__none__" && !ctrNoneN) setCalCtrFilter("");
 
   // 月グリッド構築（日曜始まり）
   const first = new Date(_calY, _calM, 1);
@@ -25946,15 +26056,32 @@ function renderListCalendarMode(rows, container){
     + '<span><span class="cal-chip-sample" style="background:#fff3e0;border:1px solid #ffcc80;"></span>満枠（' + CAL_MAX_PER_DAY + '件）</span>'
     + '<span>予定はドラッグ＆ドロップで日付変更できます</span>'
     + '</span>'
-    + (ctrInView.length || ctrHasUnassigned
-        ? '<span class="cal-legend cal-legend-ctr"><span class="cal-legend-ctr-lbl">施工会社：</span>'
-          + ctrInView.map(c => '<span title="施工会社：' + escapeHtml(c) + '">'
-              + '<span class="cal-chip-sample cal-chip-ctr" style="background:' + calContractorColor(c) + ';"></span>'
-              + escapeHtml(c) + '</span>').join("")
-          + (ctrHasUnassigned ? '<span title="施工会社が割り当てられていない予定"><span class="cal-chip-sample cal-chip-ctr cal-chip-none"></span>未割当</span>' : '')
+    + ((ctrInView.length || ctrNoneN)
+        ? '<span class="cal-legend cal-legend-ctr"><span class="cal-legend-ctr-lbl">会社で分ける：</span>'
+          + '<button type="button" class="cal-ctr-pick' + (_calCtrFilter ? '' : ' on')
+          +   '" data-cal-ctr="" title="ぜんぶの会社の予定を出す">ぜんぶ<span class="cal-ctr-n">'
+          +   evsAll.length + '</span></button>'
+          + ctrInView.map(c => '<button type="button" class="cal-ctr-pick'
+              + (_calCtrFilter === c ? ' on' : '') + '" data-cal-ctr="' + escapeHtml(c) + '"'
+              + ' style="--ctr:' + calContractorColor(c) + ';"'
+              + ' title="' + escapeHtml(c) + 'の予定だけを出す">'
+              + '<b class="cal-ctr-badge" style="background:' + calContractorColor(c) + ';">'
+              + escapeHtml(calCtrShort(c)) + '</b>' + escapeHtml(c)
+              + '<span class="cal-ctr-n">' + ctrCount[c] + '</span></button>').join("")
+          + (ctrNoneN ? ('<button type="button" class="cal-ctr-pick'
+              + (_calCtrFilter === "__none__" ? ' on' : '') + '" data-cal-ctr="__none__"'
+              + ' title="会社の決まっていない予定だけを出す">'
+              + '<b class="cal-ctr-badge cal-ctr-badge-none">？</b>会社なし'
+              + '<span class="cal-ctr-n">' + ctrNoneN + '</span></button>') : '')
           + '</span>'
         : '')
-    + '</div>';
+    + '</div>'
+    + (_calCtrFilter
+        ? ('<div class="cal-filter-note cost-detail-section">'
+           + (_calCtrFilter === "__none__" ? '会社の決まっていない予定' : ('<b>' + escapeHtml(_calCtrFilter) + '</b> の予定'))
+           + 'だけを出しています（' + evs.length + ' 件）。'
+           + '<button type="button" class="cal-ctr-clear" data-cal-ctr="">ぜんぶ出す</button></div>')
+        : '');
 
   html += '<div class="cost-detail-section"><table class="cal-table"><thead><tr>';
   ["日", "月", "火", "水", "木", "金", "土"].forEach((w, i) => {
@@ -25986,6 +26113,7 @@ function renderListCalendarMode(rows, container){
             + ' style="background:' + kd.bg + ';color:' + kd.fg + ';border-left:4px solid ' + kd.fg + ';"'
             + ' title="' + escapeHtml(calEvTitle(ev)) + '">'
             + '<b class="cal-free-mark" style="background:' + kd.fg + ';">' + kd.ch + '</b>'
+            + calCtrBadge(calEvContractor(ev))
             + escapeHtml(calEvLabel(ev)) + '</span>';
           return;
         }
@@ -25993,9 +26121,11 @@ function renderListCalendarMode(rows, container){
         if(ev.prov) cls.push("cal-prov");
         if(ev.done) cls.push("cal-done");
         if(_calHighlightKey && ev.tk === _calHighlightKey) cls.push("cal-hl");
-        const cc = calContractorColor(getContractor(ev.tk));   // 施工会社の色帯（未割当は無し）
+        const ctr = calEvContractor(ev);
+        const cc = calContractorColor(ctr);                   // 施工会社の色おび（会社なしは無し）
         const stripe = cc ? ' style="border-left:4px solid ' + cc + ';padding-left:4px;"' : '';
         html += '<span class="' + cls.join(" ") + '"' + stripe + ' draggable="true" data-tk="' + escapeHtml(ev.tk) + '" data-evtype="' + ev.type + '" title="' + escapeHtml(calEvTitle(ev)) + '">'
+          + calCtrBadge(ctr)
           + (ev.prov ? '<b class="cal-prov-mark">仮</b>' : '') + escapeHtml(calEvLabel(ev)) + '</span>';
       });
       html += '</div></td>';
@@ -26018,6 +26148,23 @@ function renderCalPanel(byDate){
     const free = Math.max(0, CAL_MAX_PER_DAY - workN);
     let html = '<div class="cal-panel-head">📌 ' + ds.replace(/-/g, "/") + ' の予定'
       + '<span class="cal-slot-note">工事 ' + workN + ' 件 ／ 空き枠 ' + free + '（目安 ' + CAL_MAX_PER_DAY + ' 件/日）</span></div>';
+    /* 3社が同じカレンダーを使うので、その日が「どの会社で何件か」をここで数える */
+    {
+      const byCtr = {}; let noneN = 0;
+      evs.forEach(ev => { const c = calEvContractor(ev); if(c) byCtr[c] = (byCtr[c] | 0) + 1; else noneN++; });
+      const ks = Object.keys(byCtr);
+      if(ks.length || noneN){
+        const order = contractorColorOrder();
+        ks.sort((a, b) => (order.indexOf(a) < 0 ? 1e9 : order.indexOf(a))
+                        - (order.indexOf(b) < 0 ? 1e9 : order.indexOf(b)) || a.localeCompare(b, "ja"));
+        html += '<div class="cal-day-ctr">この日の内訳：'
+          + ks.map(c => '<span class="cal-day-ctr-1" title="' + escapeHtml(c) + '">' + calCtrBadge(c)
+              + escapeHtml(c) + ' <b>' + byCtr[c] + '</b> 件</span>').join("")
+          + (noneN ? ('<span class="cal-day-ctr-1"><b class="cal-ctr-badge cal-ctr-badge-none">？</b>会社なし <b>'
+              + noneN + '</b> 件</span>') : '')
+          + '</div>';
+      }
+    }
     // ⚡ クイック仮入力（電話対応中の数秒メモ：管理番号＋任意の時間だけで登録）
     html += '<div class="cal-quick-row">'
       + '<span class="cal-quick-label">⚡ 電話受付（仮登録）：</span>'
@@ -26149,6 +26296,13 @@ function bindCalendarHandlers(container){
   container._calBound = true;
   container.addEventListener("click", e => {
     if(_listMode !== "calendar") return;
+    const pick = e.target.closest("[data-cal-ctr]");
+    if(pick){
+      const v = pick.dataset.calCtr || "";
+      setCalCtrFilter(v === _calCtrFilter ? "" : v);   // もう一度押すと解除
+      renderListTable();
+      return;
+    }
     const nav = e.target.closest("[data-cal-nav]");
     if(nav){
       const k = nav.dataset.calNav;
@@ -26218,9 +26372,13 @@ function bindCalendarHandlers(container){
       const kd = (document.getElementById("cu-add-kind") || {}).value || "";
       const ti = ((document.getElementById("cu-add-title") || {}).value || "").trim();
       const nt = ((document.getElementById("cu-add-note") || {}).value || "").trim();
+      const cr = (document.getElementById("cu-add-ctr") || {}).value || "";
       if(!ds){ alert("日付を入れてください"); return; }
       if(!ti){ alert("件名を入れてください（例：完了検査、元請と現場打合せ）"); return; }
-      calFreeAdd(ds, t, ti, nt, kd);
+      calFreeAdd(ds, t, ti, nt, kd, cr);
+      /* 入れた予定が別の会社で絞り込み中だと、入れた本人に見えない。
+         その会社に切り替えて必ず見えるようにする。 */
+      if(_calCtrFilter && _calCtrFilter !== (cr || "__none__")) setCalCtrFilter(cr || "__none__");
       // 入れた予定がカレンダーでも見えるよう、その月へ移動してその日を開く
       const pa = ds.split("-").map(Number);
       if(pa.length === 3 && pa[0]){ _calY = pa[0]; _calM = pa[1] - 1; }
