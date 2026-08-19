@@ -1180,9 +1180,17 @@
     body.list-print-mode .folder-group-head * { color: #fff !important; background: #1e3a5f !important; }
     /* 石綿チップは濃い色の下地に白文字。上の一括黒文字に負けないよう戻す
        （黒文字のままだと濃い赤・濃い緑の上で紙では読めない）。 */
+    /* 濃い下地に黒字だと紙で読めない。要素ごとに決めた色（--fg）へ戻す。 */
     body.list-print-mode .asb-badge,
-    body.list-print-mode .lg-asb-chip { color: #fff !important; }
+    body.list-print-mode .lg-asb-chip,
+    body.list-print-mode .cal-ctr-badge { color: var(--fg, #fff) !important; }
     body.list-print-mode .lg-asb-chip.asb-blank { color: #667482 !important; }
+    body.list-print-mode .cu-ctr-only { color: #fff !important; }
+    body.list-print-mode td.cal-today .cal-cell .cal-day { color: #fff !important; }
+    /* 画面用のボタンは紙に出さない（押せないうえ、濃い下地に黒字で読めない） */
+    body.list-print-mode .ph-bar button,
+    body.list-print-mode #mat-copy,
+    body.list-print-mode #mat-xlsx { display: none !important; }
     /* 費用詳細テーブル内 grand-total（追加工事 総合計 等）は濃紺背景に白文字を維持 */
     body.list-print-mode .cost-detail-section tr.grand-total td,
     body.list-print-mode .cost-detail-section tr.grand-total * { color: #fff !important; background: #1e3a5f !important; }
@@ -1369,8 +1377,15 @@
     body.list-print-mode .cal-toolbar { padding: 0 0 4px 0 !important; margin: 0 0 4px 0 !important; }
     body.list-print-mode .cal-toolbar .cal-legend { font-size: 9px !important; }
     body.list-print-mode .cal-panel { display: none !important; }
-    body.list-print-mode .cal-ctr-pick,
-    body.list-print-mode .cal-ctr-clear { display: none !important; }
+    body.list-print-mode .cal-ctr-clear,
+    body.list-print-mode .cal-ctr-pick[data-cal-ctr=""],
+    body.list-print-mode .cal-ctr-n,
+    body.list-print-mode .cal-legend-ctr-lbl { display: none !important; }
+    body.list-print-mode .cal-legend-ctr-lbl-print { display: inline !important; }
+    body.list-print-mode .cal-ctr-pick {
+      border: none !important; background: none !important; box-shadow: none !important;
+      padding: 0 10px 0 0 !important; font-weight: 400 !important;
+    }
     body.list-print-mode .cal-filter-note { border: none !important; background: none !important; padding: 0 !important; }
     body.list-print-mode table.cal-table { page-break-inside: avoid; table-layout: fixed; width: 100%; }
     body.list-print-mode table.cal-table td { height: 22mm !important; }
@@ -3406,7 +3421,8 @@
     font-size: 9px; font-weight: 700; line-height: 14px; text-align: center; vertical-align: 1px;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
-  .cal-ctr-badge-none { background: #b0bec5; }
+  .cal-ctr-badge-none { background: #b0bec5; color: #111; }
+  .cal-legend-ctr-lbl-print { display: none; }
   /* 会社で分ける札（押すとその会社だけになる） */
   .cal-ctr-pick {
     display: inline-flex; align-items: center; gap: 3px;
@@ -3426,6 +3442,7 @@
                    border-radius: 3px; padding: 1px 9px; font-size: 11px; cursor: pointer; }
   .cal-day-ctr { font-size: 11px; color: #33424f; margin: 4px 0 6px 0; display: flex; flex-wrap: wrap; gap: 4px 12px; }
   .cal-day-ctr-1 { white-space: nowrap; }
+  .cu-tel { width: 118px; white-space: nowrap; font-size: 12px; color: #33424f; }
   .cu-ctr-only { background: #1e3a5f; color: #fff; font-size: 11px; border-radius: 10px;
                  padding: 1px 9px; margin-left: 8px; font-weight: 700;
                  -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -6001,7 +6018,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.19d";
+const APP_VERSION = "2026.08.19e";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -12179,24 +12196,24 @@ function updateAsbestosJudgement(){
     : '';
   let html;
   if(applied === null){
-    html = '<span class="asb-badge" style="background:#b0b8c0;">⚪ 未入力</span>'
+    html = '<span class="asb-badge" style="background:#b0b8c0;--fg:' + bestInkOn("#b0b8c0") + ';color:' + bestInkOn("#b0b8c0") + ';">⚪ 未入力</span>'
          + ' <span style="font-size:10px;color:#555;">着工日を入力または「不明」にチェック（登記日からも推定可）</span>';
   } else if(!applied){
-    html = '<span class="asb-badge" style="background:#43a047;">🟢 不要</span>'
+    html = '<span class="asb-badge" style="background:#43a047;--fg:' + bestInkOn("#43a047") + ';color:' + bestInkOn("#43a047") + ';">🟢 不要</span>'
          + ' <span style="font-size:10px;color:#555;">2006/9/1以降で対象外</span>' + derivedNote;
   } else if(a.level === "level1" || a.level === "level2"){
     const lvl = a.level === "level1" ? "LV1" : "LV2";
-    html = '<span class="asb-badge" style="background:#c62828;">⚠ 要専門業者（' + lvl + '）</span>'
+    html = '<span class="asb-badge" style="background:#c62828;--fg:' + bestInkOn("#c62828") + ';color:' + bestInkOn("#c62828") + ';">⚠ 要専門業者（' + lvl + '）</span>'
          + ' <span style="font-size:10px;color:#c62828;">別途届出必要</span>';
   } else if(a.no_dust_method){
-    html = '<span class="asb-badge" style="background:#b8860b;">🟡 みなし（非発じん工法）</span>'
+    html = '<span class="asb-badge" style="background:#b8860b;--fg:' + bestInkOn("#b8860b") + ';color:' + bestInkOn("#b8860b") + ';">🟡 みなし（非発じん工法）</span>'
          + ' <span style="font-size:10px;color:#555;">みなし該当・石綿諸経費 計上なし'
          + (a.date_unknown ? '（着工日不明）' : '') + '</span>' + derivedNote;
   } else if(a.date_unknown){
-    html = '<span class="asb-badge" style="background:#fb8c00;">🟠 みなし?</span>'
+    html = '<span class="asb-badge" style="background:#fb8c00;--fg:' + bestInkOn("#fb8c00") + ';color:' + bestInkOn("#fb8c00") + ';">🟠 みなし?</span>'
          + ' <span style="font-size:10px;color:#555;">着工日不明でみなし扱い</span>';
   } else {
-    html = '<span class="asb-badge" style="background:#fb8c00;">🟠 みなし LV3</span>'
+    html = '<span class="asb-badge" style="background:#fb8c00;--fg:' + bestInkOn("#fb8c00") + ';color:' + bestInkOn("#fb8c00") + ';">🟠 みなし LV3</span>'
          + ' <span style="font-size:10px;color:#555;">2006/9/1以前</span>' + derivedNote;
   }
   view.innerHTML = html;
@@ -12337,7 +12354,8 @@ function asbestosChipHtml(row){
   const short = ASB_CHIP_SHORT[b.cat] || b.label;
   const tip = b.label + "\n" + (b.title || "")
     + "\n（石綿判定は、戸別を開いて「🏢 石綿判定」の欄で決めます）";
-  return '<span class="lg-asb-chip asb-' + b.cat + '" style="background:' + b.color + ';" title="'
+  return '<span class="lg-asb-chip asb-' + b.cat + '" style="background:' + b.color
+    + ';--fg:' + bestInkOn(b.color) + ';color:' + bestInkOn(b.color) + ';" title="'
     + escapeHtml(tip) + '">' + escapeHtml(short) + '</span>';
 }
 function aggregateAsbestos(list){
@@ -16450,7 +16468,7 @@ function renderListByFolderMode(rows, container){
       const nameTitle = (d.chosho_cust_name || "") + (telRaw ? " / ☎ " + telRaw : "");
       const addrEsc = escapeHtml(d.chosho_cust_addr || "");
       const asb = asbestosStatusBadge(r);
-      const asbCell = '<span class="asb-badge" style="background:' + asb.color + ';" title="' + escapeHtml(asb.title) + '">'
+      const asbCell = '<span class="asb-badge" style="background:' + asb.color + ';--fg:' + bestInkOn(asb.color) + ';color:' + bestInkOn(asb.color) + ';" title="' + escapeHtml(asb.title) + '">'
                     + escapeHtml(asb.label) + '</span>';
       // 工事種別の代わりに「写真枚数」セル（クリックでプレビュー）
       let photoCell;
@@ -20623,6 +20641,18 @@ const CAL_CTR_COLORS = ["#1565c0", "#c62828", "#2e7d32", "#6a1b9a", "#e65100", "
    （以前は①だけを見ていたため、施工業者マスターが入っていない端末では全社が名前ハッシュ色に落ち、
      別の色になったり複数社が同じ色に重なったりしていた。） */
 let _ctrColorOrder = null;   // 上の並びのキャッシュ。マスター/割当/業者番号表を変えたら捨てる
+/* 下地の色に対して読める文字色（白か黒）を返す。
+   紙では「文字は全部黒」という指定が効くので、濃い下地だと黒字になって読めなくなる。
+   そこで色は --fg という名前で渡し、印刷側でその名前を使って戻す。 */
+function bestInkOn(bg){
+  const m = String(bg || "").trim().replace(/^#/, "");
+  if(m.length !== 6) return "#fff";
+  const v = i => parseInt(m.slice(i, i + 2), 16) / 255;
+  const f = x => (x <= 0.03928) ? (x / 12.92) : Math.pow((x + 0.055) / 1.055, 2.4);
+  const L = 0.2126 * f(v(0)) + 0.7152 * f(v(2)) + 0.0722 * f(v(4));
+  // 白字と黒字で、見やすい方（明暗の差が大きい方）を選ぶ
+  return ((1.05 / (L + 0.05)) >= ((L + 0.05) / 0.05)) ? "#fff" : "#111";
+}
 function invalidateContractorColors(){
   _ctrColorOrder = null;
   try { invalidateCalCtrShort(); } catch(_){}
@@ -25365,7 +25395,8 @@ function pjHeadHtml(c){
     + cell("氏名", escapeHtml(c.name))
     + cell("住所", escapeHtml(c.addr), "pj-h-addr")
     + cell("電話", escapeHtml(c.tel))
-    + cell("石綿", '<span class="asb-badge" style="background:' + asb.color + ';" title="'
+    + cell("石綿", '<span class="asb-badge" style="background:' + asb.color + ';--fg:' + bestInkOn(asb.color)
+        + ';color:' + bestInkOn(asb.color) + ';" title="'
         + escapeHtml(asb.title || "") + '">' + escapeHtml(asb.label) + '</span>')
     + cell("高所作業車", escapeHtml(high))
     + cell("記録データ", measHtml, "pj-h-meas")
@@ -25837,7 +25868,9 @@ function calCtrShort(name){
 /* 会社の色おびと頭文字バッジ（予定のチップに付ける） */
 function calCtrBadge(name){
   if(!name) return "";
-  return '<b class="cal-ctr-badge" style="background:' + calContractorColor(name) + ';" title="施工会社：'
+  const bg = calContractorColor(name);
+  return '<b class="cal-ctr-badge" style="background:' + bg + ';--fg:' + bestInkOn(bg)
+    + ';color:' + bestInkOn(bg) + ';" title="施工会社：'
     + escapeHtml(name) + '">' + escapeHtml(calCtrShort(name)) + '</b>';
 }
 function calBuildEvents(rows){
@@ -25973,6 +26006,7 @@ function renderUpcomingSchedule(rows){
         + '<td class="cu-ctr" style="width:130px;">' + (f.ctr
             ? '<span class="cal-ctr-tag" style="border-left:4px solid ' + calContractorColor(f.ctr) + ';">' + escapeHtml(f.ctr) + '</span>'
             : '') + '</td>'
+        + '<td class="cu-tel"></td>'
         + '<td style="color:#667482;">' + escapeHtml(f.note || "")
         +   '<span class="cu-free-ops">'
         +     '<button type="button" data-cal-open-day="' + escapeHtml(ev.date) + '" title="この日をカレンダーで開いて直す">✏</button>'
@@ -25985,6 +26019,7 @@ function renderUpcomingSchedule(rows){
     const no = (d.chosho_mgmt_no || "").trim();
     const nm = (d.chosho_cust_name || "").trim();
     const addr = (d.chosho_cust_addr || "").trim();
+    const tel = (d.chosho_cust_tel || "").trim();
     const cc = calEvContractor(ev);
     html += '<tr class="' + (ev.done ? "cu-done" : "") + '">'
       + '<td style="width:60px;"><span class="cu-type ' + (ev.type === "work" ? "t-work" : "t-meet") + '">' + (ev.type === "work" ? "工事" : "打合せ") + '</span></td>'
@@ -25993,6 +26028,7 @@ function renderUpcomingSchedule(rows){
       + '<td class="cu-ctr" style="width:130px;">' + (cc
           ? '<span class="cal-ctr-tag" style="border-left:4px solid ' + calContractorColor(cc) + ';">' + escapeHtml(cc) + '</span>'
           : '') + '</td>'
+      + '<td class="cu-tel">' + escapeHtml(tel) + '</td>'
       + '<td style="color:#667482;">' + escapeHtml(addr) + '</td>'
       + '</tr>';
   });
@@ -26058,6 +26094,7 @@ function renderListCalendarMode(rows, container){
     + '</span>'
     + ((ctrInView.length || ctrNoneN)
         ? '<span class="cal-legend cal-legend-ctr"><span class="cal-legend-ctr-lbl">会社で分ける：</span>'
+          + '<span class="cal-legend-ctr-lbl-print">会社：</span>'
           + '<button type="button" class="cal-ctr-pick' + (_calCtrFilter ? '' : ' on')
           +   '" data-cal-ctr="" title="ぜんぶの会社の予定を出す">ぜんぶ<span class="cal-ctr-n">'
           +   evsAll.length + '</span></button>'
@@ -26065,8 +26102,7 @@ function renderListCalendarMode(rows, container){
               + (_calCtrFilter === c ? ' on' : '') + '" data-cal-ctr="' + escapeHtml(c) + '"'
               + ' style="--ctr:' + calContractorColor(c) + ';"'
               + ' title="' + escapeHtml(c) + 'の予定だけを出す">'
-              + '<b class="cal-ctr-badge" style="background:' + calContractorColor(c) + ';">'
-              + escapeHtml(calCtrShort(c)) + '</b>' + escapeHtml(c)
+              + calCtrBadge(c) + escapeHtml(c)
               + '<span class="cal-ctr-n">' + ctrCount[c] + '</span></button>').join("")
           + (ctrNoneN ? ('<button type="button" class="cal-ctr-pick'
               + (_calCtrFilter === "__none__" ? ' on' : '') + '" data-cal-ctr="__none__"'
