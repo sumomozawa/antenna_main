@@ -6018,7 +6018,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.19e";
+const APP_VERSION = "2026.08.19f";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -23311,6 +23311,7 @@ function renderListLedgerMode(rows, container){
     + '</div>'
     // ④ 取り込む（外から中へ）
     + '<div class="lgc-grp"><span class="lgc-ttl">取り込み</span>'
+    +   '<button id="lg-load-folder" title="戸別ファイル（管理番号.json）の入ったフォルダを選んで読み込みます。下のフォルダまで全部読むので、親のフォルダ（例：リスト）を選べば会社別・工区別のフォルダもまとめて入ります。画面いちばん上の「📁 フォルダ」と同じものです。" style="background:#7a4e1e;color:#fff;border:1px solid #5e3c16;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📁 フォルダ</button>'
     +   '<button id="lg-import-ledger" title="受付台帳ソフトなど別のパソコンで作った「受付台帳ファイル（.json）」を読み込みます。いまの台帳と違うところだけを一覧で確認し、選んだ分だけ取り込みます。図面・積算には触りません。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📥 受付台帳</button>'
     +   '<button id="lg-xlsx-import" title="Excel（.xlsx）を読み取ります。受付台帳ソフトが書き出した Excel なら、名前・施工会社・状態・打合せ・備考まで全項目の違いを一覧で確認してから取り込めます。見出しの無い現場のExcelなら、H列「管理番号」を下三桁で突き合わせて台帳の管理番号・住所・過去の情報を更新します。" style="background:#2e5488;color:#fff;border:1px solid #1e3a5f;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📗 Excel</button>'
     + '</div>'
@@ -24872,6 +24873,10 @@ function bindLedgerHandlers(container){
     }
     if(e.target.closest("#lg-print-sel")){ printSelectedChosho(); return; }
     if(e.target.closest("#lg-print-clear")){ _ledgerPrintSel.clear(); renderListTable(); return; }
+    /* ★ここで確認や別の処理を挟まないこと★
+       フォルダを選ぶ画面は「押した直後」しか開けない。間に何か挟むとその権利が切れ、
+       押しても何も起きなくなる（listSelectFolder の中で順番を守って処理している）。 */
+    if(e.target.closest("#lg-load-folder")){ listSelectFolder(); return; }
     if(e.target.closest("#lg-import-ledger")){ lgPickLedgerFile(); return; }
     if(e.target.closest("#lg-xlsx-import")){ ledgerXlsxImportFlow(); return; }
     if(e.target.closest("#lg-xlsx-export")){ exportReceptionLedgerToXlsx(); return; }
