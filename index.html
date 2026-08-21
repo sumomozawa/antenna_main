@@ -6018,7 +6018,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.21c";
+const APP_VERSION = "2026.08.21d";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -21214,7 +21214,17 @@ async function applyMergedLocally(merged){
 /* 変更通知 → デバウンス自動保存（物件を開いている間のみ） */
 function projTouch(){
   if(!_currentProject || _projLoading) return;
-  if(rtIsCaseReadOnly()) return; // リアルタイム：他端末が編集中の戸別を閲覧のみ表示中は保存しない
+  /* 「閲覧のみ」は “他の端末が編集中の戸別を開いている間” の話なので、
+     止めるのはその戸別を開いている間だけにする。
+     ★以前はここで物件まるごと保存を止めていた★ そのため
+       ・受付台帳で別の戸別の打合せ時間を直しても、黙って保存されない
+       ・エディタの閉じ方によっては閲覧のみが解けず、
+         そのあと何を直しても保存されないまま気づけない
+     という事が起きていた（直したのに他のPCへ伝わらない、の一因）。 */
+  if(rtIsCaseReadOnly()){
+    if(_editingRow && _listRows.indexOf(_editingRow) >= 0) return;   // その戸別を開いている間だけ止める
+    try { rtSetCaseReadOnlyUI(false); } catch(_){}                   // 開いていない＝もう閲覧のみではない
+  }
   if(_projSaveTimer) clearTimeout(_projSaveTimer);
   _projSaveTimer = setTimeout(() => { _projSaveTimer = null; projSaveNow(); }, 1500);
 }
