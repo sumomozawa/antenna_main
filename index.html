@@ -6018,7 +6018,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.21b";
+const APP_VERSION = "2026.08.21c";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -20388,12 +20388,27 @@ function lgTextResolve(row, fileKey, lgKey, srcKey){
     return;
   }
   const known = (srcKey in lg) ? String(lg[srcKey] || "") : null;
-  if(fileVal && fileVal !== known){
+  /* ファイルが前回から変わったか。
+     ★空にしたのも「変わった」★ 以前は中身のあるときしかファイルを採らなかったので、
+     別のPCで時刻や打合せを「消した」ことが、いつまでも他のPCへ伝わらなかった。
+     ただし控えが無いとき（この端末で初めて見るファイル）だけは、
+     空のファイルで台帳を消さない（まだ取り込めていない戸別を空で潰さないため）。 */
+  const fileChanged = (known === null) ? !!fileVal : (fileVal !== known);
+  if(fileChanged){
     // 備考が現場の内容へ入れ替わる分も、あとで戻せるように控える
     if(lgKey === "note"){ try { lgNoteLogPush(tk, lgVal, fileVal, "戸別ファイル（現場）の内容を採り込んだ"); } catch(_){} }
     setLedger(tk, { [lgKey]: fileVal, [srcKey]: fileVal }); // 現場が直した → 現場を採る
+    return;
   }
-  else row.data[fileKey] = lgVal;                                                          // 台帳が新しい → 戸別へ配る
+  // 台帳が新しい → 画面の行へ配る
+  row.data[fileKey] = lgVal;
+  /* ★ここで「書き戻しが要る」印を必ず付ける★
+     配ったのは画面の中だけで、フォルダの戸別ファイルはまだ古いままなのに、
+     以前はこの印を付けていなかった。そのため保存の状態が
+     「この画面で直した分はありません」と出てしまい、
+     「💾 戸別ファイルへ反映」を押す必要がある事に気づけず、
+     別のPCでフォルダを読み直しても時刻や打合せがいつまでも古いままだった。 */
+  if(fileVal !== lgVal){ try { lgMarkTouched(tk); } catch(_){} }
 }
 function noteAdopt(tk, s){
   try { lgNoteLogPush(tk, (getLedger(tk) || {}).note, s, "戸別の備考欄から取り込んだ"); } catch(_){}
@@ -20875,6 +20890,19 @@ function projPlainPayload(r){
     delete c.chosho_photos_thumb;
   }
   c.chosho_photo_count = n;          // 枚数は常に記録（物件を開いた直後から 📷N 表示）
+  /* ★受付台帳が持ち主の欄（工事の時刻・打合せ予定・備考）を、戸別の中身にも入れて渡す★
+     これまで共有ファイルでは「台帳(ledger)側」にしか入っていなかったので、
+     受け取った側で 台帳 と 戸別の中身 が食い違い、突き合わせの順番によっては
+     別のPCで直した時刻や打合せが出てこないことがあった。
+     両方に同じ内容を入れておけば、突き合わせが「同じ＝そのまま」で済み、必ず出る。 */
+  try {
+    const w = lgwbWanted(r);
+    if(w){
+      if(w.chosho_meet_at !== undefined) c.chosho_meet_at = w.chosho_meet_at;
+      if(w.chosho_time    !== undefined) c.chosho_time    = w.chosho_time;
+      if(w.chosho_note    !== undefined) c.chosho_note    = w.chosho_note;
+    }
+  } catch(_){}
   return c;
 }
 /* 現在の読み込み状態から物件スナップショットを構築（読み取りのみ）。
@@ -22015,15 +22043,68 @@ function rtOnBump(b){
   }
   _rtRemoteBump = b;
   rtShowBump(b);
+  rtMaybeAutoPull(b);      // 触れる状態なら、押させずにこちらで取り込む
 }
-async function rtPullLatest(){
+/* いま自動で取り込んでよいか。
+   取り込みはこの端末の内容を共有ファイルの内容で置き換えるので、
+   「まだ共有ファイルへ書けていない直し」が残っている間は絶対にやらない。 */
+function rtAutoPullBlockReason(){
+  if(!_projFileHandle) return "共有ファイルに連動していません";
+  if(_projLoading)     return "読み込み中です";
+  if(_projSaving)      return "保存中です";
+  if(_projSaveTimer)   return "この端末に、まだ共有ファイルへ書けていない直しがあります";
+  if(_editingRow && _listRows.indexOf(_editingRow) >= 0) return "戸別を開いて編集中です";
+  return "";
+}
+/* 他の端末の更新を、安全なときだけ黙って取り込む。
+   ★これが無いと「連携中」なのに、通知バナーを押すまで相手の直しが出てこない。
+     受付台帳の打合せ予定などは戸別ファイルではなく共有ファイル側に入っているので、
+     取り込まない限り、いつまでも古いままになる。 */
+async function rtMaybeAutoPull(b){
+  if(rtAutoPullBlockReason()) return false;       // 危ないときはバナーのまま（手で押してもらう）
+  if(_rtAutoPulling) return false;
+  _rtAutoPulling = true;
+  try {
+    await rtPullLatest({ auto: true });
+    const who = (b && b.name) || "他の端末";
+    try { rtToast("🔄 " + who + " の更新を取り込みました"); } catch(_){}
+    return true;
+  } catch(e){ console.warn("[RT] 自動の取り込みに失敗:", e); return false; }
+  finally { _rtAutoPulling = false; }
+}
+let _rtAutoPulling = false;
+/* 画面の隅に少しだけ出す知らせ（押す必要のないもの用） */
+function rtToast(msg){
+  let el = document.getElementById("rt-toast");
+  if(!el){
+    el = document.createElement("div"); el.id = "rt-toast";
+    el.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);bottom:22px;z-index:4000;"
+      + "background:#1b7a3d;color:#fff;padding:7px 16px;border-radius:16px;font-size:13px;"
+      + "box-shadow:0 3px 12px rgba(0,0,0,.28);pointer-events:none;";
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.display = "";
+  clearTimeout(rtToast._t);
+  rtToast._t = setTimeout(() => { const e = document.getElementById("rt-toast"); if(e) e.style.display = "none"; }, 3600);
+}
+async function rtPullLatest(opts){
+  opts = opts || {};
   if(!_projFileHandle){
-    alert("この物件は共有ファイルに連動していません。\nメニューの「📂 共有ファイルを開く」から最新を取り込んでください。");
+    if(!opts.auto) alert("この物件は共有ファイルに連動していません。\nメニューの「📂 共有ファイルを開く」から最新を取り込んでください。");
     return;
   }
   if(_editingRow && _listRows.indexOf(_editingRow) >= 0 && !_rtCaseReadOnly){
+    if(opts.auto) return;
     if(!confirm("編集中の戸別があります。\n最新を取り込む前に、この端末の編集内容を保存してから取り込みます。続けますか？")) return;
     try { await projSaveNow(); } catch(_){}
+  }
+  /* ★取り込みは、この端末の内容を共有ファイルの内容で置き換える★
+     まだ書けていない直し（自動保存の待ち時間の中の分）が残っていると、
+     それが黙って消える。先に必ず書き切ってから取り込む。 */
+  if(_projSaveTimer){
+    clearTimeout(_projSaveTimer); _projSaveTimer = null;
+    try { await projSaveNow(); } catch(e){ console.warn("[RT] 取り込み前の保存に失敗:", e); }
   }
   try {
     const file = await _projFileHandle.getFile();
