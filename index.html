@@ -6018,7 +6018,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.19f";
+const APP_VERSION = "2026.08.21a";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -27709,6 +27709,10 @@ async function mergeRowsWithManual(newRows, opts){
   });
   const keep = [];
   let applyAll = null;   // 「以降すべて同じ選択を適用」
+  /* 現場で直した氏名・住所・電話が、台帳の古い値と食い違ったときの控え。
+     これまでは黙って台帳を採っていたので、現場で直した名前が反映されない
+     （しかも何も言われない）状態だった。最後にまとめて選べるようにする。 */
+  const custConf = [];
   for(const mr of manuals){
     const no = ((mr.data && mr.data.chosho_mgmt_no) || "").trim();
     const match = no ? byNo[no] : null;
@@ -27725,6 +27729,10 @@ async function mergeRowsWithManual(newRows, opts){
         // 現場＝アンテナ・部材・測定・写真・配線の権威）。genbaの既定値は base(台帳)に無いため混入しない。
         const res = genbaMergeCaseData(mr.data || {}, match.data, { genbaToday: _genbaTodayStr() });
         match.data = res.merged;
+        // 顧客欄の食い違いは黙って捨てない（あとでまとめて確かめてもらう）
+        ((res.report && res.report.conflicts) || []).forEach(c => {
+          if(c && c.cat === "customer") custConf.push({ row: match, field: c.field, main: c.main, genba: c.genba });
+        });
       } else {
         // 従来：ファイル行（積算・図面データ）を土台に、台帳の記入済み値で上書き（空欄のみ読み込み値）
         const merged = Object.assign({}, match.data);
@@ -27752,7 +27760,30 @@ async function mergeRowsWithManual(newRows, opts){
     }
     // choice === "file"（読み込み値で上書き）→ ファイル行をそのまま採用（台帳行は破棄。台帳メモは同じ管理番号キーで引き継がれる）
   }
+  await lgAskCustomerConflicts(custConf);
   return noteResolveRows(keep.concat(newRows));   // 備考は台帳と突き合わせる
+}
+
+/* 現場で直した氏名・住所・電話が台帳と食い違ったとき、どちらを使うか聞く。
+   聞かずに台帳を採ると「現場で直したのに反映されない」ことになり、しかも
+   直った覚えのない古い名前が残るので、必ず見せてから決めてもらう。 */
+const LG_CUST_LABEL = { chosho_cust_name: "氏名", chosho_cust_addr: "住所", chosho_cust_tel: "電話" };
+async function lgAskCustomerConflicts(list){
+  if(!Array.isArray(list) || !list.length) return;
+  const lines = list.slice(0, 10).map(c => {
+    const no = ((c.row && c.row.data && c.row.data.chosho_mgmt_no) || "").trim() || "―";
+    return "・" + no + "　" + (LG_CUST_LABEL[c.field] || c.field)
+      + "\n　　台帳： " + (c.main || "（空）") + "\n　　現場： " + (c.genba || "（空）");
+  }).join("\n");
+  const more = list.length > 10 ? ("\n・ほか " + (list.length - 10) + " 件") : "";
+  const useGenba = confirm(
+    "現場入力で直した内容が、台帳の内容と違います（" + list.length + " 件）。\n\n"
+    + lines + more + "\n\n"
+    + "現場の内容に合わせますか？\n"
+    + "　OK　　＝ 現場の内容にする\n"
+    + "　キャンセル ＝ 台帳のままにする");
+  if(!useGenba) return;
+  list.forEach(c => { if(c && c.row && c.row.data) c.row.data[c.field] = c.genba; });
 }
 
 /* ---------- 物件機能の初期化（init から呼ばれる） ---------- */
