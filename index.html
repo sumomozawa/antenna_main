@@ -637,6 +637,140 @@
   body.mobile-layout .list-search-row input { font-size: 16px; }
 
   /* 一覧ビューのモードタブ。ひとつの帯（カード）にまとめて、どれを見ているか分かりやすくする */
+  /* ---- 予定と完了の分け表示（費用・協力会社・履行報告で共通） ----
+     工事が終わっていない戸別にも図面を描いた時点で金額は付く。
+     全部の合計だけを見ていると「もう終わったぶん」が分からないので、必ず分けて出す。 */
+  .dsplit-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .dsplit-table th, .dsplit-table td { padding: 5px 8px; border-top: 1px solid #dde3ea; }
+  .dsplit-table thead th { background: #eef3f9; text-align: right; border-top: 0; }
+  .dsplit-table thead th:first-child { text-align: left; }
+  .dsplit-table tbody th { text-align: left; font-weight: 700; white-space: nowrap; }
+  .dsplit-table .num { text-align: right; }
+  .dsplit-table tr.dsplit-done { background: #f3faf4; }
+  .dsplit-table tr.dsplit-done th { color: #1b5e20; }
+  .dsplit-table tr.dsplit-plan { background: #fffdf3; }
+  .dsplit-table tr.dsplit-plan th { color: #8a6d00; }
+  .dsplit-table tr.dsplit-all { background: #eef3f9; font-weight: 700; border-top: 2px solid #4a7abc; }
+  .dsplit-note { font-size: 11px; color: #55606b; line-height: 1.7; margin-top: 6px; }
+  .dsplit-note b { color: #1e3a5f; }
+  .dsplit-mark { text-align: center; white-space: nowrap; }
+  .dsplit-b { display: inline-block; font-size: 10px; font-weight: 700; border-radius: 3px;
+    padding: 0 5px; line-height: 16px; margin-left: 5px; white-space: nowrap; }
+  .dsplit-b.done { background: #e8f5e9; color: #1b5e20; border: 1px solid #a5d6a7; }
+  .dsplit-b.plan { background: #fff8e1; color: #8a6d00; border: 1px solid #ffe082; }
+  tr.cost-r-done td { background: #fbfefb; }
+  tr.cost-r-plan td { background: #fffefa; }
+  /* ---- 📈 履行報告 ---- */
+  .hk-setup { background: #f7f9fc; }
+  .hk-head { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; font-size: 12px; margin-bottom: 8px; }
+  .hk-head label { display: inline-flex; align-items: center; gap: 5px; }
+  .hk-head input[type="number"] { width: 116px; text-align: right; }
+  .hk-gross { font-weight: 700; color: #1e3a5f; }
+  .hk-warn { font-size: 12px; padding: 6px 10px; border-radius: 4px; margin-bottom: 8px;
+    background: #fff3e0; border: 1px solid #ffcc80; color: #8a4b00; }
+  .hk-warn.ok { background: #e8f5e9; border-color: #a5d6a7; color: #1b5e20; }
+  .hk-btn { font-size: 11px; padding: 3px 10px; border: 1px solid #b6c2ce; border-radius: 4px;
+    background: #fff; color: #33506e; cursor: pointer; margin-left: 6px; }
+  .hk-btn:hover { background: #eef3f9; }
+  .hk-btn-main { font-size: 13px; padding: 7px 16px; background: #1e3a5f; color: #fff; border-color: #1e3a5f; margin-left: 0; }
+  .hk-btn-main:hover { background: #2e5488; }
+  .hk-set-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .hk-set-table th, .hk-set-table td { padding: 4px 8px; border-top: 1px solid #dde3ea; }
+  .hk-set-table thead th { background: #eef3f9; border-top: 0; text-align: left; }
+  .hk-set-table .num { text-align: right; }
+  .hk-set-table input[type="number"] { width: 76px; text-align: right; }
+  .hk-set-table input[type="date"] { width: 118px; font-size: 11px; }
+  .hk-span-sep { margin: 0 3px; color: #90a0b0; }
+  .hk-why { font-size: 11px; color: #667482; line-height: 1.6; }
+  .hk-note { font-size: 11px; color: #55606b; line-height: 1.7; margin-top: 6px; }
+  .hk-snap-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 8px 0; font-size: 12px; }
+  .hk-snap-has { color: #1b5e20; } .hk-snap-no { color: #8a6d00; }
+  /* 報告書そのもの */
+  .hk-paper { background: #fff; padding: 4px 6px; }
+  .hk-title { text-align: center; font-size: 20px; letter-spacing: 5px; margin: 6px 0 2px; color: #1e3a5f; }
+  .hk-month { text-align: right; font-size: 13px; margin-bottom: 8px; }
+  .hk-info { border-collapse: collapse; font-size: 12px; margin-bottom: 10px; }
+  .hk-info th { text-align: left; background: #eef3f9; padding: 4px 12px; border: 1px solid #cdd9e6; white-space: nowrap; }
+  .hk-info td { padding: 4px 12px; border: 1px solid #cdd9e6; }
+  .hk-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .hk-table th, .hk-table td { padding: 5px 8px; border: 1px solid #cdd9e6; }
+  .hk-table thead th { background: #eef3f9; text-align: center; }
+  .hk-table .num { text-align: right; }
+  .hk-table tbody th { background: #eef3f9; text-align: left; }
+  .hk-table .hk-plan-c { color: #1565c0; background: #f5f9ff; }
+  .hk-table tr.hk-behind td:first-child::after { content: " ▲遅れ"; color: #c62828; font-size: 10px; font-weight: 700; }
+  .hk-table tr.hk-total { background: #eef3f9; font-weight: 700; }
+  .hk-table tr.hk-total2 { background: #f7f9fc; font-weight: 700; }
+  .hk-table input.hk-man { width: 66px; text-align: right; font-size: 12px; }
+  .hk-man-print { display: none; }
+  .hk-manual-b { font-size: 10px; background: #ede7f6; color: #4527a0; border: 1px solid #b39ddb;
+    border-radius: 3px; padding: 0 5px; }
+  .hk-blank { color: #b8c2cc; }
+  .hk-src-cell { font-size: 11px; color: #55606b; text-align: center; }
+  .hk-counts { font-size: 12px; color: #33506e; margin-top: 8px; padding: 6px 10px;
+    background: #f5f9ff; border: 1px solid #d6e3f2; border-radius: 4px; }
+  .hk-counts b { color: #1e3a5f; font-size: 13px; }
+  .hk-rule { font-size: 11px; color: #55606b; line-height: 1.8; margin-top: 8px; }
+  .hk-rule b { color: #1e3a5f; }
+  .hk-rule.warn { color: #8a4b00; background: #fff8e1; border: 1px solid #ffe082;
+    border-radius: 4px; padding: 6px 10px; }
+  /* 大きな数字のカード */
+  .hk-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px; margin: 10px 0 4px; }
+  .hk-card { border: 1px solid #d6e3f2; border-radius: 8px; padding: 10px 14px; background: #fff;
+    box-shadow: 0 1px 3px rgba(30,58,95,.06); }
+  .hk-card-l { font-size: 11px; color: #667482; letter-spacing: .5px; }
+  .hk-card-v { font-size: 30px; font-weight: 700; color: #1e3a5f; line-height: 1.15; margin: 2px 0; }
+  .hk-card-v .u { font-size: 15px; font-weight: 600; margin-left: 2px; color: #55606b; }
+  .hk-card-s { font-size: 11px; color: #667482; }
+  .hk-card.main { background: linear-gradient(180deg,#f2f7ff,#fff); border-color: #b6d0ee; }
+  .hk-card.main .hk-card-v { color: #0d47a1; }
+  .hk-card.good { background: linear-gradient(180deg,#f1faf2,#fff); border-color: #a5d6a7; }
+  .hk-card.good .hk-card-v { color: #1b5e20; }
+  .hk-card.bad { background: linear-gradient(180deg,#fff4f4,#fff); border-color: #ef9a9a; }
+  .hk-card.bad .hk-card-v { color: #b71c1c; }
+  /* 段階ごとの帯（実績を塗り、予定の位置に印） */
+  .hk-bar-c { padding: 6px 8px !important; }
+  .hk-bar-w { position: relative; height: 14px; border-radius: 7px; background: #eef2f6;
+    border: 1px solid #dde3ea; overflow: visible; }
+  .hk-bar-f { height: 100%; border-radius: 7px 0 0 7px;
+    background: linear-gradient(90deg,#4a90d9,#1565c0); transition: width .2s; }
+  .hk-bar-f.behind { background: linear-gradient(90deg,#ef9a9a,#c62828); }
+  .hk-bar-p { position: absolute; top: -3px; bottom: -3px; width: 2px; background: #37474f; }
+  .hk-bar-p::after { content: ""; position: absolute; top: -3px; left: -2.5px;
+    border-left: 3.5px solid transparent; border-right: 3.5px solid transparent; border-top: 4px solid #37474f; }
+  /* グラフ */
+  .hk-graph-head { font-size: 13px; font-weight: 700; color: #1e3a5f; margin: 10px 0 4px;
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .hk-gap { font-size: 12px; font-weight: 700; border-radius: 4px; padding: 2px 10px; }
+  .hk-gap.ok { background: #e8f5e9; color: #1b5e20; border: 1px solid #a5d6a7; }
+  .hk-gap.ng { background: #ffebee; color: #b71c1c; border: 1px solid #ef9a9a; }
+  .hk-chart { border: 1px solid #cdd9e6; border-radius: 4px; padding: 6px 8px; background: #fff; }
+  .hk-legend { font-size: 11px; display: flex; gap: 16px; margin-bottom: 2px; }
+  .hk-legend { align-items: center; }
+  .hk-lg { display: inline-flex; align-items: center; gap: 5px; }
+  .hk-lg.plan { color: #1565c0; } .hk-lg.act { color: #c62828; } .hk-lg.bar { color: #b06a6a; }
+  .hk-sw { display: inline-block; width: 18px; height: 3px; border-radius: 2px; }
+  .hk-sw.p { background: repeating-linear-gradient(90deg,#1565c0 0 6px,transparent 6px 10px); }
+  .hk-sw.a { background: #c62828; height: 3px; }
+  .hk-sw.b { background: #f8d7da; height: 11px; width: 9px; border: 1px solid #eab8bd; }
+  .hk-svg { width: 100%; height: auto; display: block; }
+  .hk-svg .hk-grid { stroke: #e3e9f0; stroke-width: 1; }
+  .hk-svg .hk-axis { stroke: #90a0b0; stroke-width: 1; }
+  .hk-svg .hk-ylab { font-size: 10px; fill: #667482; text-anchor: end; }
+  .hk-svg .hk-xlab { font-size: 10px; fill: #667482; text-anchor: middle; }
+  .hk-svg .hk-xlab.now { fill: #1e3a5f; font-weight: 700; }
+  .hk-svg .hk-now { stroke: #b0bec5; stroke-width: 1; stroke-dasharray: 2 3; }
+  .hk-svg .hk-bar { fill: #f8d7da; stroke: #eab8bd; stroke-width: .5; }
+  .hk-svg .hk-ar-p { fill: url(#hkGp); }
+  .hk-svg .hk-ar-a { fill: url(#hkGa); }
+  .hk-svg .hk-line-p { fill: none; stroke: #1565c0; stroke-width: 2; stroke-dasharray: 7 4; }
+  .hk-svg .hk-line-a { fill: none; stroke: #c62828; stroke-width: 2.4; }
+  .hk-svg .hk-dot-a { fill: #fff; stroke: #c62828; stroke-width: 2.2; }
+  /* 印刷では設定と入力欄を出さない（報告書だけを刷る） */
+  body.list-print-mode .hk-setup { display: none !important; }
+  body.list-print-mode .hk-table input.hk-man { display: none !important; }
+  body.list-print-mode .hk-man-print { display: inline !important; }
   .list-mode-tabs {
     display: flex;
     gap: 3px;
@@ -5208,6 +5342,7 @@
       <button class="mode-tab" data-list-mode="subcontractor" title="協力会社→元請けへの請求内訳（労務費＋協力会社諸経費＋持出材料）。全体費用詳細の数値には一切影響しません。単価は標準単価（業者間の統一額）で計算し、物件用の単価変更（単価マスターの色付き行）は反映されません">🤝 協力会社</button>
       <button class="mode-tab" data-list-mode="ledger" title="全戸別を1行ずつ一覧・セル直接編集（工事日程・打合せ・ビラ配布・完了・備考）。カレンダーと双方向連動">📒 受付台帳</button>
       <button class="mode-tab" data-list-mode="calendar" title="工事予定（青）と打合せ予定（緑）を月表示。受付台帳と双方向連動">📅 予定</button>
+      <button class="mode-tab" data-list-mode="progress" title="月ごとの履行報告書（出来高報告）。工事費内訳書から出した段階ごとの割合と、受付台帳・現場入力の印から当月の出来高を出し、工程表の予定と実績をグラフで見比べます。完了の判定は明示のチェックだけで行い、費用の計上額からは判定しません。">📈 履行報告</button>
       <button class="mode-tab" data-list-mode="materials" title="現場入力で「下見完了」にした戸別の材料を、工事全体で合計します。まとめ発注の数量表（金額なし）">🧰 発注材料</button>
       <button class="mode-tab" data-list-mode="photos" title="戸別ファイル（管理番号.json）の中に入っている写真を、戸別ごとに並べて印刷／PDFにします（1戸別＝必ず1ページ）。写真は1枚ずつ左右90°に回したり消したりでき、その結果は「戸別ファイルへ書き戻す」で元のJSONへ返せます。">📷 写真台帳</button>
       <button class="list-pdf-btn" id="btn-list-pdf" title="現在のモードの内容をPDF/印刷ダイアログで出力">🖨 PDF出力</button>
@@ -6024,7 +6159,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.22e";
+const APP_VERSION = "2026.08.22f";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -16295,7 +16430,8 @@ function renderListTable(){
 
   // 受付台帳・カレンダーは0件でも表示する（台帳の「＋新規行」／カレンダーのクイック仮入力が戸別作成の起点）
   const zeroOk = (_listMode === "ledger" || _listMode === "calendar" || _listMode === "materials"
-    || _listMode === "photos");   // 写真台帳は戸別を読み込んでいなくてもフォルダだけで使える
+    || _listMode === "photos"     // 写真台帳は戸別を読み込んでいなくてもフォルダだけで使える
+    || _listMode === "progress"); // 履行報告は戸別が無くても割合と工期を先に決められる
   if(_listRows.length === 0 && !zeroOk){
     tbl.innerHTML = ""; custom.innerHTML = "";
     tbl.style.display = ""; custom.style.display = "none";
@@ -16335,6 +16471,10 @@ function renderListTable(){
     tbl.style.display = "none";
     custom.style.display = "";
     renderListCalendarMode(rows, custom);
+  } else if(_listMode === "progress"){
+    tbl.style.display = "none";
+    custom.style.display = "";
+    renderListProgressMode(rows, custom);
   } else if(_listMode === "materials"){
     tbl.style.display = "none";
     custom.style.display = "";
@@ -16680,6 +16820,7 @@ function renderListCostDetailMode(rows, container){
   // 未集計の内訳。図面がまだ無い戸別と、全暗号化で中身が読めない戸別は原因が別なので分けて数える
   // （まとめ発注の前に「何件ぶんの材料か」を判断できるようにするため）。
   let naNoDwg = 0, naEnc = 0;
+  const costSplit = doneSplitNew();     // 予定（未完了）と完了に分けた集計
 
   rows.forEach(r => {
     const bom = costDetailFilterBom(getRowBomAggregate(r));   // 諸経費除外（キャッシュは無変更）
@@ -16750,6 +16891,7 @@ function renderListCostDetailMode(rows, container){
       baseMat: baseMatRow, baseLab: baseLabRow,
       addMat: addMatRow, addLab: addLabRow
     });
+    doneSplitAdd(costSplit, r, bom.matSum, bom.labSum);
     caseTotalMat += bom.matSum;
     caseTotalLab += bom.labSum;
     baseMatTotal += baseMatRow;
@@ -16793,6 +16935,10 @@ function renderListCostDetailMode(rows, container){
 
   let html = renderSelectedFolderBanner();
 
+  // 予定と完了に分けた集計。工事が終わっていない戸別にも金額は付くので、
+  // 全部の合計だけを見ていると「もう終わったぶん」が分からない。
+  html += doneSplitHtml(costSplit, { title: "予定と完了（材料費・労務費／税抜）" });
+
   // 戸別ごとの一覧（上部）
   html += '<div class="cost-detail-section">'
     + '<h3>戸別ごとの金額一覧 <span style="font-size:11px;color:#555;font-weight:normal;">(' + perRowList.length + ' 件・諸経費/協力会社諸経費 含まず・税抜)</span>' + onlyDwgBadge;
@@ -16803,6 +16949,7 @@ function renderListCostDetailMode(rows, container){
   html += '<table><thead><tr>'
       + '<th style="width:130px">管理番号</th>'
       + '<th>お客様名</th>'
+      + '<th style="width:76px" title="受付台帳の「完了」チェック、または現場入力の工事完了が付いているか">状態</th>'
       + '<th class="num" style="width:120px">戸別合計</th>';
   if(hasPreset){
     html += '<th class="num" style="width:110px" title="プリセット×1件分を固定計上">基本工事分</th>';
@@ -16812,9 +16959,12 @@ function renderListCostDetailMode(rows, container){
   }
   html += '</tr></thead><tbody>';
   perRowList.forEach(p => {
-    html += '<tr>'
+    const pDone = caseWorkDone(p.r);
+    html += '<tr class="' + (pDone ? "cost-r-done" : "cost-r-plan") + '">'
       + '<td class="mgmt-no">' + escapeHtml(p.r.data.chosho_mgmt_no || "―") + '</td>'
       + '<td>' + escapeHtml(p.r.data.chosho_cust_name || "") + '</td>'
+      + '<td class="dsplit-mark">' + (pDone ? '<span class="dsplit-b done">✓ 完了</span>'
+                                            : '<span class="dsplit-b plan">○ 予定</span>') + '</td>'
       + '<td class="num">' + yen(p.caseMat + p.caseLab) + '</td>';
     if(hasPreset){
       const addAmt = p.addMat + p.addLab;
@@ -16827,12 +16977,12 @@ function renderListCostDetailMode(rows, container){
   });
   if(hasPreset){
     const addTotal = addMat + addLab;
-    html += '<tr class="grand-total"><td colspan="2" style="text-align:right;">総合計 (基本+追加=戸別合計)</td>'
+    html += '<tr class="grand-total"><td colspan="3" style="text-align:right;">総合計 (基本+追加=戸別合計)</td>'
       + '<td class="num">' + yen(caseTotalMat + caseTotalLab) + '</td>'
       + '<td class="num">' + yen(baseMatTotal + baseLabTotal) + '</td>'
       + '<td class="num">' + yenSigned(addTotal) + '</td></tr>';
   } else {
-    html += '<tr class="grand-total"><td colspan="2" style="text-align:right;">総合計 (' + perRowList.length + ' 件)</td>'
+    html += '<tr class="grand-total"><td colspan="3" style="text-align:right;">総合計 (' + perRowList.length + ' 件)</td>'
       + '<td class="num">' + yen(caseTotalMat + caseTotalLab) + '</td>'
       + '<td class="num">' + yen(caseTotalMat) + '</td><td class="num">' + yen(caseTotalLab) + '</td></tr>';
   }
@@ -17095,6 +17245,60 @@ function subStatusBadgeHtml(status){
 
 /* 持出フラグの保存キー：管理番号（請求の単位）優先・無ければファイルパス。
    ※ 管理番号重複はアプリ側で警告対象。重複時は同一束として扱う。 */
+/* ============================================================
+   その戸別の工事が「終わった」と言えるか
+   ------------------------------------------------------------
+   ★ここで見てよいのは、人が明示的に付けた印だけ★
+     ・受付台帳の「完了」（chosho_status === "completed"）
+     ・現場入力の工事完了（work_done）
+   ★金額が計上されているかどうかは、絶対に見ない★
+   工事が終わっていない戸別にも、図面を描いた時点で材料費・労務費は
+   積み上がる。「金額がある＝終わった」と数えると、出来高が実態より
+   大きく出て、履行報告書も請求も狂う。
+   ============================================================ */
+function caseWorkDone(row){
+  const d = (row && row.data) || {};
+  if(d.chosho_status === "completed") return true;
+  if(d.work_done === true) return true;
+  return false;
+}
+/* 予定（まだ終わっていない）と完了に分けた集計の箱を作る。 */
+function doneSplitNew(){
+  return { done:{ n:0, mat:0, lab:0 }, plan:{ n:0, mat:0, lab:0 } };
+}
+function doneSplitAdd(sp, row, mat, lab){
+  const b = caseWorkDone(row) ? sp.done : sp.plan;
+  b.n++; b.mat += (mat || 0); b.lab += (lab || 0);
+}
+/* 予定／完了の内訳を出す帯。費用と協力会社で同じ形にして、見比べられるようにする。
+   cols … [{key:"mat",label:"材料費"}, ...] 出す列。合計は必ず出す。 */
+function doneSplitHtml(sp, opts){
+  opts = opts || {};
+  const cols = opts.cols || [{ key:"mat", label:"材料費" }, { key:"lab", label:"労務費" }];
+  const sum = b => cols.reduce((a, c) => a + (b[c.key] || 0), 0);
+  const dT = sum(sp.done), pT = sum(sp.plan), gT = dT + pT;
+  const pct = v => gT > 0 ? (Math.round(v / gT * 1000) / 10).toFixed(1) + "%" : "―";
+  const line = (cls, label, b, tip) => '<tr class="' + cls + '"><th title="' + escapeHtml(tip || "") + '">' + label + '</th>'
+    + '<td class="num">' + b.n + ' 件</td>'
+    + cols.map(c => '<td class="num">' + yen(b[c.key] || 0) + '</td>').join("")
+    + '<td class="num"><b>' + yen(sum(b)) + '</b></td>'
+    + '<td class="num">' + pct(sum(b)) + '</td></tr>';
+  return '<div class="cost-detail-section dsplit">'
+    + '<h3>' + escapeHtml(opts.title || "予定と完了") + '</h3>'
+    + '<table class="dsplit-table"><thead><tr><th style="width:150px"></th><th class="num" style="width:80px">件数</th>'
+    +   cols.map(c => '<th class="num" style="width:130px">' + escapeHtml(c.label) + '</th>').join("")
+    +   '<th class="num" style="width:140px">合計</th><th class="num" style="width:70px">割合</th>'
+    + '</tr></thead><tbody>'
+    + line("dsplit-done", "✓ 完了", sp.done, "受付台帳の「完了」チェック、または現場入力の工事完了が付いている戸別")
+    + line("dsplit-plan", "○ 予定（未完了）", sp.plan, "まだ「完了」の印が付いていない戸別。図面があれば金額は出るが、出来高には数えない")
+    + '<tr class="dsplit-all"><th>合計</th><td class="num">' + (sp.done.n + sp.plan.n) + ' 件</td>'
+    +   cols.map(c => '<td class="num">' + yen((sp.done[c.key] || 0) + (sp.plan[c.key] || 0)) + '</td>').join("")
+    +   '<td class="num"><b>' + yen(gT) + '</b></td><td class="num">100.0%</td></tr>'
+    + '</tbody></table>'
+    + '<div class="dsplit-note">完了かどうかは、<b>受付台帳の「完了」チェック</b>と<b>現場入力の工事完了</b>だけで判定しています。'
+    + '金額が計上されているかどうかからは判定しません（工事が終わっていない戸別にも、図面を描いた時点で金額は付くため）。</div>'
+    + '</div>';
+}
 function subCaseKey(row){
   // 管理番号は半角でキーにする（全角のまま保存された古いファイルと同じ戸別として扱う）
   const mg = toHalfWidthAn((row.data && row.data.chosho_mgmt_no || "")).trim();
@@ -17160,6 +17364,9 @@ function computeSubRow(row, idx){
     custName: (row.data && row.data.chosho_cust_name) || "",
     date: (row.data && row.data.chosho_date) || "",
     company: getContractor(takeoutKey) || "", // 施工会社（協力会社の割当）
+    /* 工事が終わったか。受付台帳の「完了」と現場入力の工事完了だけで見る。
+       金額が付いているかどうかからは判定しない（caseWorkDone を参照）。 */
+    done: caseWorkDone(row), row,
     pureLab, fee, materials, takeout, total: pureLab + fee + takeout,
     laborItems, laborSum,
     status: rev.status || "unconfirmed", note: rev.note || ""
@@ -17181,8 +17388,10 @@ function renderListSubcontractorMode(rows, container){
   const companyAgg = {}; const companyOrder = [];
   subRows.forEach(sr => {
     const c = sr.company || "";
-    if(!(c in companyAgg)){ companyAgg[c] = { company: c, n: 0, lab: 0, fee: 0, take: 0, total: 0 }; companyOrder.push(c); }
+    if(!(c in companyAgg)){ companyAgg[c] = { company: c, n: 0, lab: 0, fee: 0, take: 0, total: 0,
+      dn: 0, dTotal: 0, pn: 0, pTotal: 0 }; companyOrder.push(c); }
     const a = companyAgg[c]; a.n++; a.lab += sr.pureLab; a.fee += sr.fee; a.take += sr.takeout; a.total += sr.total;
+    if(sr.done){ a.dn++; a.dTotal += sr.total; } else { a.pn++; a.pTotal += sr.total; }
   });
   companyOrder.sort((a, b) => (a === "" ? 1 : b === "" ? -1 : a.localeCompare(b, "ja"))); // 未割当は末尾
   const hasAnyCompany = companyOrder.some(c => c !== "");
@@ -17207,6 +17416,17 @@ function renderListSubcontractorMode(rows, container){
     + (naCount > 0 ? ' ／ 未集計(全暗号化等) ' + naCount + ' 件' : '')
     + '</span></div>';
 
+  // 予定と完了に分けた集計。請求できるのは終わったぶんだけなので、ここを分けて出す。
+  {
+    const sp = doneSplitNew();
+    activeRows.forEach(sr => {
+      const b = sr.done ? sp.done : sp.plan;
+      b.n++; b.lab = (b.lab || 0) + sr.pureLab; b.fee = (b.fee || 0) + sr.fee; b.take = (b.take || 0) + sr.takeout;
+    });
+    html += doneSplitHtml(sp, { title: "予定と完了（協力会社への請求／税抜）",
+      cols: [{ key:"lab", label:"労務費" }, { key:"fee", label:"協力会社諸経費" }, { key:"take", label:"持出材料" }] });
+  }
+
   // 🏢 会社別集計（最重要：施工会社ごとの請求内訳の要約。会社名クリックで絞り込み）
   if(hasAnyCompany){
     html += '<div class="cost-detail-section sub-company-summary" style="margin-bottom:10px;">'
@@ -17214,7 +17434,10 @@ function renderListSubcontractorMode(rows, container){
       + '<table class="sub-company-table" style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:#eef3f9;">'
       + '<th style="text-align:left;padding:4px 8px;">施工会社</th><th style="text-align:right;padding:4px 8px;">件数</th>'
       + '<th style="text-align:right;padding:4px 8px;">労務費</th><th style="text-align:right;padding:4px 8px;">協力会社諸経費</th>'
-      + '<th style="text-align:right;padding:4px 8px;">持出材料</th><th style="text-align:right;padding:4px 8px;">合計</th></tr></thead><tbody>';
+      + '<th style="text-align:right;padding:4px 8px;">持出材料</th><th style="text-align:right;padding:4px 8px;">合計</th>'
+      + '<th style="text-align:right;padding:4px 8px;background:#e8f5e9;" title="受付台帳の「完了」または現場入力の工事完了が付いている戸別のぶん">✓ 完了</th>'
+      + '<th style="text-align:right;padding:4px 8px;background:#fff8e1;" title="まだ完了の印が付いていない戸別のぶん">○ 予定</th>'
+      + '</tr></thead><tbody>';
     companyOrder.forEach(c => {
       const a = companyAgg[c];
       const sel = (_subCompanyFilter !== "all") && ((_subCompanyFilter === "__none__" ? "" : _subCompanyFilter) === c);
@@ -17224,13 +17447,19 @@ function renderListSubcontractorMode(rows, container){
         + '<td style="text-align:right;padding:4px 8px;">' + yen(a.lab) + '</td>'
         + '<td style="text-align:right;padding:4px 8px;">' + yen(a.fee) + '</td>'
         + '<td style="text-align:right;padding:4px 8px;">' + yen(a.take) + '</td>'
-        + '<td style="text-align:right;padding:4px 8px;font-weight:700;color:#1e3a5f;">' + yen(a.total) + '</td></tr>';
+        + '<td style="text-align:right;padding:4px 8px;font-weight:700;color:#1e3a5f;">' + yen(a.total) + '</td>'
+        + '<td style="text-align:right;padding:4px 8px;background:#f3faf4;color:#1b5e20;">' + yen(a.dTotal)
+        +   '<span style="color:#7a8a7c;font-size:10px;"> ' + a.dn + '件</span></td>'
+        + '<td style="text-align:right;padding:4px 8px;background:#fffdf3;color:#8a6d00;">' + yen(a.pTotal)
+        +   '<span style="color:#9a9484;font-size:10px;"> ' + a.pn + '件</span></td></tr>';
     });
-    const tAll = companyOrder.reduce((s, c) => { const a = companyAgg[c]; s.n += a.n; s.lab += a.lab; s.fee += a.fee; s.take += a.take; s.total += a.total; return s; }, { n: 0, lab: 0, fee: 0, take: 0, total: 0 });
+    const tAll = companyOrder.reduce((s, c) => { const a = companyAgg[c]; s.n += a.n; s.lab += a.lab; s.fee += a.fee; s.take += a.take; s.total += a.total; s.dn += a.dn; s.dTotal += a.dTotal; s.pn += a.pn; s.pTotal += a.pTotal; return s; }, { n: 0, lab: 0, fee: 0, take: 0, total: 0, dn: 0, dTotal: 0, pn: 0, pTotal: 0 });
     html += '<tr style="border-top:2px solid #4a7abc;background:#eef3f9;font-weight:700;">'
       + '<td style="padding:5px 8px;">総合計</td><td style="text-align:right;padding:5px 8px;">' + tAll.n + '</td>'
       + '<td style="text-align:right;padding:5px 8px;">' + yen(tAll.lab) + '</td><td style="text-align:right;padding:5px 8px;">' + yen(tAll.fee) + '</td>'
-      + '<td style="text-align:right;padding:5px 8px;">' + yen(tAll.take) + '</td><td style="text-align:right;padding:5px 8px;color:#1e3a5f;">' + yen(tAll.total) + '</td></tr>'
+      + '<td style="text-align:right;padding:5px 8px;">' + yen(tAll.take) + '</td><td style="text-align:right;padding:5px 8px;color:#1e3a5f;">' + yen(tAll.total) + '</td>'
+      + '<td style="text-align:right;padding:5px 8px;background:#e8f5e9;color:#1b5e20;">' + yen(tAll.dTotal) + '<span style="font-weight:normal;font-size:10px;"> ' + tAll.dn + '件</span></td>'
+      + '<td style="text-align:right;padding:5px 8px;background:#fff8e1;color:#8a6d00;">' + yen(tAll.pTotal) + '<span style="font-weight:normal;font-size:10px;"> ' + tAll.pn + '件</span></td></tr>'
       + '</tbody></table>'
       + (_subCompanyFilter !== "all" ? '<div style="margin-top:5px;"><button class="sub-btn" id="sub-company-clear" type="button">✕ 会社の絞り込みを解除（全社表示）</button></div>' : '')
       + '</div>';
@@ -17285,6 +17514,7 @@ function renderListSubcontractorMode(rows, container){
     html += '<tr class="sub-row' + (hasT ? ' has-takeout' : '') + '" data-uid="' + escapeHtml(sr.uid) + '">'
       + '<td class="sub-exp"><button class="sub-expand-btn" type="button">' + (expanded ? '▼' : '▶') + '</button></td>'
       + '<td class="mgmt-no">' + escapeHtml(sr.mgmtNo || "―") + subStatusBadgeHtml(sr.status) + (hasT ? '<span class="sub-badge">持出</span>' : '')
+        + (sr.done ? '<span class="dsplit-b done">✓ 完了</span>' : '<span class="dsplit-b plan">○ 予定</span>')
         + (sr.company ? '<span class="sub-company-chip" style="display:inline-block;margin-left:6px;font-size:10px;background:#e8eef5;color:#33506e;border:1px solid #cdd9e6;border-radius:3px;padding:0 5px;">🏢 ' + escapeHtml(sr.company) + '</span>' : '') + '</td>'
       + '<td>' + escapeHtml(sr.custName) + '</td>'
       + '<td class="num">' + yen(sr.pureLab) + '</td>'
@@ -25196,6 +25426,549 @@ function bindLedgerHandlers(container){
   });
 }
 
+/* ============================================================
+   📈 履行報告（一覧の第9モード）
+   ------------------------------------------------------------
+   月ごとの履行報告書（出来高報告）を作る。
+
+   ■ 割合の考え方
+     工事価格を100%として、作業の段階ごとに割合を配る。
+     初期値は工事費内訳書（戸別受信その2）の金額から出した。
+
+       材料費      7,610,400円   工事価格の 27.98%
+       労務費      7,817,580円            28.74%
+       共通仮設費  2,311,770円            8.50%（うち石綿含有建材の調査費 308,000円）
+       現場管理費  5,524,160円            20.31%
+       一般管理費  3,936,090円            14.47%
+       ────────────────────────
+       工事価格   27,200,000円           100.00%
+
+     この金額はあくまで割合の参考。割合は画面で直せる。
+
+   ■ ★守ること★
+     工事が終わっていない戸別にも、図面を描いた時点で材料費・労務費は積み上がる。
+     「全体費用に金額が計上されている＝その戸別は終わった」と数えるのは禁止。
+     ここでは、人が明示的に付けた印（受付台帳のチェック・現場入力の工程）と、
+     手入力の％だけを見る。金額は出来高の“単価”としてしか使わない。
+   ============================================================ */
+const HK_LS = "antenna_main_hakou_v1";
+/* 段階と、その割合の根拠。pct は工事価格に対する％。 */
+/* 予定の期間（from/to）は工程表（着手 令和8年7月3日）から入れた初期値。
+     資材準備／材料調達  91日   事前調査／現地調査 112日
+     アンテナ設置工事    142日  手直し調整 17日      完成書類 8日
+   ここも画面で直せる。直すと予定曲線がその場で描き直る。 */
+const HK_STAGES = [
+  { key:"survey",  name:"下見・現地調査（石綿調査含む）", pct:5.19,  src:"survey",
+    from:"2026-07-03", to:"2026-10-22",
+    why:"共通仮設費の石綿含有建材の調査費 308,000円 ＋ 現場管理費の20%",
+    plan:"工程表の「事前調査／現地調査」112日" },
+  { key:"meet",    name:"打合せ",                         pct:3.05,  src:"meetPast",
+    from:"2026-07-03", to:"2026-11-30",
+    why:"現場管理費の15%", plan:"現地調査と並行" },
+  { key:"consent", name:"同意書 受領・立会打合せ",         pct:3.05,  src:"consent",
+    from:"2026-07-03", to:"2026-12-31",
+    why:"現場管理費の15%", plan:"現地調査〜工事と並行" },
+  { key:"order",   name:"材料発注",                       pct:6.99,  src:"manual",
+    from:"2026-08-01", to:"2026-10-30",
+    why:"材料費の25%（発注を済ませた分）", plan:"工程表の「資材準備／材料調達」91日" },
+  { key:"matchk",  name:"材料検査（現場搬入）",            pct:20.98, src:"manual",
+    from:"2026-09-15", to:"2026-11-30",
+    why:"材料費の75%（搬入して検査を受けた分）", plan:"資材準備の後半（搬入・検査）" },
+  { key:"work",    name:"工事（施工）",                    pct:43.22, src:"done",
+    from:"2026-10-01", to:"2027-02-19",
+    why:"労務費の全額 ＋ 共通仮設費（石綿調査を除く）＋ 現場管理費の35%",
+    plan:"工程表の「アンテナ設置工事／設置配線」142日" },
+  { key:"insp",    name:"手直し調整・完了検査",            pct:8.84,  src:"manual",
+    from:"2027-02-20", to:"2027-03-08",
+    why:"一般管理費の40% ＋ 現場管理費の15%", plan:"工程表の「手直し調整」17日" },
+  { key:"doc",     name:"各種書類作成",                    pct:8.68,  src:"compdoc",
+    from:"2027-03-09", to:"2027-03-16",
+    why:"一般管理費の60%", plan:"工程表の「完成書類／書類作成」8日" }
+];
+/* 「その段階が済んだ」と数えてよい印。金額から判定するものは、ここに1つも入れない。 */
+const HK_SRC = [
+  { key:"survey",   label:"下見済（現場入力の下見完了）" },
+  { key:"flyer",    label:"ビラ配布済" },
+  { key:"meetPast", label:"打合せ予定日が過ぎた" },
+  { key:"consent",  label:"同意書 受領済" },
+  { key:"done",     label:"工事完了（受付台帳の完了・現場の工事完了）" },
+  { key:"compdoc",  label:"完了書 受領済" },
+  { key:"manual",   label:"手入力（工事全体の％）" }
+];
+let _hk = null;
+function hkLoad(){
+  if(_hk) return _hk;
+  let o = null;
+  try { o = JSON.parse(localStorage.getItem(HK_LS) || "null"); } catch(_){}
+  _hk = (o && typeof o === "object") ? o : {};
+  if(!_hk.rate || typeof _hk.rate !== "object") _hk.rate = {};
+  if(!_hk.src  || typeof _hk.src  !== "object") _hk.src  = {};
+  if(!_hk.manual || typeof _hk.manual !== "object") _hk.manual = {};
+  if(!_hk.snap   || typeof _hk.snap   !== "object") _hk.snap   = {};
+  if(!_hk.head   || typeof _hk.head   !== "object") _hk.head   = {};
+  if(!_hk.span   || typeof _hk.span   !== "object") _hk.span   = {};   // 段階ごとの予定の期間
+  if(_hk.head.net === undefined) _hk.head.net = 27200000;   // 内訳書の工事価格（税抜）
+  if(_hk.head.tax === undefined) _hk.head.tax = 10;
+  if(_hk.head.start === undefined) _hk.head.start = "2026-07-03";  // 工程表の着手日
+  if(_hk.head.end   === undefined) _hk.head.end   = "2027-03-16";  // 工程表の完成
+  return _hk;
+}
+function hkSave(){
+  try { localStorage.setItem(HK_LS, JSON.stringify(hkLoad())); }
+  catch(e){ console.warn("履行報告の保存に失敗", e); }
+}
+/* 画面で直した割合・判定のもとを混ぜた段階の並び。 */
+function hkStages(){
+  const h = hkLoad();
+  return HK_STAGES.map(st => {
+    const sp = h.span[st.key] || {};
+    return { key: st.key, name: st.name, why: st.why, plan: st.plan,
+      pct: (typeof h.rate[st.key] === "number") ? h.rate[st.key] : st.pct,
+      src: h.src[st.key] || st.src,
+      from: sp.from || st.from, to: sp.to || st.to };
+  });
+}
+function hkPctSum(){ return hkStages().reduce((a, st) => a + (st.pct || 0), 0); }
+function hkGross(){ const h = hkLoad(); return Math.round((h.head.net || 0) * (1 + (h.head.tax || 0) / 100)); }
+function hkYm(d){ const t = d || new Date(); const p = n => String(n).padStart(2, "0");
+  return t.getFullYear() + "-" + p(t.getMonth() + 1); }
+function hkPrevYm(ym){
+  const m = /^(\d{4})-(\d{2})$/.exec(String(ym || "")); if(!m) return "";
+  const d = new Date(+m[1], +m[2] - 2, 1); const p = n => String(n).padStart(2, "0");
+  return d.getFullYear() + "-" + p(d.getMonth() + 1);
+}
+function hkYmLabel(ym){
+  const m = /^(\d{4})-(\d{2})$/.exec(String(ym || "")); return m ? (+m[1] + "年" + (+m[2]) + "月") : String(ym || "");
+}
+/* その戸別が、その印を持っているか。★金額は一切見ない★ */
+function hkCaseHit(row, src){
+  const d = (row && row.data) || {};
+  const lg = getLedger(subCaseKey(row)) || {};
+  switch(src){
+    case "survey":   return d.survey_done === true || lg.survey === true;
+    case "flyer":    return lg.flyer === true || d.flyer_done === true;
+    case "consent":  return lg.consent === true || d.consent_received === true;
+    case "compdoc":  return lg.compdoc === true || d.compdoc_received === true;
+    case "done":     return caseWorkDone(row);
+    case "meetPast": {
+      const v = String(lg.meetAt || "").slice(0, 10);
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+      return v <= hkToday();
+    }
+    default: return false;   // manual はここでは数えない
+  }
+}
+function hkToday(){ const d = new Date(); const p = n => String(n).padStart(2, "0");
+  return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()); }
+/* 保留の戸別を数に入れるか（既定は入れる。着工を止めているだけで契約からは外れないため） */
+function hkRows(rows){
+  const h = hkLoad();
+  if(!h.head.skipHold) return rows;
+  return rows.filter(r => !(getLedger(subCaseKey(r)) || {}).hold);
+}
+/* その月の出来高を計算する。 */
+function hkCompute(rows, ym){
+  const h = hkLoad();
+  const target = hkRows(rows);
+  const n = target.length;
+  const man = h.manual[ym] || {};
+  const stages = hkStages().map(st => {
+    let rate = 0, hit = 0, manual = false;
+    if(st.src === "manual"){
+      manual = true;
+      rate = Math.max(0, Math.min(100, Number(man[st.key]) || 0));
+    } else {
+      hit = target.filter(r => hkCaseHit(r, st.src)).length;
+      rate = n > 0 ? (hit / n * 100) : 0;
+    }
+    return Object.assign({}, st, { rate, hit, n, manual,
+      /* その段階の出来高＝ 工事価格 × 段階の割合 × 達成率 */
+      amount: (h.head.net || 0) * (st.pct / 100) * (rate / 100),
+      share: st.pct * rate / 100 });     // 全体に対する出来高％
+  });
+  const total = stages.reduce((a, st) => a + st.share, 0);
+  return { stages, total, amount: stages.reduce((a, st) => a + st.amount, 0), n };
+}
+/* ---- 予定と実績のグラフ ----
+   予定曲線 … 段階ごとの予定の期間を日割りして積み上げたもの（工程管理曲線）
+   実績曲線 … 月の記録（確定した達成率）と、いま見ている月の計算値
+   予定と実績を重ねて見ないと、「遅れているのか、先行しているのか」が分からない。 */
+function hkD(v){
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v || ""));
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+}
+function hkMonthEndD(ym){
+  const m = /^(\d{4})-(\d{2})$/.exec(String(ym || ""));
+  return m ? new Date(+m[1], +m[2], 0) : null;    // その月の末日
+}
+/* 工期のあいだの月を並べる（多すぎる指定は 60ヶ月で打ち切る） */
+function hkMonths(){
+  const h = hkLoad();
+  const a = hkD(h.head.start), b = hkD(h.head.end);
+  if(!a || !b || b < a) return [];
+  const out = []; const p = n => String(n).padStart(2, "0");
+  let y = a.getFullYear(), m = a.getMonth() + 1;
+  for(let i = 0; i < 60; i++){
+    out.push(y + "-" + p(m));
+    if(y === b.getFullYear() && m === b.getMonth() + 1) break;
+    m++; if(m > 12){ m = 1; y++; }
+  }
+  return out;
+}
+/* その日付の時点で、予定では何％進んでいるはずか */
+function hkPlanAt(date){
+  if(!date) return 0;
+  let t = 0;
+  hkStages().forEach(st => {
+    const a = hkD(st.from), b = hkD(st.to);
+    if(!a || !b || b <= a){ if(a && date >= a) t += st.pct; return; }
+    const f = (date - a) / (b - a);
+    t += st.pct * Math.max(0, Math.min(1, f));
+  });
+  return t;
+}
+/* 月ごとの「予定」と「実績」。実績は記録のある月＋いま見ている月だけ。 */
+function hkSeries(rows, ym){
+  const h = hkLoad();
+  return hkMonths().map(k => {
+    const end = hkMonthEndD(k);
+    let act = null;
+    if(h.snap[k] && typeof h.snap[k].total === "number") act = h.snap[k].total;
+    else if(k === ym) act = hkCompute(rows, ym).total;
+    return { ym: k, plan: hkPlanAt(end), act };
+  });
+}
+/* 予定と実績の折れ線。印刷でもそのまま出るよう、画像ではなく図形で描く。 */
+function hkChartSvg(series, ym){
+  const W = 900, H = 300, L = 46, R = 14, T = 14, B = 40;
+  const iw = W - L - R, ih = H - T - B;
+  const n = series.length;
+  if(n < 2) return '<div class="hk-rule">工期（着手日と完成日）を入れると、予定と実績のグラフが出ます。</div>';
+  const x = i => L + (n === 1 ? iw / 2 : iw * i / (n - 1));
+  const y = v => T + ih * (1 - Math.max(0, Math.min(100, v)) / 100);
+  let g = '';
+  for(let v = 0; v <= 100; v += 20){
+    g += '<line x1="' + L + '" y1="' + y(v) + '" x2="' + (W - R) + '" y2="' + y(v) + '" class="hk-grid"/>'
+      + '<text x="' + (L - 6) + '" y="' + (y(v) + 4) + '" class="hk-ylab">' + v + '%</text>';
+  }
+  // 当月分（前の月からの伸び）の棒。細かい月の動きが分かる。
+  let bars = '';
+  const bw = Math.max(4, Math.min(22, iw / n * 0.45));
+  series.forEach((s, i) => {
+    if(s.act === null) return;
+    const pv = (i > 0 && series[i - 1].act !== null) ? series[i - 1].act : 0;
+    const d = Math.max(0, s.act - pv);
+    if(d <= 0) return;
+    bars += '<rect x="' + (x(i) - bw / 2) + '" y="' + y(d) + '" width="' + bw + '" height="' + (y(0) - y(d)) + '" class="hk-bar"><title>'
+      + escapeHtml(hkYmLabel(s.ym) + " 当月分 " + hkFixed(d, 1) + "%") + '</title></rect>';
+  });
+  const ptsOf = key => {
+    const pts = [];
+    series.forEach((s, i) => { const v = s[key]; if(v === null || v === undefined) return; pts.push({ x: x(i), y: y(v) }); });
+    return pts;
+  };
+  const path = (key, cls) => {
+    const pts = ptsOf(key);
+    return pts.length >= 2 ? '<polyline points="' + pts.map(q => q.x + "," + q.y).join(" ") + '" class="' + cls + '"/>' : "";
+  };
+  /* 線の下を薄く塗る。線だけより「どれだけ積み上がったか」が体で分かる。 */
+  const area = (key, cls) => {
+    const pts = ptsOf(key);
+    if(pts.length < 2) return "";
+    return '<polygon class="' + cls + '" points="' + pts[0].x + "," + y(0) + " "
+      + pts.map(q => q.x + "," + q.y).join(" ") + " " + pts[pts.length - 1].x + "," + y(0) + '"/>';
+  };
+  let dots = '';
+  series.forEach((s, i) => {
+    if(s.act === null) return;
+    dots += '<circle cx="' + x(i) + '" cy="' + y(s.act) + '" r="3.5" class="hk-dot-a"><title>'
+      + escapeHtml(hkYmLabel(s.ym) + " 実績 " + hkFixed(s.act, 1) + "%") + '</title></circle>';
+  });
+  let xl = '';
+  series.forEach((s, i) => {
+    const m = /^(\d{4})-(\d{2})$/.exec(s.ym);
+    const lab = m ? (+m[2]) + "月" : s.ym;
+    xl += '<text x="' + x(i) + '" y="' + (H - B + 16) + '" class="hk-xlab' + (s.ym === ym ? " now" : "") + '">' + lab + '</text>';
+    if(s.ym === ym){
+      xl += '<line x1="' + x(i) + '" y1="' + T + '" x2="' + x(i) + '" y2="' + y(0) + '" class="hk-now"/>';
+    }
+  });
+  return '<div class="hk-chart">'
+    + '<div class="hk-legend"><span class="hk-lg plan"><i class="hk-sw p"></i>予定（工程表）</span>'
+    +   '<span class="hk-lg act"><i class="hk-sw a"></i>実績（出来高）</span>'
+    +   '<span class="hk-lg bar"><i class="hk-sw b"></i>当月分</span></div>'
+    + '<svg viewBox="0 0 ' + W + ' ' + H + '" class="hk-svg" role="img" aria-label="予定と実績の出来高グラフ">'
+    +   '<defs>'
+    +     '<linearGradient id="hkGp" x1="0" y1="0" x2="0" y2="1">'
+    +       '<stop offset="0%" stop-color="#1565c0" stop-opacity="0.20"/>'
+    +       '<stop offset="100%" stop-color="#1565c0" stop-opacity="0.02"/></linearGradient>'
+    +     '<linearGradient id="hkGa" x1="0" y1="0" x2="0" y2="1">'
+    +       '<stop offset="0%" stop-color="#c62828" stop-opacity="0.28"/>'
+    +       '<stop offset="100%" stop-color="#c62828" stop-opacity="0.03"/></linearGradient>'
+    +   '</defs>'
+    +   g + bars
+    +   area("plan", "hk-ar-p") + area("act", "hk-ar-a")
+    +   '<line x1="' + L + '" y1="' + y(0) + '" x2="' + (W - R) + '" y2="' + y(0) + '" class="hk-axis"/>'
+    +   '<line x1="' + L + '" y1="' + T + '" x2="' + L + '" y2="' + y(0) + '" class="hk-axis"/>'
+    +   path("plan", "hk-line-p") + path("act", "hk-line-a") + dots + xl
+    + '</svg></div>';
+}
+/* 大きな数字のカード。表を読む前に「いまどうなっているか」が目に入るようにする。 */
+function hkCardsHtml(cur, planNow, prevTotal, h){
+  const gap = cur.total - planNow;
+  const card = (cls, label, big, sub) =>
+    '<div class="hk-card ' + cls + '"><div class="hk-card-l">' + label + '</div>'
+    + '<div class="hk-card-v">' + big + '</div>'
+    + '<div class="hk-card-s">' + sub + '</div></div>';
+  const doneN = cur.stages.filter(st => st.key === "work")[0];
+  return '<div class="hk-cards">'
+    + card("main", "当月末までの出来高", hkFixed(cur.total, 1) + '<span class="u">%</span>',
+        yen(cur.amount) + "（税抜）")
+    + card(gap >= 0 ? "good" : "bad", "予定との差",
+        (gap >= 0 ? "＋" : "△") + hkFixed(Math.abs(gap), 1) + '<span class="u">%</span>',
+        "予定 " + hkFixed(planNow, 1) + "% に対して" + (gap >= 0 ? "先行" : "遅れ"))
+    + card("", "当月分の出来高",
+        (prevTotal === null ? "―" : (hkFixed(cur.total - prevTotal, 1) + '<span class="u">%</span>')),
+        (prevTotal === null ? "前月の記録がありません"
+          : (yen(cur.amount - (h.head.net || 0) * prevTotal / 100) + "（税抜）")))
+    + card("", "工事完了", (doneN ? doneN.hit : 0) + '<span class="u">戸</span>',
+        "全 " + cur.n + " 戸中")
+    + '</div>';
+}
+/* 段階ごとの帯。実績を塗り、予定の位置に印を立てる。数字だけより遅れが目で分かる。 */
+function hkBarHtml(rate, planPct){
+  const r = Math.max(0, Math.min(100, rate || 0));
+  const pp = Math.max(0, Math.min(100, planPct || 0));
+  const behind = r + 0.05 < pp;
+  return '<div class="hk-bar-w" title="実績 ' + hkFixed(r, 1) + '% ／ 予定 ' + hkFixed(pp, 1) + '%">'
+    + '<div class="hk-bar-f' + (behind ? " behind" : "") + '" style="width:' + r + '%"></div>'
+    + '<div class="hk-bar-p" style="left:' + pp + '%"></div>'
+    + '</div>';
+}
+function hkFixed(v, k){ return (Math.round((v || 0) * Math.pow(10, k)) / Math.pow(10, k)).toFixed(k); }
+function renderListProgressMode(rows, container){
+  const h = hkLoad();
+  const ym = h.head.ym || hkYm();
+  h.head.ym = ym;
+  const prev = hkPrevYm(ym);
+  const cur = hkCompute(rows, ym);
+  const snapPrev = h.snap[prev] || null;
+  const sum = hkPctSum();
+  const net = h.head.net || 0;
+
+  let html = renderSelectedFolderBanner();
+
+  /* ---- 設定（印刷では出さない） ---- */
+  html += '<div class="cost-detail-section hk-setup"><h3>設定</h3>'
+    + '<div class="hk-head">'
+    +   '<label>報告する月 <input type="month" id="hk-ym" value="' + escapeHtml(ym) + '"></label>'
+    +   '<label>工事名 <input type="text" id="hk-name" size="40" value="' + escapeHtml(h.head.name || "") + '" placeholder="令和８年度戸別受信設備設置工事（その２）"></label>'
+    +   '<label>請負金額（税抜） <input type="number" id="hk-net" step="1" value="' + (net || 0) + '"> 円</label>'
+    +   '<label>消費税 <input type="number" id="hk-tax" step="0.1" style="width:64px" value="' + (h.head.tax || 0) + '"> %</label>'
+    +   '<label title="工程表の着手日">着手 <input type="date" id="hk-start" value="' + escapeHtml(h.head.start || "") + '"></label>'
+    +   '<label title="工程表の完成日">完成 <input type="date" id="hk-end" value="' + escapeHtml(h.head.end || "") + '"></label>'
+    +   '<span class="hk-gross">税込 ' + yen(hkGross()) + '</span>'
+    +   '<label title="保留の戸別を戸数から外します。既定は入れたまま（着工を止めているだけで、契約からは外れないため）">'
+    +     '<input type="checkbox" id="hk-skiphold"' + (h.head.skipHold ? " checked" : "") + '> 保留の戸別を数に入れない</label>'
+    + '</div>'
+    + '<div class="hk-warn' + (Math.abs(sum - 100) < 0.005 ? " ok" : "") + '">'
+    +   '割合の合計 <b>' + hkFixed(sum, 2) + '%</b>'
+    +   (Math.abs(sum - 100) < 0.005 ? '（100%ちょうどです）'
+        : '　⚠ 100%になっていません。出来高が実際とずれます。')
+    +   ' <button type="button" id="hk-reset" class="hk-btn">内訳書の割合に戻す</button>'
+    + '</div>';
+
+  html += '<table class="hk-set-table"><thead><tr>'
+    + '<th style="width:230px">作業の段階</th>'
+    + '<th class="num" style="width:92px">割合（%）</th>'
+    + '<th class="num" style="width:120px">金額（税抜）</th>'
+    + '<th style="width:230px">済んだと数える印</th>'
+    + '<th style="width:250px">予定の期間（工程表）</th>'
+    + '<th>割合の根拠（工事費内訳書）</th>'
+    + '</tr></thead><tbody>';
+  cur.stages.forEach(st => {
+    html += '<tr>'
+      + '<td>' + escapeHtml(st.name) + '</td>'
+      + '<td class="num"><input type="number" class="hk-pct" data-k="' + st.key + '" step="0.01" min="0" max="100" value="' + st.pct + '"></td>'
+      + '<td class="num">' + yen(net * st.pct / 100) + '</td>'
+      + '<td><select class="hk-src" data-k="' + st.key + '">'
+      +   HK_SRC.map(o => '<option value="' + o.key + '"' + (st.src === o.key ? " selected" : "") + '>' + escapeHtml(o.label) + '</option>').join("")
+      + '</select></td>'
+      + '<td class="hk-span"><input type="date" class="hk-from" data-k="' + st.key + '" value="' + escapeHtml(st.from || "") + '">'
+      +   '<span class="hk-span-sep">〜</span>'
+      +   '<input type="date" class="hk-to" data-k="' + st.key + '" value="' + escapeHtml(st.to || "") + '">'
+      +   '<div class="hk-why">' + escapeHtml(st.plan || "") + '</div></td>'
+      + '<td class="hk-why">' + escapeHtml(st.why) + '</td>'
+      + '</tr>';
+  });
+  html += '</tbody></table>';
+  html += '<div class="hk-note">「手入力」にした段階は、下の報告書の表で当月末の％を直に入れてください（月ごとに覚えます）。'
+    + 'それ以外は、受付台帳と現場入力の印から戸数で数えます。</div>'
+    + '</div>';
+
+  /* ---- 報告書（ここが印刷される） ---- */
+  html += '<div class="cost-detail-section hk-report"><div class="hk-paper">'
+    + '<h2 class="hk-title">履 行 報 告 書</h2>'
+    + '<div class="hk-month">' + escapeHtml(hkYmLabel(ym)) + '分</div>'
+    + '<table class="hk-info"><tbody>'
+    +   '<tr><th>工 事 名</th><td>' + (h.head.name ? escapeHtml(h.head.name) : '<span class="hk-blank">（設定で入力）</span>') + '</td></tr>'
+    +   '<tr><th>請負金額</th><td>' + yen(hkGross()) + '（税込）　／　' + yen(net) + '（税抜）</td></tr>'
+    +   '<tr><th>対象戸数</th><td>' + cur.n + ' 戸' + (h.head.skipHold ? '（保留を除く）' : '') + '</td></tr>'
+    + '</tbody></table>';
+
+  html += hkCardsHtml(cur, hkPlanAt(hkMonthEndD(ym)), (h.snap[prev] ? h.snap[prev].total : null), h);
+
+  /* 予定と実績のグラフ。数字の表だけでは、遅れているのか先行しているのかが読み取れない。 */
+  const series = hkSeries(rows, ym);
+  { const here = series.filter(x => x.ym === ym)[0];
+    const gap = (here && here.act !== null && here.act !== undefined) ? (here.act - here.plan) : null;
+    html += '<div class="hk-graph-head">予定と実績（出来高工程管理曲線）'
+      + (gap === null ? ''
+         : '<span class="hk-gap ' + (gap >= 0 ? "ok" : "ng") + '">'
+           + escapeHtml(hkYmLabel(ym)) + '末　予定 ' + hkFixed(here.plan, 1) + '% ／ 実績 ' + hkFixed(here.act, 1) + '%　'
+           + (gap >= 0 ? ("＋" + hkFixed(gap, 1) + "% 予定より進んでいます")
+                       : ("△" + hkFixed(-gap, 1) + "% 予定より遅れています")) + '</span>')
+      + '</div>';
+    html += hkChartSvg(series, ym);
+  }
+
+  html += '<table class="hk-table"><thead><tr>'
+    + '<th style="width:210px">作 業 区 分</th>'
+    + '<th class="num" style="width:72px">構成比</th>'
+    + '<th class="num" style="width:88px">当月末の<br>予定</th>'
+    + '<th class="num" style="width:88px">前月末まで</th>'
+    + '<th class="num" style="width:96px">当月末まで<br>（実績）</th>'
+    + '<th class="num" style="width:80px">当月分</th>'
+    + '<th style="width:150px">進み具合</th>'
+    + '<th class="num" style="width:120px">当月末までの<br>出来高金額</th>'
+    + '<th style="width:96px">数え方</th>'
+    + '</tr></thead><tbody>';
+  cur.stages.forEach(st => {
+    const pv = snapPrev && snapPrev.byStage && typeof snapPrev.byStage[st.key] === "number"
+      ? snapPrev.byStage[st.key] : null;
+    const diff = (pv === null) ? null : (st.rate - pv);
+    const planPct = (function(){
+      const a = hkD(st.from), b = hkD(st.to), e = hkMonthEndD(ym);
+      if(!e) return 0;
+      if(!a || !b || b <= a) return (a && e >= a) ? 100 : 0;
+      return Math.max(0, Math.min(1, (e - a) / (b - a))) * 100;
+    })();
+    const behind = st.rate + 0.05 < planPct;
+    html += '<tr class="' + (behind ? "hk-behind" : "") + '">'
+      + '<td>' + escapeHtml(st.name) + '</td>'
+      + '<td class="num">' + hkFixed(st.pct, 2) + '%</td>'
+      + '<td class="num hk-plan-c">' + hkFixed(planPct, 1) + '%</td>'
+      + '<td class="num">' + (pv === null ? '<span class="hk-blank">―</span>' : (hkFixed(pv, 1) + "%")) + '</td>'
+      + '<td class="num">' + (st.manual
+          ? '<input type="number" class="hk-man" data-k="' + st.key + '" step="0.1" min="0" max="100" value="' + hkFixed(st.rate, 1) + '"><span class="hk-man-print">' + hkFixed(st.rate, 1) + '%</span>'
+          : (hkFixed(st.rate, 1) + "%")) + '</td>'
+      + '<td class="num">' + (diff === null ? '<span class="hk-blank">―</span>' : (hkFixed(diff, 1) + "%")) + '</td>'
+      + '<td class="hk-bar-c">' + hkBarHtml(st.rate, planPct) + '</td>'
+      + '<td class="num">' + yen(st.amount) + '</td>'
+      + '<td class="hk-src-cell">' + (st.manual
+          ? '<span class="hk-manual-b">手入力</span>'
+          : (st.hit + " / " + st.n + " 戸")) + '</td>'
+      + '</tr>';
+  });
+  const prevTotal = snapPrev ? snapPrev.total : null;
+  const planNow = hkPlanAt(hkMonthEndD(ym));
+  html += '<tr class="hk-total"><th>合　計</th>'
+    + '<td class="num">' + hkFixed(sum, 2) + '%</td>'
+    + '<td class="num hk-plan-c">' + hkFixed(planNow, 1) + '%</td>'
+    + '<td class="num">' + (prevTotal === null ? '<span class="hk-blank">―</span>' : (hkFixed(prevTotal, 1) + "%")) + '</td>'
+    + '<td class="num">' + hkFixed(cur.total, 1) + '%</td>'
+    + '<td class="num">' + (prevTotal === null ? '<span class="hk-blank">―</span>' : (hkFixed(cur.total - prevTotal, 1) + "%")) + '</td>'
+    + '<td class="hk-bar-c">' + hkBarHtml(cur.total, planNow) + '</td>'
+    + '<td class="num">' + yen(cur.amount) + '</td>'
+    + '<td></td></tr>'
+    + '<tr class="hk-total2"><th>出来高金額（税込）</th><td colspan="4"></td>'
+    + '<td class="num">' + yen(cur.amount * (1 + (h.head.tax || 0) / 100)) + '</td>'
+    + '<td></td></tr>'
+    + '</tbody></table>';
+
+  /* 戸別の進み（数の裏付け。報告書に添える） */
+  const cnt = k => hkRows(rows).filter(r => hkCaseHit(r, k)).length;
+  html += '<div class="hk-counts">戸別の進み（全 ' + cur.n + ' 戸）　'
+    + '下見済 <b>' + cnt("survey") + '</b>　／　ビラ <b>' + cnt("flyer") + '</b>'
+    + '　／　同意書 <b>' + cnt("consent") + '</b>　／　工事完了 <b>' + cnt("done") + '</b>'
+    + '　／　完了書 <b>' + cnt("compdoc") + '</b></div>';
+
+  html += '<div class="hk-rule">※ 工事が終わったかどうかは、<b>受付台帳の「完了」チェック</b>と<b>現場入力の工事完了</b>だけで判定しています。'
+    + '全体費用に金額が計上されているかどうかからは、判定していません'
+    + '（工事が終わっていない戸別にも、図面を描いた時点で材料費・労務費は積み上がるため）。</div>';
+  if(!snapPrev){
+    html += '<div class="hk-rule warn">※ ' + escapeHtml(hkYmLabel(prev)) + 'の記録がまだありません。'
+      + '「前月末まで」と「当月分」は出せません。月末に下の<b>「この月を確定して記録する」</b>を押しておくと、翌月から出ます。</div>';
+  }
+  html += '</div></div>';
+
+  /* ---- 記録（印刷では出さない） ---- */
+  html += '<div class="cost-detail-section hk-setup"><h3>月の記録</h3>'
+    + '<div class="hk-note">その月の締めに押すと、そのときの達成率を記録します。翌月の「前月末まで」に使います。'
+    + '同じ月をもう一度押すと、記録し直します。</div>'
+    + '<div class="hk-snap-row">'
+    +   '<button type="button" id="hk-fix" class="hk-btn hk-btn-main">' + escapeHtml(hkYmLabel(ym)) + 'を確定して記録する</button>'
+    +   (h.snap[ym] ? '<span class="hk-snap-has">記録あり（' + escapeHtml(String(h.snap[ym].savedAt || "").slice(0, 16).replace("T", " ")) + '／合計 ' + hkFixed(h.snap[ym].total, 1) + '%）</span>' : '<span class="hk-snap-no">この月はまだ記録していません</span>')
+    +   (h.snap[ym] ? ' <button type="button" id="hk-unfix" class="hk-btn">この月の記録を消す</button>' : '')
+    + '</div>';
+  const keys = Object.keys(h.snap).sort();
+  if(keys.length){
+    html += '<table class="hk-set-table"><thead><tr><th style="width:130px">月</th><th class="num" style="width:110px">合計</th>'
+      + '<th class="num" style="width:140px">出来高金額（税抜）</th><th>記録した日時</th></tr></thead><tbody>';
+    keys.forEach(k => {
+      const sn = h.snap[k];
+      html += '<tr><td>' + escapeHtml(hkYmLabel(k)) + '</td>'
+        + '<td class="num">' + hkFixed(sn.total, 1) + '%</td>'
+        + '<td class="num">' + yen(sn.amount || 0) + '</td>'
+        + '<td>' + escapeHtml(String(sn.savedAt || "").slice(0, 16).replace("T", " ")) + '</td></tr>';
+    });
+    html += '</tbody></table>';
+  }
+  html += '</div>';
+
+  container.innerHTML = html;
+
+  /* ---- 操作 ---- */
+  const redraw = () => { hkSave(); renderListTable(); };
+  const el = id => container.querySelector("#" + id);
+  el("hk-ym").addEventListener("change", e => { h.head.ym = e.target.value || hkYm(); redraw(); });
+  el("hk-name").addEventListener("change", e => { h.head.name = e.target.value; redraw(); });
+  el("hk-net").addEventListener("change", e => { h.head.net = Math.max(0, Math.round(Number(e.target.value) || 0)); redraw(); });
+  el("hk-tax").addEventListener("change", e => { h.head.tax = Math.max(0, Number(e.target.value) || 0); redraw(); });
+  el("hk-skiphold").addEventListener("change", e => { h.head.skipHold = e.target.checked; redraw(); });
+  el("hk-start").addEventListener("change", e => { h.head.start = e.target.value; redraw(); });
+  el("hk-end").addEventListener("change", e => { h.head.end = e.target.value; redraw(); });
+  const setSpan = (k, f, v) => { if(!h.span[k]) h.span[k] = {}; h.span[k][f] = v; redraw(); };
+  container.querySelectorAll(".hk-from").forEach(i => i.addEventListener("change", () => setSpan(i.dataset.k, "from", i.value)));
+  container.querySelectorAll(".hk-to").forEach(i => i.addEventListener("change", () => setSpan(i.dataset.k, "to", i.value)));
+  el("hk-reset").addEventListener("click", () => {
+    if(!confirm("割合・「済んだと数える印」・予定の期間を、工事費内訳書と工程表から出した初期値に戻します。\n\n月の記録と請負金額・工期はそのままです。")) return;
+    h.rate = {}; h.src = {}; h.span = {}; redraw();
+  });
+  container.querySelectorAll(".hk-pct").forEach(inp => inp.addEventListener("change", () => {
+    h.rate[inp.dataset.k] = Math.max(0, Math.min(100, Number(inp.value) || 0)); redraw();
+  }));
+  container.querySelectorAll(".hk-src").forEach(sel => sel.addEventListener("change", () => {
+    h.src[sel.dataset.k] = sel.value; redraw();
+  }));
+  container.querySelectorAll(".hk-man").forEach(inp => inp.addEventListener("change", () => {
+    if(!h.manual[ym]) h.manual[ym] = {};
+    h.manual[ym][inp.dataset.k] = Math.max(0, Math.min(100, Number(inp.value) || 0)); redraw();
+  }));
+  el("hk-fix").addEventListener("click", () => {
+    const c = hkCompute(rows, ym);
+    const byStage = {};
+    c.stages.forEach(st => { byStage[st.key] = st.rate; });
+    h.snap[ym] = { total: c.total, amount: c.amount, byStage, n: c.n, savedAt: new Date().toISOString() };
+    hkSave(); renderListTable();
+    alert(hkYmLabel(ym) + "の達成率を記録しました（合計 " + hkFixed(c.total, 1) + "%）。\n\n翌月の「前月末まで」に使われます。");
+  });
+  const un = el("hk-unfix");
+  if(un) un.addEventListener("click", () => {
+    if(!confirm(hkYmLabel(ym) + "の記録を消します。よろしいですか？")) return;
+    delete h.snap[ym]; redraw();
+  });
+}
 /* ============================================================
    🧰 発注材料数量（一覧の第7モード）
    現場入力で「下見完了」にした戸別の材料を、工事全体で合計する。
