@@ -6018,7 +6018,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.21d";
+const APP_VERSION = "2026.08.22a";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -20393,7 +20393,14 @@ function lgTextResolve(row, fileKey, lgKey, srcKey){
      別のPCで時刻や打合せを「消した」ことが、いつまでも他のPCへ伝わらなかった。
      ただし控えが無いとき（この端末で初めて見るファイル）だけは、
      空のファイルで台帳を消さない（まだ取り込めていない戸別を空で潰さないため）。 */
-  const fileChanged = (known === null) ? !!fileVal : (fileVal !== known);
+  /* 空にしたのを「消した」と受け取るのは、こちらで直していないときだけ。
+     台帳の値が控えと違う＝この端末（事務所）で直したばかり、という事なので、
+     中身の入っていないファイルでそれを消してはいけない。
+     （現場入力は時刻の欄を空のまま書き出すことがあり、
+       それで事務所が入れた時刻が消えてしまっていた） */
+  const localEdited = (known !== null) && (lgVal !== known);
+  const fileChanged = (known === null) ? !!fileVal
+                    : (fileVal ? (fileVal !== known) : !localEdited);
   if(fileChanged){
     // 備考が現場の内容へ入れ替わる分も、あとで戻せるように控える
     if(lgKey === "note"){ try { lgNoteLogPush(tk, lgVal, fileVal, "戸別ファイル（現場）の内容を採り込んだ"); } catch(_){} }
