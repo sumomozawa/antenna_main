@@ -771,6 +771,7 @@
   body.list-print-mode .hk-setup { display: none !important; }
   body.list-print-mode .hk-table input.hk-man { display: none !important; }
   body.list-print-mode .hk-man-print { display: inline !important; }
+  body.list-print-mode .hk-manual-b { display: none !important; }   /* 印刷・PDFでは「手入力」の印を出さない */
   .list-mode-tabs {
     display: flex;
     gap: 3px;
@@ -6159,7 +6160,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.22g";
+const APP_VERSION = "2026.08.24a";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -25456,7 +25457,9 @@ const HK_LS = "antenna_main_hakou_v1";
 /* 段階と、その割合の根拠。pct は工事価格に対する％。 */
 /* 予定の期間（from/to）は工程表（着手 令和8年7月3日）から入れた初期値。
      資材準備／材料調達  91日   事前調査／現地調査 112日
-     アンテナ設置工事    142日  手直し調整 17日      完成書類 8日
+     アンテナ設置工事    142日  手直し調整 17日
+   書類は工程表の「完成書類 8日」だけでは足りない（施工計画書・資材承認願・着工届・
+   コリンズ・下請報告など着手時の書類が大量にある）ため、着手時／施工中／完成の3段階に分けた。
    ここも画面で直せる。直すと予定曲線がその場で描き直る。 */
 const HK_STAGES = [
   { key:"survey",  name:"下見・現地調査（石綿調査含む）", pct:5.19,  src:"survey",
@@ -25482,9 +25485,18 @@ const HK_STAGES = [
   { key:"insp",    name:"手直し調整・完了検査",            pct:8.84,  src:"manual",
     from:"2027-02-20", to:"2027-03-08",
     why:"一般管理費の40% ＋ 現場管理費の15%", plan:"工程表の「手直し調整」17日" },
-  { key:"doc",     name:"各種書類作成",                    pct:8.68,  src:"compdoc",
-    from:"2027-03-09", to:"2027-03-16",
-    why:"一般管理費の60%", plan:"工程表の「完成書類／書類作成」8日" }
+  { key:"doc1",    name:"着手時の提出書類",                pct:2.60,  src:"manual",
+    from:"2026-07-03", to:"2026-08-31",
+    why:"一般管理費の60%（＝8.68%）を書類3段階へ配分。うち30%",
+    plan:"施工計画書・着工届・現場代理人等届・経歴書・下請報告書・使用資材メーカー承認願・コリンズ登録・建退共" },
+  { key:"doc2",    name:"施工中の提出書類",                pct:2.60,  src:"manual",
+    from:"2026-09-01", to:"2027-02-28",
+    why:"一般管理費の60%（＝8.68%）を書類3段階へ配分。うち30%",
+    plan:"工事打合簿・月ごとの履行報告・資材検収簿・石綿事前調査報告・工事写真整理・変更協議" },
+  { key:"doc3",    name:"完成書類",                        pct:3.48,  src:"compdoc",
+    from:"2027-03-01", to:"2027-03-26",
+    why:"一般管理費の60%（＝8.68%）を書類3段階へ配分。うち40%",
+    plan:"完成届・完成図書（工事調書・写真）・引渡書・コリンズ完成登録・請求書" }
 ];
 /* 「その段階が済んだ」と数えてよい印。金額から判定するものは、ここに1つも入れない。 */
 const HK_SRC = [
@@ -25511,7 +25523,7 @@ function hkLoad(){
   if(_hk.head.net === undefined) _hk.head.net = 27200000;   // 内訳書の工事価格（税抜）
   if(_hk.head.tax === undefined) _hk.head.tax = 10;
   if(_hk.head.start === undefined) _hk.head.start = "2026-07-03";  // 工程表の着手日
-  if(_hk.head.end   === undefined) _hk.head.end   = "2027-03-16";  // 工程表の完成
+  if(_hk.head.end   === undefined) _hk.head.end   = "2027-03-26";  // 工期末（完成書類の終わり）
   return _hk;
 }
 function hkSave(){
