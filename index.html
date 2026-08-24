@@ -578,6 +578,44 @@
   @media (prefers-reduced-motion: reduce){
     .scan-spin { animation-duration: 2.4s; }
   }
+  /* ---- 一覧を開くまでの「動いています」表示 ----
+     数百件の受付台帳は、表を組み立てるだけで数秒かかる。その間ブラウザは何も描けないので、
+     何も出さないと固まったように見えて、続けて押されてしまう。 */
+  #list-busy {
+    position: fixed; inset: 0; z-index: 260;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(244,245,247,.72);
+    -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+  }
+  #list-busy .lb-card {
+    background: #fff; border: 1px solid #cdd9e6; border-radius: 10px;
+    padding: 18px 26px; box-shadow: 0 6px 24px rgba(30,58,95,.16);
+    text-align: center; min-width: 240px;
+  }
+  #list-busy .lb-spin {
+    display: block; width: 28px; height: 28px; margin: 2px auto 10px;
+    border-radius: 50%; border: 3px solid #d6e3f2; border-top-color: #1e3a5f;
+    animation: scan-spin-kf .8s linear infinite;
+  }
+  #list-busy .lb-t { display: block; font-size: 14px; font-weight: 700; color: #1e3a5f; }
+  #list-busy .lb-s { display: block; margin-top: 5px; font-size: 11.5px; color: #667482; }
+  #list-busy .lb-bar {
+    display: block; width: 190px; height: 4px; margin: 11px auto 0;
+    border-radius: 2px; background: #e3e9f0; overflow: hidden;
+  }
+  #list-busy .lb-bar i {
+    display: block; width: 42%; height: 100%; border-radius: 2px; background: #4a7abc;
+    animation: lb-slide 1.1s ease-in-out infinite;
+  }
+  @keyframes lb-slide {
+    0%   { transform: translateX(-110%); }
+    100% { transform: translateX(250%); }
+  }
+  @media (prefers-reduced-motion: reduce){
+    #list-busy .lb-spin { animation-duration: 2.4s; }
+    #list-busy .lb-bar i { animation-duration: 3s; }
+  }
+  @media print { #list-busy { display: none !important; } }
   .list-status {
     padding: 14px;
     text-align: center;
@@ -6160,7 +6198,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.24b";
+const APP_VERSION = "2026.08.24c";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -14116,7 +14154,7 @@ function openListView(){
   if(typeof projSyncEditorToRow === "function") projSyncEditorToRow();
   document.body.classList.add("list-view-open");
   // 取り込んだ編集内容を一覧へ即反映（再描画しないと古い表示のまま＝編集が反映されない不具合）
-  if(typeof renderListTable === "function") renderListTable();
+  if(typeof renderListTable === "function") listRenderMaybeBusy(_listMode, "開いています");
   // 前回のフォルダを覚えていれば、選び直さずに読み込む（1回だけ試す）
   try { listDirAutoLoad(); } catch(e){ console.warn("前回のフォルダの自動読込に失敗", e); }
 }
@@ -18754,7 +18792,68 @@ async function listLoadRow(target){
 }
 
 /* 一覧モード切替 */
-function setListMode(mode){
+/* 一覧の表を組み立てるのに時間がかかるとき、その間ずっと「動いています」を出す。
+   ★重い描画は画面を止めるので、先に暗幕を出して「1回描かせて」から始める★
+   同じ処理の中で続けて描き始めると、暗幕が出ないまま固まる。 */
+function listBusyShow(label, sub){
+  let d = document.getElementById("list-busy");
+  if(!d){
+    d = document.createElement("div");
+    d.id = "list-busy";
+    d.setAttribute("role", "status");
+    d.setAttribute("aria-live", "polite");
+    d.innerHTML = '<div class="lb-card"><span class="lb-spin" aria-hidden="true"></span>'
+      + '<span class="lb-t"></span><span class="lb-s"></span>'
+      + '<span class="lb-bar" aria-hidden="true"><i></i></span></div>';
+    document.body.appendChild(d);
+  }
+  d.querySelector(".lb-t").textContent = label || "開いています";
+  d.querySelector(".lb-s").textContent = sub || "そのままお待ちください";
+  d.style.display = "";
+  return d;
+}
+function listBusyHide(){
+  const d = document.getElementById("list-busy");
+  if(d) d.style.display = "none";
+}
+/* 暗幕を出す → ブラウザに描かせる → 重い処理 → 暗幕を消す。
+   タブが裏にいると requestAnimationFrame が来ないので、時間でも押さえる（先に来た方で1回だけ走る）。 */
+function listBusyRun(label, sub, fn){
+  listBusyShow(label, sub);
+  let ran = false;
+  const go = () => {
+    if(ran) return; ran = true;
+    try { fn(); }
+    catch(e){ console.error("一覧の描画に失敗", e); }
+    finally { listBusyHide(); }
+  };
+  try { requestAnimationFrame(() => requestAnimationFrame(go)); } catch(_){}
+  setTimeout(go, 150);
+}
+/* タブの見出しから、そのモードの呼び名を取る（「📒 受付台帳」→「受付台帳」）。 */
+function listModeLabel(mode){
+  const b = document.querySelector('.list-mode-tabs .mode-tab[data-list-mode="' + mode + '"]');
+  const t = b ? b.textContent.trim() : "";
+  return t ? t.replace(/^\S+\s*/, "") || t : "一覧";
+}
+/* そのモードを、いまの件数で開くと待たされるか。
+   受付台帳は1行ごとに入力欄を作るので、いちばん重い。 */
+const LIST_HEAVY_MODES = ["ledger", "photos", "subcontractor", "cost_detail", "by_folder", "materials", "progress"];
+function listRenderIsSlow(mode){
+  const n = (_listRows || []).length;
+  return (LIST_HEAVY_MODES.indexOf(mode) >= 0) ? (n >= 40) : (n >= 200);
+}
+/* 待たされそうなら暗幕つきで、そうでなければそのまま描く。 */
+function listRenderMaybeBusy(mode, verb){
+  if(!listRenderIsSlow(mode)){ renderListTable(); return; }
+  const n = (_listRows || []).length;
+  listBusyRun(listModeLabel(mode) + "を" + (verb || "開いています"),
+    n + "件を並べています。そのままお待ちください。", renderListTable);
+}
+/* モードの印だけを付け替える（表は描かない）。
+   一覧を開くのと同時にモードも変える場面（メニューの機能カード）で、
+   前のモードの表を一度組み立ててから作り直す＝数百件で倍待たされるのを避けるため。 */
+function listModeApply(mode){
   _listMode = mode;
   document.querySelectorAll(".list-mode-tabs .mode-tab").forEach(b => {
     b.classList.toggle("active", b.dataset.listMode === mode);
@@ -18764,9 +18863,12 @@ function setListMode(mode){
     _lgPrintPreview = false;
     document.body.classList.remove("lg-print-preview");
   }
-  document.body.classList.remove("list-mode-standard","list-mode-by_folder","list-mode-cost_detail","list-mode-subcontractor","list-mode-ledger","list-mode-calendar","list-mode-materials","list-mode-photos");
+  document.body.classList.remove("list-mode-standard","list-mode-by_folder","list-mode-cost_detail","list-mode-subcontractor","list-mode-ledger","list-mode-calendar","list-mode-progress","list-mode-materials","list-mode-photos");
   document.body.classList.add("list-mode-" + mode);
-  renderListTable();
+}
+function setListMode(mode){
+  listModeApply(mode);
+  listRenderMaybeBusy(mode, "開いています");
 }
 
 /* ============================================================
@@ -22992,8 +23094,8 @@ async function renderMenuView(){
         return;
       }
       if(f.mode){
+        listModeApply(f.mode);   // 先にモードを決める。開くときの描画1回で済ませる
         openListView();
-        setListMode(f.mode);
       } else {
         closeListView();
       }
