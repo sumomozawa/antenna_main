@@ -5337,7 +5337,7 @@
       <label class="list-hide-dup-label" title="同じ管理番号が複数あるとき、ファイル更新日時が最新の1件だけ表示します（古い重複を隠す）"><input type="checkbox" id="list-hide-dup"> 重複を隠す <span class="hd-sub">(同一管理番号は最新日付のみ)</span></label>
     </div>
     <div class="list-mode-tabs">
-      <button class="mode-tab active" data-list-mode="standard" title="全戸別を1枚の表でフラットに表示。取付方法（アンテナ取付ガイド）・ファイル形式（📄平文／🔐HYB／🔐FULL）・ファイル名が出るのはここだけです。番号や氏名で探す・どのファイルから読んだか確かめる用。">📄 一覧</button>
+      <button class="mode-tab active" data-list-mode="standard" title="全戸別を1枚の表でフラットに表示。取付方法（アンテナ取付ガイド）・ファイル形式（📄平文／🔐HYB／🔐FULL）・ファイル名が出るのはここだけです。番号や氏名で探す・どのファイルから読んだか確かめる用。お客様の氏名・電話は表には出しません（検索では今までどおり当たります）。">📄 一覧</button>
       <button class="mode-tab" data-list-mode="by_folder" title="保存先フォルダ（工区）ごとにグループ分けし、グループごとに件数・小計・石綿サマリと全体合計を出します。施工会社の割り当て（プルダウン）・写真枚数の確認・石綿みなし判定が出るのはここだけです。">📁 工事別</button>
       <button class="mode-tab" data-list-mode="cost_detail" title="読み込んだ全戸別の材料費・労務費を工事全体で集計。★基本工事プリセットを指定すると、基本工事とそれ以外（追加工事）に分けて集計します。">💴 費用</button>
       <button class="mode-tab" data-list-mode="subcontractor" title="協力会社→元請けへの請求内訳（労務費＋協力会社諸経費＋持出材料）。全体費用詳細の数値には一切影響しません。単価は標準単価（業者間の統一額）で計算し、物件用の単価変更（単価マスターの色付き行）は反映されません">🤝 協力会社</button>
@@ -6160,7 +6160,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.24a";
+const APP_VERSION = "2026.08.24b";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -16528,13 +16528,15 @@ function lgFileWhenTitle(row){
     + "そのファイルはこのフォルダに届いていません。";
 }
 function renderListStandardMode(rows, tbl){
-  // 工事別フォルダ同様、氏名+電話を1セルに統合し、ファイル名は印刷非表示
+  /* お客様の氏名・電話はこの表には出さない（画面でも印刷でも）。
+     どこで開いても人目に付く一覧なので、個人が特定できる情報は住所までにする。
+     ※ 検索は今までどおり氏名・電話でも当たる（出さないだけで、持ってはいる）。
+     ファイル名は印刷非表示。 */
   const dupSet = getDuplicateMgmtSet();
   let html = '<colgroup>'
     + '<col class="col-kind">'
     + '<col class="col-status">'
     + '<col class="col-mgmt">'
-    + '<col class="col-name">'
     + '<col class="col-addr">'
     + '<col class="col-date">'
     + '<col class="col-work">'
@@ -16546,7 +16548,6 @@ function renderListStandardMode(rows, tbl){
     + '<th>区分</th>'
     + '<th>状態</th>'
     + '<th>管理番号</th>'
-    + '<th>お客様 <span style="font-size:9px;color:#555;font-weight:normal;">(氏名／電話)</span></th>'
     + '<th>住所</th>'
     + '<th>施工日</th>'
     + '<th title="アンテナ取付ガイドで選んだ取付方法（柱・破風・破風2段・外壁・縦並び・屋根馬）。工事が終わるまでは「予定」が付きます">取付方法</th>'
@@ -16560,18 +16561,11 @@ function renderListStandardMode(rows, tbl){
     if(r.fileType !== "full" || r.unlocked){
       if(d.chosho_status === "completed") doneCount++; else pendingCount++;
     }
-    const nameEsc = escapeHtml(d.chosho_cust_name || "");
-    const telRaw = (d.chosho_cust_tel || "").trim();
-    const nameTel = telRaw
-      ? nameEsc + ' <span style="font-size:9px;color:#666;">☎ ' + escapeHtml(telRaw) + '</span>'
-      : nameEsc;
-    const nameTitle = (d.chosho_cust_name || "") + (telRaw ? " / ☎ " + telRaw : "");
     const addrEsc = escapeHtml(d.chosho_cust_addr || "");
     html += '<tr data-list-idx="' + i + '">'
       + '<td>' + listTypeBadge(r) + '</td>'
       + '<td>' + listStatusBadge(d, r.fileType, r.unlocked) + '</td>'
       + mgmtNoCellHtml(d, dupSet)
-      + '<td title="' + escapeHtml(nameTitle) + '">' + nameTel + '</td>'
       + '<td class="wrap" title="' + addrEsc + '">' + addrEsc + '</td>'
       + '<td>' + escapeHtml(d.chosho_date || "") + '</td>'
       + listMountCellHtml(r)
@@ -16589,7 +16583,7 @@ function renderListStandardMode(rows, tbl){
                    + '<span style="font-weight:normal;font-size:11px;margin-left:6px;color:#fb8c00;">未完了 ' + pendingCount + '</span>';
   html += '<tfoot>'
     + '<tr style="background:#eef3f9;font-weight:600;">'
-    + '<td colspan="7" style="text-align:right;padding:8px 10px;border-top:2px solid #4a7abc;">'
+    + '<td colspan="6" style="text-align:right;padding:8px 10px;border-top:2px solid #4a7abc;">'
     +   (doneCount + pendingCount) + ' 件' + statusNote + '</td>'
     + '<td colspan="3" class="no-print" style="border-top:2px solid #4a7abc;"></td>'
     + '</tr>'
