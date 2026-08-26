@@ -814,6 +814,9 @@
   .pj-case.pj-sp { border-left: 5px solid #5d4037; }
   .pj-head.pj-head-sp { background: #efebe9; }
   .pj-head.pj-head-sp .pj-h-k { color: #5d4037; }
+  .pj-part { display: inline-block; margin-left: 8px; padding: 0 7px; border-radius: 9px;
+    background: #5d4037; color: #fff; font-size: 10px; font-weight: 700; line-height: 17px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   @media print {
     .pj-case.pj-sp { border-left: 3px solid #5d4037; }
     .pj-head.pj-head-sp { background: #efebe9 !important;
@@ -6207,7 +6210,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.26a";
+const APP_VERSION = "2026.08.26b";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -19134,7 +19137,9 @@ async function _pickPhotoExportDir(){
     catch(e2){ if(e2 && e2.name === "AbortError") return null; console.warn(e2); alert("フォルダを開けませんでした。"); return null; }
   }
   _lastPhotoExportDir = parent;
-  try { projHandlePut(PHOTO_EXPORT_DIR_KEY, parent); } catch(_){}
+  /* 控えられなくてもこの回の書き出しは続ける。await しないので、
+     失敗を拾わないままにすると「未処理の失敗」としてコンソールに出てしまう。 */
+  try { Promise.resolve(projHandlePut(PHOTO_EXPORT_DIR_KEY, parent)).catch(() => {}); } catch(_){}
   return parent;
 }
 function _dataUriToBytes(uri){
@@ -19248,6 +19253,69 @@ async function _getCasePhotos(row, pickedDir, pwCandidates){
   return { photos: [], thumbOnly };
 }
 
+/* 特別記録の入れ物の名前。「特別記録_資材検収（納品）_20260826_20素子アンテナ100基検収」。
+   長すぎるとWindowsで作れないので、件名は40文字までにする。 */
+function spFolderName(d, i){
+  const kind = _sanitizeName(spKindLabel(d)) || "特別記録";
+  const date = _sanitizeName(String(d.special_date || "")).replace(/-/g, "");
+  const title = _sanitizeName(String(d.special_title || "")).slice(0, 40);
+  return ["特別記録", kind, date, title].filter(Boolean).join("_") || ("特別記録_" + (i + 1));
+}
+/* 特別記録（資材検収・検査中・イレギュラー）の写真を、記録ごとのフォルダへ無劣化で書き出す。
+   戸別とは別の入れ物にするので、工事フォルダの中で混ざらない。 */
+async function bulkExportSpecialPhotos(){
+  if(!window.showDirectoryPicker){
+    alert("この機能はPCの Chrome / Edge で使えます（フォルダ書き込みAPI）。");
+    return;
+  }
+  const sps = (_specialRows || []).filter(sp => sp && sp.data
+    && (sp.data.chosho_photos || []).some(p => p && p.dataUri));
+  if(!sps.length){
+    alert("書き出せる特別記録がありません。\n\n"
+      + "現場入力の「特別」で撮った 特別記録_….json を、\n"
+      + "「📁 フォルダ」で読み込んだフォルダに入れてください。");
+    return;
+  }
+  /* ★フォルダを選ぶ画面を先に開く★（確認を先に出すと「押した直後」の扱いが切れて開けなくなる） */
+  const parent = await _pickPhotoExportDir();
+  if(!parent) return;
+  if(!confirm("「" + (parent.name || "選んだフォルダ") + "」の中に、特別記録ごとのフォルダを作って"
+      + "写真を書き出します。\n\n・対象: " + sps.length + " 件\n"
+      + "・写真: " + sps.reduce((n, sp) => n + (sp.data.chosho_photos || []).filter(p => p && p.dataUri).length, 0)
+      + " 枚（無劣化・原本のまま）\n\n進めますか？")) return;
+
+  let ok = 0, total = 0, failed = 0;
+  const used = {};
+  bulkProgressOpen("📦 特別記録の写真を書き出し中", sps.length);
+  let aborted = false;
+  try{
+    for(let i = 0; i < sps.length; i++){
+      if(bulkProgressAborted()){ aborted = true; break; }
+      const d = sps[i].data;
+      let name = spFolderName(d, i);
+      used[name] = (used[name] || 0) + 1;
+      if(used[name] > 1) name = name + "_" + used[name];   // 同じ名前が重なったら分ける
+      bulkProgressUpdate(i, "処理中: " + name, "書き出し済み " + ok + " 件 / " + total + " 枚");
+      await bulkProgressYield();
+      const photos = (d.chosho_photos || []).filter(p => p && p.dataUri);
+      try{
+        const r = await _writeCasePhotos(parent, name, photos);
+        total += r.written; failed += r.failed; ok++;
+      }catch(err){ console.warn("特別記録の書き出しに失敗", name, err); failed += photos.length; }
+      bulkProgressUpdate(i + 1, null, "書き出し済み " + ok + " 件 / " + total + " 枚");
+    }
+  } finally { bulkProgressClose(); }
+
+  let msg = (aborted ? "📦 特別記録の書き出しを中止しました。\n（中止するまでに書き出した分は残っています）\n\n"
+                     : "📦 特別記録の写真を書き出しました。\n\n")
+    + "・書き出した記録: " + ok + " 件\n"
+    + "・写真合計: " + total + " 枚（無劣化・原本のまま）\n";
+  if(failed) msg += "・書込失敗: " + failed + " 枚\n";
+  msg += "\nフォルダ名は「特別記録_種類_日付_件名」、\n"
+      + "ファイル名は「フォルダ名_連番_品名」です。";
+  alert(msg);
+  uiToast("特別記録 " + ok + "件 / " + total + "枚 を書き出しました");
+}
 /* 一覧（物件）の全戸別の写真を、指定フォルダ内に「管理番号」フォルダを作って一括で無劣化書き出し。 */
 async function bulkExportPhotosToFolders(){
   if(!window.showDirectoryPicker){
@@ -26263,8 +26331,10 @@ function pjPhotoLabel(ph, i){
 async function pjLoad(){
   if(_pjBusy) return;
   const rows = Array.isArray(_listRows) ? _listRows.slice() : [];
-  if(!rows.length){
-    alert("戸別がありません。\n「📁 フォルダ」で工事フォルダを読み込むか、物件を開いてください。");
+  /* 戸別が1件も無くても、特別記録（資材検収など）だけを読み込むことはある。
+     ここで止めると、そのフォルダの特別記録を出す手立てが無くなる。 */
+  if(!rows.length && !(_specialRows || []).length){
+    alert("戸別も特別記録もありません。\n「📁 フォルダ」で工事フォルダを読み込むか、物件を開いてください。");
     return;
   }
   if(_pjCases && pjDirtyList().length
@@ -26490,16 +26560,22 @@ async function pjWriteBack(){
         + ng.slice(0, 6).map(c => "・" + (c.no || "―") + "：" + pjWhyLocked(c)).join("\n")) : ""));
 }
 /* 印刷の見出しに横並びで貼る項目 */
-function pjHeadHtml(c){
+function pjHeadHtml(c, pg){
   if(c && c.sp){
     const cell = (k, v, cls) => '<div class="pj-h-cell' + (cls ? (" " + cls) : "") + '">'
       + '<div class="pj-h-k">' + escapeHtml(k) + '</div>'
       + '<div class="pj-h-v">' + (v || '<span class="pj-none">―</span>') + '</div></div>';
+    const parts = (pg && pg.parts > 1)
+      ? ('<span class="pj-part">' + (pg.part + 1) + " / " + pg.parts + " ページ</span>") : "";
+    const shownN = pg ? pg.photos.length : c.photos.length;
+    const range = (pg && pg.parts > 1)
+      ? (shownN + " 枚（" + (pg.from + 1) + "〜" + (pg.from + shownN) + " / 全 " + c.photos.length + " 枚）")
+      : (c.photos.length + " 枚");
     return '<div class="pj-head pj-head-sp">'
-      + cell("区分", '<b>' + escapeHtml(c.spKind || "特別記録") + '</b>', "pj-h-no")
+      + cell("区分", '<b>' + escapeHtml(c.spKind || "特別記録") + '</b>' + parts, "pj-h-no")
       + cell("件名", escapeHtml(c.spTitle || ""), "pj-h-addr")
       + cell("日付", escapeHtml(c.spDate || ""))
-      + cell("写真", c.photos.length + " 枚")
+      + cell("写真", escapeHtml(range))
       + cell("備考", escapeHtml(c.spNote || ""), "pj-h-addr")
       + '</div>';
   }
@@ -26563,6 +26639,10 @@ function renderListPhotoMode(rows, container){
       +   ' title="回した・消した写真を、管理番号.json へ書き戻します。写真以外（氏名・住所・積算・図面・測定値）には触りません。">'
       +   '💾 戸別ファイルへ書き戻す' + (dirtyN ? ('（' + dirtyN + '件）') : '') + '</button>'
       + '<button type="button" id="pj-print" title="1戸別＝1ページで、A4縦の写真台帳を印刷／PDF出力します">🖨 写真台帳を印刷</button>'
+      + ((_specialRows || []).length
+          ? ('<button type="button" id="pj-sp-export" title="特別記録（資材検収・検査中・イレギュラー）の写真を、記録ごとのフォルダを作って画質を落とさずに書き出します">'
+             + '📦 特別記録の写真を書き出す（' + (_specialRows || []).length + '件）</button>')
+          : '')
       + '</div>';
     const inScope = Array.isArray(rows)
       ? _pjCases.filter(c => rows.indexOf(c.row) >= 0) : _pjCases;
@@ -26614,12 +26694,25 @@ function renderListPhotoMode(rows, container){
   html += '<div class="pj-doc-head">写真台帳'
     + (_currentProject ? ('　' + escapeHtml(_currentProject.name)) : "")
     + '<span class="pj-doc-date">' + lgDateStrToday(0).replace(/-/g, "/") + ' 現在</span></div>';
-  html += shown.map(c => {
+  /* 特別記録（資材検収など）は品目ごとに何枚も撮るので、1ページに詰め込むと1枚が小さすぎて使えない。
+     一定枚数ごとにページを分ける。戸別は今までどおり「1件＝必ず1ページ」。 */
+  const PJ_SP_PER_PAGE = 12;
+  const pages = [];
+  shown.forEach(c => {
+    if(!c.sp || c.photos.length <= PJ_SP_PER_PAGE){ pages.push({ c, photos: c.photos, from: 0, part: 0, parts: 1 }); return; }
+    const parts = Math.ceil(c.photos.length / PJ_SP_PER_PAGE);
+    for(let i = 0; i < parts; i++){
+      pages.push({ c, photos: c.photos.slice(i * PJ_SP_PER_PAGE, (i + 1) * PJ_SP_PER_PAGE),
+        from: i * PJ_SP_PER_PAGE, part: i, parts });
+    }
+  });
+  html += pages.map(pg => {
+    const c = pg.c;
     const why = pjWhyLocked(c), locked = !!why;
-    const g = pjGrid(c.photos.length || 1);
-    const body = c.photos.length
+    const g = pjGrid(pg.photos.length || 1);
+    const body = pg.photos.length
       ? ('<div class="pj-grid" style="--pj-cols:' + g.cols + ';--pj-rows:' + g.rows + ';">'
-         + c.photos.map((ph, i) =>
+         + pg.photos.map((ph, k) => { const i = pg.from + k; return (
              '<figure class="pj-box">'
              + '<div class="pj-frame"><img src="' + escapeHtml(ph.dataUri || "") + '" alt="" loading="lazy"'
              +   ' data-pj-zoom="' + escapeHtml(c.key) + '|' + i + '"></div>'
@@ -26631,11 +26724,11 @@ function renderListPhotoMode(rows, container){
              +     '<button type="button" class="pj-del" data-pj-del="' + escapeHtml(c.key) + '|' + i + '" title="この写真を消す">🗑</button>'
              +   '</span>'))
              +   '</figcaption>'
-             + '</figure>').join("")
+             + '</figure>'); }).join("")
          + '</div>')
       : ('<div class="pj-nophoto">写真はありません' + (c.err ? ('（' + escapeHtml(c.err) + '）') : "") + '</div>');
     return '<section class="pj-case' + (c.sp ? " pj-sp" : "") + (_pjDirty[c.key] ? " pj-dirty" : "") + '">'
-      + pjHeadHtml(c)
+      + pjHeadHtml(c, pg)
       + (locked && c.photos.length
           ? ('<div class="pj-note no-print">🔒 この戸別は書き戻せません（' + escapeHtml(why)
              + '）。回す・消すはできません。</div>')
@@ -26705,6 +26798,7 @@ function bindPhotoHandlers(container){
     if(e.target.closest("#pj-load")){ pjLoad(); return; }
     if(e.target.closest("#pj-writeback")){ pjWriteBack(); return; }
     if(e.target.closest("#pj-print")){ pjPrint(); return; }
+    if(e.target.closest("#pj-sp-export")){ bulkExportSpecialPhotos(); return; }
     const rot = e.target.closest("[data-pj-rot]");
     if(rot){ const a = rot.dataset.pjRot.split("|"); pjDoRotate(a[0], parseInt(a[1], 10), parseInt(a[2], 10)); return; }
     const del = e.target.closest("[data-pj-del]");
