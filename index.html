@@ -5337,7 +5337,7 @@
       <!-- 読み込む -->
       <span class="tb-grp">
         <button id="btn-list-select-folder" title="フォルダの中を、下のフォルダまで全部読み込みます (Chrome/Edge)。一度選ぶとそのフォルダを覚えるので、次からは一覧を開いたときに自動で読み込みます（別のフォルダにしたいときだけ押してください）。">📁 フォルダ</button>
-        <button id="btn-list-select-files" title="ファイル（.json / .hyb / .enc）を1つずつ／まとめて選んで読み込みます。フォルダ選択に対応していない端末（iPad など）はこちらから。">📄 ファイル</button>
+        <button id="btn-list-select-files" title="ファイル（.json / .hyb / .enc / .json.txt）を1つずつ／まとめて選んで読み込みます。フォルダ選択に対応していない端末（iPad など）はこちらから。">📄 ファイル</button>
         <button id="btn-genba-import" title="スマホ現場入力が書き出した「管理番号.json」を、開いている物件の同じ管理番号の戸別へ取り込みます。顧客情報は台帳を優先し、アンテナ・部材・測定・写真・配線は現場を採用。料金・石綿・図面レイアウトはPCを保持。取込前に中身を確かめられます。" style="background:#1565c0;">📥 現場取込</button>
       </span>
       <span class="tb-div" aria-hidden="true"></span>
@@ -6198,7 +6198,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.24c";
+const APP_VERSION = "2026.08.25a";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -14512,8 +14512,8 @@ async function scanDirRecursive(dirHandle, pathPrefix, rows, stats){
         (stats.errDirs = stats.errDirs || []).push(pathPrefix + name + "/");
       }
     } else if(handle.kind === "file"){
-      // 対象拡張子: .json / .hyb / .enc / .antenna.hyb / .antenna.enc
-      if(!/\.(json|hyb|enc)$/i.test(name)) continue;
+      // 対象拡張子: .json / .hyb / .enc / .antenna.hyb / .antenna.enc ／ .json.txt（Androidの共有）
+      if(!isCaseFileName(name)) continue;
       stats.files++;
       scanProgressShow(stats, stats._label);
       /* たまに処理を手放して、画面を描き直させる。
@@ -14979,9 +14979,22 @@ async function dupCleanupFlow(rows, quietIfNone){
    0KB＝中身が無い＝消しても失うものが無いので、ここで見つけて掃除する。
    中身のある壊れたファイルは、開けば直せる見込みがあるので消さずに知らせるだけ。
    ============================================================ */
+/* ============================================================
+   戸別ファイルとして読む名前かどうか
+   ------------------------------------------------------------
+   ふつうは .json / .hyb / .enc。
+   これに加えて .json.txt も読む。
+   ★Androidは .json をそのまま共有できない★（Chromeが許すのは .txt .csv .pdf 等で、
+   .json は許可リストに入っていない）。Dropboxへ渡す道が共有シートしかないタブレットでは、
+   現場入力が「2611A001.json.txt」という名前で渡す。中身はふつうの戸別JSONと同じ。
+   ============================================================ */
+function isCaseFileName(name){
+  return /\.(json|hyb|enc)$/i.test(String(name || "")) || /\.json\.txt$/i.test(String(name || ""));
+}
 /* ファイル名から管理番号を推す。「2613ZSO263_5017105541291380094.json」→「2613ZSO263」 */
 function junkNoFromName(name){
-  return String(name || "").replace(/\.(json|hyb|enc)$/i, "").split("_")[0].trim();
+  return String(name || "").replace(/\.json\.txt$/i, "").replace(/\.(json|hyb|enc)$/i, "")
+    .split("_")[0].trim();
 }
 function junkSizeLabel(n){
   if(n === 0) return "0 KB（空）";
@@ -15011,7 +15024,7 @@ async function junkScanEmpty(dirHandle, pathPrefix, out){
     if(handle.kind === "directory"){
       try { await junkScanEmpty(handle, pathPrefix + name + "/", out); } catch(_){}
     } else if(handle.kind === "file"){
-      if(!/\.(json|hyb|enc)$/i.test(name)) continue;
+      if(!isCaseFileName(name)) continue;
       try {
         const f = await handle.getFile();
         if(f.size === 0){
@@ -15940,7 +15953,7 @@ async function writeRowFile(row, newData, newExt){
   const blob = new Blob([content], { type: "application/json" });
   // 拡張子変更対応の新ファイル名
   const oldName = row.file.split(/[\\/]/).pop() || row.file;
-  let baseNoExt = oldName.replace(/\.(json|hyb|enc)$/i, "");
+  let baseNoExt = oldName.replace(/\.json\.txt$/i, "").replace(/\.(json|hyb|enc)$/i, "");
   // 戸別プレーンJSONは「管理番号.json」に統一：旧 .antenna 接頭辞を除去（例 245001.antenna → 245001）
   if(newExt === "json") baseNoExt = baseNoExt.replace(/\.antenna$/i, "");
   const newName = baseNoExt + "." + newExt;
