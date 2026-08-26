@@ -810,6 +810,15 @@
   body.list-print-mode .hk-table input.hk-man { display: none !important; }
   body.list-print-mode .hk-man-print { display: inline !important; }
   body.list-print-mode .hk-manual-b { display: none !important; }   /* 印刷・PDFでは「手入力」の印を出さない */
+  /* 写真台帳：特別記録の枠（戸別ではないと一目で分かるようにする） */
+  .pj-case.pj-sp { border-left: 5px solid #5d4037; }
+  .pj-head.pj-head-sp { background: #efebe9; }
+  .pj-head.pj-head-sp .pj-h-k { color: #5d4037; }
+  @media print {
+    .pj-case.pj-sp { border-left: 3px solid #5d4037; }
+    .pj-head.pj-head-sp { background: #efebe9 !important;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
   .list-mode-tabs {
     display: flex;
     gap: 3px;
@@ -6198,7 +6207,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.25a";
+const APP_VERSION = "2026.08.26a";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -14443,8 +14452,25 @@ function slimListRow(row, canReread){
 /* このJSONは戸別ファイルではない、と分かるか。分かるものは「読めなかった」ではなく
    黙って読み飛ばす（物件ファイルや現場用の書き出しが同じフォルダに置かれていても、
    毎回エラーとして知らされないように）。判定できないものは今までどおり知らせる。 */
+/* ============================================================
+   特別記録（現場入力の「特別」で撮った、戸別に属さない写真）
+   ------------------------------------------------------------
+   資材検収・検査中・どの戸別にも当てはまらない写真。
+   ★戸別ではないので、一覧・費用・履行報告・発注材料には一切入れない★
+   （入れると件数・金額・出来高が狂う）。写真台帳だけが専用の枠として出す。
+   ============================================================ */
+let _specialRows = [];        // フォルダを読むたびに入れ替える
+function isSpecialRecord(data){
+  return !!(data && typeof data === "object" && data._recordType === "special");
+}
+const SP_KIND_LABEL = { material_in:"資材検収（納品）", material_chk:"資材検収（検査中）",
+                        other:"その他・イレギュラー" };
+function spKindLabel(d){
+  return String((d && (d.special_kind_name || SP_KIND_LABEL[d.special_kind])) || "特別記録");
+}
 function listNotACaseFile(data){
   if(!data || typeof data !== "object") return "";
+  if(isSpecialRecord(data)) return "特別記録";
   if(data.schema === PROJ_SCHEMA && Array.isArray(data.cases)) return "物件ファイル";
   const t = String(data.type || data._type || "");
   if(t === "antenna_map_pack")         return "現場用の地図";
@@ -14526,6 +14552,15 @@ async function scanDirRecursive(dirHandle, pathPrefix, rows, stats){
         let data;
         try { data = JSON.parse(text); }
         catch(_){ junkNote(stats, pathPrefix, name, dirHandle, file); continue; }
+        /* 特別記録は「戸別ではないが、写真台帳では使う」。
+           行には入れず、別の入れ物へ寄せておく。 */
+        if(isSpecialRecord(data)){
+          stats.files--;
+          (stats.special = stats.special || []).push({
+            file: pathPrefix + name, name: name, dirPath: pathPrefix, dir: dirHandle,
+            lastModified: file.lastModified, data: data });
+          continue;
+        }
         // 戸別ファイルでないと分かるもの（物件ファイル・現場用の書き出し等）は、
         // エラーではなく読み飛ばし。同じフォルダに置いてあっても邪魔にならないように。
         const notCase = listNotACaseFile(data);
@@ -14634,6 +14669,7 @@ async function listReloadRemembered(ask){
     if(st) st.textContent = "前回のフォルダを読み込めませんでした（移動・削除されたかもしれません）。「📁 フォルダ」から選び直してください。";
     return false;
   }
+  _specialRows = stats.special || [];
   _listRows = await mergeRowsWithManual(rows, { source: "folder", stats, root: nm });
   _listSelectedFolderName = nm;
   renderListTable();
@@ -15219,6 +15255,7 @@ async function listReloadFolder(expectedGone){
       st.textContent = "フォルダを読み直せませんでした（移動・削除されたかもしれません）。「📁 フォルダ」から選び直してください。"; }
     return;
   }
+  _specialRows = stats.special || [];
   _listRows = await mergeRowsWithManual(rows, { source: "folder", stats,
     root: _listDirHandle.name || "", expectedGone: expectedGone || [] });
   { const sn = syncStalledNote(stats);
@@ -15812,6 +15849,7 @@ async function listSelectFolder(){
       }
     }
     // 台帳起点の行（仮受付・手入力）は保持し、管理番号重複は件ごとに確認してマージ
+    _specialRows = stats.special || [];
     _listRows = await mergeRowsWithManual(rows, { source: "folder", stats,
       root: dirHandle.name || "", expectedGone });
     _listSelectedFolderName = dirHandle.name || "";
@@ -26260,6 +26298,19 @@ async function pjLoad(){
     } catch(e){ c.err = "読み込めませんでした（" + ((e && e.message) || e) + "）"; }
     cases.push(c);
   }
+  /* 特別記録（資材検収・検査中・イレギュラー）。戸別ではないので一覧には入っていない。
+     写真台帳では、戸別の後ろに専用の枠として並べる。 */
+  (_specialRows || []).forEach((sp, i) => {
+    const d = (sp && sp.data) || {};
+    const ph = (Array.isArray(d.chosho_photos) ? d.chosho_photos : []).filter(x => x && x.dataUri);
+    cases.push({ row: null, sp: sp, key: "sp" + i + ":" + String(sp.file || i),
+      no: "", name: "", addr: "", tel: "",
+      spKind: spKindLabel(d), spTitle: String(d.special_title || ""),
+      spDate: String(d.special_date || ""), spNote: String(d.special_note || ""),
+      photos: ph.map(x => ({ label: x.label || "", dataUri: x.dataUri, id: x.id || "",
+        src0: x.dataUri, rot: 0 })),
+      err: "" });
+  });
   _pjCases = cases;
   _pjDirty = {};
   _pjRowsRef = _listRows;            // どの一覧から作った台帳かを覚えておく
@@ -26338,6 +26389,7 @@ function pjDirtyList(){ return (_pjCases || []).filter(c => _pjDirty[c.key]); }
 /* この戸別を 管理番号.json へ書き戻してよいか。書き戻せない理由を返す（空文字なら書き戻せる）。
    ★サムネ（物件に控えた小さな写真）を書き戻すと原寸が失われるので、必ずここで止める。 */
 function pjWhyLocked(c){
+  if(c && c.sp) return "特別記録です（写真の入れ替えは現場入力の「特別」で行ってください）";
   const r = c && c.row;
   if(!r) return "戸別の情報がありません";
   if(c.err) return c.err;
@@ -26439,6 +26491,18 @@ async function pjWriteBack(){
 }
 /* 印刷の見出しに横並びで貼る項目 */
 function pjHeadHtml(c){
+  if(c && c.sp){
+    const cell = (k, v, cls) => '<div class="pj-h-cell' + (cls ? (" " + cls) : "") + '">'
+      + '<div class="pj-h-k">' + escapeHtml(k) + '</div>'
+      + '<div class="pj-h-v">' + (v || '<span class="pj-none">―</span>') + '</div></div>';
+    return '<div class="pj-head pj-head-sp">'
+      + cell("区分", '<b>' + escapeHtml(c.spKind || "特別記録") + '</b>', "pj-h-no")
+      + cell("件名", escapeHtml(c.spTitle || ""), "pj-h-addr")
+      + cell("日付", escapeHtml(c.spDate || ""))
+      + cell("写真", c.photos.length + " 枚")
+      + cell("備考", escapeHtml(c.spNote || ""), "pj-h-addr")
+      + '</div>';
+  }
   const dd = (c.row && c.row.data) || {};
   const asb = asbestosStatusBadge(c.row);
   const high = (String(dd.high_work) === "yes") ? "必要" : (dd.high_work == null ? "―" : "不要");
@@ -26471,7 +26535,7 @@ function pjShownCases(rows){
   let all = _pjCases || [];
   if(Array.isArray(rows)){
     const keep = new Set(rows);
-    all = all.filter(c => keep.has(c.row));
+    all = all.filter(c => c.sp || keep.has(c.row));   // 特別記録は戸別の絞り込みの対象外
   }
   return _pjOnlyPhoto ? all.filter(c => c.photos.length) : all;
 }
@@ -26482,9 +26546,14 @@ function renderListPhotoMode(rows, container){
     + '<div class="ph-bar-line">'
     +   '<button type="button" id="pj-load" title="いま読み込んでいる戸別（受付台帳と同じ一覧）の中から、戸別ファイルに入っている写真を読み出して並べます。">'
     +     (_pjCases ? '🔄 写真を読み直す' : '📥 写真を読み込む') + '</button>'
-    +   (_pjCases ? ('<span class="ph-root">戸別 ' + pjShownCases(rows).length + ' 件／写真 '
-          + pjShownCases(rows).reduce((n, c) => n + c.photos.length, 0) + ' 枚'
-          + ((rows && rows.length < _pjCases.length) ? '（絞り込み中）' : '') + '</span>') : '')
+    +   (_pjCases ? (function(){
+          const sh = pjShownCases(rows);
+          const spN = sh.filter(c => c.sp).length;
+          return '<span class="ph-root">戸別 ' + (sh.length - spN) + ' 件'
+            + (spN ? ('／特別記録 ' + spN + ' 件') : '')
+            + '／写真 ' + sh.reduce((n, c) => n + c.photos.length, 0) + ' 枚'
+            + ((rows && rows.length < _pjCases.length) ? '（絞り込み中）' : '') + '</span>';
+        })() : '')
     + '</div>';
   if(_pjCases){
     html += '<div class="ph-bar-line">'
@@ -26517,7 +26586,10 @@ function renderListPhotoMode(rows, container){
       + '・回した・消した結果は <b>「💾 戸別ファイルへ書き戻す」</b>で 管理番号.json へ書き戻します'
       + '（押すまでファイルは変わりません）。<br>'
       + '・印刷は <b>1戸別＝必ず1ページ</b>。上に 管理番号・氏名・住所・電話・石綿・高所作業車・'
-      + '記録データ（アンテナ／増幅器／端子）を横に並べ、下に写真を敷きます。</p>'
+      + '記録データ（アンテナ／増幅器／端子）を横に並べ、下に写真を敷きます。<br>'
+      + '・現場入力の「特別」で撮った <b>特別記録</b>（資材検収・検査中・イレギュラー）が'
+      + 'フォルダにあれば、戸別の後ろに専用の枠として並びます'
+      + '（戸別ではないので、件数・費用・出来高には入りません）。</p>'
       + '</div>';
     container.innerHTML = html;
     bindPhotoHandlers(container);
@@ -26562,7 +26634,7 @@ function renderListPhotoMode(rows, container){
              + '</figure>').join("")
          + '</div>')
       : ('<div class="pj-nophoto">写真はありません' + (c.err ? ('（' + escapeHtml(c.err) + '）') : "") + '</div>');
-    return '<section class="pj-case' + (_pjDirty[c.key] ? " pj-dirty" : "") + '">'
+    return '<section class="pj-case' + (c.sp ? " pj-sp" : "") + (_pjDirty[c.key] ? " pj-dirty" : "") + '">'
       + pjHeadHtml(c)
       + (locked && c.photos.length
           ? ('<div class="pj-note no-print">🔒 この戸別は書き戻せません（' + escapeHtml(why)
