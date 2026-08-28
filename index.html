@@ -3549,9 +3549,9 @@
   td.cal-out { background: #fafbfc; }
   td.cal-today { outline: 2px solid #1e3a5f; outline-offset: -2px; }
   td.cal-today .cal-cell .cal-day { color: #fff; background: #1e3a5f; border-radius: 2px; padding: 0 4px; display: inline-block; }
-  td.cal-full { background: #fff3e0; }
+
   td.cal-sel { background: #e3f2fd; }
-  .cal-cell .cal-day .cal-full-mark { color: #e65100; font-weight: 700; font-size: 10px; margin-left: 3px; }
+  .cal-cell .cal-day .cal-work-n { color: #667482; font-weight: 600; font-size: 9px; margin-left: 3px; }
   .cal-ev {
     display: block; font-size: 10.5px; line-height: 1.35; margin-top: 1px;
     border-radius: 2px; padding: 0 3px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
@@ -6210,7 +6210,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.26b";
+const APP_VERSION = "2026.08.26c";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -23100,7 +23100,7 @@ async function importProjectFileObj(f){
 
 /* ---------- メニュー画面 ---------- */
 const MENU_FEATS = [
-  { icon: "📅", title: "予定カレンダー", desc: "工事予定（青）・打合せ予定（緑）を月表示で管理。1日4件の枠を確認しながら割り当て", mode: "calendar" },
+  { icon: "📅", title: "予定カレンダー", desc: "工事予定（青）・打合せ予定（緑）を月表示で管理。日をクリックすると、その日の件数と会社別の内訳が出ます", mode: "calendar" },
   { icon: "📒", title: "受付台帳", desc: "全戸別を1行ずつ一覧。日程・打合せ・ビラ配布・完了・備考をその場で直接編集", mode: "ledger" },
   { icon: "📄", title: "戸別一覧（読込・積算）", desc: "保存済ファイルの一覧・検索・読込。フォルダからの取り込みもここから", mode: "standard" },
   { icon: "🧰", title: "発注材料数量", desc: "現場入力で「下見完了」にした戸別の材料を工事全体で合計。まとめ発注用の数量表（金額なし）", mode: "materials" },
@@ -26973,9 +26973,13 @@ function bindMaterialsMode(container, items){
 /* ============================================================
    予定カレンダー（一覧の第6モード）
    工事予定＝chosho_date＋ledger.time（青）／打合せ＝ledger.meetAt（緑）
-   1日の工事予定は最大4件を目安に、超過時は警告（入力は可能）
+
+   ★1日あたりの上限は置かない★
+   以前は「1日4件が目安」として満枠の色と警告を出していたが、
+   下請けを何社も抱えていれば1日に入る件数はその日の人数しだいで、
+   4件で満席とは限らない。数えて出すだけにして、多い少ないの判断は人に任せる。
+   その日が「どの会社で何件か」は、日を選ぶと下に出る。
    ============================================================ */
-const CAL_MAX_PER_DAY = 4;
 let _calY = null, _calM = null;      // 表示中の年・月(0-11)
 let _calPanel = null;                 // {type:"day",date} / {type:"event",tk,evType}
 /* ---------- 戸別に紐づかない予定（元請との打合せ・社内会議など） ----------
@@ -27124,15 +27128,7 @@ function calBuildEvents(rows){
   });
   return evs;
 }
-function calWorkCountOn(dateS, exceptTk){
-  let n = 0;
-  _listRows.forEach(r => {
-    if(!lgLedgerEnabled(r)) return;
-    if(exceptTk && subCaseKey(r) === exceptTk) return;
-    if(r.data && r.data.chosho_date === dateS) n++;
-  });
-  return n;
-}
+
 function calEvLabel(ev){
   if(ev.type === "free"){
     const kd = calFreeKind(ev.free && ev.free.kind);
@@ -27157,13 +27153,12 @@ function calEvTitle(ev){
     + "\n" + (d.chosho_mgmt_no || "―") + " " + (d.chosho_cust_name || "")
     + (d.chosho_cust_addr ? "\n" + d.chosho_cust_addr : "") + cLine;
 }
-/* 予定の日付を移動（D&D・日付変更で共用）。工事は4件枠を警告 */
+/* 予定の日付を移動（D&D・日付変更で共用）。
+   1日あたりの上限は置かないので、件数で止めたり聞き直したりはしない。 */
 function calMoveEvent(tk, type, newDate, newTime){
   const row = calRowByTk(tk);
   if(!row || !newDate) return;
   if(type === "work"){
-    const cnt = calWorkCountOn(newDate, tk);
-    if(cnt >= CAL_MAX_PER_DAY && !confirm("⚠ " + newDate.replace(/-/g, "/") + " は既に工事予定が " + cnt + " 件あります（1日の目安は " + CAL_MAX_PER_DAY + " 件）。\nこの日に割り当てますか？")) return;
     lgWriteCaseField(row, "date", newDate);
     if(newTime != null) setLedger(tk, { time: newTime });
   } else {
@@ -27318,7 +27313,7 @@ function renderListCalendarMode(rows, container){
     + '<span><span class="cal-chip-sample" style="background:#e8f5e9;border:1px solid #a5d6a7;"></span>打合せ</span>'
     + '<span title="戸別に紐づかない予定。日をクリックするか、下の「今後の予定」の＋から入れられます">'
     +   '<span class="cal-chip-sample" style="background:#ede7f6;border:1px solid #b39ddb;"></span>その他（検査・立会いなど）</span>'
-    + '<span><span class="cal-chip-sample" style="background:#fff3e0;border:1px solid #ffcc80;"></span>満枠（' + CAL_MAX_PER_DAY + '件）</span>'
+
     + '<span>予定はドラッグ＆ドロップで日付変更できます</span>'
     + '</span>'
     + ((ctrInView.length || ctrNoneN)
@@ -27364,11 +27359,10 @@ function renderListCalendarMode(rows, container){
       const tdCls = [];
       if(!inMonth) tdCls.push("cal-out");
       if(ds === todayS) tdCls.push("cal-today");
-      if(workN >= CAL_MAX_PER_DAY) tdCls.push("cal-full");
       if(_calPanel && _calPanel.type === "day" && _calPanel.date === ds) tdCls.push("cal-sel");
       html += '<td class="' + tdCls.join(" ") + '" data-date="' + ds + '"><div class="cal-cell" data-date="' + ds + '">'
         + '<div class="cal-day">' + parseInt(ds.slice(8), 10)
-        + (workN >= CAL_MAX_PER_DAY ? '<span class="cal-full-mark">満</span>' : (workN > 0 ? '<span style="color:#90a0b0;font-weight:400;font-size:9px;"> ' + workN + '/' + CAL_MAX_PER_DAY + '</span>' : ''))
+        + (workN > 0 ? '<span class="cal-work-n" title="この日の工事予定の件数">' + workN + '件</span>' : '')
         + '</div>';
       dayEvs.forEach(ev => {
         if(ev.type === "free"){
@@ -27410,9 +27404,10 @@ function renderCalPanel(byDate){
     const ds = _calPanel.date;
     const evs = (byDate && byDate[ds]) || [];
     const workN = evs.filter(ev => ev.type === "work").length;
-    const free = Math.max(0, CAL_MAX_PER_DAY - workN);
+    const meetN = evs.filter(ev => ev.type === "meet").length;
     let html = '<div class="cal-panel-head">📌 ' + ds.replace(/-/g, "/") + ' の予定'
-      + '<span class="cal-slot-note">工事 ' + workN + ' 件 ／ 空き枠 ' + free + '（目安 ' + CAL_MAX_PER_DAY + ' 件/日）</span></div>';
+      + '<span class="cal-slot-note">工事 ' + workN + ' 件'
+      + (meetN ? ('　打合せ ' + meetN + ' 件') : '') + '</span></div>';
     /* 3社が同じカレンダーを使うので、その日が「どの会社で何件か」をここで数える */
     {
       const byCtr = {}; let noneN = 0;
@@ -27955,11 +27950,9 @@ function calQuickAdd(dateS, no, time){
   }
   const exist = _listRows.find(r => ((r.data && r.data.chosho_mgmt_no) || "").trim() === no);
   if(exist){
-    calMoveEvent(subCaseKey(exist), "work", dateS, time); // 予定追加のみ（4件枠の警告込み）
+    calMoveEvent(subCaseKey(exist), "work", dateS, time); // 予定追加のみ
     return;
   }
-  const cnt = calWorkCountOn(dateS);
-  if(cnt >= CAL_MAX_PER_DAY && !confirm("⚠ " + dateS.replace(/-/g, "/") + " は既に工事予定が " + cnt + " 件あります（1日の目安は " + CAL_MAX_PER_DAY + " 件）。\nこの日に仮登録しますか？")) return;
   const row = createManualRow({ chosho_mgmt_no: no, chosho_date: dateS }, "phone");
   if(time) setLedger(subCaseKey(row), { time });
   renderListTable();
