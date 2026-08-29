@@ -6210,7 +6210,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.26c";
+const APP_VERSION = "2026.08.28b";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -15926,6 +15926,10 @@ function listSelectFiles(){
     }
     // 台帳起点の行（仮受付・手入力）は保持し、管理番号重複は件ごとに確認してマージ
     _listRows = await mergeRowsWithManual(rows);
+    /* 特別記録は「そのフォルダにあったもの」。一覧を入れ替えたら必ず捨てる。
+       残すと、別の物件の写真台帳に前のフォルダの特別記録が出て、
+       「📦 特別記録の写真を書き出す」で別の物件のフォルダへ書き出してしまう。 */
+    _specialRows = [];
     _listSelectedFolderName = "";
     renderListTable();
     // 物件へ取り込み：写真サムネイル生成→即時保存
@@ -21855,6 +21859,7 @@ async function applyProject(p, opts){
     _projLastWrittenUpdatedAt = p.updatedAt || "";
     _projFileHandle = (opts && opts.fileHandle) || null; // ファイル連動で開いた時だけ書込ハンドル保持
     if(!opts._merge) _projDirHandle = null; // 物件を新規に開く＝工事フォルダリンクは持ち越さない（必要時にIDBから再リンク）
+    _specialRows = [];                      // 前のフォルダの特別記録は持ち越さない
     _listRows = (p.cases || []).map(c => {
       // 台帳起点の行（仮受付・手入力）はマーカーから直接復元（空欄でも消えない）
       if(c.payload && c.payload._manual){
@@ -22905,6 +22910,7 @@ async function createProjectFlow(){
     _listSelectedFolderName = p.name;
   } else {
     _listRows = [];
+    _specialRows = [];
     _listSelectedFolderName = p.name;
     renderListTable();
   }
@@ -29395,6 +29401,7 @@ function init(){
   };
   document.getElementById("btn-list-clear").onclick = () => {
     _listRows = [];
+    _specialRows = [];
     _listSelectedFolderName = "";
     renderListTable();
   };
