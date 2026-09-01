@@ -1593,6 +1593,9 @@
     body.list-print-mode table.cal-table { page-break-inside: avoid; table-layout: fixed; width: 100%;
       flex: 1 1 auto; height: 100%; }
     body.list-print-mode table.cal-table td { height: auto !important; }
+    body.list-print-mode table.cal-table.cal-w4 tbody tr { height: 25% !important; }
+    body.list-print-mode table.cal-table.cal-w5 tbody tr { height: 20% !important; }
+    body.list-print-mode table.cal-table.cal-w6 tbody tr { height: 16.666% !important; }
     body.list-print-mode .cal-cell { min-height: 0 !important; height: 100% !important; padding: 1px 2px !important; overflow: hidden; }
     body.list-print-mode .cal-cell .cal-day { font-size: 9px !important; }
     body.list-print-mode .cal-ev { font-size: 8px !important; line-height: 1.2 !important; padding: 0 2px !important; }
@@ -6243,7 +6246,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.29c";
+const APP_VERSION = "2026.08.29d";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -27404,7 +27407,7 @@ function renderListCalendarMode(rows, container){
            + '<button type="button" class="cal-ctr-clear" data-cal-ctr="">ぜんぶ出す</button></div>')
         : '');
 
-  html += '<div class="cost-detail-section"><table class="cal-table"><thead><tr>';
+  html += '<div class="cost-detail-section"><table class="cal-table cal-w' + weeks + '"><thead><tr>';
   ["日", "月", "火", "水", "木", "金", "土"].forEach((w, i) => {
     html += '<th class="' + (i === 0 ? "cal-sun" : (i === 6 ? "cal-sat" : "")) + '">' + w + '</th>';
   });
