@@ -1583,8 +1583,10 @@
     }
     body.list-print-mode .cal-filter-note { border: none !important; background: none !important; padding: 0 !important; }
     /* A4横（297x210・余白8mm）＝中身は 281x194mm。枠をその高さに固定して、
-       見出しの残り全部を月グリッドに渡す。表に高さを与えると各週の行が分け合って伸びる。 */
-    body.list-print-mode .cal-page { display: flex; flex-direction: column; height: 194mm; overflow: hidden; }
+       見出しの残り全部を月グリッドに渡す。表に高さを与えると各週の行が分け合って伸びる。
+       高さは 193mm＝中身より1mm低くしてある。A4の実寸は 209.99mm で、余白を引くと
+       中身は 193.99mm。194mm ちょうどだと 0.01mm はみ出して2枚目・3枚目に流れてしまう。 */
+    body.list-print-mode .cal-page { display: flex; flex-direction: column; height: 193mm; overflow: hidden; }
     body.list-print-mode .cal-page > .cost-detail-section:last-child { flex: 1 1 auto; min-height: 0; display: flex; }
     body.list-print-mode table.cal-table { page-break-inside: avoid; table-layout: fixed; width: 100%;
       flex: 1 1 auto; height: 100%; }
@@ -6239,7 +6241,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.29a";
+const APP_VERSION = "2026.08.29b";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
