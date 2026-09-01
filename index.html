@@ -3343,9 +3343,11 @@
   .menu-proj-table .mp-actions button.mp-del { border-color: #c62828; color: #c62828; }
   .menu-proj-table .mp-actions button.mp-del:hover { background: #fdecea; }
   .menu-empty { background: #fff; border: 1px dashed #b8c2cc; border-radius: 6px; padding: 18px; text-align: center; color: #667482; font-size: 13px; }
-  .app-ver-top { display:inline-block; margin-right:8px; padding:1px 7px; border-radius:9px;
-    background:rgba(255,255,255,.16); color:#dbe6f2; font-size:11px; font-weight:700;
-    white-space:nowrap; }
+  /* メニュー最上部の版表記。押さなくても常に見えるように、少し大きめ・選択可 */
+  .app-ver-menu { display:inline-block; padding:2px 10px; border-radius:10px;
+    background:rgba(255,255,255,.18); color:#eaf2fb; font-size:12px; font-weight:700;
+    white-space:nowrap; flex:0 0 auto; user-select:text; letter-spacing:.02em; }
+
   .proj-ind { font-size: 11px; color: #ffd54f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
   @media print { .menu-view { display: none !important; } }
 
@@ -4543,7 +4545,7 @@
       </span>
       <span class="tb-div" aria-hidden="true"></span>
       <!-- 状態表示 -->
-      <span id="app-ver-top" class="app-ver-top" title="このアプリの版。現場入力と版がそろっているか確かめるときに使います"></span>
+
       <span id="proj-ind-app" class="proj-ind" title="現在開いている物件"></span>
       <span id="rt-ind-app" class="rt-ind" style="display:none;" title="リアルタイム同期"></span>
       <span id="rt-locks-app" class="rt-locks" style="display:none;"></span>
@@ -5413,7 +5415,7 @@
       <span id="rt-locks-list" class="rt-locks" style="display:none;"></span>
       <span id="list-pw-indicator" style="display:none;color:#fff;font-size:11px;padding:2px 8px;border-radius:3px;background:#2e7d32;" title="クリックで記憶パスワードを消去"></span>
       <span id="list-count" style="color:#fff;font-size:12px;margin:0 10px;"></span>
-      <span id="app-ver-list" class="app-ver-top" title="このアプリの版。現場入力と版がそろっているか確かめるときに使います"></span>
+
       <button id="btn-list-close" style="margin-left:auto;background:#666;" title="一覧を閉じる">✕</button>
     </nav>
   </header>
@@ -5729,6 +5731,8 @@
 <div class="menu-view" id="menu-view">
   <header class="menu-header">
     <h1>🏠 メニュー</h1>
+    <span id="app-ver-menu" class="app-ver-menu"
+      title="このアプリの版。読み込み直したときに新しくなっているか、ここで確かめられます"></span>
     <span class="menu-cur-proj" id="menu-cur-proj"></span>
     <span class="menu-cur-proj" id="rt-ind-menu" style="display:none;cursor:pointer;" title="リアルタイム同期設定"></span>
     <button id="menu-projfile" title="共有物件JSONファイルへの連動状態" style="display:none;">🔗 共有ファイルに連動</button>
@@ -6246,7 +6250,9 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.29d";
+/* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
+   現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
+const APP_VERSION = "120";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -23500,17 +23506,17 @@ function renderContractorDigitRows(){
 }
 /* メニュー最下部の版表記（メイン＋最後に取り込んだ現場入力の版）。目立たせない。 */
 function renderAppVersionFoot(){
-  // 道具の帯にも出す（メニューを開かなくても、いつでも版が分かるように）
-  ["app-ver-top", "app-ver-list"].forEach(id => {
-    const t = document.getElementById(id);
-    if(t) t.textContent = "v" + APP_VERSION;
-  });
+  // メインの版が出るのはメニューの一番上、ここ1か所だけ。
+  // 受付台帳の読込件数の隣にも出していたが、件数と紛らわしいのでやめた。
+  const vm = document.getElementById("app-ver-menu");
+  if(vm) vm.textContent = "version " + APP_VERSION;
   const vf = document.getElementById("app-ver-foot");
   if(!vf) return;
+  // ここは「現場入力の版」だけ。メインの版はメニューの一番上に出している。
   const gv = getGenbaVersion();
-  vf.innerHTML = escapeHtml(APP_NAME_SHORT) + ' <b>v' + escapeHtml(APP_VERSION) + '</b>'
-    + (gv ? '　／　現場入力 <b>v' + escapeHtml(gv.ver) + '</b><span title="現場JSNを取り込んだ時点で記録した版です">（' + escapeHtml(gv.at) + ' 取込）</span>'
-          : '　／　現場入力 <span title="現場JSNを取り込むと、その現場入力アプリの版をここに表示します">（未取込）</span>');
+  vf.innerHTML = (gv
+    ? '現場入力 <b>version ' + escapeHtml(gv.ver) + '</b><span title="現場JSNを取り込んだ時点で記録した版です">（' + escapeHtml(gv.at) + ' 取込）</span>'
+    : '現場入力 <span title="現場JSNを取り込むと、その現場入力アプリの版をここに表示します">（未取込）</span>');
 }
 
 /* ============================================================
