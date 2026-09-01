@@ -1369,8 +1369,15 @@
     /* 濃い下地に黒字だと紙で読めない。要素ごとに決めた色（--fg）へ戻す。 */
     body.list-print-mode .asb-badge,
     body.list-print-mode .lg-asb-chip,
-    body.list-print-mode .cal-ctr-badge { color: var(--fg, #fff) !important; }
+    body.list-print-mode .cal-ctr-badge,
+    body.list-print-mode .cal-free-mark,
+    body.list-print-mode .lg-hold-badge,
+    body.list-print-mode .lg-nofile-badge,
+    body.list-print-mode .lg-dup-badge,
+    body.list-print-mode .pj-box figcaption .pj-i,
+    body.list-print-mode .pj-part { color: var(--fg, #fff) !important; }
     body.list-print-mode .lg-asb-chip.asb-blank { color: #667482 !important; }
+    body.list-print-mode .cal-ctr-badge-none { color: #111 !important; }
     body.list-print-mode .cu-ctr-only { color: #fff !important; }
     body.list-print-mode td.cal-today .cal-cell .cal-day { color: #fff !important; }
     /* 画面用のボタンは紙に出さない（押せないうえ、濃い下地に黒字で読めない） */
@@ -1568,13 +1575,20 @@
     body.list-print-mode .cal-ctr-n,
     body.list-print-mode .cal-legend-ctr-lbl { display: none !important; }
     body.list-print-mode .cal-legend-ctr-lbl-print { display: inline !important; }
+    /* 会社別の色凡例は紙にも出す（.cal-toolbar button の一括非表示に負けないよう後で戻す） */
+    body.list-print-mode .cal-toolbar .cal-ctr-pick:not([data-cal-ctr=""]) { display: inline-flex !important; }
     body.list-print-mode .cal-ctr-pick {
       border: none !important; background: none !important; box-shadow: none !important;
       padding: 0 10px 0 0 !important; font-weight: 400 !important;
     }
     body.list-print-mode .cal-filter-note { border: none !important; background: none !important; padding: 0 !important; }
-    body.list-print-mode table.cal-table { page-break-inside: avoid; table-layout: fixed; width: 100%; }
-    body.list-print-mode table.cal-table td { height: 22mm !important; }
+    /* A4横（297x210・余白8mm）＝中身は 281x194mm。枠をその高さに固定して、
+       見出しの残り全部を月グリッドに渡す。表に高さを与えると各週の行が分け合って伸びる。 */
+    body.list-print-mode .cal-page { display: flex; flex-direction: column; height: 194mm; overflow: hidden; }
+    body.list-print-mode .cal-page > .cost-detail-section:last-child { flex: 1 1 auto; min-height: 0; display: flex; }
+    body.list-print-mode table.cal-table { page-break-inside: avoid; table-layout: fixed; width: 100%;
+      flex: 1 1 auto; height: 100%; }
+    body.list-print-mode table.cal-table td { height: auto !important; }
     body.list-print-mode .cal-cell { min-height: 0 !important; height: 100% !important; padding: 1px 2px !important; overflow: hidden; }
     body.list-print-mode .cal-cell .cal-day { font-size: 9px !important; }
     body.list-print-mode .cal-ev { font-size: 8px !important; line-height: 1.2 !important; padding: 0 2px !important; }
@@ -1631,6 +1645,7 @@
     /* ⑤「今後の予定（先の工程）」レポート印刷：schedule-only 時は月グリッド等を隠し、レポートのみをA4縦で出力 */
     body.list-print-mode.schedule-only .cost-detail-section,
     body.list-print-mode.schedule-only .cal-panel,
+    body.list-print-mode.schedule-only .cal-page,
     body.list-print-mode.schedule-only .cal-toolbar { display: none !important; }
     body.list-print-mode.schedule-only .cal-upcoming { display: block !important; border: none !important; padding: 0 !important; }
     body.list-print-mode.schedule-only .cal-upcoming .cu-day { page-break-inside: avoid; }
@@ -1639,6 +1654,14 @@
     body.list-print-mode.schedule-only .cal-upcoming .cu-day-head.cu-sun { color: #c62828 !important; }
     body.list-print-mode.schedule-only .cal-upcoming .cu-type.t-work { color: #0d47a1 !important; background: #e3f2fd !important; }
     body.list-print-mode.schedule-only .cal-upcoming .cu-type.t-meet { color: #1b5e20 !important; background: #e8f5e9 !important; }
+    /* 施工会社の色凡例（レポート内）。会社名の左の色帯が誰の色か、紙だけで分かるようにする */
+    body.list-print-mode .cal-upcoming .cu-ctr-legend {
+      display: flex !important; flex-wrap: wrap; gap: 1px 12px;
+      border: 1px solid #cdd3da; border-radius: 4px; padding: 3px 8px; margin: 3px 0 6px;
+      font-size: 10px; color: #000;
+    }
+    body.list-print-mode .cal-upcoming .cu-ctr-legend .cu-cl-lbl { font-weight: 700; }
+    body.list-print-mode .cal-upcoming .cu-ctr-legend .cu-cl-1 { white-space: nowrap; }
 
     /* 一覧印刷は名前付きページで横向きを固定（後段の通常印刷 @page A4 portrait に後勝ちで上書きされ縦向き→右切れになるのを防ぐ） */
     @page list-landscape { size: A4 landscape; margin: 8mm; }
@@ -3410,12 +3433,14 @@
     display: inline-block; background: #e65100; color: #fff;
     font-size: 9px; font-weight: 700; padding: 0 5px; border-radius: 7px;
     margin-left: 4px; vertical-align: 1px; white-space: nowrap;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
   /* ファイルが見当たらない戸別（名前だけ残した行）の印 */
   .lg-nofile-badge {
     display: inline-block; background: #6d4c41; color: #fff;
     font-size: 9px; font-weight: 700; padding: 0 5px; border-radius: 7px;
     margin-left: 4px; vertical-align: 1px; white-space: nowrap;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
   .lg-nofile-badge.pending { background: #8d6e63; }
   #lgmiss-ov .modal{min-width:640px;max-width:900px;max-height:82vh;overflow:auto;}
@@ -3635,7 +3660,8 @@
   .cu-ctr-only { background: #1e3a5f; color: #fff; font-size: 11px; border-radius: 10px;
                  padding: 1px 9px; margin-left: 8px; font-weight: 700;
                  -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .cal-free-mark { background: #6a1b9a; color: #fff; border-radius: 3px; padding: 0 3px; margin-right: 3px; font-size: 9px; }
+  .cal-free-mark { background: #6a1b9a; color: #fff; border-radius: 3px; padding: 0 3px; margin-right: 3px; font-size: 9px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .cal-ev-type.t-free, .cu-type.t-free { background: #ede7f6; color: #4527a0; }
   .cal-free-sec { margin-top: 10px; padding: 8px 10px; background: #faf7fd; border: 1px solid #e4dcf0; border-radius: 5px; }
   .cal-free-head { font-size: 12px; font-weight: 700; color: #4527a0; margin-bottom: 6px; }
@@ -3767,6 +3793,8 @@
   .cal-upcoming .cu-prov { color: #b05a00; font-weight: 700; }
   .cal-upcoming tr.cu-done { opacity: .55; }
   .cal-upcoming .cu-empty { color: #667482; padding: 6px 0; font-size: 12px; }
+  /* 施工会社の色凡例。画面ではカレンダー上部の札と重複するので、紙にだけ出す */
+  .cal-upcoming .cu-ctr-legend { display: none; }
   /* 今後の予定レポートから、その場で「その他の予定」を足す欄（印刷には出さない） */
   .cal-upcoming .cu-add { display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
     background: #faf7fd; border: 1px solid #e4dcf0; border-radius: 5px; padding: 7px 10px; margin: 6px 0 2px; }
@@ -3784,7 +3812,8 @@
     cursor: pointer; font-size: 11px; margin-left: 3px; }
   .cal-upcoming .cu-free-ops button:hover { background: #eef2f6; }
   /* 種別の色は紙にも出す（印で見分けるため） */
-  .cal-upcoming .cu-type, .cal-ev-type, .cal-free-mark { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .cal-upcoming .cu-type, .cal-ev-type, .cal-free-mark,
+  .cal-ctr-tag { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   /* メニューのサマリ（仮受付・今日の工事） */
   .menu-summary { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; }
   .menu-summary .ms-item {
@@ -6210,7 +6239,7 @@
    ★更新したらこの2行を書き換える（表示・書き出しJSONへ自動反映）。
    ============================================================ */
 const APP_NAME_SHORT = "メイン";
-const APP_VERSION = "2026.08.28b";
+const APP_VERSION = "2026.08.29a";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -27181,6 +27210,27 @@ function calFmtDateJP(ds){
   const w = "日月火水木金土"[new Date(p[0], p[1] - 1, p[2]).getDay()];
   return p[0] + "/" + String(p[1]).padStart(2, "0") + "/" + String(p[2]).padStart(2, "0") + "（" + w + "）";
 }
+/* 施工会社の色凡例（会社名→色）。渡された予定に実際に出てくる会社だけを、業者マスターの
+   登録順で並べる。画面では出さず、印刷したときだけ見えるようにしてある。 */
+function calCtrLegendHtml(evs){
+  const order = contractorColorOrder();
+  const seen = {}; let noneN = 0;
+  (evs || []).forEach(ev => {
+    const c = calEvContractor(ev);
+    if(c) seen[c] = (seen[c] | 0) + 1; else noneN++;
+  });
+  const names = Object.keys(seen).sort((a, b) => {
+    const ia = order.indexOf(a), ib = order.indexOf(b);
+    return (ia < 0 ? 1e9 : ia) - (ib < 0 ? 1e9 : ib) || a.localeCompare(b, "ja");
+  });
+  if(!names.length) return "";
+  return '<div class="cu-ctr-legend"><span class="cu-cl-lbl">施工会社の色：</span>'
+    + names.map(c => '<span class="cu-cl-1">' + calCtrBadge(c)
+        + '<span class="cal-ctr-tag" style="border-left:4px solid ' + calContractorColor(c) + ';">'
+        + escapeHtml(c) + '</span></span>').join("")
+    + (noneN ? '<span class="cu-cl-1"><b class="cal-ctr-badge cal-ctr-badge-none">？</b>会社なし</span>' : '')
+    + '</div>';
+}
 /* 「今後の予定（先の工程）」レポート。今日以降の工事・打合せ予定を日付ごとに新しい順で一覧。
    カレンダーと同じ calBuildEvents から生成するため、予定を動かすと自動で追従する。 */
 function renderUpcomingSchedule(rows){
@@ -27198,7 +27248,8 @@ function renderUpcomingSchedule(rows){
         ? ('<span class="cu-ctr-only">' + escapeHtml(_calCtrFilter === "__none__" ? "会社なし" : _calCtrFilter) + ' のみ</span>')
         : '')
     + '<span class="cu-sub">' + todayS.replace(/-/g, "/") + ' 現在 ／ 工事 ' + workN + ' 件・打合せ ' + meetN + ' 件'
-    + (freeN ? "・その他 " + freeN + " 件" : "") + '</span></div>';
+    + (freeN ? "・その他 " + freeN + " 件" : "") + '</span></div>'
+    + calCtrLegendHtml(evs);
   // 〇〇検査・立会いなど、戸別に紐づかない予定はここから直接入れられる（印刷には出さない）
   html += '<div class="cu-add">'
     + '<span class="cu-add-lbl">＋ 予定を追加</span>'
@@ -27305,6 +27356,7 @@ function renderListCalendarMode(rows, container){
   };
 
   let html = renderSelectedFolderBanner();
+  html += '<div class="cal-page">';
   html += '<div class="cal-toolbar cost-detail-section">'
     + '<button data-cal-nav="py" title="前の年">«</button>'
     + '<button data-cal-nav="pm" title="前の月">‹</button>'
@@ -27398,6 +27450,7 @@ function renderListCalendarMode(rows, container){
     html += '</tr>';
   }
   html += '</tbody></table></div>';
+  html += '</div>';                       // .cal-page（ここまでが用紙1枚ぶん）
   html += '<div class="cal-panel" id="cal-panel">' + renderCalPanel(byDate) + '</div>';
   html += renderUpcomingSchedule(rows);   // 今後の予定（先の工程）レポート＝カレンダーと同データで自動追従
   container.innerHTML = html;
