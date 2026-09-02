@@ -940,6 +940,7 @@
   body.lg-print-preview .ledger-table input[type=checkbox] { width: 11px; height: 11px; margin: 0; }
   body.lg-print-preview .ledger-table select.lg-st-sel { font-size: 10px !important; line-height: 1.2 !important; }
   body.lg-print-preview .ledger-table .lg-note-input { display: none !important; }
+  body.lg-print-preview .ledger-table .lg-any { display: none !important; }
   body.lg-print-preview .ledger-table td[data-col="note"] { min-width: 0 !important; }
   body.lg-print-preview .ledger-table .lg-note-print { display: inline !important; }
   /* 調整中の列を見分けやすくする（プレビューだけの色。印刷には出ない） */
@@ -1595,6 +1596,7 @@
     body.list-print-mode .ledger-table .lg-ctr-none { display: none !important; }
     /* 備考は印刷時、単一行inputを隠し折返しテキストで全文表示（広げた列を活かす） */
     body.list-print-mode .ledger-table .lg-note-input { display: none !important; }
+    body.list-print-mode .ledger-table .lg-any { display: none !important; }   /* 紙では日付欄の文字だけにする */
     body.list-print-mode .ledger-table td[data-col="note"] { min-width: 0 !important; }
     body.list-print-mode .ledger-table .lg-note-print { display: block !important; white-space: normal; word-break: break-word; overflow-wrap: anywhere; font-size: 9.5px; line-height: 1.3; color: #5d4037; text-align: left; }
     /* ④ 予定カレンダー：A4(横)1枚に収める（操作ボタン・詳細パネルを隠し、セルを圧縮） */
@@ -3463,6 +3465,20 @@
   table.ledger-table tr.lg-prov td { background: #fff5c2; }
   /* 保留：完了・仮受付より後に置くことで、重なったときは保留の色を優先させる（着工を止めている印なので目立たせる） */
   table.ledger-table tr.lg-hold td { background: #ffe8cc; }
+  /* 「いつでも良い」と言われたまま日付が決まっていない行。忘れられやすいので色を付ける */
+  table.ledger-table tr.lg-unsched td { background: #e7f1fb; }
+  .lg-any { display: inline-flex; align-items: center; gap: 3px; margin-top: 2px;
+    font-size: 10.5px; color: #667482; white-space: nowrap; cursor: pointer;
+    border: 1px solid #dde3ea; border-radius: 3px; padding: 0 5px; background: #fff; }
+  .lg-any input { margin: 0; cursor: pointer; }
+  .lg-any:hover { background: #eef2f6; }
+  .lg-any.on { color: #1e5b8f; border-color: #9cc4e4; background: #eaf3fb; font-weight: 700; }
+  .lg-any.on.warn { color: #7a4e1e; border-color: #e6c98a; background: #fff8e1; }
+  .lg-any-badge { display: inline-block; background: #1565c0; color: #fff;
+    font-size: 9px; font-weight: 700; padding: 0 5px; border-radius: 7px;
+    margin-left: 4px; vertical-align: 1px; white-space: nowrap;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .menu-summary .ms-unsched { border-color: #9cc4e4; background: #e7f1fb; color: #1e3a5f; }
   table.ledger-table tr.lg-hl td { background: #e3f2fd !important; }
   .lg-prov-badge {
     display: inline-block; background: #fdd835; color: #5d4037;
@@ -6293,7 +6309,7 @@
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "126";
+const APP_VERSION = "127";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -21102,6 +21118,15 @@ function lgMigrateHanKeys(){
 }
 /* 受付台帳で「保留」にした戸別か（管理番号で判定）。地図の「保」マークがこれを参照する。
    台帳のキーは subCaseKey と同じ "m:<管理番号>" 形式（管理番号なしの行は地図にリンクできないので対象外）。 */
+/* 「いつでも良い」と言われて日付を決めていない戸別。
+   予定表にもカレンダーにも出てこないので、そのまま忘れられやすい。
+   日付が入ったら自動でこの状態から外れる（印を外し忘れても大丈夫なように）。 */
+function lgIsUnscheduled(row){
+  if(!row) return false;
+  const lg = getLedger(subCaseKey(row)) || {};
+  if(!lg.anytime) return false;
+  return !String((row.data && row.data.chosho_date) || "").trim();
+}
 function isCaseOnHold(mgmtNo){
   const mg = toHalfWidthAn(mgmtNo == null ? "" : mgmtNo).trim();
   if(!mg) return false;
@@ -21109,13 +21134,13 @@ function isCaseOnHold(mgmtNo){
 }
 function setLedger(tk, patch){
   const next = Object.assign({ time: "", meetAt: "", flyer: false, consent: false, compdoc: false, hold: false, note: "", noteSrc: "",
-                               meetSrc: "", timeSrc: "",
+                               meetSrc: "", timeSrc: "", anytime: false,
                                flyerSrc: false, consentSrc: false, compdocSrc: false, holdSrc: false }, _ledgerMap[tk] || {}, patch);
   let removed = false;
   // 既定値だけのエントリは持たない（肥大化防止）。※Src は「前回ファイルから採り込んだ値」の控えで、
   // これを落とすと現場と台帳のどちらが新しいか分からなくなるので、空判定に必ず含めること。
   if(!next.time && !next.meetAt && !next.flyer && !next.consent && !next.compdoc && !next.hold && !next.note && !next.noteSrc
-     && !next.meetSrc && !next.timeSrc
+     && !next.meetSrc && !next.timeSrc && !next.anytime
      && !next.flyerSrc && !next.consentSrc && !next.compdocSrc && !next.holdSrc){ delete _ledgerMap[tk]; removed = true; }
   else _ledgerMap[tk] = next;
   saveLedgerMap();
@@ -23476,10 +23501,11 @@ async function renderMenuView(){
   const sumEl = document.getElementById("menu-summary");
   if(sumEl){
     const todayS = lgDateStrToday(0);
-    let prov = 0, todayN = 0, todayDone = 0;
+    let prov = 0, todayN = 0, todayDone = 0, unschedN = 0;
     _listRows.forEach(r => {
       const d = (r && r.data) || {};
       if(d.chosho_status === "provisional") prov++;
+      if(lgIsUnscheduled(r)) unschedN++;
       if(d.chosho_date === todayS && lgLedgerEnabled(r)){
         todayN++;
         if(d.chosho_status === "completed") todayDone++;
@@ -23488,12 +23514,20 @@ async function renderMenuView(){
     sumEl.innerHTML =
       '<button type="button" class="ms-item ms-prov" id="ms-prov" title="受付台帳を「仮受付のみ」で開く（電話メモの清書）">📞 仮受付（清書待ち）<b>' + prov + '</b>件</button>'
       + '<button type="button" class="ms-item ms-today" id="ms-today" title="予定カレンダーで今日を表示">🔧 今日の工事 <b>' + todayN + '</b>件'
-      + (todayDone > 0 ? '（完了 ' + todayDone + '）' : '') + '</button>';
+      + (todayDone > 0 ? '（完了 ' + todayDone + '）' : '') + '</button>'
+      /* 「いつでも良い」と言われたまま日付が決まっていないもの。カレンダーにも予定表にも
+         出てこないので、ここに件数を出しておかないと忘れられる。 */
+      + (unschedN > 0
+         ? '<button type="button" class="ms-item ms-unsched" id="ms-unsched" title="受付台帳を「日程未定のみ」で開く（いつでも良いと言われたまま日付が決まっていない戸別）">📅 日程未定 <b>' + unschedN + '</b>件</button>'
+         : '');
     if(!sumEl._bound){
       sumEl._bound = true;
       sumEl.addEventListener("click", e => {
         if(e.target.closest("#ms-prov")){
           _ledgerOnlyProv = true;
+          closeMenuView(); openListView(); setListMode("ledger");
+        } else if(e.target.closest("#ms-unsched")){
+          _ledgerOnlyUnsched = true;
           closeMenuView(); openListView(); setListMode("ledger");
         } else if(e.target.closest("#ms-today")){
           const t = new Date();
@@ -23732,6 +23766,7 @@ let _ledgerOnlyNoFlyer = false;
 let _ledgerOnlyProv = false;     // 仮受付のみ（電話後の清書作業用）
 let _ledgerOnlyNoDwg = false;    // 図面未作成のみ
 let _ledgerOnlyHold = false;     // 保留のみ
+let _ledgerOnlyUnsched = false;  // 「いつでも可」なのに日付が決まっていないものだけ
 let _ledgerHighlightKey = null;
 let _ledgerShown = {};   // uid → row
 let _ledgerPrintSel = new Set();  // 工事調書「選択印刷」でチェック中の戸別（subCaseKey）。再描画やモード切替を跨いで保持
@@ -24107,6 +24142,7 @@ function renderListLedgerMode(rows, container){
     if(sk === "meet") return lg.meetAt || "9999";
     if(sk === "flyer") return lg.flyer ? 1 : 0;
     if(sk === "hold") return lg.hold ? 1 : 0;
+    if(sk === "anytime") return lgIsUnscheduled(r) ? 1 : 0;
     if(sk === "done") return (d.chosho_status === "completed") ? 1 : 0;
     return "";
   };
@@ -24122,16 +24158,18 @@ function renderListLedgerMode(rows, container){
     if(_ledgerOnlyNoFlyer && getLedger(subCaseKey(r)).flyer) return false;
     if(_ledgerOnlyNoDwg && lgHasDrawing(r)) return false;
     if(_ledgerOnlyHold && !getLedger(subCaseKey(r)).hold) return false;
+    if(_ledgerOnlyUnsched && !lgIsUnscheduled(r)) return false;
     return true;
   });
   const dupN = lgDupCounts(rows);   // 同じ管理番号が重なっている戸別に印を出すため
-  let done = 0, flyered = 0, prov = 0, held = 0;
+  let done = 0, flyered = 0, prov = 0, held = 0, unsched = 0;
   rows.forEach(r => {
     if(r.data && r.data.chosho_status === "completed") done++;
     if(r.data && r.data.chosho_status === "provisional") prov++;
     const lgc = getLedger(subCaseKey(r));
     if(lgc.flyer) flyered++;
     if(lgc.hold) held++;
+    if(lgIsUnscheduled(r)) unsched++;
   });
 
   // 工事調書「選択印刷」のチェック数（読み込み済かつ印刷可能な戸別のみ計上）
@@ -24159,6 +24197,7 @@ function renderListLedgerMode(rows, container){
     +   '<label title="ビラをまだ配っていない戸別"><input type="checkbox" id="lg-only-noflyer"' + (_ledgerOnlyNoFlyer ? " checked" : "") + '> ビラ未配布</label>'
     +   '<label title="図面（積算）がまだ入っていない戸別"><input type="checkbox" id="lg-only-nodwg"' + (_ledgerOnlyNoDwg ? " checked" : "") + '> 図面未作成</label>'
     +   '<label' + (held > 0 ? ' style="background:#ffe8cc;border-radius:3px;padding:2px 6px;"' : '') + ' title="着工を止めている戸別"><input type="checkbox" id="lg-only-hold"' + (_ledgerOnlyHold ? " checked" : "") + '> 保留' + (held > 0 ? '（' + held + '）' : '') + '</label>'
+    +   '<label' + (unsched > 0 ? ' style="background:#e7f1fb;border-radius:3px;padding:2px 6px;"' : '') + ' title="「いつでも良い」と言われていて、まだ日付が決まっていない戸別"><input type="checkbox" id="lg-only-unsched"' + (_ledgerOnlyUnsched ? " checked" : "") + '> 日程未定' + (unsched > 0 ? '（' + unsched + '）' : '') + '</label>'
     + '</div>'
     // ③ 印刷する
     + '<div class="lgc-grp"><span class="lgc-ttl">印刷</span>'
@@ -24217,6 +24256,7 @@ function renderListLedgerMode(rows, container){
     else if(isDone) cls.push("lg-done");
     else if(d.chosho_date === todayS) cls.push("lg-today");
     else if(d.chosho_date === tomoS) cls.push("lg-tomorrow");
+    if(lgIsUnscheduled(r)) cls.push("lg-unsched"); // いつでも可なのに日付が空＝忘れやすい
     if(lg.hold) cls.push("lg-hold");   // 完了・仮受付と重なっても保留の色を出す（CSS側で後勝ち）
     if(_ledgerHighlightKey && tk === _ledgerHighlightKey) cls.push("lg-hl");
     const tCell = (f, v) => lgEditableField(r, f)
@@ -24246,6 +24286,7 @@ function renderListLedgerMode(rows, container){
              + dupN[toHalfWidthAn(d.chosho_mgmt_no || "").trim()] + ' 件あります。このままだと積算・発注材料数量・費用が'
              + '二重に数えられます。「🧩 重複」でどれを残すか選んでください。">重複</span>') : '')
       + (lg.hold ? '<span class="lg-hold-badge" title="保留（地図でも管理番号の右肩に「保」マークが付きます）">保</span>' : '')
+      + (lgIsUnscheduled(r) ? '<span class="lg-any-badge" title="「いつでも良い」と言われていて、まだ日付が決まっていません">日程未定</span>' : '')
       + asbestosChipHtml(r)     // 石綿の可否（⚪未入力／🟢不要／⚠L1・L2／🟠みなし／🟡非発じん）
       + (r._detached ? '<span class="lg-nofile-badge' + (r._detached.reason === "pending" ? ' pending' : '')
           + '" title="' + (r._detached.reason === "pending" ? "ファイルが見当たりません（次に読み込んだ時にまた確認します）" : "戸別ファイルが無い行です（名前だけ残しています）。ファイルが戻れば自動で元に戻ります")
@@ -24259,12 +24300,24 @@ function renderListLedgerMode(rows, container){
       + '<td>' + tCell("tel", d.chosho_cust_tel) + '</td>';
     // 工事日程予定（日付=chosho_date ＋ 時間=ledger.time）
     // 印刷では入力欄を隠し、「8/1-10:00」の1行表示にする（縦に積まれた入力欄が行を高くし、枚数が増えるため）
+    // 「いつでも可」の札。日付が空のままだと予定に出てこないので、ここで目立たせる
+    const anyOn = !!lg.anytime, noDate = !String(d.chosho_date || "").trim();
+    const anyChip = '<label class="lg-any' + (anyOn ? (noDate ? " on warn" : " on") : "")
+      + '" title="' + (anyOn
+          ? (noDate ? "「いつでも良い」と言われていて、まだ日付が決まっていません。日付を入れると自動で外れます"
+                    : "「いつでも良い」でしたが、日付は入っています")
+          : "先方から「いつでも良い」と言われたときに押します。日付が決まるまで台帳で目立つようにします")
+      + '"><input type="checkbox" data-f="anytime"' + (anyOn ? " checked" : "") + (enabled ? "" : " disabled")
+      + '>いつでも可</label>';
     if(lgEditableField(r, "date")){
       html += '<td class="lg-c"><input type="date" data-f="date" value="' + escapeHtml(d.chosho_date || "") + '">'
         + '<input type="time" data-f="time" value="' + escapeHtml(lg.time || "") + '"' + (enabled ? "" : " disabled") + '>'
-        + '<span class="lg-dt-print">' + escapeHtml(lgFmtDateTime(d.chosho_date, lg.time)) + '</span></td>';
+        + anyChip
+        + '<span class="lg-dt-print">' + escapeHtml(lgFmtDateTime(d.chosho_date, lg.time))
+        +   (anyOn && noDate ? "（いつでも可・日程未定）" : "") + '</span></td>';
     } else {
-      html += '<td class="lg-c">' + escapeHtml(d.chosho_date || "―") + (lg.time ? " " + escapeHtml(lg.time) : "") + ' 🔒</td>';
+      html += '<td class="lg-c">' + escapeHtml(d.chosho_date || "―") + (lg.time ? " " + escapeHtml(lg.time) : "")
+        + (anyOn && noDate ? ' <span class="lg-any-badge">いつでも可</span>' : '') + ' 🔒</td>';
     }
     // 打合せ予定（ledger.meetAt）
     html += '<td class="lg-c"><input type="datetime-local" data-f="meet" value="' + escapeHtml(lg.meetAt || "") + '"' + (enabled ? "" : " disabled") + '>'
@@ -24865,8 +24918,9 @@ function buildLedgerHtmlSnapshot(){
     // 台帳の記入。控え（*Src）は渡さない（向こうでは使わないうえ、ファイルも重くなる）
     const one = { time: lg.time || "", meetAt: lg.meetAt || "",
                   flyer: !!lg.flyer, hold: !!lg.hold, consent: !!lg.consent, compdoc: !!lg.compdoc,
+                  anytime: !!lg.anytime,
                   note: lg.note || d.chosho_note || "" };
-    if(one.time || one.meetAt || one.flyer || one.hold || one.consent || one.compdoc || one.note) ledger[tk] = one;
+    if(one.time || one.meetAt || one.flyer || one.hold || one.consent || one.compdoc || one.anytime || one.note) ledger[tk] = one;
     const ctr = String((typeof rowContractor === "function" ? rowContractor(r) : "") || "").trim();
     if(ctr) assign[tk] = ctr;
   });
@@ -25163,7 +25217,8 @@ function lgShowLedgerDiffDialog(payload, items){
           chosho_date: x.date || "", chosho_status: x.status || "provisional" }, "ledger-file");
         const tk = subCaseKey(row);
         setLedger(tk, { time: x.time || "", meetAt: x.meet || "", flyer: !!x.flyer, hold: !!x.hold,
-                        consent: !!x.consent, compdoc: !!x.compdoc, note: x.note || "" });
+                        consent: !!x.consent, compdoc: !!x.compdoc, anytime: !!x.anytime,
+                        note: x.note || "" });
         if(String(x.contractor || "").trim()){
           setContractor(tk, String(x.contractor).trim());
           try {
@@ -25862,6 +25917,7 @@ function bindLedgerHandlers(container){
     if(t.id === "lg-only-noflyer"){ _ledgerOnlyNoFlyer = t.checked; renderListTable(); return; }
     if(t.id === "lg-only-nodwg"){ _ledgerOnlyNoDwg = t.checked; renderListTable(); return; }
     if(t.id === "lg-only-hold"){ _ledgerOnlyHold = t.checked; renderListTable(); return; }
+    if(t.id === "lg-only-unsched"){ _ledgerOnlyUnsched = t.checked; renderListTable(); return; }
     if(t.id === "lg-print-all"){
       // 表示中の印刷可能な戸別をまとめて選択／解除（絞り込み中はその範囲のみ）
       const printable = Object.values(_ledgerShown).filter(r => lgLedgerEnabled(r));
@@ -25884,6 +25940,7 @@ function bindLedgerHandlers(container){
     else if(f === "consent"){ setLedger(tk, { consent: t.checked }); lgMarkTouched(tk); renderListTable(); }
     else if(f === "compdoc"){ setLedger(tk, { compdoc: t.checked }); lgMarkTouched(tk); renderListTable(); }
     // 保留は地図の「保」マークに直結するので、地図を開いたままでも即座に描き直す
+    else if(f === "anytime"){ setLedger(tk, { anytime: t.checked }); lgMarkTouched(tk); renderListTable(); }
     else if(f === "hold"){ setLedger(tk, { hold: t.checked }); lgMarkTouched(tk); try { if(window.__mapRefreshObjects) window.__mapRefreshObjects(); } catch(_){} renderListTable(); }
     else if(f === "done"){ lgWriteCaseField(row, "status", t.checked ? "completed" : "in_progress"); row._amtCache = undefined; renderListTable(); }
     else if(f === "note"){ lgSetNote(tk, toHalfWidthAn(t.value).trim(), "受付台帳で直した"); lgMarkTouched(tk); lgSaveStateRefresh(); }
