@@ -770,16 +770,33 @@
   .hk-card.good .hk-card-v { color: #1b5e20; }
   .hk-card.bad { background: linear-gradient(180deg,#fff4f4,#fff); border-color: #ef9a9a; }
   .hk-card.bad .hk-card-v { color: #b71c1c; }
-  /* 段階ごとの帯（実績を塗り、予定の位置に印） */
-  .hk-bar-c { padding: 6px 8px !important; }
-  .hk-bar-w { position: relative; height: 14px; border-radius: 7px; background: #eef2f6;
-    border: 1px solid #dde3ea; overflow: visible; }
-  .hk-bar-f { height: 100%; border-radius: 7px 0 0 7px;
-    background: linear-gradient(90deg,#4a90d9,#1565c0); transition: width .2s; }
-  .hk-bar-f.behind { background: linear-gradient(90deg,#ef9a9a,#c62828); }
-  .hk-bar-p { position: absolute; top: -3px; bottom: -3px; width: 2px; background: #37474f; }
+  /* 段階ごとの進み具合（実績を塗り・予定の位置に印・差を数字で添える） */
+  .hk-bar-c { padding: 5px 8px !important; }
+  .hk-prog { display: flex; align-items: center; gap: 8px; }
+  .hk-bar-w { position: relative; flex: 1 1 auto; min-width: 70px; height: 16px; border-radius: 8px;
+    background: #eef2f6; border: 1px solid #dde3ea; overflow: visible;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .hk-bar-tick { position: absolute; top: 3px; bottom: 3px; width: 1px; background: #ccd6e0; }
+  .hk-bar-f { position: absolute; left: 0; top: 0; height: 100%; border-radius: 8px 0 0 8px;
+    background: linear-gradient(180deg,#5b9bdd,#1565c0); transition: width .2s;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .hk-prog.behind .hk-bar-f { background: linear-gradient(180deg,#ef8a8a,#c62828); }
+  .hk-prog.done   .hk-bar-f { background: linear-gradient(180deg,#66bb6a,#2e7d32); border-radius: 8px; }
+  /* 予定に届いていない分。斜線で「あとどれだけ必要か」を面積で見せる */
+  .hk-bar-short { position: absolute; top: 0; height: 100%;
+    background: repeating-linear-gradient(45deg,#f6c9c9 0 4px,#fbe4e4 4px 8px);
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .hk-bar-p { position: absolute; top: -3px; bottom: -3px; width: 2px; background: #37474f; z-index: 2;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .hk-bar-p::after { content: ""; position: absolute; top: -3px; left: -2.5px;
     border-left: 3.5px solid transparent; border-right: 3.5px solid transparent; border-top: 4px solid #37474f; }
+  .hk-prog-n { flex: 0 0 auto; width: 74px; text-align: right; line-height: 1.15;
+    font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+  .hk-prog-n b { font-size: 12px; color: #1e3a5f; }
+  .hk-prog-gap { display: block; font-size: 10px; font-weight: 700; color: #667482; }
+  .hk-prog.behind .hk-prog-gap { color: #c62828; }
+  .hk-prog.ok    .hk-prog-gap { color: #1565c0; }
+  .hk-prog.done  .hk-prog-gap { color: #2e7d32; }
   /* グラフ */
   .hk-graph-head { font-size: 13px; font-weight: 700; color: #1e3a5f; margin: 10px 0 4px;
     display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -802,7 +819,15 @@
   .hk-svg .hk-xlab { font-size: 10px; fill: #667482; text-anchor: middle; }
   .hk-svg .hk-xlab.now { fill: #1e3a5f; font-weight: 700; }
   .hk-svg .hk-now { stroke: #b0bec5; stroke-width: 1; stroke-dasharray: 2 3; }
+  /* 今日の位置。報告する月の点線（hk-now）と重なっても分かるよう、色と太さを変える */
+  .hk-svg .hk-today line { stroke: #2e7d32; stroke-width: 1.6; stroke-dasharray: 5 3; }
+  .hk-svg .hk-today circle { fill: #2e7d32; }
+  .hk-svg .hk-today text { font-size: 10px; fill: #2e7d32; font-weight: 700; }
+  .hk-lg.today { color: #2e7d32; }
+  .hk-sw.t { background: repeating-linear-gradient(90deg,#2e7d32 0 5px,transparent 5px 8px); height: 3px; }
   .hk-svg .hk-bar { fill: #ef9a9a; stroke: #c62828; stroke-width: .8; }
+  /* 前回の記録までの部分。当月分（濃い）との違いが分かる程度に薄くする */
+  .hk-svg .hk-bar-prev { fill: #f6d2d2; stroke: #dda3a3; stroke-width: .6; }
   .hk-svg .hk-ar-p { fill: url(#hkGp); }
   .hk-svg .hk-ar-a { fill: url(#hkGa); }
   .hk-svg .hk-line-p { fill: none; stroke: #1565c0; stroke-width: 2; stroke-dasharray: 7 4; }
@@ -6309,7 +6334,7 @@
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "127";
+const APP_VERSION = "128";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -25990,8 +26015,8 @@ const HK_STAGES = [
     from:"2026-07-03", to:"2026-11-30",
     why:"現場管理費の15%", plan:"現地調査と並行" },
   { key:"consent", name:"同意書 受領・立会打合せ",         pct:3.05,  src:"consent",
-    from:"2026-07-03", to:"2026-12-31",
-    why:"現場管理費の15%", plan:"現地調査〜工事と並行" },
+    from:"2026-07-03", to:"2026-12-26",
+    why:"現場管理費の15%", plan:"申込受付の締切（12/26頃）まで" },
   { key:"order",   name:"材料発注",                       pct:6.99,  src:"manual",
     from:"2026-08-01", to:"2026-10-30",
     why:"材料費の25%（発注を済ませた分）", plan:"工程表の「資材準備／材料調達」91日" },
@@ -25999,20 +26024,20 @@ const HK_STAGES = [
     from:"2026-09-15", to:"2026-11-30",
     why:"材料費の75%（搬入して検査を受けた分）", plan:"資材準備の後半（搬入・検査）" },
   { key:"work",    name:"工事（施工）",                    pct:43.22, src:"done",
-    from:"2026-10-01", to:"2027-02-19",
+    from:"2026-10-01", to:"2026-12-26",
     why:"労務費の全額 ＋ 共通仮設費（石綿調査を除く）＋ 現場管理費の35%",
-    plan:"工程表の「アンテナ設置工事／設置配線」142日" },
+    plan:"受信方式切替のご案内の申込受付が12/26頃まで。その付近で工事自体は完了の予定" },
   { key:"insp",    name:"手直し調整・完了検査",            pct:8.84,  src:"manual",
-    from:"2027-02-20", to:"2027-03-08",
-    why:"一般管理費の40% ＋ 現場管理費の15%", plan:"工程表の「手直し調整」17日" },
+    from:"2026-12-01", to:"2027-02-28",
+    why:"一般管理費の40% ＋ 現場管理費の15%", plan:"工事の終盤（12月）から動き出し、年明けに片づける" },
   { key:"doc1",    name:"着手時の提出書類",                pct:2.60,  src:"manual",
     from:"2026-07-03", to:"2026-08-31",
     why:"一般管理費の60%（＝8.68%）を書類3段階へ配分。うち30%",
     plan:"施工計画書・着工届・現場代理人等届・経歴書・下請報告書・使用資材メーカー承認願・コリンズ登録・建退共" },
   { key:"doc2",    name:"施工中の提出書類",                pct:2.60,  src:"manual",
-    from:"2026-09-01", to:"2027-02-28",
+    from:"2026-09-01", to:"2026-12-26",
     why:"一般管理費の60%（＝8.68%）を書類3段階へ配分。うち30%",
-    plan:"工事打合簿・月ごとの履行報告・資材検収簿・石綿事前調査報告・工事写真整理・変更協議" },
+    plan:"工事打合簿・月ごとの履行報告・資材検収簿・石綿事前調査報告・工事写真整理・変更協議（工事と同じく12/26頃まで）" },
   { key:"doc3",    name:"完成書類",                        pct:3.48,  src:"compdoc",
     from:"2027-03-01", to:"2027-03-26",
     why:"一般管理費の60%（＝8.68%）を書類3段階へ配分。うち40%",
@@ -26198,31 +26223,42 @@ function hkChartSvg(series, ym){
   const iw = W - L - R, ih = H - T - B;
   const n = series.length;
   if(n < 2) return '<div class="hk-rule">工期（着手日と完成日）を入れると、予定と実績のグラフが出ます。</div>';
-  const x = i => L + (n === 1 ? iw / 2 : iw * i / (n - 1));
+  const x = i => L + (n === 1 ? iw / 2 : iw * i / (n - 1));   // i は小数でもよい（今日の印に使う）
   const y = v => T + ih * (1 - Math.max(0, Math.min(100, v)) / 100);
   let g = '';
   for(let v = 0; v <= 100; v += 20){
     g += '<line x1="' + L + '" y1="' + y(v) + '" x2="' + (W - R) + '" y2="' + y(v) + '" class="hk-grid"/>'
       + '<text x="' + (L - 6) + '" y="' + (y(v) + 4) + '" class="hk-ylab">' + v + '%</text>';
   }
-  /* 当月分（前回の記録からの伸び）の棒。
-     測る元は「ひとつ前の月」ではなく「最後に記録のあった月」。記録は月末にしか
-     付けないので、ひとつ前の月に記録が無いことはふつうに起きる。そこを 0 とみなすと
-     当月分＝その月の累計になり、棒だけが桁違いに伸びて折れ線と食い違っていた。
-     棒は「前回の記録の高さ→当月の高さ」に渡す。折れ線の段差とそのまま重なるので、
-     見た目でも食い違えない。 */
+  /* 実績の棒。0%の線から、その月の実績（累計）まで伸ばす。棒の上端は折れ線の点と
+     同じ高さになるので、棒と線が食い違うことはない。
+     濃い部分が「当月分（前回の記録からの伸び）」、薄い部分が「前回の記録まで」。
+     当月分を測る元は「ひとつ前の月」ではなく「最後に記録のあった月」。記録は月末に
+     しか付けないので、ひとつ前の月に記録が無いことはふつうに起きる。そこを0とみなすと
+     当月分＝その月の累計になってしまう。 */
   let bars = '';
   const bw = Math.max(5, Math.min(24, iw / n * 0.5));
   let pAct = 0, pYm = null;
   series.forEach((s, i) => {
     if(s.act === null) return;
-    const d = s.act - pAct;
-    if(d > 0.005){
-      const yTop = y(s.act), yBot = y(pAct);
-      bars += '<rect x="' + (x(i) - bw / 2) + '" y="' + yTop + '" width="' + bw
-        + '" height="' + Math.max(1.5, yBot - yTop) + '" rx="2" class="hk-bar"><title>'
-        + escapeHtml(hkYmLabel(s.ym) + (pYm ? "（" + hkYmLabel(pYm) + " から）" : "")
-          + " 当月分 " + hkFixed(d, 1) + "%") + '</title></rect>';
+    const d = s.act - pAct;                     // 当月分（前回の記録からの伸び）
+    const bx = x(i) - bw / 2;
+    const yAct = y(s.act), yBase = y(0), yPrev = y(Math.max(0, Math.min(pAct, s.act)));
+    const tip = escapeHtml(hkYmLabel(s.ym) + " 実績 " + hkFixed(s.act, 1) + "%"
+      + (d > 0.005 ? ("／当月分 " + hkFixed(d, 1) + "%"
+          + (pYm ? "（" + hkYmLabel(pYm) + " から）" : "")) : ""));
+    // ① 前回の記録まで（薄い）
+    if(yBase - yPrev > 0.5){
+      bars += '<rect x="' + bx + '" y="' + yPrev + '" width="' + bw
+        + '" height="' + (yBase - yPrev) + '" class="hk-bar hk-bar-prev"><title>' + tip + '</title></rect>';
+    }
+    // ② 当月分（濃い）。伸びていない月は①だけ
+    if(yPrev - yAct > 0.5){
+      bars += '<rect x="' + bx + '" y="' + yAct + '" width="' + bw
+        + '" height="' + (yPrev - yAct) + '" rx="2" class="hk-bar"><title>' + tip + '</title></rect>';
+    } else if(yBase - yAct > 0.5 && yBase - yPrev <= 0.5){
+      bars += '<rect x="' + bx + '" y="' + yAct + '" width="' + bw
+        + '" height="' + (yBase - yAct) + '" rx="2" class="hk-bar"><title>' + tip + '</title></rect>';
     }
     pAct = s.act; pYm = s.ym;
   });
@@ -26248,6 +26284,28 @@ function hkChartSvg(series, ym){
     dots += '<circle cx="' + x(i) + '" cy="' + y(s.act) + '" r="3.5" class="hk-dot-a"><title>'
       + escapeHtml(hkYmLabel(s.ym) + " 実績 " + hkFixed(s.act, 1) + "%") + '</title></circle>';
   });
+  /* 今日の印。月の点は「その月末」を表しているので、今日は点と点の間に入る。
+     その月の何日目まで来ているかで按分して立てる。工期の外なら出さない。 */
+  let todayMark = '';
+  {
+    const td = new Date();
+    const tYm = td.getFullYear() + "-" + String(td.getMonth() + 1).padStart(2, "0");
+    const idx = series.findIndex(s => s.ym === tYm);
+    if(idx >= 0){
+      const daysIn = new Date(td.getFullYear(), td.getMonth() + 1, 0).getDate();
+      const frac = Math.max(0, Math.min(1, td.getDate() / daysIn));   // 月末＝1.0＝その月の点
+      // 点は月末なので、今日は「ひとつ前の月末＋その月の進み具合」の位置。
+      // 工期の初月で月末前なら手前に振り切れるので、左端に寄せる（下でclamp）。
+      const pos = idx + frac - 1;
+      const xt = x(Math.max(0, Math.min(n - 1, pos)));
+      const lab = (td.getMonth() + 1) + "/" + td.getDate();
+      todayMark = '<g class="hk-today">'
+        + '<line x1="' + xt + '" y1="' + T + '" x2="' + xt + '" y2="' + y(0) + '"/>'
+        + '<circle cx="' + xt + '" cy="' + T + '" r="3"/>'
+        + '<text x="' + (xt + 5) + '" y="' + (T + 10) + '">今日 ' + lab + '</text>'
+        + '<title>' + escapeHtml("今日 " + td.getFullYear() + "/" + lab) + '</title></g>';
+    }
+  }
   let xl = '';
   series.forEach((s, i) => {
     const m = /^(\d{4})-(\d{2})$/.exec(s.ym);
@@ -26260,7 +26318,8 @@ function hkChartSvg(series, ym){
   return '<div class="hk-chart">'
     + '<div class="hk-legend"><span class="hk-lg plan"><i class="hk-sw p"></i>予定（工程表）</span>'
     +   '<span class="hk-lg act"><i class="hk-sw a"></i>実績（出来高）</span>'
-    +   '<span class="hk-lg bar"><i class="hk-sw b"></i>当月分（前回の記録からの伸び）</span></div>'
+    +   '<span class="hk-lg bar"><i class="hk-sw b"></i>実績の棒（濃い部分が当月分）</span>'
+    +   '<span class="hk-lg today"><i class="hk-sw t"></i>今日</span></div>'
     + '<svg viewBox="0 0 ' + W + ' ' + H + '" class="hk-svg" role="img" aria-label="予定と実績の出来高グラフ">'
     +   '<defs>'
     +     '<linearGradient id="hkGp" x1="0" y1="0" x2="0" y2="1">'
@@ -26275,7 +26334,7 @@ function hkChartSvg(series, ym){
     +   bars
     +   '<line x1="' + L + '" y1="' + y(0) + '" x2="' + (W - R) + '" y2="' + y(0) + '" class="hk-axis"/>'
     +   '<line x1="' + L + '" y1="' + T + '" x2="' + L + '" y2="' + y(0) + '" class="hk-axis"/>'
-    +   path("plan", "hk-line-p") + path("act", "hk-line-a") + dots + xl
+    +   path("plan", "hk-line-p") + path("act", "hk-line-a") + dots + xl + todayMark
     + '</svg></div>';
 }
 /* 大きな数字のカード。表を読む前に「いまどうなっているか」が目に入るようにする。 */
@@ -26300,14 +26359,31 @@ function hkCardsHtml(cur, planNow, prevTotal, h){
         "全 " + cur.n + " 戸中")
     + '</div>';
 }
-/* 段階ごとの帯。実績を塗り、予定の位置に印を立てる。数字だけより遅れが目で分かる。 */
+/* 段階ごとの進み具合。数字の列だけでは「予定に対してどれだけ足りないか」が読み取れないので、
+   実績を塗り・予定の位置に印を立て・その差を横に添える。
+   ・目盛（25/50/75%）を薄く入れて、帯のどのあたりかを目測できるようにする
+   ・予定に届いていない分は、実績の先から予定の印までを斜線で見せる＝不足がそのまま面積で分かる
+   ・色は 予定以上=青 ／ 遅れ=赤。差の数字も同じ色で添える */
 function hkBarHtml(rate, planPct){
-  const r = Math.max(0, Math.min(100, rate || 0));
+  const r  = Math.max(0, Math.min(100, rate || 0));
   const pp = Math.max(0, Math.min(100, planPct || 0));
-  const behind = r + 0.05 < pp;
-  return '<div class="hk-bar-w" title="実績 ' + hkFixed(r, 1) + '% ／ 予定 ' + hkFixed(pp, 1) + '%">'
-    + '<div class="hk-bar-f' + (behind ? " behind" : "") + '" style="width:' + r + '%"></div>'
-    + '<div class="hk-bar-p" style="left:' + pp + '%"></div>'
+  const gap = r - pp;
+  const behind = gap < -0.05;
+  const done = r >= 99.95;
+  const cls = done ? "done" : (behind ? "behind" : "ok");
+  const tip = "実績 " + hkFixed(r, 1) + "% ／ 予定 " + hkFixed(pp, 1) + "%"
+    + (behind ? ("　△" + hkFixed(-gap, 1) + "% 足りません")
+              : (gap > 0.05 ? ("　＋" + hkFixed(gap, 1) + "% 先行") : "　予定どおり"));
+  return '<div class="hk-prog ' + cls + '" title="' + escapeHtml(tip) + '">'
+    + '<div class="hk-bar-w">'
+    +   '<i class="hk-bar-tick" style="left:25%"></i><i class="hk-bar-tick" style="left:50%"></i><i class="hk-bar-tick" style="left:75%"></i>'
+    +   (behind ? '<div class="hk-bar-short" style="left:' + r + '%;width:' + (pp - r) + '%"></div>' : '')
+    +   '<div class="hk-bar-f" style="width:' + r + '%"></div>'
+    +   '<div class="hk-bar-p" style="left:' + pp + '%" title="予定 ' + hkFixed(pp, 1) + '%"></div>'
+    + '</div>'
+    + '<div class="hk-prog-n"><b>' + hkFixed(r, 1) + '%</b>'
+    +   '<span class="hk-prog-gap">' + (done ? "完了"
+          : (behind ? ("△" + hkFixed(-gap, 1)) : (gap > 0.05 ? ("＋" + hkFixed(gap, 1)) : "±0"))) + '</span></div>'
     + '</div>';
 }
 function hkFixed(v, k){ return (Math.round((v || 0) * Math.pow(10, k)) / Math.pow(10, k)).toFixed(k); }
@@ -26429,7 +26505,7 @@ function renderListProgressMode(rows, container){
     + '<th class="num" style="width:88px">前月末まで</th>'
     + '<th class="num" style="width:96px">当月末まで<br>（実績）</th>'
     + '<th class="num" style="width:80px">当月分</th>'
-    + '<th style="width:150px">進み具合</th>'
+    + '<th style="width:196px">進み具合</th>'
     + '<th class="num" style="width:120px">当月末までの<br>出来高金額</th>'
     + '<th style="width:96px">数え方</th>'
     + '</tr></thead><tbody>';
@@ -26483,9 +26559,6 @@ function renderListProgressMode(rows, container){
     + '　／　同意書 <b>' + cnt("consent") + '</b>　／　工事完了 <b>' + cnt("done") + '</b>'
     + '　／　完了書 <b>' + cnt("compdoc") + '</b></div>';
 
-  html += '<div class="hk-rule">※ 工事が終わったかどうかは、<b>受付台帳の「完了」チェック</b>と<b>現場入力の工事完了</b>だけで判定しています。'
-    + '全体費用に金額が計上されているかどうかからは、判定していません'
-    + '（工事が終わっていない戸別にも、図面を描いた時点で材料費・労務費は積み上がるため）。</div>';
   if(!snapPrev){
     html += '<div class="hk-rule warn">※ ' + escapeHtml(hkYmLabel(prev)) + 'の記録がまだありません。'
       + '「前月末まで」と「当月分」は出せません。月末に下の<b>「この月を確定して記録する」</b>を押しておくと、翌月から出ます。</div>';
