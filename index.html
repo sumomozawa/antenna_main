@@ -5848,6 +5848,7 @@
         <span style="font-size:13px;color:#37474f;">円</span>
         <button id="menu-proj-fee-save" style="background:#1e3a5f;color:#fff;border:1px solid #16314f;padding:5px 16px;border-radius:3px;cursor:pointer;font-size:12px;">設定</button>
         <button id="menu-proj-fee-clear" style="background:#fff;color:#7a4e1e;border:1px solid #b08a55;padding:5px 12px;border-radius:3px;cursor:pointer;font-size:12px;">未設定に戻す</button>
+        <button id="menu-proj-fee-refollow" title="戸別ごとに個別の額になっている戸別を、まとめて上の額に戻します。1件ずつ開いて「物件の諸経費を使う」を入れ直す必要はありません。" style="background:#fff;color:#1e5b8f;border:1px solid #7fa9cf;padding:5px 12px;border-radius:3px;cursor:pointer;font-size:12px;">↩ 全戸別をこの額にそろえる</button>
         <span id="menu-proj-fee-stat" style="font-size:11px;color:#667482;"></span>
       </div>
       </div>
@@ -6252,7 +6253,7 @@
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "120";
+const APP_VERSION = "121";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -7860,6 +7861,76 @@ function setProjOutsourceFee(v, opts){
   if(opts.touch !== false){ try { markProjMetaEdited("outsourceFee"); } catch(_){} try { projTouch(); } catch(_){} }
   try { if(typeof renderListTable === "function") renderListTable(); } catch(_){}   // 集計を再描画
   try { if(typeof renderMenuView === "function") renderMenuView(); } catch(_){}     // 件数表示を更新
+}
+
+/* 個別上書き（outsource_fee_auto:false）になった戸別を、まとめて物件の額へ戻す。
+   row.data を直すだけでは足りない：写真あり(_slim)・ハイブリッドの戸別は、開くときに
+   工事フォルダの元ファイルを読み直してその値を画面に出すため、個別JSONまで書き戻す。
+   （個別JSONの書込は写真温存つき＝buildIndividualContent が元ファイルの原寸写真を残す） */
+async function restoreAllProjFeeFollow(){
+  if(typeof _currentProject === "undefined" || !_currentProject){ alert("物件を開いてから実行してください。"); return; }
+  if(!projOutsourceFeeActive()){ alert("先に「1戸あたり」の金額を設定してください。"); return; }
+  const amt = getProjOutsourceFee();
+  const rows = (typeof _listRows !== "undefined" ? _listRows : []);
+  const locked = rows.filter(r => r && r.data && r.fileType === "full" && !r.unlocked && !rowFeeIsAuto(r)).length;
+  const targets = rows.filter(r => r && r.data && !(r.fileType === "full" && !r.unlocked) && !rowFeeIsAuto(r));
+  if(!targets.length){
+    alert("個別に上書きされている戸別はありません。\n（読み込み中の戸別はすべて物件の額に追従しています）");
+    return;
+  }
+  /* 工事フォルダの確認は confirm より先に。confirm を挟むと「押した直後」の扱いが切れ、
+     フォルダを選ぶ画面が開けなくなる（ensureProjDirHandle の注意書きと同じ理由）。 */
+  let dir = null;
+  try { dir = await ensureProjDirHandle(); } catch(_){ dir = null; }
+  const sample = targets.slice(0, 5).map(r =>
+    "・" + (((r.data.chosho_mgmt_no || "") + "").trim() || r.file || "(番号なし)")
+    + "　" + yen(Math.max(0, parseFloat(r.data.outsource_fee_amount) || 0)) + " → " + yen(amt)).join("\n");
+  const msg = "個別に上書きされている " + targets.length + " 件を、物件の額（" + yen(amt) + "）にそろえます。\n\n"
+    + sample + (targets.length > 5 ? ("\n…ほか " + (targets.length - 5) + " 件") : "")
+    + (locked ? ("\n\n※ 暗号化されたままの戸別 " + locked + " 件は対象外です（先に復号してください）。") : "")
+    + (dir ? "\n\n工事フォルダの「管理番号.json」にも書き戻します（写真はそのまま残ります）。"
+           : "\n\n⚠ 工事フォルダがリンクされていないため、物件の中だけを直します。\n"
+             + "　このあとフォルダを読み直すと元に戻ります。")
+    + "\n\nよろしいですか？";
+  if(!confirm(msg)) return;
+
+  targets.forEach(r => {
+    r.data = Object.assign({}, r.data, { outsource_fee_auto: true });
+    r._amtCache = undefined; r._bomCache = undefined;
+    try { resolveRowOutsourceFee(r); } catch(_){}
+    try { markCaseEdited(r); } catch(_){}
+  });
+  // 開いている戸別が対象なら、画面のチェックと金額も合わせる
+  try {
+    if(typeof _editingRow !== "undefined" && _editingRow && targets.indexOf(_editingRow) >= 0){
+      const useProj = document.getElementById("outsource_fee_use_proj");
+      if(useProj) useProj.checked = true;
+      setOutsourceFeeUI(amt > 0, amt, false);
+      syncOutsourceFeeDisabled();
+      if(typeof rebuild === "function") rebuild();
+    }
+  } catch(_){}
+
+  let wrote = 0, failed = 0;
+  if(dir){
+    for(const r of targets){
+      let note = "";
+      try { note = await _genbaWriteRowIndividual(r); } catch(_){ note = ""; }
+      if(note && note.indexOf("📄") >= 0) wrote++; else failed++;
+    }
+  }
+  try { projTouch(); } catch(_){}
+  try { renderListTable(); } catch(_){}
+  try { renderMenuView(); } catch(_){}
+  const stat = document.getElementById("menu-proj-fee-stat");
+  if(stat) stat.textContent = "✓ " + targets.length + " 件を " + yen(amt) + " にそろえました"
+    + (dir ? ("（個別JSON " + wrote + " 件更新" + (failed ? "・" + failed + " 件は更新できず" : "") + "）") : "（物件の中のみ）");
+  alert("個別上書きだった " + targets.length + " 件を、物件の額（" + yen(amt) + "）にそろえました。"
+    + (dir ? ("\n工事フォルダの個別JSON： " + wrote + " 件を更新"
+             + (failed ? ("／" + failed + " 件は更新できませんでした") : "") + "。")
+           : "\n\n⚠ 工事フォルダは未リンクのため、個別JSONは更新していません。\n"
+             + "　フォルダを読み直すと元に戻ります。工事フォルダをリンクしてから、もう一度実行してください。")
+    + (locked ? ("\n\n暗号化されたままの戸別 " + locked + " 件は対象外です。") : ""));
 }
 
 /* 物件を開いている時の「新規戸別」の積算既定：諸経費なし＋協力会社諸経費オン（ユーザー方針）。
@@ -12665,8 +12736,16 @@ function collectState(){
   // 協力会社諸経費（オン/オフ＋手動金額）。プリセット保存にも含まれる
   s.outsource_fee_on = !!(document.getElementById("outsource_fee_on") || {}).checked;
   s.outsource_fee_amount = Math.max(0, parseFloat((document.getElementById("outsource_fee_amount") || {}).value) || 0);
-  // 物件の諸経費に追従(auto)か個別上書き(custom)か。物件未使用時もチェック状態を保持して往復させる
-  s.outsource_fee_auto = !!(document.getElementById("outsource_fee_use_proj") || {}).checked;
+  // 物件の諸経費に追従(auto)か個別上書き(custom)か。
+  // チェック欄は物件の諸経費が未設定の間は画面に出ない（syncOutsourceFeeDisabled）。
+  // 出ていない時に checked をそのまま書くと false＝個別上書きが黙って焼き付き、
+  // あとで物件の諸経費を設定してもその戸別だけ追従しなくなる。
+  // 出ていない時はキーごと落として、読込側の既定（!== false ＝追従）に委ねる。
+  {
+    const _upEl = document.getElementById("outsource_fee_use_proj");
+    const _upOn = (typeof projOutsourceFeeActive === "function") && projOutsourceFeeActive();
+    if(_upOn) s.outsource_fee_auto = !!(_upEl && _upEl.checked);
+  }
   // 部屋名・BD
   // ※ 部屋名selectのみ（data-idx限定）。属性なしの全select拾いは分配(sp)・壁端子(term)の値が
   //    混在した3倍配列になり、再読込で2部屋目以降の部屋名が消えるバグだった（読込側に互換修復あり）
@@ -29100,6 +29179,9 @@ function initProjectFeatures(){
   { const _fc = document.getElementById("menu-proj-fee-clear"); if(_fc) _fc.onclick = () => {
       if(!_currentProject) return;
       setProjOutsourceFee(null);
+    }; }
+  { const _fr = document.getElementById("menu-proj-fee-refollow"); if(_fr) _fr.onclick = () => {
+      restoreAllProjFeeFollow().catch(e => alert("そろえられませんでした：" + (e && e.message || e)));
     }; }
   { const _fi = document.getElementById("menu-proj-fee"); if(_fi) _fi.addEventListener("keydown", e => {
       if(e.key === "Enter"){ e.preventDefault(); const b = document.getElementById("menu-proj-fee-save"); if(b) b.click(); }
