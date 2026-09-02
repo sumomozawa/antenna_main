@@ -6261,7 +6261,7 @@
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "122";
+const APP_VERSION = "123";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -21688,6 +21688,7 @@ function buildProjectSnapshot(base){
     contractorDigits: getContractorDigitMap(), // 業者番号(管理番号の4桁目 1〜4)→会社名 の対応表
     calEvents: getCalFreeEvents(),          // 戸別に紐づかない予定（元請打合せ・社内会議など）
     outsourceFee: getProjOutsourceFee(),    // 物件の諸経費（協力会社諸経費の既定額・未設定はnull）
+    hakou: hkCapture(),                     // 履行報告（工事価格・工期・段階ごとの割合と手入力・締めた月）
     teishutsu: (typeof window.__tslCapture === "function" ? window.__tslCapture() : undefined) // 提出書類チェックリスト（チェック/提出日/下請負人/契約日＋編集テンプレ）
   });
   // 自己完結(v3)物件のときだけ、物件ごとに変わる設定を内包 → 共有ファイル経由で端末間に同じ単価/プリセットが渡る。
@@ -21720,7 +21721,8 @@ let _editedProjMeta = new Set();  // この端末が編集した物件全体設�
    キーだけ local を採用し、触っていないキーは disk（他社の最新）を維持する。
    ここに載っていないキーは「編集しても競合時に disk へ戻る」ので、設定を増やしたら必ず追記すること。 */
 const PROJ_META_KEYS = ["name", "contractors", "contractorDigits", "calEvents", "outsourceFee",
-  "teishutsu", "partsOverride", "basePresetKey", "userPresets", "asbestosOffice", "sfpPref"];
+  "teishutsu", "partsOverride", "basePresetKey", "userPresets", "asbestosOffice", "sfpPref",
+  "hakou"];
 let _deletedCaseKeys = new Set(); // この端末が削除した戸別の caseId（マージで disk からも除外する）
 let _deletedAnnoKeys = new Set(); // この端末が削除した注釈の subCaseKey（マージで disk からも除外する）
 let _projSaving = false;          // projSaveNow 実行中ガード（保存の多重実行・書込交錯を防ぐ）
@@ -22143,6 +22145,9 @@ async function applyProject(p, opts){
     // 物件の諸経費（協力会社諸経費の既定額）を復元し、追従(auto)戸別へ反映
     _projOutsourceFee = (typeof p.outsourceFee === "number" && isFinite(p.outsourceFee)) ? Math.max(0, p.outsourceFee) : null;
     applyProjOutsourceFeeToRows();
+    // 履行報告（物件JSONに入っていれば復元。入っていない古い物件は、
+    // この端末に溜めていた内容をそのまま引き継ぐ＝これまでの入力を捨てない）
+    hkAdopt(p.hakou);
     // 提出書類チェックリスト（物件JSONに内包されていれば復元。旧物件＝未内包なら端末localStorageの値を維持）
     if(p.teishutsu !== undefined && p.teishutsu !== null && typeof window.__tslApply === "function"){
       try { window.__tslApply(p.id, p.teishutsu); } catch(_){}
@@ -22178,6 +22183,7 @@ function detachProject(){
   _projWriteWarn = "";
   _projLastWrittenUpdatedAt = "";
   _projOutsourceFee = null;   // 物件の諸経費もクリア（通常モードでは無効）
+  hkAdopt(null);              // 履行報告も端末（物件なし）の内容へ戻す
   try { localStorage.removeItem(PROJ_CURRENT_KEY); } catch(_){}
   restoreNormalState(); // 単価マスター・プリセットを通常(全物件共通)へ戻す
   // 単価マスターが通常へ戻る＝行の金額が変わるので、金額キャッシュを破棄して再計算させる
@@ -25951,9 +25957,30 @@ function hkLoad(){
   if(_hk.head.end   === undefined) _hk.head.end   = "2027-03-26";  // 工期末（完成書類の終わり）
   return _hk;
 }
+/* 履行報告の置き場所。
+   ・物件を開いている間は「その物件」に入れる（物件JSONに載るので、別のPCでも同じ内容が見える）。
+   ・物件を開いていないときだけ、これまで通り端末（localStorage）に置く。
+   物件ごとに別々の工事なので、端末に1つだけ持つと物件を変えても同じ数字が出てしまう。 */
 function hkSave(){
+  if(typeof _currentProject !== "undefined" && _currentProject){
+    try { markProjMetaEdited("hakou"); } catch(_){}
+    try { projTouch(); } catch(_){}   // 物件JSONへ自動保存
+    return;
+  }
   try { localStorage.setItem(HK_LS, JSON.stringify(hkLoad())); }
   catch(e){ console.warn("履行報告の保存に失敗", e); }
+}
+/* 物件スナップショットに入れる形。中身は hkLoad と同じ。 */
+function hkCapture(){
+  try { return JSON.parse(JSON.stringify(hkLoad())); } catch(_){ return null; }
+}
+/* 物件を開く/切り離すときに、履行報告の内容を差し替える。
+   o が無い（＝履行報告をまだ持っていない古い物件）ときは、いま端末に入っている内容を
+   引き継ぐ。これまで入力したものが物件を開いた瞬間に消えるのを避けるため。 */
+function hkAdopt(o){
+  _hk = (o && typeof o === "object") ? JSON.parse(JSON.stringify(o)) : null;
+  hkLoad();                                   // 既定値の埋め直し（_hk が null なら端末の内容を読む）
+  try { if(_listMode === "progress") renderListTable(); } catch(_){}
 }
 /* 画面で直した割合・判定のもとを混ぜた段階の並び。 */
 function hkStages(){
