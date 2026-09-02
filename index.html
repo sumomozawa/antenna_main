@@ -810,6 +810,35 @@
   .hk-svg .hk-dot-a { fill: #fff; stroke: #c62828; stroke-width: 2.2; }
   /* 印刷では設定と入力欄を出さない（報告書だけを刷る） */
   body.list-print-mode .hk-setup { display: none !important; }
+  body.list-print-mode .hk-banner { display: none !important; }  /* 枠の外に高さを残さない */
+  /* 履行報告の印刷：A4横で 1枚目＝グラフ、2枚目＝作業区分ごとの帯（シークバー）。
+     @page list-landscape（A4横・余白8mm）は body.list-print-mode に効いているので
+     ここでは分けるところだけを決める。 */
+  /* .cost-detail-section の「途中で切らない」を、報告書だけは解除する。
+     切る場所（2枚目の頭）はこちらで決めているので、全体を1枚に収めようとされると
+     どこにも入らず、空きの多い紙が余分に出てしまう。 */
+  body.list-print-mode .hk-report { page-break-inside: auto !important; break-inside: auto !important; }
+  .hk-page2 { display: none; }                                  /* 画面では出さない（続きなので） */
+  body.list-print-mode .hk-page2 { display: block !important; margin-bottom: 6px; }
+  body.list-print-mode .hk-p2-head { font-size: 13px; color: #1e3a5f; letter-spacing: 2px;
+    border-bottom: 2px solid #1e3a5f; padding-bottom: 3px; margin-bottom: 8px; }
+  /* 1枚目＝グラフまで、2枚目＝作業区分ごとの帯。切る場所はここだけで決める。
+     高さは固定しない：固定すると、用紙にわずかでも収まらないときに Chrome が
+     枠ごと次の紙へ送ったり、中身を切り落としたりして、かえって崩れる。 */
+  body.list-print-mode .hk-pg2 { page-break-before: always; break-before: page; }
+  /* 1枚目：グラフは途中で切らない。
+     さらに inline-block にしておく。ブロックのままだと、1枚目に十分な余白があっても
+     Chrome がグラフを丸ごと次の紙へ送ってしまい、空きだらけの紙が1枚余分に出ていた
+     （中身を減らしても直らなかったので、高さではなくブロックの分割の癖）。 */
+  body.list-print-mode .hk-chart { page-break-inside: avoid; break-inside: avoid;
+    display: inline-block; width: 100%; }
+  body.list-print-mode .hk-cards { page-break-inside: avoid; break-inside: avoid; }
+  /* 2枚目：表が次の紙へ続くときは見出し行を繰り返す。行の途中では切らない */
+  body.list-print-mode .hk-table thead { display: table-header-group; }
+  body.list-print-mode .hk-table tr { page-break-inside: avoid; break-inside: avoid; }
+  /* 帯は紙でも色を残す（進み具合が見えなくなるため） */
+  body.list-print-mode .hk-bar-w, body.list-print-mode .hk-bar-f, body.list-print-mode .hk-bar-p {
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body.list-print-mode .hk-table input.hk-man { display: none !important; }
   body.list-print-mode .hk-man-print { display: inline !important; }
   body.list-print-mode .hk-manual-b { display: none !important; }   /* 印刷・PDFでは「手入力」の印を出さない */
@@ -6264,7 +6293,7 @@
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "125";
+const APP_VERSION = "126";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -26245,7 +26274,10 @@ function renderListProgressMode(rows, container){
   const sum = hkPctSum();
   const net = h.head.net || 0;
 
-  let html = renderSelectedFolderBanner();
+  /* 「選択フォルダ」の帯は画面だけ。紙には報告書の表題と工事名があるので要らないうえ、
+     1枚ぶんの枠（.hk-pg）の外に高さが残ると枠が用紙に収まらなくなり、
+     グラフが丸ごと次の紙へ送られてしまう。 */
+  let html = '<div class="hk-banner">' + renderSelectedFolderBanner() + '</div>';
 
   /* ---- 設定（印刷では出さない） ---- */
   html += '<div class="cost-detail-section hk-setup"><h3>設定</h3>'
@@ -26299,6 +26331,7 @@ function renderListProgressMode(rows, container){
 
   /* ---- 報告書（ここが印刷される） ---- */
   html += '<div class="cost-detail-section hk-report"><div class="hk-paper">'
+    + '<div class="hk-pg hk-pg1">'
     + '<h2 class="hk-title">履 行 報 告 書</h2>'
     + '<div class="hk-month">' + escapeHtml(hkYmLabel(ym)) + '分</div>'
     + '<table class="hk-info"><tbody>'
@@ -26322,6 +26355,15 @@ function renderListProgressMode(rows, container){
       + '</div>';
     html += hkChartSvg(series, ym);
   }
+
+  /* ここまでが1枚目（グラフまで）。2枚目の頭には、紙が分かれても何の表か分かるよう
+     表題と月を出す（印刷だけ・画面では続きなので出さない）。 */
+  html += '</div><div class="hk-pg hk-pg2">'
+    + '<div class="hk-page2">'
+    +   '<div class="hk-p2-head"><b>履 行 報 告 書</b>　' + escapeHtml(hkYmLabel(ym)) + '分'
+    +     (h.head.name ? '　／　' + escapeHtml(h.head.name) : '') + '</div>'
+    +   '<div class="hk-graph-head">作業区分ごとの進み具合</div>'
+    + '</div>';
 
   html += '<table class="hk-table"><thead><tr>'
     + '<th style="width:210px">作 業 区 分</th>'
@@ -26391,7 +26433,7 @@ function renderListProgressMode(rows, container){
     html += '<div class="hk-rule warn">※ ' + escapeHtml(hkYmLabel(prev)) + 'の記録がまだありません。'
       + '「前月末まで」と「当月分」は出せません。月末に下の<b>「この月を確定して記録する」</b>を押しておくと、翌月から出ます。</div>';
   }
-  html += '</div></div>';
+  html += '</div></div></div>';   // .hk-pg2 / .hk-paper / .hk-report
 
   /* ---- 記録（印刷では出さない） ---- */
   html += '<div class="cost-detail-section hk-setup"><h3>月の記録</h3>'
