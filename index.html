@@ -723,6 +723,9 @@
   .hk-note { font-size: 11px; color: #55606b; line-height: 1.7; margin-top: 6px; }
   .hk-snap-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 8px 0; font-size: 12px; }
   .hk-snap-has { color: #1b5e20; } .hk-snap-no { color: #8a6d00; }
+  /* 見ている月がいまの月と違うときの注意書き */
+  .hk-ym-stale{display:inline-flex;align-items:center;gap:8px;margin-left:10px;font-size:12px;
+    color:#7a4e1e;background:#fff8e1;border:1px solid #e6c98a;border-radius:4px;padding:3px 10px;}
   /* 報告書そのもの */
   .hk-paper { background: #fff; padding: 4px 6px; }
   .hk-title { text-align: center; font-size: 20px; letter-spacing: 5px; margin: 6px 0 2px; color: #1e3a5f; }
@@ -791,7 +794,7 @@
   .hk-sw { display: inline-block; width: 18px; height: 3px; border-radius: 2px; }
   .hk-sw.p { background: repeating-linear-gradient(90deg,#1565c0 0 6px,transparent 6px 10px); }
   .hk-sw.a { background: #c62828; height: 3px; }
-  .hk-sw.b { background: #f8d7da; height: 11px; width: 9px; border: 1px solid #eab8bd; }
+  .hk-sw.b { background: #ef9a9a; height: 11px; width: 9px; border: 1px solid #c62828; border-radius: 2px; }
   .hk-svg { width: 100%; height: auto; display: block; }
   .hk-svg .hk-grid { stroke: #e3e9f0; stroke-width: 1; }
   .hk-svg .hk-axis { stroke: #90a0b0; stroke-width: 1; }
@@ -799,7 +802,7 @@
   .hk-svg .hk-xlab { font-size: 10px; fill: #667482; text-anchor: middle; }
   .hk-svg .hk-xlab.now { fill: #1e3a5f; font-weight: 700; }
   .hk-svg .hk-now { stroke: #b0bec5; stroke-width: 1; stroke-dasharray: 2 3; }
-  .hk-svg .hk-bar { fill: #f8d7da; stroke: #eab8bd; stroke-width: .5; }
+  .hk-svg .hk-bar { fill: #ef9a9a; stroke: #c62828; stroke-width: .8; }
   .hk-svg .hk-ar-p { fill: url(#hkGp); }
   .hk-svg .hk-ar-a { fill: url(#hkGa); }
   .hk-svg .hk-line-p { fill: none; stroke: #1565c0; stroke-width: 2; stroke-dasharray: 7 4; }
@@ -807,6 +810,35 @@
   .hk-svg .hk-dot-a { fill: #fff; stroke: #c62828; stroke-width: 2.2; }
   /* 印刷では設定と入力欄を出さない（報告書だけを刷る） */
   body.list-print-mode .hk-setup { display: none !important; }
+  body.list-print-mode .hk-banner { display: none !important; }  /* 枠の外に高さを残さない */
+  /* 履行報告の印刷：A4横で 1枚目＝グラフ、2枚目＝作業区分ごとの帯（シークバー）。
+     @page list-landscape（A4横・余白8mm）は body.list-print-mode に効いているので
+     ここでは分けるところだけを決める。 */
+  /* .cost-detail-section の「途中で切らない」を、報告書だけは解除する。
+     切る場所（2枚目の頭）はこちらで決めているので、全体を1枚に収めようとされると
+     どこにも入らず、空きの多い紙が余分に出てしまう。 */
+  body.list-print-mode .hk-report { page-break-inside: auto !important; break-inside: auto !important; }
+  .hk-page2 { display: none; }                                  /* 画面では出さない（続きなので） */
+  body.list-print-mode .hk-page2 { display: block !important; margin-bottom: 6px; }
+  body.list-print-mode .hk-p2-head { font-size: 13px; color: #1e3a5f; letter-spacing: 2px;
+    border-bottom: 2px solid #1e3a5f; padding-bottom: 3px; margin-bottom: 8px; }
+  /* 1枚目＝グラフまで、2枚目＝作業区分ごとの帯。切る場所はここだけで決める。
+     高さは固定しない：固定すると、用紙にわずかでも収まらないときに Chrome が
+     枠ごと次の紙へ送ったり、中身を切り落としたりして、かえって崩れる。 */
+  body.list-print-mode .hk-pg2 { page-break-before: always; break-before: page; }
+  /* 1枚目：グラフは途中で切らない。
+     さらに inline-block にしておく。ブロックのままだと、1枚目に十分な余白があっても
+     Chrome がグラフを丸ごと次の紙へ送ってしまい、空きだらけの紙が1枚余分に出ていた
+     （中身を減らしても直らなかったので、高さではなくブロックの分割の癖）。 */
+  body.list-print-mode .hk-chart { page-break-inside: avoid; break-inside: avoid;
+    display: inline-block; width: 100%; }
+  body.list-print-mode .hk-cards { page-break-inside: avoid; break-inside: avoid; }
+  /* 2枚目：表が次の紙へ続くときは見出し行を繰り返す。行の途中では切らない */
+  body.list-print-mode .hk-table thead { display: table-header-group; }
+  body.list-print-mode .hk-table tr { page-break-inside: avoid; break-inside: avoid; }
+  /* 帯は紙でも色を残す（進み具合が見えなくなるため） */
+  body.list-print-mode .hk-bar-w, body.list-print-mode .hk-bar-f, body.list-print-mode .hk-bar-p {
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body.list-print-mode .hk-table input.hk-man { display: none !important; }
   body.list-print-mode .hk-man-print { display: inline !important; }
   body.list-print-mode .hk-manual-b { display: none !important; }   /* 印刷・PDFでは「手入力」の印を出さない */
@@ -6261,7 +6293,7 @@
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "123";
+const APP_VERSION = "126";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -26116,16 +26148,26 @@ function hkChartSvg(series, ym){
     g += '<line x1="' + L + '" y1="' + y(v) + '" x2="' + (W - R) + '" y2="' + y(v) + '" class="hk-grid"/>'
       + '<text x="' + (L - 6) + '" y="' + (y(v) + 4) + '" class="hk-ylab">' + v + '%</text>';
   }
-  // 当月分（前の月からの伸び）の棒。細かい月の動きが分かる。
+  /* 当月分（前回の記録からの伸び）の棒。
+     測る元は「ひとつ前の月」ではなく「最後に記録のあった月」。記録は月末にしか
+     付けないので、ひとつ前の月に記録が無いことはふつうに起きる。そこを 0 とみなすと
+     当月分＝その月の累計になり、棒だけが桁違いに伸びて折れ線と食い違っていた。
+     棒は「前回の記録の高さ→当月の高さ」に渡す。折れ線の段差とそのまま重なるので、
+     見た目でも食い違えない。 */
   let bars = '';
-  const bw = Math.max(4, Math.min(22, iw / n * 0.45));
+  const bw = Math.max(5, Math.min(24, iw / n * 0.5));
+  let pAct = 0, pYm = null;
   series.forEach((s, i) => {
     if(s.act === null) return;
-    const pv = (i > 0 && series[i - 1].act !== null) ? series[i - 1].act : 0;
-    const d = Math.max(0, s.act - pv);
-    if(d <= 0) return;
-    bars += '<rect x="' + (x(i) - bw / 2) + '" y="' + y(d) + '" width="' + bw + '" height="' + (y(0) - y(d)) + '" class="hk-bar"><title>'
-      + escapeHtml(hkYmLabel(s.ym) + " 当月分 " + hkFixed(d, 1) + "%") + '</title></rect>';
+    const d = s.act - pAct;
+    if(d > 0.005){
+      const yTop = y(s.act), yBot = y(pAct);
+      bars += '<rect x="' + (x(i) - bw / 2) + '" y="' + yTop + '" width="' + bw
+        + '" height="' + Math.max(1.5, yBot - yTop) + '" rx="2" class="hk-bar"><title>'
+        + escapeHtml(hkYmLabel(s.ym) + (pYm ? "（" + hkYmLabel(pYm) + " から）" : "")
+          + " 当月分 " + hkFixed(d, 1) + "%") + '</title></rect>';
+    }
+    pAct = s.act; pYm = s.ym;
   });
   const ptsOf = key => {
     const pts = [];
@@ -26161,7 +26203,7 @@ function hkChartSvg(series, ym){
   return '<div class="hk-chart">'
     + '<div class="hk-legend"><span class="hk-lg plan"><i class="hk-sw p"></i>予定（工程表）</span>'
     +   '<span class="hk-lg act"><i class="hk-sw a"></i>実績（出来高）</span>'
-    +   '<span class="hk-lg bar"><i class="hk-sw b"></i>当月分</span></div>'
+    +   '<span class="hk-lg bar"><i class="hk-sw b"></i>当月分（前回の記録からの伸び）</span></div>'
     + '<svg viewBox="0 0 ' + W + ' ' + H + '" class="hk-svg" role="img" aria-label="予定と実績の出来高グラフ">'
     +   '<defs>'
     +     '<linearGradient id="hkGp" x1="0" y1="0" x2="0" y2="1">'
@@ -26171,8 +26213,9 @@ function hkChartSvg(series, ym){
     +       '<stop offset="0%" stop-color="#c62828" stop-opacity="0.28"/>'
     +       '<stop offset="100%" stop-color="#c62828" stop-opacity="0.03"/></linearGradient>'
     +   '</defs>'
-    +   g + bars
+    +   g
     +   area("plan", "hk-ar-p") + area("act", "hk-ar-a")
+    +   bars
     +   '<line x1="' + L + '" y1="' + y(0) + '" x2="' + (W - R) + '" y2="' + y(0) + '" class="hk-axis"/>'
     +   '<line x1="' + L + '" y1="' + T + '" x2="' + L + '" y2="' + y(0) + '" class="hk-axis"/>'
     +   path("plan", "hk-line-p") + path("act", "hk-line-a") + dots + xl
@@ -26213,20 +26256,35 @@ function hkBarHtml(rate, planPct){
 function hkFixed(v, k){ return (Math.round((v || 0) * Math.pow(10, k)) / Math.pow(10, k)).toFixed(k); }
 function renderListProgressMode(rows, container){
   const h = hkLoad();
-  const ym = h.head.ym || hkYm();
-  h.head.ym = ym;
+  /* 「報告する月」の決め方。
+     ・自分で月を選んでいなければ、いまの月を出す（放っておいても勝手に進む）。
+     ・締めて記録した月は終わったものとして、月が変わったらいまの月へ進める。
+       （8月を記録済みのまま9月になったら9月を出す）
+     ・まだ記録していない過去の月は、そのまま出す。月初に前月の報告を作るため。
+       この場合は下に「いまは○月です」と出して、1押しで戻せるようにする。
+     以前は描くたびに h.head.ym へ書き戻していたので、一度開いた月に貼り付いて
+     いつまでも動かなかった。 */
+  const nowYm = hkYm();
+  let ym = h.head.ym || nowYm;
+  if(ym < nowYm && h.snap[ym]) ym = nowYm;    // 記録済みの過去月 → いまの月へ進める
+  const ymStale = (ym !== nowYm);
   const prev = hkPrevYm(ym);
   const cur = hkCompute(rows, ym);
   const snapPrev = h.snap[prev] || null;
   const sum = hkPctSum();
   const net = h.head.net || 0;
 
-  let html = renderSelectedFolderBanner();
+  /* 「選択フォルダ」の帯は画面だけ。紙には報告書の表題と工事名があるので要らないうえ、
+     1枚ぶんの枠（.hk-pg）の外に高さが残ると枠が用紙に収まらなくなり、
+     グラフが丸ごと次の紙へ送られてしまう。 */
+  let html = '<div class="hk-banner">' + renderSelectedFolderBanner() + '</div>';
 
   /* ---- 設定（印刷では出さない） ---- */
   html += '<div class="cost-detail-section hk-setup"><h3>設定</h3>'
     + '<div class="hk-head">'
     +   '<label>報告する月 <input type="month" id="hk-ym" value="' + escapeHtml(ym) + '"></label>'
+    +   (ymStale ? '<span class="hk-ym-stale">いまは ' + escapeHtml(hkYmLabel(nowYm)) + ' です'
+        + ' <button type="button" id="hk-ym-now" class="hk-btn">' + escapeHtml(hkYmLabel(nowYm)) + 'にする</button></span>' : '')
     +   '<label>工事名 <input type="text" id="hk-name" size="40" value="' + escapeHtml(h.head.name || "") + '" placeholder="令和８年度戸別受信設備設置工事（その２）"></label>'
     +   '<label>請負金額（税抜） <input type="number" id="hk-net" step="1" value="' + (net || 0) + '"> 円</label>'
     +   '<label>消費税 <input type="number" id="hk-tax" step="0.1" style="width:64px" value="' + (h.head.tax || 0) + '"> %</label>'
@@ -26273,6 +26331,7 @@ function renderListProgressMode(rows, container){
 
   /* ---- 報告書（ここが印刷される） ---- */
   html += '<div class="cost-detail-section hk-report"><div class="hk-paper">'
+    + '<div class="hk-pg hk-pg1">'
     + '<h2 class="hk-title">履 行 報 告 書</h2>'
     + '<div class="hk-month">' + escapeHtml(hkYmLabel(ym)) + '分</div>'
     + '<table class="hk-info"><tbody>'
@@ -26296,6 +26355,15 @@ function renderListProgressMode(rows, container){
       + '</div>';
     html += hkChartSvg(series, ym);
   }
+
+  /* ここまでが1枚目（グラフまで）。2枚目の頭には、紙が分かれても何の表か分かるよう
+     表題と月を出す（印刷だけ・画面では続きなので出さない）。 */
+  html += '</div><div class="hk-pg hk-pg2">'
+    + '<div class="hk-page2">'
+    +   '<div class="hk-p2-head"><b>履 行 報 告 書</b>　' + escapeHtml(hkYmLabel(ym)) + '分'
+    +     (h.head.name ? '　／　' + escapeHtml(h.head.name) : '') + '</div>'
+    +   '<div class="hk-graph-head">作業区分ごとの進み具合</div>'
+    + '</div>';
 
   html += '<table class="hk-table"><thead><tr>'
     + '<th style="width:210px">作 業 区 分</th>'
@@ -26365,7 +26433,7 @@ function renderListProgressMode(rows, container){
     html += '<div class="hk-rule warn">※ ' + escapeHtml(hkYmLabel(prev)) + 'の記録がまだありません。'
       + '「前月末まで」と「当月分」は出せません。月末に下の<b>「この月を確定して記録する」</b>を押しておくと、翌月から出ます。</div>';
   }
-  html += '</div></div>';
+  html += '</div></div></div>';   // .hk-pg2 / .hk-paper / .hk-report
 
   /* ---- 記録（印刷では出さない） ---- */
   html += '<div class="cost-detail-section hk-setup"><h3>月の記録</h3>'
@@ -26397,6 +26465,7 @@ function renderListProgressMode(rows, container){
   const redraw = () => { hkSave(); renderListTable(); };
   const el = id => container.querySelector("#" + id);
   el("hk-ym").addEventListener("change", e => { h.head.ym = e.target.value || hkYm(); redraw(); });
+  { const b = el("hk-ym-now"); if(b) b.addEventListener("click", () => { h.head.ym = hkYm(); redraw(); }); }
   el("hk-name").addEventListener("change", e => { h.head.name = e.target.value; redraw(); });
   el("hk-net").addEventListener("change", e => { h.head.net = Math.max(0, Math.round(Number(e.target.value) || 0)); redraw(); });
   el("hk-tax").addEventListener("change", e => { h.head.tax = Math.max(0, Number(e.target.value) || 0); redraw(); });
