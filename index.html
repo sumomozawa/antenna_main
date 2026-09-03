@@ -6334,7 +6334,7 @@
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "129";
+const APP_VERSION = "130";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -14806,9 +14806,33 @@ function scanProgressStart(label){
   _scanUiAt = 0;
   scanProgressShow({ files: 0, dirs: 0 }, label, true);
 }
+/* 中を見に行かないフォルダ。
+   工事フォルダの中には工事写真のフォルダが一緒に入っていることがある。
+   写真は戸別ファイルではないので読む必要が無く、枚数が多いと数えるだけで時間がかかる。
+   名前で分かるものは開かずに飛ばす（何も言わずに飛ばす＝黙認）。
+   ※ 飛ばした数は読み込み後の控えに残すので、あとから確認はできる。 */
+function scanSkipDirName(name){
+  const s = String(name || "").trim();
+  if(!s) return false;
+  if(s.charAt(0) === ".") return true;                       // 隠しフォルダ・同期ソフトの作業用
+  if(/^(__MACOSX|node_modules|\$RECYCLE\.BIN|System Volume Information)$/i.test(s)) return true;
+  // 工事写真まわり。「写真」「画像」を含む名前と、カメラ・端末が作る定番の名前
+  if(/(写真|画像|フォト|サムネ)/.test(s)) return true;
+  if(/^(DCIM|photos?|images?|img|pic(ture)?s?|thumbnails?|thumbs)$/i.test(s)) return true;
+  return false;
+}
 async function scanDirRecursive(dirHandle, pathPrefix, rows, stats){
+  let seen = 0;
   for await (const [name, handle] of dirHandle.entries()){
+    /* 写真だけのフォルダは中身が何千件になることがある。
+       拾わないものでも1件ずつ回すので、たまに処理を手放さないと
+       くるくるが止まって固まったように見える。 */
+    if((++seen % 200) === 0){ scanProgressShow(stats, stats._label); await new Promise(r => setTimeout(r, 0)); }
     if(handle.kind === "directory"){
+      if(scanSkipDirName(name)){
+        (stats.skipDirs = stats.skipDirs || []).push(pathPrefix + name + "/");
+        continue;                                            // 開かずに飛ばす
+      }
       stats.dirs++;
       scanProgressShow(stats, stats._label);
       try {
