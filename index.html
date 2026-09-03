@@ -3827,6 +3827,8 @@
     padding: 10px 12px; margin-bottom: 12px; }
   .pj-case.pj-dirty { border-color: #ef6c00; box-shadow: inset 3px 0 0 #ef6c00; }
   /* 見出しは横一列。1件1ページに収めたいので、ここは低く抑える。 */
+  .pj-apt { font-size: 10px; color: #4a148c; font-weight: 700; margin-top: 2px; white-space: nowrap;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .pj-head { display: flex; align-items: stretch; gap: 8px; flex-wrap: nowrap;
     border-bottom: 2px solid #90caf9; padding-bottom: 5px; margin-bottom: 8px; overflow-x: auto; }
   .pj-h-cell { flex: 0 0 auto; min-width: 0; }
@@ -10057,7 +10059,7 @@ function aptPartLabel(id, fallback){
   return (p && p.diagram_label) ? p.diagram_label : fallback;
 }
 /* この建物の代表番号（枝番を外したもの）。図面の見出しに出す。 */
-function aptBaseNoOf(input){
+function aptBaseNoOf(){
   const el = document.getElementById("chosho_mgmt_no");
   return aptMgmtBase(el ? el.value : "");
 }
@@ -10082,7 +10084,7 @@ function aptFormBldgKey(){
 function renderAptCommonDiagram(svg, input, W, H){
   const units = Math.max(APT_MIN_UNITS, Math.min(APT_MAX_UNITS, parseInt(input.apt_units, 10) || APT_MIN_UNITS));
   const common = !!input.apt_common;
-  const baseNo = aptBaseNoOf(input);
+  const baseNo = aptBaseNoOf();
   const gKey = aptFormBldgKey();
   const wallX = 620, unitX = 900;
 
@@ -10228,7 +10230,7 @@ function renderAptUnitDiagram(svg, input, W, H){
   const units = Math.max(APT_MIN_UNITS, Math.min(APT_MAX_UNITS, parseInt(input.apt_units, 10) || APT_MIN_UNITS));
   const idx = Math.max(1, parseInt(input.apt_idx, 10) || 1);
   const common = !!input.apt_common;
-  const baseNo = aptBaseNoOf(input);
+  const baseNo = aptBaseNoOf();
   const wallX = 380;
 
   svg.appendChild(svgEl("rect", { x:20, y:30, width: wallX - 40, height: H - 60, class:"boundary" }));
@@ -14892,7 +14894,8 @@ function getRowBomAggregate(row){
           mat: (it.material_cost || 0) * it.qty,
           lab: (it.labor_cost || 0) * it.qty,
           note: it.note || "",
-          cablePart: it.cablePart // 費用詳細でケーブル標準/追加を判定
+          cablePart: it.cablePart, // 費用詳細でケーブル標準/追加を判定
+          aptBuilding: it.aptBuilding // アパートの建物ぶん（予定／完了を共用部完了で分けるため）
         }));
         let matSum = 0, labSum = 0;
         items.forEach(it => { matSum += it.mat; labSum += it.lab; });
@@ -18291,7 +18294,10 @@ function aptCommonDoneRow(row){ return row ? aptCommonDone(row.data) : false; }
 function aptSplitBomMoney(items){
   const o = { bMat:0, bLab:0, uMat:0, uLab:0 };
   (items || []).forEach(it => {
-    const m = (it.material_cost || 0) * it.qty, l = (it.labor_cost || 0) * it.qty;
+    // 積算の明細そのまま（material_cost×数量）でも、集計後の形（mat/lab に掛け算済み）でも読めるようにする。
+    // getRowBomAggregate が形を作り直すので、片方だけ見ていると金額が0になる。
+    const m = (it.mat !== undefined) ? (it.mat || 0) : (it.material_cost || 0) * (it.qty || 0);
+    const l = (it.lab !== undefined) ? (it.lab || 0) : (it.labor_cost || 0) * (it.qty || 0);
     if(it.aptBuilding){ o.bMat += m; o.bLab += l; } else { o.uMat += m; o.uLab += l; }
   });
   return o;
@@ -25936,6 +25942,13 @@ function buildLedgerHtmlSnapshot(){
       chosho_note:      d.chosho_note      || "",
       work_type:        d.work_type        || ""
     };
+    // アパート（集合住宅）。ここは項目を選んで渡す形なので、書いておかないと落ちる。
+    // 落ちると、書き出したHTMLの台帳で建物のまとまりが分からなくなる。
+    ["apt_units","apt_idx","apt_bldg","apt_name","apt_room","apt_common",
+     "apt_common_done","apt_owner_name","apt_owner_tel"].forEach(k => {
+      const v = String(d[k] || "").trim();
+      if(v) fields[k] = v;
+    });
     const enc = (r.fileType === "hybrid" || r.fileType === "full");
     cases.push({ caseId: r._caseId || "", file: r.file || "", lastModified: r.lastModified || 0,
                  payload: enc ? { plain: fields } : fields });
@@ -28084,9 +28097,17 @@ function pjHeadHtml(c, pg){
            + '</td><td>' + escapeHtml(m.mer) + '</td><td>' + escapeHtml(m.ber) + '</td></tr>').join("")
        + '</table>')
     : '<span class="pj-none">記録なし</span>';
+  // アパートは1世帯=1ページになるので、住所だけだと全ページ同じに見える。
+  // 管理番号の下に「さくら荘 203号室（8世帯の3世帯目）」を出して区別できるようにする。
+  const cd = (c.row && c.row.data) || {};
+  const aptLine = isApartmentData(cd)
+    ? ('<div class="pj-apt">🏢 ' + escapeHtml(aptBldgName(cd)) + '　' + escapeHtml(aptUnitLabel(cd))
+       + '（' + aptUnits(cd) + '世帯の' + aptIdx(cd) + '世帯目'
+       + (aptIsRep(cd) ? '・代表' : '') + '）</div>')
+    : '';
   return '<div class="pj-head">'
     + cell("管理番号", '<b>' + escapeHtml(c.no || "") + '</b>'
-        + (c.lowres ? '<span class="pj-lowres">⚠ 原寸ではありません</span>' : ''), "pj-h-no")
+        + (c.lowres ? '<span class="pj-lowres">⚠ 原寸ではありません</span>' : '') + aptLine, "pj-h-no")
     + cell("氏名", escapeHtml(c.name))
     + cell("住所", escapeHtml(c.addr), "pj-h-addr")
     + cell("電話", escapeHtml(c.tel))
@@ -28627,6 +28648,13 @@ function calEvLabel(ev){
     return (ev.time ? ev.time + " " : "") + ((ev.free && ev.free.title) || kd.name);
   }
   const d = ev.row.data || {};
+  // アパートは同じ棟の予定が「2611AAA001-01」「-02」…と並ぶと見分けが付かないので、
+  // 部屋番号（無ければ「N世帯目」）を先に出す。
+  if(isApartmentData(d)){
+    const room = aptUnitLabel(d);
+    return (ev.time ? ev.time + " " : "") + "🏢" + room
+      + (d.chosho_cust_name ? " " + d.chosho_cust_name : "");
+  }
   const no = (d.chosho_mgmt_no || "").trim() || (d.chosho_cust_name || "―");
   return (ev.time ? ev.time + " " : "") + no;
 }
@@ -28640,9 +28668,15 @@ function calEvTitle(ev){
   const d = ev.row.data || {};
   const cc = getContractor(ev.tk);
   const cLine = cc ? "\n施工： " + cc : "";
-  if(ev.prov) return "仮受付（電話メモ・台帳で清書待ち）\n" + (d.chosho_mgmt_no || "―") + cLine;
+  // アパートは「どの建物の何号室か」が分かるように1行足す
+  const aLine = isApartmentData(d)
+    ? ("\n🏢 " + aptBldgName(d) + "　" + aptUnitLabel(d)
+       + "（" + aptUnits(d) + "世帯の" + aptIdx(d) + "世帯目）")
+    : "";
+  if(ev.prov) return "仮受付（電話メモ・台帳で清書待ち）\n" + (d.chosho_mgmt_no || "―") + aLine + cLine;
   return (ev.type === "work" ? "工事予定" : "打合せ") + (ev.done ? "（完了）" : "")
     + "\n" + (d.chosho_mgmt_no || "―") + " " + (d.chosho_cust_name || "")
+    + aLine
     + (d.chosho_cust_addr ? "\n" + d.chosho_cust_addr : "") + cLine;
 }
 /* 予定の日付を移動（D&D・日付変更で共用）。
