@@ -7514,7 +7514,9 @@ function buildBOM(input, qtyOverridesOpt) {
   // 石綿みなし諸経費（判定が🟠みなしLV3、かつ非発じん工法でない時のみ）: 内訳に計上し積算へ加算。
   // 労務費区分でBOMに含める（＝基本工事プリセット集計・費用詳細にも反映）。
   // ただし諸経費(overhead markup)の算定対象からは除外（calcTotals 側で isAsbestosFee を考慮）。
-  if(asbestosFeeApplies(input.asbestos)){
+  //   ・アパートは石綿の判定が建物の着工日から決まるので、建物に1回だけ計上する
+  //     （代表＝1世帯目。2世帯目以降に付けると8世帯で¥160,000になってしまう）
+  if(asbestosFeeApplies(input.asbestos) && !APT_SUB){
     const asbAmt = asbestosDeemedFeeAmount(input.asbestos);
     if(asbAmt > 0){
       items.push({
@@ -7523,8 +7525,11 @@ function buildBOM(input, qtyOverridesOpt) {
         material_cost: 0, labor_cost: Math.round(asbAmt),
         unit: "式", diagram_label: "",
         new_or_existing: "new",
-        note: "石綿みなし判定（LV3）に伴う諸経費",
-        isAsbestosFee: true
+        note: "石綿みなし判定（LV3）に伴う諸経費"
+             + (APT_ON ? "（建物に1回・代表の世帯に計上）" : ""),
+        isAsbestosFee: true,
+        // アパートでは建物ぶん＝共用部完了で予定／完了を分ける
+        aptBuilding: APT_ON || undefined
       });
     }
   }
@@ -25161,6 +25166,14 @@ function renderListLedgerMode(rows, container){
     if(!aptGroups.has(k)) aptGroups.set(k, []);
     aptGroups.get(k).push(r);
   });
+  // 地図は建物1つに管理番号1つしかリンクできない。アパートは棟のどこかが
+  // リンクされていれば全世帯を「登録済み」と見なす（代表番号でも枝番付きでも拾える）。
+  const aptMapReg = new Map();
+  aptGroups.forEach((g, k) => {
+    let hit = isMapRegistered(k);
+    if(!hit) hit = g.some(m => isMapRegistered((m.data && m.data.chosho_mgmt_no) || ""));
+    aptMapReg.set(k, hit);
+  });
   const dupN = lgDupCounts(rows);   // 同じ管理番号が重なっている戸別に印を出すため
   let done = 0, flyered = 0, prov = 0, held = 0, unsched = 0, aptN = 0;
   rows.forEach(r => {
@@ -25292,9 +25305,8 @@ function renderListLedgerMode(rows, container){
       html += '<td class="lg-c">' + (isDone ? "完了" : (isProv ? "仮受付" : "受付済")) + ' 🔒</td>';
     }
     // 管理番号（図面有無アイコン＋地図登録アイコン付き）
-    // アパートは地図の建物1つに代表番号でリンクするので、枝番を外しても見る
-    const mapReg = isMapRegistered(d.chosho_mgmt_no)
-      || (isApartmentRow(r) && isMapRegistered(aptMgmtBase(d.chosho_mgmt_no)));
+    // アパートは棟のどこかがリンクされていれば全世帯を登録済みと見なす
+    const mapReg = isMapRegistered(d.chosho_mgmt_no) || (aptKey ? !!aptMapReg.get(aptKey) : false);
     html += '<td>' + tCell("mgmt", d.chosho_mgmt_no)
       + (isProv ? '<span class="lg-prov-badge">仮</span>' : '')
       + ((dupN[toHalfWidthAn(d.chosho_mgmt_no || "").trim()] > 1)
