@@ -3515,6 +3515,27 @@
     font-size: 9px; font-weight: 700; padding: 0 5px; border-radius: 7px;
     margin-left: 4px; vertical-align: 1px; white-space: nowrap;
     -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  /* アパート（集合住宅）。1世帯=1行のまま、同じ建物を1本の帯でくくって見せる。
+     行は増やさず、左端の縦線と見出し行だけで「ここからここまでが1棟」を示す。 */
+  .lg-apt-chip { display: inline-block; background: #6a1b9a; color: #fff;
+    font-size: 9px; font-weight: 700; padding: 0 5px; border-radius: 7px;
+    margin-left: 4px; vertical-align: 1px; white-space: nowrap;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .lg-apt-chip.rep { background: #4a148c; }
+  table.ledger-table tr.lg-apt td:first-child { box-shadow: inset 3px 0 0 #6a1b9a; }
+  table.ledger-table tr.lg-apt-last td { border-bottom: 2px solid #ce93d8; }
+  table.ledger-table tr.lg-apt-band td {
+    background: #f3e5f5; color: #4a148c; font-size: 11.5px; font-weight: 600;
+    padding: 3px 8px !important; border-top: 2px solid #ce93d8;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .lg-apt-band .ab-n { background: #6a1b9a; color: #fff; border-radius: 8px;
+    padding: 0 6px; font-size: 10px; margin-left: 4px; }
+  .lg-apt-band .ab-com { color: #00695c; margin-left: 8px; font-weight: 700; }
+  .lg-apt-band .ab-com.off { color: #8a4b00; }
+  .lg-apt-band .ab-sep { color: #b39ddb; margin: 0 6px; }
+  .lg-apt-band label { font-weight: 600; cursor: pointer; }
+  .lg-apt-band input[type=checkbox] { vertical-align: -1px; margin-right: 2px; }
   .menu-summary .ms-unsched { border-color: #9cc4e4; background: #e7f1fb; color: #1e3a5f; }
   table.ledger-table tr.lg-hl td { background: #e3f2fd !important; }
   .lg-prov-badge {
@@ -4771,6 +4792,13 @@
             <select id="apt_common">
               <option value="no">なし（世帯ごとに電源部）</option>
               <option value="yes">あり（共用部にボックス）</option>
+            </select>
+          </div>
+          <div class="field apt-only">
+            <label><span data-tip="共用部（アンテナ・増幅器・ボックス）の工事が終わったら「済」にします。&#10;アパートは先にアンテナを立ててから入居者を順に切り替えるので、建物ぶんの金額は&#10;代表の入居者の完了チェックではなく、この印で「予定／完了」を分けます。&#10;建物内の世帯すべてに同じ値が入ります。">共用部の工事</span></label>
+            <select id="apt_common_done">
+              <option value="no">まだ（予定）</option>
+              <option value="yes">済（アンテナ・増幅器・ボックス設置済み）</option>
             </select>
           </div>
           <div class="field apt-only">
@@ -7012,6 +7040,10 @@ function buildBOM(input, qtyOverridesOpt) {
   const APT_REP = APT_ON && APT_IDX === 1;      // 代表＝建物ぶんを背負う世帯
   const APT_SUB = APT_ON && APT_IDX !== 1;      // 2世帯目以降＝宅内だけ
   const APT_COMMON = APT_ON && !!input.apt_common;
+  /* この区間で add した行は「建物ぶん（棟に1つ）」の印を付ける。
+     アパートの共用部は入居者の切替より先に終わるので、全体費用詳細の予定／完了は
+     入居者の完了チェックではなく「共用部完了」で分けたい。そのための目印。 */
+  let APT_SCOPE_BUILDING = false;
   const qtyOverrides = qtyOverridesOpt !== undefined ? qtyOverridesOpt : STATE.qtyOverrides;
   const add = (id, qty, opts={}) => {
     const p = PARTS[id];
@@ -7031,7 +7063,9 @@ function buildBOM(input, qtyOverridesOpt) {
       new_or_existing: opts.new_or_existing || "new",
       note: note,
       // ケーブル標準/追加分割用メタ（非ケーブルは undefined）
-      cableSeg: opts.cableSeg, cableStd: opts.cableStd, cablePart: opts.cablePart
+      cableSeg: opts.cableSeg, cableStd: opts.cableStd, cablePart: opts.cablePart,
+      // アパートの建物ぶん（棟に1つ）。戸建てでは常に undefined。
+      aptBuilding: (APT_ON && APT_SCOPE_BUILDING) || undefined
     });
   };
   // ケーブル標準/追加分割: 標準m数までを「標準」、超過分を「追加」として別行で計上
@@ -7063,6 +7097,7 @@ function buildBOM(input, qtyOverridesOpt) {
   // ※ この if の中では 2スペース字下げのままにしてある（158行を字下げし直すと
   //    差分が読めなくなるため）。閉じ括弧は「ここまで建物ぶん」の目印を参照。
   if(!APT_SUB){
+  APT_SCOPE_BUILDING = true;
 
   // 主アンテナ
   add(input.antenna_main, 1, { note: "主系統" });
@@ -7222,6 +7257,7 @@ function buildBOM(input, qtyOverridesOpt) {
     if(faSpId) add(faSpId, 1, { note:"FA接続部 分配" });
   }
 
+  APT_SCOPE_BUILDING = false;
   } // ===== ここまで建物ぶん（!APT_SUB）=========================================
 
   // 宅内分配器（不明の場合は部材未確定）
@@ -7251,6 +7287,7 @@ function buildBOM(input, qtyOverridesOpt) {
   //   ・共用部なしのアパートは電源部が世帯ごとになるのでこの区間は使わない
   //     （下の「アパートの電源まわり」で BPS6W・2ZA2030・WK1512K を計上する）
   if(input.power_pos === "outside" && (!APT_ON || (APT_COMMON && APT_REP))){
+    APT_SCOPE_BUILDING = APT_COMMON;
     const isDirectConn = input.ext_power_conn === "direct";
     if(APT_COMMON){
       add(aptBoxPartsId(input.apt_units), 1, { note:"共用部ボックス（" + input.apt_units + "世帯）電源部・分配器収納" });
@@ -7276,6 +7313,7 @@ function buildBOM(input, qtyOverridesOpt) {
     if(input.box_consent){
       add("wk1512k", 1, { note:"OPBOX(WB-DM)内に組み込み" });
     }
+    APT_SCOPE_BUILDING = false;
   }
 
   // ===== アパート（集合住宅）の電源まわり ===================================
@@ -7288,6 +7326,7 @@ function buildBOM(input, qtyOverridesOpt) {
     const aptNth = input.apt_idx + "世帯目";
     if(input.apt_common){
       if(input.apt_idx === 1){
+        APT_SCOPE_BUILDING = true;
         add("elcb_2p2e20a", 1, { note:"共用部ボックス内 安全ブレーカー（電源部用）" });
         // BOX内コンセントを別途指定していないときは、電源部を差すコンセントをここで計上する
         // （両方入れて2個にならないよう、box_consent が付いているときは足さない）
@@ -7299,6 +7338,7 @@ function buildBOM(input, qtyOverridesOpt) {
           add(x.id, x.qty, { note:"共用部ボックス内 全通電分配器（" + input.apt_units + "世帯 "
                                   + aptSplitterPlanText(aptPlan) + "）" });
         });
+        APT_SCOPE_BUILDING = false;
       }
     } else {
       add("amp_ps_bps6w", 1, { note:"増幅器の電源部（アパート " + aptNth + "）" });
@@ -7326,7 +7366,9 @@ function buildBOM(input, qtyOverridesOpt) {
   // 引込コーナーブラケット OFMU（増幅器out→次段機器の配線取り回し用）
   // 屋外＝棟に1つなので、アパートは代表にだけ計上する。
   if(input.use_ofmu && !APT_SUB){
+    APT_SCOPE_BUILDING = APT_ON;
     add("ofmu", input.ofmu_qty, { note:"増幅器out→次段機器 配線取り回し（コーナー部）" });
+    APT_SCOPE_BUILDING = false;
   }
 
   // ステンレスワイヤー1.6（引込・支線兼用の長さm入力）
@@ -7335,7 +7377,9 @@ function buildBOM(input, qtyOverridesOpt) {
   // この手入力欄の値とは用途が別であり二重計上ではない。
   // 支線も屋外＝棟に1つなので、アパートは代表にだけ計上する。
   if(input.wire_sus16_len > 0 && !APT_SUB){
+    APT_SCOPE_BUILDING = APT_ON;
     add("wire_sus16", input.wire_sus16_len, { note:"支線（長さ入力）" });
+    APT_SCOPE_BUILDING = false;
   }
 
   // 直列ユニット（壁端子）
@@ -7396,6 +7440,7 @@ function buildBOM(input, qtyOverridesOpt) {
   //     2世帯目以降は撤去を計上せず、宅内調整 ¥10,500 のみとする。
   const catvBundle = (typeof _currentProject !== "undefined" && !!_currentProject) && !!input.is_catv && !APT_SUB;
   if(input.is_catv && !APT_SUB){
+    APT_SCOPE_BUILDING = APT_ON;
     if(catvBundle){
       add("adjust_drop", 1, { note:"物件一式：保安器撤去・引込線撤去・ダミー抵抗・宅内CH調整を含む（¥11,000）" });
     } else {
@@ -7409,11 +7454,12 @@ function buildBOM(input, qtyOverridesOpt) {
         add("dummy_dr7m", 1, { note:"分岐分配器アウトにダミー抵抗差込" });
       }
     }
+    APT_SCOPE_BUILDING = false;
   }
 
   // 労務・特殊
   // 高所作業車は棟に1回なので、アパートは代表にだけ計上する
-  if(input.high_work && !APT_SUB) add("high_work", 4, { note:"半日4時間（既定）、数量欄で調整可" });
+  if(input.high_work && !APT_SUB){ APT_SCOPE_BUILDING = APT_ON; add("high_work", 4, { note:"半日4時間（既定）、数量欄で調整可" }); APT_SCOPE_BUILDING = false; }
   if(input.apt_units > 0){
     // アパートはチャンネル調整が世帯ごとに要る（共用部の有無に関わらず世帯数分）。
     // 代表がCATVの束ね ¥11,000 に入っているときだけ、そちらに含まれるので足さない。
@@ -13048,7 +13094,8 @@ function collectState(){
     "chosho_mgmt_no","chosho_date","chosho_time","chosho_cust_name","chosho_cust_addr","chosho_cust_tel",
     "chosho_status","chosho_note",
     // アパート（集合住宅）。戸建てでは apt_units が空なので、以降の分岐は全部オフになる。
-    "apt_units","apt_idx","apt_name","apt_room","apt_common","apt_owner_name","apt_owner_tel","apt_bldg"];
+    "apt_units","apt_idx","apt_name","apt_room","apt_common","apt_owner_name","apt_owner_tel","apt_bldg",
+    "apt_common_done"];
   const s = {};
   ids.forEach(id => {
     const el = document.getElementById(id);
@@ -16938,6 +16985,7 @@ function missShowNote(){
 }
 function renderListTable(){
   try { renderAppVersionFoot(); } catch(_){}   // 版はいつでも見えるようにしておく
+  try { updateProjBar(); } catch(_){}          // 物件バッジのアパート要約（棟数・世帯数・完了）を合わせる
   if(_listMode === "ledger"){ try { refreshMapLinkedSet(); } catch(_){} }
   const tbl = document.getElementById("list-table");
   const custom = document.getElementById("list-content-custom");
@@ -17166,10 +17214,14 @@ function renderListStandardMode(rows, tbl){
 
 /* 選択中のフォルダ名バナー（工事別フォルダ／費用詳細モードの先頭に表示） */
 function renderSelectedFolderBanner(){
-  if(!_listSelectedFolderName) return '';
+  const apt = (typeof aptProjSummary === "function") ? aptProjSummary() : "";
+  if(!_listSelectedFolderName && !apt) return '';
   return '<div class="list-origin-banner">'
-    + '<span class="origin-label">📁 選択フォルダ</span>'
-    + '<span class="origin-name">' + escapeHtml(_listSelectedFolderName) + '</span>'
+    + (_listSelectedFolderName
+        ? ('<span class="origin-label">📁 選択フォルダ</span>'
+           + '<span class="origin-name">' + escapeHtml(_listSelectedFolderName) + '</span>')
+        : '')
+    + (apt ? '<span class="origin-name">' + escapeHtml(apt.trim()) + '</span>' : '')
     + '</div>';
 }
 
@@ -17457,7 +17509,15 @@ function renderListCostDetailMode(rows, container){
       baseMat: baseMatRow, baseLab: baseLabRow,
       addMat: addMatRow, addLab: addLabRow
     });
-    doneSplitAdd(costSplit, r, bom.matSum, bom.labSum);
+    if(isApartmentRow(r) && aptIsRep(r.data)){
+      // アパートの代表は「建物ぶん（アンテナ・増幅器・ボックス等）」と「世帯ぶん」を持つ。
+      // 建物ぶんは共用部完了の印で、世帯ぶんはその入居者の完了チェックで分ける。
+      const sp2 = aptSplitBomMoney(bom.items);
+      doneSplitAdd(costSplit, r, sp2.uMat, sp2.uLab);
+      doneSplitAdd(costSplit, r, sp2.bMat, sp2.bLab, { done: aptCommonDoneRow(r), count: false });
+    } else {
+      doneSplitAdd(costSplit, r, bom.matSum, bom.labSum);
+    }
     caseTotalMat += bom.matSum;
     caseTotalLab += bom.labSum;
     baseMatTotal += baseMatRow;
@@ -17832,9 +17892,14 @@ function caseWorkDone(row){
 function doneSplitNew(){
   return { done:{ n:0, mat:0, lab:0 }, plan:{ n:0, mat:0, lab:0 } };
 }
-function doneSplitAdd(sp, row, mat, lab){
-  const b = caseWorkDone(row) ? sp.done : sp.plan;
-  b.n++; b.mat += (mat || 0); b.lab += (lab || 0);
+function doneSplitAdd(sp, row, mat, lab, opts){
+  opts = opts || {};
+  // done を明示すると完了判定を差し替えられる（アパートの建物ぶん＝共用部完了で分けるため）。
+  // count:false のときは件数を数えない（同じ戸別を2回足すときに件数が二重になるのを防ぐ）。
+  const isDone = (opts.done !== undefined) ? !!opts.done : caseWorkDone(row);
+  const b = isDone ? sp.done : sp.plan;
+  if(opts.count !== false) b.n++;
+  b.mat += (mat || 0); b.lab += (lab || 0);
 }
 /* 予定／完了の内訳を出す帯。費用と協力会社で同じ形にして、見比べられるようにする。
    cols … [{key:"mat",label:"材料費"}, ...] 出す列。合計は必ず出す。 */
@@ -17880,6 +17945,9 @@ function doneSplitHtml(sp, opts){
    建物ごとの値（総世帯数・建物名・共用部の有無・大家）は各行に同じものを持たせる。
    1行だけ開いても情報が欠けないようにするため。書き換えは群全体へ伝播させる。 */
 const APT_MIN_UNITS = 2, APT_MAX_UNITS = 12;
+/* 建物に1つの値。どの世帯で直しても建物ぜんぶに同じものを配る。 */
+const APT_GROUP_FIELDS = ["apt_units", "apt_name", "apt_common", "apt_common_done",
+                          "apt_owner_name", "apt_owner_tel", "apt_bldg"];
 /* 全通電（全端子電流通過型）分配器で実在する分配数。9世帯以上はこれをカスケードする。 */
 const APT_SPLIT_SIZES = [2, 3, 4, 5, 6, 8];
 const APT_BRANCH_RE = /^(.+)-(\d{1,2})$/;
@@ -17903,6 +17971,22 @@ function aptIdx(d){
 function aptIsRep(d){ return aptUnits(d) > 0 && aptIdx(d) === 1; }
 /* 共用部があるか。無い場合は世帯ごとに電源部・漏電遮断器・コンセントが要る。 */
 function aptHasCommon(d){ return isApartmentData(d) && String((d && d.apt_common) || "") === "yes"; }
+/* 共用部（アンテナ・増幅器・ボックス）の工事が終わっているか。
+   アパートは「先にアンテナを立ててから、入居者を順に切り替える」進め方なので、
+   建物ぶんの金額を代表の入居者の完了チェックに連動させると、代表が最後まで残ったときに
+   終わっているはずの工事がずっと「予定」に居座る。そこで建物ぶんだけは別に持つ。
+   ※ 金額からは絶対に判定しない。人が付けたこの印だけで判定する。 */
+function aptCommonDone(d){ return isApartmentData(d) && String((d && d.apt_common_done) || "") === "yes"; }
+function aptCommonDoneRow(row){ return row ? aptCommonDone(row.data) : false; }
+/* 積算の明細を「建物ぶん」と「世帯ぶん」に割る。戸建てでは建物ぶんが0になる。 */
+function aptSplitBomMoney(items){
+  const o = { bMat:0, bLab:0, uMat:0, uLab:0 };
+  (items || []).forEach(it => {
+    const m = (it.material_cost || 0) * it.qty, l = (it.labor_cost || 0) * it.qty;
+    if(it.aptBuilding){ o.bMat += m; o.bLab += l; } else { o.uMat += m; o.uLab += l; }
+  });
+  return o;
+}
 
 /* 管理番号から枝番を外した代表部分（2611AAA001-03 → 2611AAA001） */
 function aptMgmtBase(mgmt){
@@ -18118,6 +18202,99 @@ function aptFillUnits(){
   try { rebuild(); } catch(_){}
   try { renderListTable(); } catch(_){}
   alert(want.length + " 世帯ぶんの行を作りました。受付台帳で「" + (shared.apt_name || bldg) + "」としてまとまって並びます。");
+}
+/* --- 受付台帳のアパート表示 ----------------------------------------------
+   1世帯 = 1行のまま、同じ建物の行を隣どうしに寄せて、上に1本だけ帯を出す。
+   行を折りたたむ仕掛けは作らない（列も増やさない）。台帳を「なるべく見やすく
+   シンプルに」保つため、増やすのは帯1行と小さなチップだけにしてある。 */
+
+/* 並び替えの結果を崩さずに、同じ建物の行を最初の1件の位置へ寄せる。
+   どの列で並び替えても建物が散らばらないようにするため。 */
+function aptRegroup(rows){
+  const out = [], placed = new Set(), byKey = new Map();
+  (rows || []).forEach(r => {
+    const k = aptBldgKeyOfRow(r);
+    if(!k) return;
+    if(!byKey.has(k)) byKey.set(k, []);
+    byKey.get(k).push(r);
+  });
+  byKey.forEach(a => a.sort((x, y) => {
+    const xi = aptIdx(x.data), yi = aptIdx(y.data);
+    if(xi !== yi) return xi - yi;
+    return String(x.data.chosho_mgmt_no || "").localeCompare(String(y.data.chosho_mgmt_no || ""), "ja", { numeric: true });
+  }));
+  (rows || []).forEach(r => {
+    const k = aptBldgKeyOfRow(r);
+    if(!k){ out.push(r); return; }
+    if(placed.has(k)) return;          // 群は最初の1件が出てきた場所にまとめて置く
+    placed.add(k);
+    byKey.get(k).forEach(m => out.push(m));
+  });
+  return out;
+}
+
+/* 建物の見出し帯。世帯数・共用部の有無・大家・同意書・完了の進み具合を1行で出す。
+   完了は caseWorkDone だけで数える（金額からは絶対に判定しない）。 */
+function aptBandRowHtml(row, members, colSpan){
+  const d = row.data || {};
+  const n = members.length;
+  const done = members.filter(caseWorkDone).length;
+  const units = aptUnits(d) || n;
+  const consent = members.some(m => getLedger(subCaseKey(m)).consent);
+  const compdoc = members.filter(m => getLedger(subCaseKey(m)).compdoc).length;
+  const key = aptBldgKey(d);
+  const common = aptHasCommon(d);
+  const cdone = aptCommonDone(d);
+  return '<tr class="lg-apt-band" data-aptkey="' + escapeHtml(key) + '"><td colspan="' + colSpan + '">'
+    + '🏢 ' + escapeHtml(aptBldgName(d))
+    + '<span class="ab-n">' + n + (n !== units ? ' / ' + units : '') + '世帯</span>'
+    + '<span class="ab-com' + (common ? '' : ' off') + '" title="'
+      + (common ? '共用部（外部）のボックスに増幅器・電源部・全端子電流通過型の屋内用分配器・安全ブレーカー・コンセントを収めます'
+                : '共用部が無いので、世帯ごとに電源部BPS6W・小型漏電遮断機2ZA2030・コンセントWK1512Kが要ります')
+      + '">' + (common ? '共用部あり' : '共用部なし') + '</span>'
+    + '<span class="ab-sep">|</span>大家 ' + escapeHtml(d.apt_owner_name || "―")
+    + (d.apt_owner_tel ? '（' + escapeHtml(d.apt_owner_tel) + '）' : '')
+    + '<span class="ab-sep">|</span>'
+    + '<label title="建物にアンテナを付ける承諾は大家から1つもらえば足ります。ここを押すと建物内の全世帯の同意書に同じ印が付きます。">'
+    + '<input type="checkbox" data-aptf="consent"' + (consent ? ' checked' : '') + '>同意書（大家）</label>'
+    + '<span class="ab-sep">|</span>'
+    + '<label title="共用部（アンテナ・増幅器・ボックス）の工事が終わったら印を付けます。&#10;全体費用詳細の「予定／完了」で、建物ぶんの金額はこの印で分けます（入居者の切替とは別に数えます）。">'
+    + '<input type="checkbox" data-aptf="commondone"' + (cdone ? ' checked' : '') + '>共用部の工事済</label>'
+    + '<span class="ab-sep">|</span>完了届 ' + compdoc + ' / ' + n
+    + '<span class="ab-sep">|</span>工事完了 <b>' + done + ' / ' + n + '</b>'
+    + '</td></tr>';
+}
+
+/* 管理番号のとなりに出す小さなチップ。「3/8」と何世帯目かが分かる。 */
+function aptChipHtml(row){
+  if(!isApartmentRow(row)) return "";
+  const d = row.data || {};
+  const i = aptIdx(d), u = aptUnits(d);
+  const rep = (i === 1);
+  const tip = aptBldgName(d) + (d.apt_room ? "　" + d.apt_room : "")
+    + "\n" + u + "世帯のうち " + i + "世帯目" + (rep ? "（代表）" : "")
+    + "\n同意書は大家に1つ（建物で共有）／完了届は世帯ごと"
+    + (rep ? "\n建物ぶん（アンテナ・増幅器・ボックス）はこの世帯に計上します" : "");
+  return '<span class="lg-apt-chip' + (rep ? ' rep' : '') + '" title="' + escapeHtml(tip) + '">🏢 '
+    + i + '/' + u + (rep ? '代' : '') + '</span>';
+}
+
+/* 建物ぜんぶに同じ値を入れる（世帯数・建物名・共用部・大家・共用部完了）。
+   建物ごとの値を各行にコピーで持たせているので、1つ直したら群全体へ配る。 */
+function aptSetGroupField(row, key, value){
+  const g = aptGroupRows(_listRows, aptBldgKeyOfRow(row));
+  (g.length ? g : [row]).forEach(m => {
+    if(!m || !m.data) return;
+    m.data[key] = value;
+    try { markCaseEdited(m); } catch(_){}
+  });
+  try { projTouch(); } catch(_){}
+}
+/* 同意書は大家に1つ。建物内の全世帯に同じ印を付ける（各行に物理的に持たせるので、
+   履行報告・書き出し・現場入力の作りに手を入れずに済む）。 */
+function aptSetGroupConsent(row, checked){
+  const g = aptGroupRows(_listRows, aptBldgKeyOfRow(row));
+  (g.length ? g : [row]).forEach(m => setLedger(subCaseKey(m), { consent: !!checked }));
 }
 function subCaseKey(row){
   // 管理番号は半角でキーにする（全角のまま保存された古いファイルと同じ戸別として扱う）
@@ -23868,10 +24045,26 @@ function openMenuView(){
 function closeMenuView(){
   document.body.classList.remove("menu-open");
 }
+/* 物件の中にアパートが何棟・何世帯あるかを一言で。無ければ空文字。
+   完了は caseWorkDone だけで数える（金額からは判定しない）。 */
+function aptProjSummary(){
+  const keys = new Set();
+  let units = 0, done = 0;
+  (typeof _listRows !== "undefined" ? (_listRows || []) : []).forEach(r => {
+    if(!isApartmentRow(r)) return;
+    keys.add(aptBldgKeyOfRow(r));
+    units++;
+    if(caseWorkDone(r)) done++;
+  });
+  if(!keys.size) return "";
+  return "　🏢 アパート " + keys.size + "棟 " + units + "世帯（完了 " + done + "）";
+}
 function updateProjBar(){
-  const txt = _currentProject ? ("📁 " + _currentProject.name) : "";
+  const apt = _currentProject ? aptProjSummary() : "";
+  const txt = _currentProject ? ("📁 " + _currentProject.name + apt) : "";
   const tip = _currentProject
-    ? ("現在開いている物件: " + _currentProject.name + (_projLastSaved ? "（自動保存 " + _projLastSaved + "）" : ""))
+    ? ("現在開いている物件: " + _currentProject.name + (_projLastSaved ? "（自動保存 " + _projLastSaved + "）" : "")
+       + (apt ? "\n" + apt.trim() + "　※ 1世帯=1戸別として数えています" : ""))
     : "";
   ["proj-ind-app", "proj-ind-list"].forEach(id => {
     const el = document.getElementById(id);
@@ -24243,7 +24436,8 @@ let _ledgerOnlyNoFlyer = false;
 let _ledgerOnlyProv = false;     // 仮受付のみ（電話後の清書作業用）
 let _ledgerOnlyNoDwg = false;    // 図面未作成のみ
 let _ledgerOnlyHold = false;     // 保留のみ
-let _ledgerOnlyUnsched = false;  // 「いつでも可」なのに日付が決まっていないものだけ
+let _ledgerOnlyUnsched = false;
+let _ledgerOnlyApt = false;      // 🏢 アパートの世帯だけを出す  // 「いつでも可」なのに日付が決まっていないものだけ
 let _ledgerHighlightKey = null;
 let _ledgerShown = {};   // uid → row
 let _ledgerPrintSel = new Set();  // 工事調書「選択印刷」でチェック中の戸別（subCaseKey）。再描画やモード切替を跨いで保持
@@ -24603,6 +24797,9 @@ function lgNoteFit(el){
 function lgNoteFitAll(container){
   (container || document).querySelectorAll("textarea.lg-note-input").forEach(lgNoteFit);
 }
+/* 受付台帳の列数。空表示のcolspanとアパートの帯で同じ数を使う。
+   列を増やすときは、ヘッダ・セル・LG_PRINT_COLS・印刷CSS とここを揃えること。 */
+const LG_LEDGER_COLSPAN = 16;
 function renderListLedgerMode(rows, container){
   _ledgerShown = {};
   const todayS = lgDateStrToday(0), tomoS = lgDateStrToday(1);
@@ -24636,10 +24833,21 @@ function renderListLedgerMode(rows, container){
     if(_ledgerOnlyNoDwg && lgHasDrawing(r)) return false;
     if(_ledgerOnlyHold && !getLedger(subCaseKey(r)).hold) return false;
     if(_ledgerOnlyUnsched && !lgIsUnscheduled(r)) return false;
+    if(_ledgerOnlyApt && !isApartmentRow(r)) return false;
     return true;
   });
+  // 同じ建物の世帯を隣どうしに寄せる（どの列で並び替えても建物が散らばらないように）
+  const shownG = aptRegroup(shown);
+  // 建物ごとの行を1回だけ集めておく（描画のたびに絞り込むと世帯数×行数になるため）
+  const aptGroups = new Map();
+  shownG.forEach(r => {
+    const k = aptBldgKeyOfRow(r);
+    if(!k) return;
+    if(!aptGroups.has(k)) aptGroups.set(k, []);
+    aptGroups.get(k).push(r);
+  });
   const dupN = lgDupCounts(rows);   // 同じ管理番号が重なっている戸別に印を出すため
-  let done = 0, flyered = 0, prov = 0, held = 0, unsched = 0;
+  let done = 0, flyered = 0, prov = 0, held = 0, unsched = 0, aptN = 0;
   rows.forEach(r => {
     if(r.data && r.data.chosho_status === "completed") done++;
     if(r.data && r.data.chosho_status === "provisional") prov++;
@@ -24647,6 +24855,7 @@ function renderListLedgerMode(rows, container){
     if(lgc.flyer) flyered++;
     if(lgc.hold) held++;
     if(lgIsUnscheduled(r)) unsched++;
+    if(isApartmentRow(r)) aptN++;
   });
 
   // 工事調書「選択印刷」のチェック数（読み込み済かつ印刷可能な戸別のみ計上）
@@ -24659,7 +24868,8 @@ function renderListLedgerMode(rows, container){
   // 操作は「行を足す」「絞り込む」「印刷する」「やりとりする」の4つにまとめる。
   // 探さずに済むよう、それぞれに小見出しを付けて枠で囲う。
   const nFilters = (_ledgerOnlyProv ? 1 : 0) + (_ledgerOnlyPending ? 1 : 0) + (_ledgerOnlyNoFlyer ? 1 : 0)
-    + (_ledgerOnlyNoDwg ? 1 : 0) + (_ledgerOnlyHold ? 1 : 0);
+    + (_ledgerOnlyNoDwg ? 1 : 0) + (_ledgerOnlyHold ? 1 : 0)
+    + (_ledgerOnlyUnsched ? 1 : 0) + (_ledgerOnlyApt ? 1 : 0);   // 日程未定は今まで数え漏れていた
   html += '<div class="ledger-controls cost-detail-section">'
     // ① 行を足す
     + '<div class="lgc-grp"><span class="lgc-ttl">追加</span>'
@@ -24675,6 +24885,10 @@ function renderListLedgerMode(rows, container){
     +   '<label title="図面（積算）がまだ入っていない戸別"><input type="checkbox" id="lg-only-nodwg"' + (_ledgerOnlyNoDwg ? " checked" : "") + '> 図面未作成</label>'
     +   '<label' + (held > 0 ? ' style="background:#ffe8cc;border-radius:3px;padding:2px 6px;"' : '') + ' title="着工を止めている戸別"><input type="checkbox" id="lg-only-hold"' + (_ledgerOnlyHold ? " checked" : "") + '> 保留' + (held > 0 ? '（' + held + '）' : '') + '</label>'
     +   '<label' + (unsched > 0 ? ' style="background:#e7f1fb;border-radius:3px;padding:2px 6px;"' : '') + ' title="「いつでも良い」と言われていて、まだ日付が決まっていない戸別"><input type="checkbox" id="lg-only-unsched"' + (_ledgerOnlyUnsched ? " checked" : "") + '> 日程未定' + (unsched > 0 ? '（' + unsched + '）' : '') + '</label>'
+    +   (aptN > 0
+          ? ('<label style="background:#f3e5f5;border-radius:3px;padding:2px 6px;" title="アパート（集合住宅）の世帯だけを出します。建物ごとにまとまって並びます。"><input type="checkbox" id="lg-only-apt"'
+             + (_ledgerOnlyApt ? " checked" : "") + '> 🏢 アパート（' + aptN + '）</label>')
+          : '')
     + '</div>'
     // ③ 印刷する
     + '<div class="lgc-grp"><span class="lgc-ttl">印刷</span>'
@@ -24719,7 +24933,14 @@ function renderListLedgerMode(rows, container){
     + '<th data-col="open" style="width:140px;">開く</th>'
     + '</tr></thead><tbody>';
 
-  shown.forEach((r, i) => {
+  shownG.forEach((r, i) => {
+    // 建物の切れ目に見出しの帯を1本入れる（帯は行ではないので _ledgerShown には入れない）
+    const aptKey = aptBldgKeyOfRow(r);
+    const prevKey = i > 0 ? aptBldgKeyOfRow(shownG[i - 1]) : "";
+    const nextKey = (i + 1 < shownG.length) ? aptBldgKeyOfRow(shownG[i + 1]) : "";
+    if(aptKey && aptKey !== prevKey){
+      html += aptBandRowHtml(r, aptGroups.get(aptKey) || [r], LG_LEDGER_COLSPAN);
+    }
     const uid = "lg" + i;
     _ledgerShown[uid] = r;
     const d = r.data || {};
@@ -24736,6 +24957,7 @@ function renderListLedgerMode(rows, container){
     if(lgIsUnscheduled(r)) cls.push("lg-unsched"); // いつでも可なのに日付が空＝忘れやすい
     if(lg.hold) cls.push("lg-hold");   // 完了・仮受付と重なっても保留の色を出す（CSS側で後勝ち）
     if(_ledgerHighlightKey && tk === _ledgerHighlightKey) cls.push("lg-hl");
+    if(aptKey){ cls.push("lg-apt"); if(aptKey !== nextKey) cls.push("lg-apt-last"); }
     const tCell = (f, v) => lgEditableField(r, f)
       ? '<span class="lg-edit" data-f="' + f + '" title="クリックで編集">' + (escapeHtml(v || "") || "<span style='color:#b8c2cc;'>―</span>") + '</span>'
       : '<span class="lg-lock" title="' + (enabled ? "暗号化項目（戸別を開いて編集）" : "全暗号化（🔓一括復号で閲覧可・編集はファイルから）") + '">' + escapeHtml(v || "―") + ' 🔒</span>';
@@ -24755,7 +24977,9 @@ function renderListLedgerMode(rows, container){
       html += '<td class="lg-c">' + (isDone ? "完了" : (isProv ? "仮受付" : "受付済")) + ' 🔒</td>';
     }
     // 管理番号（図面有無アイコン＋地図登録アイコン付き）
-    const mapReg = isMapRegistered(d.chosho_mgmt_no);
+    // アパートは地図の建物1つに代表番号でリンクするので、枝番を外しても見る
+    const mapReg = isMapRegistered(d.chosho_mgmt_no)
+      || (isApartmentRow(r) && isMapRegistered(aptMgmtBase(d.chosho_mgmt_no)));
     html += '<td>' + tCell("mgmt", d.chosho_mgmt_no)
       + (isProv ? '<span class="lg-prov-badge">仮</span>' : '')
       + ((dupN[toHalfWidthAn(d.chosho_mgmt_no || "").trim()] > 1)
@@ -24765,6 +24989,7 @@ function renderListLedgerMode(rows, container){
       + (lg.hold ? '<span class="lg-hold-badge" title="保留（地図でも管理番号の右肩に「保」マークが付きます）">保</span>' : '')
       + (lgIsUnscheduled(r) ? '<span class="lg-any-badge" title="「いつでも良い」と言われていて、まだ日付が決まっていません">日程未定</span>' : '')
       + asbestosChipHtml(r)     // 石綿の可否（⚪未入力／🟢不要／⚠L1・L2／🟠みなし／🟡非発じん）
+      + aptChipHtml(r)          // アパートの何世帯目か（🏢 3/8）
       + (r._detached ? '<span class="lg-nofile-badge' + (r._detached.reason === "pending" ? ' pending' : '')
           + '" title="' + (r._detached.reason === "pending" ? "ファイルが見当たりません（次に読み込んだ時にまた確認します）" : "戸別ファイルが無い行です（名前だけ残しています）。ファイルが戻れば自動で元に戻ります")
           + (r._detached.path ? "。前の場所: " + escapeHtml(r._detached.path) : "") + '">ファイル無</span>' : '')
@@ -24843,7 +25068,7 @@ function renderListLedgerMode(rows, container){
     html += '</tr>';
   });
   if(shown.length === 0){
-    html += '<tr><td colspan="16" style="text-align:center;color:#667482;padding:14px;">表示できる戸別がありません（「＋ 新規行」で台帳から戸別を作成できます）</td></tr>';
+    html += '<tr><td colspan="' + LG_LEDGER_COLSPAN + '" style="text-align:center;color:#667482;padding:14px;">表示できる戸別がありません（「＋ 新規行」で台帳から戸別を作成できます）</td></tr>';
   }
   html += '</tbody></table></div>';
   container.innerHTML = html;
@@ -26403,6 +26628,25 @@ function bindLedgerHandlers(container){
     if(t.id === "lg-only-nodwg"){ _ledgerOnlyNoDwg = t.checked; renderListTable(); return; }
     if(t.id === "lg-only-hold"){ _ledgerOnlyHold = t.checked; renderListTable(); return; }
     if(t.id === "lg-only-unsched"){ _ledgerOnlyUnsched = t.checked; renderListTable(); return; }
+    if(t.id === "lg-only-apt"){ _ledgerOnlyApt = t.checked; renderListTable(); return; }
+    // アパートの見出し帯のチェック（建物ぜんぶに効く）
+    {
+      const band = t.closest("tr.lg-apt-band");
+      if(band){
+        const g = aptGroupRows(_listRows, band.dataset.aptkey || "");
+        if(g.length){
+          if(t.dataset.aptf === "consent"){
+            aptSetGroupConsent(g[0], t.checked);
+            lgMarkTouched(subCaseKey(g[0]));
+          } else if(t.dataset.aptf === "commondone"){
+            aptSetGroupField(g[0], "apt_common_done", t.checked ? "yes" : "no");
+            g.forEach(m => { m._amtCache = undefined; m._bomCache = undefined; });
+          }
+          renderListTable();
+        }
+        return;
+      }
+    }
     if(t.id === "lg-print-all"){
       // 表示中の印刷可能な戸別をまとめて選択／解除（絞り込み中はその範囲のみ）
       const printable = Object.values(_ledgerShown).filter(r => lgLedgerEnabled(r));
@@ -26422,7 +26666,12 @@ function bindLedgerHandlers(container){
     else if(f === "time"){ setLedger(tk, { time: t.value }); lgMarkTouched(tk); lgSaveStateRefresh(); }
     else if(f === "meet"){ setLedger(tk, { meetAt: t.value }); lgMarkTouched(tk); lgSaveStateRefresh(); }
     else if(f === "flyer"){ setLedger(tk, { flyer: t.checked }); lgMarkTouched(tk); renderListTable(); }
-    else if(f === "consent"){ setLedger(tk, { consent: t.checked }); lgMarkTouched(tk); renderListTable(); }
+    else if(f === "consent"){
+      // 同意書は建物の大家から1つ。アパートの世帯で押したら建物ぜんぶに同じ印を付ける。
+      if(isApartmentRow(row)) aptSetGroupConsent(row, t.checked);
+      else setLedger(tk, { consent: t.checked });
+      lgMarkTouched(tk); renderListTable();
+    }
     else if(f === "compdoc"){ setLedger(tk, { compdoc: t.checked }); lgMarkTouched(tk); renderListTable(); }
     // 保留は地図の「保」マークに直結するので、地図を開いたままでも即座に描き直す
     else if(f === "anytime"){ setLedger(tk, { anytime: t.checked }); lgMarkTouched(tk); renderListTable(); }
@@ -30048,6 +30297,16 @@ function init(){
       const base = mgEl ? aptMgmtBase(mgEl.value) : "";
       const idx = parseInt(e.target.value, 10) || 0;
       if(mgEl && base && idx >= 1) mgEl.value = aptMgmtWithBranch(base, idx);
+    }
+    // 建物ごとの値（世帯数・建物名・共用部・大家・共用部完了）は建物ぜんぶに配る。
+    // 1世帯だけ直して他とちぐはぐになると、積算の代表判定や台帳の帯がずれるため。
+    if(APT_GROUP_FIELDS.indexOf(e.target.id) >= 0 && _editingRow && isApartmentRow(_editingRow)){
+      aptSetGroupField(_editingRow, e.target.id, e.target.value);
+      if(e.target.id === "apt_common" || e.target.id === "apt_units"){
+        aptGroupRows(_listRows, aptBldgKeyOfRow(_editingRow))
+          .forEach(m => { m._amtCache = undefined; m._bomCache = undefined; });
+      }
+      try { if(_listMode === "ledger") renderListTable(); } catch(_){}
     }
     // 外部分配=3分配器WP選択時：1本アンテナ→3分配→増幅器3入力 の構成のため46CH専用アンテナは無し
     if(e.target.id === "outer_splitter" && e.target.value === "sp_3cw"){
