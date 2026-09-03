@@ -6437,7 +6437,7 @@
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "130";
+const APP_VERSION = "131";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -9035,6 +9035,16 @@ function renderDiagram(input){
   svg.setAttribute("width", W);
   svg.setAttribute("height", H);
 
+  // アパート（集合住宅）は図面を2種類に分ける。
+  //   代表（1世帯目） … 共用部の図（アンテナ→増幅器→ボックス→各世帯へ）
+  //   2世帯目以降     … その世帯の宅内図（共用部より→分配器→壁端子→TV）
+  // 戸建てはここを素通りして、従来どおりの図面を描く。
+  if((parseInt(input.apt_units, 10) || 0) >= 2){
+    if((parseInt(input.apt_idx, 10) || 1) === 1) renderAptCommonDiagram(svg, input, W, H);
+    else                                        renderAptUnitDiagram(svg, input, W, H);
+    return;
+  }
+
   // 既存/新規判定
   //   アンテナ→増幅器の屋外配線は常に新規（赤）
   //   引込み・宅内配線は設定に従う
@@ -10028,6 +10038,305 @@ function renderDiagram(input){
     "boundary-label");
 
   // ---- 選択中ノードの移動ハンドル UI（最後に描画して最前面） ----
+  renderSelectionHandle(svg);
+}
+
+/* ============================================================
+   アパート（集合住宅）の図面
+   ------------------------------------------------------------
+   共用部の図面（代表＝1世帯目）と、世帯ごとの宅内図（2世帯目以降）に分ける。
+   戸建ての renderDiagram には手を入れず、入口で振り分けるだけにしてある。
+   図は毎回 input から作り直すので、位置の手直し（nodeOffsets）・配線の色
+   （wireOverrides）・赤文字（textAnnotations）はキー名だけで従来どおり効く。
+   ノードのキーは戸建てとぶつからないよう "apt_" で始める。
+   ============================================================ */
+
+/* 部材の図面ラベル（無ければ代替を返す） */
+function aptPartLabel(id, fallback){
+  const p = id && PARTS[id];
+  return (p && p.diagram_label) ? p.diagram_label : fallback;
+}
+/* この建物の代表番号（枝番を外したもの）。図面の見出しに出す。 */
+function aptBaseNoOf(input){
+  const el = document.getElementById("chosho_mgmt_no");
+  return aptMgmtBase(el ? el.value : "");
+}
+/* 世帯の見出し。同じ建物の行から部屋番号を拾い、無ければ「N世帯目」。 */
+function aptUnitCaption(i, groupKey){
+  try {
+    const g = aptGroupRows(typeof _listRows !== "undefined" ? _listRows : [], groupKey);
+    const m = g.find(r => aptIdx(r.data) === i + 1);
+    const room = m && String(m.data.apt_room || "").trim();
+    if(room) return room;
+  } catch(_){}
+  return (i + 1) + "世帯目";
+}
+/* いま編集している建物のキー（入力欄の建物キー、無ければ代表番号） */
+function aptFormBldgKey(){
+  const b = String(((document.getElementById("apt_bldg") || {}).value) || "").trim();
+  return toHalfWidthAn(b) || aptMgmtBase((document.getElementById("chosho_mgmt_no") || {}).value);
+}
+
+/* ---- 共用部の図面（代表＝1世帯目）---------------------------------------
+   屋外（アンテナ→増幅器）── 共用部（ボックスの中身）── 各世帯へ の3段。 */
+function renderAptCommonDiagram(svg, input, W, H){
+  const units = Math.max(APT_MIN_UNITS, Math.min(APT_MAX_UNITS, parseInt(input.apt_units, 10) || APT_MIN_UNITS));
+  const common = !!input.apt_common;
+  const baseNo = aptBaseNoOf(input);
+  const gKey = aptFormBldgKey();
+  const wallX = 620, unitX = 900;
+
+  // エリアの枠
+  svg.appendChild(svgEl("rect", { x:20, y:30, width: wallX - 40, height: H - 60, class:"boundary" }));
+  svg.appendChild(svgEl("rect", { x: wallX + 20, y:30, width: unitX - wallX - 40, height: H - 60, class:"boundary" }));
+  svg.appendChild(svgEl("rect", { x: unitX + 20, y:30, width: W - unitX - 40, height: H - 60, class:"boundary" }));
+  mkLabel(svg, 30, 50, "── 屋外 ──", "area-label");
+  mkLabel(svg, wallX + 30, 50, common ? "── 共用部（外部）──" : "── 屋外（共用部なし）──", "area-label");
+  mkLabel(svg, unitX + 30, 50, "── 各世帯へ ──", "area-label");
+  svg.appendChild(svgEl("line", { x1: wallX, y1: 30, x2: wallX, y2: H - 30, stroke:"#666", "stroke-width":"2" }));
+  svg.appendChild(svgEl("line", { x1: unitX, y1: 30, x2: unitX, y2: H - 30, stroke:"#666", "stroke-width":"2" }));
+  mkLabel(svg, 30, 74, "🏢 " + units + "世帯" + (baseNo ? "（" + baseNo + "）" : "")
+    + "　共用部" + (common ? "あり" : "なし"), "area-label");
+
+  // ---- アンテナ列 ----
+  const ants = [];
+  ants.push({ id: input.antenna_main, top: "主系統" });
+  if(input.ch46) ants.push({ id: input.antenna_46 || input.antenna_main, top: "46CH" });
+  if(input.ch50_separate) ants.push({ id: input.antenna_50 || input.antenna_main, top: "50CH" });
+  if(input.bs_cs) ants.push({ id: null, top: "衛星", label: "BS/CS" });
+  const antW = 110, antH = 34, antX = 50;
+  const antGap = 76;
+  // 屋外の縦の真ん中に寄せる（上に固まって下が大きく空くのを避ける）
+  const antTop = Math.max(110, Math.round((H - antGap * (ants.length - 1) - antH) / 2));
+  const antNodes = ants.map((a, i) => mkNode(svg, antX, antTop + antGap * i, antW, antH,
+    a.label || aptPartLabel(a.id, "アンテナ"),
+    { id: a.id || undefined, existing: false, toplabel: a.top, nodeKey: "apt_ant_" + i }));
+
+  // ---- 増幅器 ----
+  const ampW = 150, ampH = 46, ampX = 380;
+  const ampY = antTop + (antGap * (ants.length - 1)) / 2;
+  const ampNode = mkNode(svg, ampX, ampY, ampW, ampH,
+    aptPartLabel(input.amplifier, "増幅器"),
+    { id: input.amplifier, existing: false, toplabel: "増幅器（棟に1台）",
+      inputId: "amplifier", editTitle: "増幅器", nodeKey: "apt_amp" });
+  antNodes.forEach((n, i) => {
+    mkWire(svg, [n.right, { x: ampNode.left.x - 24, y: n.right.y },
+                 { x: ampNode.left.x - 24, y: ampNode.left.y }, ampNode.left],
+      { existing: false, wireKey: "apt_ant_amp_" + i });
+  });
+
+  // ---- 共用部のボックス ----
+  const bx = wallX + 40, bw = unitX - wallX - 80;
+  let lastOut = ampNode.right;
+  const splitOuts = [];
+  if(common){
+    const boxId = aptBoxPartsId(units);
+    const by = 76, bh = H - 150;
+    svg.appendChild(svgEl("rect", { x: bx, y: by, width: bw, height: bh, rx:6, ry:6, class:"boundary" }));
+    mkLabel(svg, bx + 6, by - 8, "共用部ボックス " + aptPartLabel(boxId, "BOX")
+      + "（" + (PARTS[boxId] ? PARTS[boxId].model : "") + "）", "boundary-label");
+    // ボックス本体をクリックできるノードにする（単価を見られるように）
+    mkNode(svg, bx + 14, by + 12, bw - 28, 30,
+      (PARTS[boxId] ? PARTS[boxId].model : aptPartLabel(boxId, "BOX")),
+      { id: boxId, existing: false, nodeKey: "apt_box" });
+    const pw = mkNode(svg, bx + 14, by + 58, bw - 28, 36, "電源部\n（ボックス内蔵）",
+      { existing: false, nodeKey: "apt_box_power" });
+    const brk = mkNode(svg, bx + 14, by + 110, bw - 28, 34, "安全ブレーカー\n2P2E20A",
+      { id: "elcb_2p2e20a", existing: false, nodeKey: "apt_box_brk" });
+    const cn = mkNode(svg, bx + 14, by + 160, bw - 28, 32, "コンセント\nWK1512K",
+      { id: "wk1512k", existing: false, nodeKey: "apt_box_cn" });
+    // 電源の流れ（破線）：コンセント → ブレーカー → 電源部
+    mkWire(svg, [cn.top, brk.bottom], { existing: false, dash: true, wireKey: "apt_cn_brk" });
+    mkWire(svg, [brk.top, pw.bottom], { existing: false, dash: true, wireKey: "apt_brk_pw" });
+    mkLabel(svg, cn.right.x - 40, cn.top.y - 4, "電源線", "wire-label");
+
+    // 分配器（9世帯以上はカスケード）
+    const plan = aptSplitterPlan(units);
+    const spTop = by + 210;
+    let headNode = null;
+    const branchNodes = [];
+    if(!plan.cascade){
+      const p = plan.rows[0];
+      headNode = mkNode(svg, bx + 14, spTop, bw - 28, 40, aptPartLabel(p.id, p.size + "分配"),
+        { id: p.id, existing: false, sublabel: "全通電", nodeKey: "apt_sp_head" });
+      for(let i = 0; i < units; i++) splitOuts.push(headNode.right);
+    } else {
+      const head = plan.rows[0], br = plan.rows[1];
+      headNode = mkNode(svg, bx + 14, spTop, bw - 28, 36,
+        aptPartLabel(head.id, "2分配") + "  ← 元",
+        { id: head.id, existing: false, nodeKey: "apt_sp_head" });
+      const brW = (bw - 40) / 2;
+      for(let k = 0; k < br.qty; k++){
+        const n = mkNode(svg, bx + 14 + (brW + 12) * k, spTop + 62, brW, 36,
+          aptPartLabel(br.id, br.size + "分配"),
+          { id: br.id, existing: false, sublabel: "枝" + (k + 1), nodeKey: "apt_sp_br" + k });
+        branchNodes.push(n);
+        mkWire(svg, [headNode.bottom, { x: headNode.bottom.x, y: spTop + 52 },
+                     { x: n.top.x, y: spTop + 52 }, n.top],
+          { existing: false, wireKey: "apt_sp_br_" + k });
+      }
+      // 各世帯を枝に割り振る
+      for(let i = 0; i < units; i++){
+        const n = branchNodes[Math.min(branchNodes.length - 1, Math.floor(i / Math.ceil(units / branchNodes.length)))];
+        splitOuts.push(n.right);
+      }
+    }
+    // 増幅器 → 電源部（信号＋電源）
+    mkWire(svg, [ampNode.right, { x: bx - 14, y: ampNode.right.y },
+                 { x: bx - 14, y: pw.left.y }, pw.left],
+      { existing: false, wireKey: "apt_amp_box" });
+    mkLabel(svg, ampNode.right.x + 10, ampNode.right.y - 8, "S5CFB", "wire-label");
+    mkLabel(svg, ampNode.right.x + 10, ampNode.right.y + 4, "電源+信号", "wire-label");
+    // 電源部 → 分配器
+    mkWire(svg, [pw.right, { x: bx + bw + 6, y: pw.right.y },
+                 { x: bx + bw + 6, y: headNode.right.y }, headNode.right],
+      { existing: false, wireKey: "apt_pw_sp" });
+    lastOut = headNode.right;
+  } else {
+    // 共用部なし：増幅器から各世帯へ直接。電源部は世帯ごと（世帯の図面に出る）。
+    mkLabel(svg, bx, 140, "共用部が無いので、電源部・漏電遮断器・コンセントは", "boundary-label");
+    mkLabel(svg, bx, 156, "世帯ごとに設置します（各世帯の図面を参照）。", "boundary-label");
+    mkLabel(svg, bx, 180, "この図には共用部のボックスは出ません。", "boundary-label");
+  }
+
+  // ---- 各世帯へ ----
+  const uTop = 80, uBottom = H - 80;
+  const gap = (uBottom - uTop) / units;
+  const uW = W - unitX - 80, uH = Math.min(34, gap - 12);
+  for(let i = 0; i < units; i++){
+    const cy = uTop + gap * (i + 0.5);
+    const no = baseNo ? aptMgmtWithBranch(baseNo, i + 1) : "";
+    const n = mkNode(svg, unitX + 40, cy - uH / 2, uW, uH,
+      aptUnitCaption(i, gKey) + (no ? "\n" + no : ""),
+      { existing: false, nodeKey: "apt_unit_" + i,
+        tooltip: (i === 0 ? "代表の世帯（建物ぶんの金額はここに計上）" : (i + 1) + "世帯目") });
+    const from = splitOuts[i] || lastOut;
+    const vx = unitX + 6 + (i % 6) * 3;    // 縦線を少しずつずらして、クリックで狙った世帯が反応するように
+    mkWire(svg, [from, { x: vx, y: from.y }, { x: vx, y: n.left.y }, n.left],
+      { existing: false, wireKey: "apt_unit_wire_" + i });
+  }
+
+  mkLabel(svg, 30, H - 10,
+    "凡例： 赤=新規 / 黒=既存 / 破線=電源 / 共用部の部材は代表（1世帯目）の積算に計上",
+    "boundary-label");
+  renderSelectionHandle(svg);
+}
+
+/* ---- 世帯ごとの宅内図（2世帯目以降）------------------------------------
+   共用部（棟）から入ってきた線を、その世帯の分配器→壁端子→TVへ配る。 */
+function renderAptUnitDiagram(svg, input, W, H){
+  const units = Math.max(APT_MIN_UNITS, Math.min(APT_MAX_UNITS, parseInt(input.apt_units, 10) || APT_MIN_UNITS));
+  const idx = Math.max(1, parseInt(input.apt_idx, 10) || 1);
+  const common = !!input.apt_common;
+  const baseNo = aptBaseNoOf(input);
+  const wallX = 380;
+
+  svg.appendChild(svgEl("rect", { x:20, y:30, width: wallX - 40, height: H - 60, class:"boundary" }));
+  svg.appendChild(svgEl("rect", { x: wallX + 20, y:30, width: W - wallX - 40, height: H - 60, class:"boundary" }));
+  mkLabel(svg, 30, 50, "── 共用部（棟）より ──", "area-label");
+  mkLabel(svg, wallX + 30, 50, "── 宅内 ──", "area-label");
+  svg.appendChild(svgEl("line", { x1: wallX, y1: 30, x2: wallX, y2: H - 30, stroke:"#666", "stroke-width":"2" }));
+  mkLabel(svg, wallX - 12, H - 40, "壁", "boundary-label");
+  const room = String(((document.getElementById("apt_room") || {}).value) || "").trim();
+  mkLabel(svg, 30, 74, "🏢 " + units + "世帯の " + idx + "世帯目"
+    + (room ? "　" + room : "") + "　共用部" + (common ? "あり" : "なし"), "area-label");
+
+  // ---- 共用部からの引き込み ----
+  const srcY = 330;
+  const src = mkNode(svg, 50, srcY, 170, 44, "共用部より\n（全通電分配器）",
+    { existing: true, sublabel: baseNo ? aptMgmtWithBranch(baseNo, 1) : "代表の世帯",
+      nodeKey: "apt_src" });
+  let prev = src.right;
+
+  // ---- 共用部なし：この世帯の電源部一式 ----
+  if(!common){
+    const pw = mkNode(svg, 250, srcY - 4, 100, 38, "電源部\nBPS6W",
+      { id: "amp_ps_bps6w", existing: false, nodeKey: "apt_u_pw" });
+    const brk = mkNode(svg, 250, srcY + 76, 100, 36, "小型漏電\n遮断機 2ZA2030",
+      { id: "elcb_2za2030", existing: false, nodeKey: "apt_u_brk" });
+    const cn = mkNode(svg, 250, srcY + 148, 100, 32, "コンセント\nWK1512K",
+      { id: "wk1512k", existing: false, nodeKey: "apt_u_cn" });
+    mkWire(svg, [src.right, pw.left], { existing: false, wireKey: "apt_u_src_pw" });
+    mkWire(svg, [cn.top, brk.bottom], { existing: false, dash: true, wireKey: "apt_u_cn_brk" });
+    mkWire(svg, [brk.top, pw.bottom], { existing: false, dash: true, wireKey: "apt_u_brk_pw" });
+    mkLabel(svg, cn.right.x - 42, cn.top.y - 4, "電源線", "wire-label");
+    prev = pw.right;
+  }
+
+  // ---- 宅内分配器 ----
+  const spUnknown = input.indoor_split === "unknown";
+  const spLabel = spUnknown ? "既設分配器\n(数不明)"
+    : (input.indoor_split + "分配" + (input.split_all_pass ? "\n(全通電)" : ""));
+  const spId = spUnknown ? null
+    : (input.split_all_pass ? "sp_" + input.indoor_split + "spfdw" : "sp_" + input.indoor_split + "spfw");
+  const spNode = mkNode(svg, 470, 330, 100, 50, spLabel,
+    { id: spId, existing: spUnknown, sublabel: spUnknown ? "既存流用" : "新規",
+      inputId: "indoor_split", editTitle: "宅内分配器（分配数）", nodeKey: "indoor_sp" });
+  const indoorExist = input.indoor_wire === "existing";
+  const spSideExist = spUnknown ? true : indoorExist;
+  // 壁抜け → 分配器（wireKey は戸建てと同じ wall_to_sp。積算の「宅内新規」がそのまま効く）
+  mkWire(svg, [prev, { x: wallX + 6, y: prev.y }, { x: wallX + 6, y: spNode.left.y }, spNode.left],
+    { existing: input.outer_wire === "existing", wireKey: "wall_to_sp" });
+
+  // ---- 壁端子（TV部屋ごと）----
+  const tvN = Math.max(1, parseInt(input.tv_count, 10) || 1);
+  const termX = 760, termW = 78;
+  const rangeTop = 90, rangeBottom = H - 120;
+  const gapY = (rangeBottom - rangeTop) / tvN;
+  const termNodes = [];
+  for(let i = 0; i < tvN; i++){
+    const cy = rangeTop + gapY * (i + 0.5);
+    const termId = ((input.tv_term || [])[i]) || "";
+    const isEnd = (i === tvN - 1);
+    const termLabel = (termId && PARTS[termId] && PARTS[termId].diagram_label)
+      ? PARTS[termId].diagram_label : (isEnd ? "壁端子\n(末)" : "壁端子");
+    const t = mkNode(svg, termX, cy - 16, termW, 32, termLabel,
+      { id: termId || undefined, existing: !termId,
+        toplabel: (input.tv_rooms || [])[i] || ("TV" + (i + 1)),
+        nodeKey: "term_" + i });
+    termNodes.push(t);
+    // 壁後2分配（新規/既存）
+    const spRaw = (input.tv_sp || [])[i];
+    const spState = (spRaw === true) ? "new" : (spRaw === false ? "no" : (spRaw || "no"));
+    let prevRight = t.right;
+    if(spState !== "no"){
+      const sp2Id = input.split_all_pass ? "sp_2spfdw" : "sp_2spfw";
+      const sp2 = mkNode(svg, t.right.x + 40, cy - 16, 54, 32, "2分配",
+        { id: sp2Id, existing: spState === "existing",
+          sublabel: spState === "existing" ? "壁後(既存)" : "壁後(新規)",
+          nodeKey: "tv_sp2_" + i });
+      mkWire(svg, [prevRight, sp2.left], { existing: spSideExist, wireKey: "term_sp2_" + i });
+      prevRight = sp2.right;
+    }
+    // BD（チャンネル調整）
+    if(((input.tv_bd || [])[i])){
+      const bd = mkNode(svg, prevRight.x + 30, cy - 16, 48, 32, "BD",
+        { existing: spSideExist, sublabel: "CH調整", nodeKey: "tv_bd_" + i });
+      mkWire(svg, [prevRight, bd.left], { existing: spSideExist, wireKey: "tv_bd_w_" + i });
+      prevRight = bd.right;
+    }
+    mkNode(svg, prevRight.x + 24, cy - 14, 44, 28, "TV",
+      { existing: true, nodeKey: "tv_" + i });
+  }
+  // 分配器 → 各部屋（wireKey は戸建てと同じ indoor_room_N。クリック赤＝+10m の積算が効く）
+  if(termNodes.length){
+    const fanStartX = spNode.right.x + 4;
+    const fanEndX = termNodes[0].left.x - 3;
+    const availableW = Math.max(6, fanEndX - fanStartX);
+    const stagger = tvN > 1 ? Math.min(3, availableW / tvN) : 0;
+    termNodes.forEach((t, i) => {
+      const vx = fanStartX + stagger * i;
+      mkWire(svg, [spNode.right, { x: vx, y: spNode.right.y }, { x: vx, y: t.left.y }, t.left],
+        { existing: spSideExist, wireKey: "indoor_room_" + i });
+    });
+  }
+
+  if(input.meas_show && STATE.measurements){
+    drawMeasTable(svg, 470, H - 150, "宅内末端", STATE.measurements.channels, STATE.measurements.terminal, "meas_term");
+  }
+  mkLabel(svg, 30, H - 10,
+    "凡例： 赤=新規 / 黒=既存 / 破線=電源　※ アンテナ・増幅器・共用部は代表（1世帯目）の図面に出ます",
+    "boundary-label");
   renderSelectionHandle(svg);
 }
 
@@ -25475,13 +25784,26 @@ function buildReceptionLedgerPayload(){
       hold:    !!lg.hold,          // 保留（現場入力アプリの一覧に「保」バッジを出す）
       consent: !!lg.consent,       // 同意書 受領済み
       compdoc: !!lg.compdoc,       // 完了書 受領／提出済み
-      note:    lg.note            || d.chosho_note || ""
+      note:    lg.note            || d.chosho_note || "",
+      // アパート（集合住宅）。戸建てでは全部空になる。
+      // これを載せておかないと、現場入力とやりとりした戻りで建物のまとまりが消えて
+      // 世帯がばらばらの行になってしまう。
+      apt_units: String(d.apt_units || ""),
+      apt_idx:   String(d.apt_idx   || ""),
+      apt_bldg:  String(d.apt_bldg  || ""),
+      apt_name:  String(d.apt_name  || ""),
+      apt_room:  String(d.apt_room  || ""),
+      apt_common: String(d.apt_common || ""),
+      apt_common_done: String(d.apt_common_done || ""),
+      apt_owner_name: String(d.apt_owner_name || ""),
+      apt_owner_tel:  String(d.apt_owner_tel  || "")
     };
   }).filter(x => x.mgmt_no || x.name || x.addr);
   const projName = (typeof _currentProject !== "undefined" && _currentProject && _currentProject.name) ? String(_currentProject.name) : "";
   /* version 3 で「下見済み(survey / survey_at)」を足した。
+     version 4 でアパート（apt_*）を足した。
      古い現場入力アプリは知らない欄として読み飛ばすだけなので、そのまま渡してよい。 */
-  return { type: "antenna_reception_ledger", version: 3, appVersion: APP_VERSION,
+  return { type: "antenna_reception_ledger", version: 4, appVersion: APP_VERSION,
            exportedAt: new Date().toISOString(), project: projName, count: rows.length, rows };
 }
 async function exportReceptionLedgerForGenba(){
@@ -25737,6 +26059,27 @@ const LGIMP_FIELDS = [
   { f: "note",    label: "備考",     kind: "lg",   key: "note" },
   { f: "contractor", label: "施工会社", kind: "ctr", key: "contractor" }
 ];
+/* 受付台帳ファイルの行から、アパート（集合住宅）の欄だけを取り出す。
+   version 4 以降のファイルにしか入っていないので、無ければ空のまま。 */
+function lgimpAptFields(x){
+  const o = {};
+  ["apt_units", "apt_idx", "apt_bldg", "apt_name", "apt_room",
+   "apt_common", "apt_common_done", "apt_owner_name", "apt_owner_tel"].forEach(k => {
+    const v = String((x && x[k]) || "").trim();
+    if(v) o[k] = v;
+  });
+  return o;
+}
+/* 既にある行に、こちらが空のときだけアパートの欄を入れる（上書きはしない）。 */
+function lgimpAdoptApt(row, x){
+  if(!row || !row.data || !x) return;
+  const f = lgimpAptFields(x);
+  let touched = false;
+  for(const k in f){
+    if(!String(row.data[k] || "").trim()){ row.data[k] = f[k]; touched = true; }
+  }
+  if(touched){ try { markCaseEdited(row); } catch(_){} }
+}
 const LGIMP_ST_NAME = { provisional: "仮受付", in_progress: "受付済", completed: "完了" };
 /* 自動昇格を違いの一覧に出すときに使う「状態」の定義（LGIMP_FIELDS の状態と同じもの） */
 const LGIMP_STATUS_FIELD = LGIMP_FIELDS.filter(F => F.f === "status")[0];
@@ -25919,9 +26262,10 @@ function lgShowLedgerDiffDialog(payload, items){
       if(!it) return;
       if(it.kind === "add"){
         const x = it.src;
-        const row = createManualRow({ chosho_mgmt_no: it.no, chosho_cust_name: x.name || "",
+        const row = createManualRow(Object.assign({ chosho_mgmt_no: it.no, chosho_cust_name: x.name || "",
           chosho_cust_addr: toHalfWidthAn(x.addr || ""), chosho_cust_tel: toHalfWidthAn(x.tel || ""),
-          chosho_date: x.date || "", chosho_status: x.status || "provisional" }, "ledger-file");
+          chosho_date: x.date || "", chosho_status: x.status || "provisional" },
+          lgimpAptFields(x)), "ledger-file");
         const tk = subCaseKey(row);
         setLedger(tk, { time: x.time || "", meetAt: x.meet || "", flyer: !!x.flyer, hold: !!x.hold,
                         consent: !!x.consent, compdoc: !!x.compdoc, anytime: !!x.anytime,
@@ -25936,6 +26280,9 @@ function lgShowLedgerDiffDialog(payload, items){
         added++;
         return;
       }
+      // アパートの情報は差分一覧に出さず、こちらが空のときだけ黙って入れる。
+      // 建物のまとまりは人が選ぶものではないので、確認の一覧に9項目も並べない。
+      if(it.row) lgimpAdoptApt(it.row, it.src);
       const d = it.diffs[parseInt(bx.dataset.j, 10)];
       if(!d) return;
       if(d.F.kind === "case"){
