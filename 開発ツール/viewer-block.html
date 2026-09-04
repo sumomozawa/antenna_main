@@ -77,6 +77,18 @@ svg#diagram{ cursor:default !important; }
 /* ---------- 積算パネル：協力会社（対下請）の欄は出さない ---------- */
 #outsource_fee_on, #outsource_fee_amount, #outsource_fee_use_proj_wrap{ display:none !important; }
 .estimate-panel .tax-toggle:has(#outsource_fee_on){ display:none !important; }
+/* 費用画面の「協力会社諸経費（物件の額）」の揃い具合も対下請の情報なので出さない */
+.pf-follow{ display:none !important; }
+
+/* ---------- 写真：閲覧専用なので「工事調書に載せる」印は付け外しさせない ---------- */
+.ph-chosho-pick, .ph-chosho-note{ display:none !important; }
+
+/* ---------- アパート：記録を書き替える操作は出さない（見るのは自由） ---------- */
+/* 「完了確認書なしで完了」にする誘いのボタン。付いた印（.lg-waived）はそのまま見せる。 */
+.lg-waive{ display:none !important; }
+/* 同意書の受取日は見るだけ（帯の入力欄は出さず、文字の控えを出す） */
+.lg-apt-band .ab-date{ display:none !important; }
+.lg-apt-band .ab-date-print{ display:inline !important; margin-left:4px; }
 
 /* ---------- 戸別一覧ヘッダー：読込系だけ残す ---------- */
 #btn-list-bulk-reenc, #btn-list-bulk-plain, #btn-list-bulk-photos,

@@ -957,9 +957,9 @@
   body.lg-print-preview .ledger-table td { min-width: 0 !important; }
   body.lg-print-preview .ledger-table td { white-space: normal; word-break: break-word; overflow-wrap: anywhere; }
   body.lg-print-preview .ledger-table thead th:first-child,
-  body.lg-print-preview .ledger-table tbody td:first-child,
+  body.lg-print-preview .ledger-table tbody tr:not(.lg-apt-band) > td:first-child,
   body.lg-print-preview .ledger-table thead th:last-child,
-  body.lg-print-preview .ledger-table tbody td:last-child { display: none !important; }
+  body.lg-print-preview .ledger-table tbody tr:not(.lg-apt-band) > td:last-child { display: none !important; }
   body.lg-print-preview .ledger-table input[type=date],
   body.lg-print-preview .ledger-table input[type=time],
   body.lg-print-preview .ledger-table input[type=datetime-local] { display: none !important; }
@@ -1234,6 +1234,20 @@
   .cost-detail-section th.num { text-align: right; font-family: "Consolas","Menlo",monospace; }
   .cost-detail-section tr.sub-total td { background: #f7f9fb; font-weight: 600; border-top: 1px solid #cdd3da; }
   .cost-detail-section tr.grand-total td { background: #1e3a5f; color: #fff; font-weight: 600; border-top: 2px solid #1e3a5f; }
+  /* 協力会社諸経費が物件の額に揃っているかの表示（費用画面の先頭） */
+  .pf-follow .pf-msg { font-size: 12px; line-height: 1.7; }
+  .pf-follow .pf-on  { color: #1b5e20; }
+  .pf-follow .pf-off { color: #c62828; }
+  .pf-follow .pf-table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 12px; }
+  .pf-follow .pf-table th, .pf-follow .pf-table td { border: 1px solid #d6dae0; padding: 3px 8px; }
+  .pf-follow .pf-table th { background: #eef2f6; color: #1e3a5f; }
+  .pf-follow .pf-table td.num, .pf-follow .pf-table th.num { text-align: right; font-family: "Consolas","Menlo",monospace; }
+  .pf-follow .pf-act { margin-top: 7px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .pf-follow .pf-act button {
+    background: #fff; color: #1e5b8f; border: 1px solid #7fa9cf;
+    padding: 4px 12px; border-radius: 3px; cursor: pointer; font-size: 12px;
+  }
+  .pf-follow .pf-note { font-size: 11px; color: #667482; }
 
   /* ===== 協力会社請求内訳タブ ===== */
   .sub-summary-bar {
@@ -1578,9 +1592,11 @@
       border: none !important; background: transparent !important; padding: 0 !important;
       text-align: center; font-weight: 600; color: #000 !important;
     }
-    /* 「開く」列(最右)は印刷不要 → 列ごと(見出し＋セル)非表示。固定レイアウトで列幅を配分し、空いた分を備考へ */
+    /* 「開く」列(最右)は印刷不要 → 列ごと(見出し＋セル)非表示。固定レイアウトで列幅を配分し、空いた分を備考へ
+       ※ アパートの帯（tr.lg-apt-band）は1行まるごと1つのセルなので、
+          first-child かつ last-child に当たって消えていた。帯は必ず除く。 */
     body.list-print-mode .ledger-table thead th:last-child,
-    body.list-print-mode .ledger-table tbody td:last-child { display: none !important; }
+    body.list-print-mode .ledger-table tbody tr:not(.lg-apt-band) > td:last-child { display: none !important; }
     body.list-print-mode .ledger-table { table-layout: fixed; width: 100%; }
     /* 画面用の下限幅（住所170px・備考220px）は印刷では邪魔。指定した%どおりに配分させる */
     body.list-print-mode .ledger-table th,
@@ -1589,7 +1605,7 @@
     /* チェック列(最左・選択印刷用)と「開く」列は印刷不要 → 列ごと(見出し＋セル)非表示。
        ※ 列の増減で位置がずれない first-child / last-child で指定する。 */
     body.list-print-mode .ledger-table thead th:first-child,
-    body.list-print-mode .ledger-table tbody td:first-child { display: none !important; }
+    body.list-print-mode .ledger-table tbody tr:not(.lg-apt-band) > td:first-child { display: none !important; }
     /* 各列の幅は「列番号」ではなく data-col（列の名前）で指定し、JS が
        #lg-print-w に書き出す（lgApplyPrintWidths）。列を1本足しても他の列の指定がずれない。
        ここで nth-child を使っていたため、「保留」列を足したときに以降の指定が1つずつずれ、
@@ -1600,12 +1616,19 @@
     body.list-print-mode .ledger-table input[type=time],
     body.list-print-mode .ledger-table input[type=datetime-local] { display: none !important; }
     body.list-print-mode .ledger-table .lg-dt-print { display: inline !important; white-space: nowrap; font-size: 10px; }
+    /* 同意書の受取日：入力欄は紙に出ないので、文字の控えを出す */
+    body.list-print-mode .ledger-table .ab-date { display: none !important; }
+    body.list-print-mode .ledger-table .ab-date-print { display: inline !important; margin-left: 4px; }
     /* 住所は印刷では半角数字で表示（全角は幅が2倍で折り返しやすいため）。データは全角のまま。 */
     body.list-print-mode .ledger-table tbody td[data-col="addr"] .lg-edit,
     body.list-print-mode .ledger-table tbody td[data-col="addr"] .lg-lock { display: none !important; }
     body.list-print-mode .ledger-table .lg-addr-print { display: inline !important; }
     /* 「状態」列に仮受付と出るので、管理番号セルの「仮」バッジは印刷では重複 → 消す */
     body.list-print-mode .ledger-table .lg-prov-badge { display: none !important; }
+    /* 「書なし」の誘い（まだ押していないボタン）は紙に出さない。付いた印だけ残す。 */
+    body.list-print-mode .ledger-table .lg-waive { display: none !important; }
+    body.list-print-mode .ledger-table .lg-waived {
+      background: #ef6c00 !important; color: #fff !important; border-color: #e65100 !important; }
     /* 余白・行間・文字を詰める */
     body.list-print-mode .ledger-table th,
     body.list-print-mode .ledger-table td { padding: 1px 4px !important; line-height: 1.25 !important; font-size: 10px !important; }
@@ -2057,10 +2080,20 @@
       page-break-inside: avoid !important;
       break-inside: avoid !important;
     }
+    /* 系統図ページの中身は「見出し／系統図／測定表／写真」を上から順に積む。
+       紙の高さ(281mm)を器の高さにして、系統図だけを縮ませる。
+       こうすると写真が何枚あっても、下が切れたり次の紙へこぼれたりしない。 */
     .diagram-wrap > div {
       page-break-inside: avoid !important;
       break-inside: avoid !important;
+      height: 281mm !important;
+      display: flex !important;
+      flex-direction: column !important;
+      overflow: hidden !important;
     }
+    .diagram-wrap > div > .print-header,
+    .diagram-wrap > div > .diagram-print-meas,
+    .diagram-wrap > div > .diagram-print-photos { flex: 0 0 auto; }
     .estimate-panel {
       border: none !important;
       overflow: visible !important;
@@ -2069,19 +2102,19 @@
       page-break-before: always;
     }
     #estimate-body { overflow: visible !important; }
+    /* 系統図そのもの。紙が足りない分はここが縮む（形は崩れない＝縦横比は保たれる）。
+       余りがあるときは元の縦横比のまま。下限を決めておき、これより小さくは潰さない。 */
     svg#diagram {
       border: none !important;
       width: 100% !important;
       height: auto !important;
       max-width: 182mm !important;
-      max-height: 118mm !important;
-    }
-    /* 写真枚数が多い時は系統図SVGを少し縮めて1ページ収まりを確保 */
-    .diagram-wrap:has(.diagram-print-photos > .dpp-box:nth-child(5)) svg#diagram {
-      max-height: 100mm !important;
-    }
-    .diagram-wrap:has(.diagram-print-photos > .dpp-box:nth-child(7)) svg#diagram {
-      max-height: 88mm !important;
+      max-height: 160mm !important;
+      flex: 0 1 auto !important;
+      /* min-width:auto のままだと、縦積みの箱の中でSVGが縦横比から
+         「これ以上狭くできない幅」を主張して紙からはみ出す（右側が切れる）。 */
+      min-width: 0 !important;
+      min-height: 95mm !important;
     }
 
     /* 系統図ページ下部: 測定表 + 写真を表示 (chosho時は.appが非表示なので影響なし) */
@@ -2133,14 +2166,16 @@
       margin-top: 3mm;
       width: 182mm;
     }
-    /* 写真枚数別の固定割付（auto-fit より優先）*/
+    /* 写真が多い戸別は、写真だけを別の紙（工事写真）へ移す。ここは移した後の抜け殻。 */
+    .diagram-print-photos.dpp-offpage { display: none !important; }
+    /* 系統図と同じ紙に載せるのは6枚まで。枚数ごとに、並べ方と1枚の高さを決め打ちする。
+       どの枚数でも写真の帯を105mm以内に収め、系統図が縮まないようにしてある。 */
     .diagram-print-photos:has(> .dpp-box:nth-child(1):last-child) { grid-template-columns: 1fr; }
     .diagram-print-photos:has(> .dpp-box:nth-child(2):last-child) { grid-template-columns: 1fr 1fr; }
-    .diagram-print-photos:has(> .dpp-box:nth-child(3):last-child),
-    .diagram-print-photos:has(> .dpp-box:nth-child(4):last-child) { grid-template-columns: 1fr 1fr; }
+    .diagram-print-photos:has(> .dpp-box:nth-child(3):last-child) { grid-template-columns: 1fr 1fr 1fr; }
+    .diagram-print-photos:has(> .dpp-box:nth-child(4):last-child) { grid-template-columns: 1fr 1fr 1fr 1fr; }
     .diagram-print-photos:has(> .dpp-box:nth-child(5):last-child),
     .diagram-print-photos:has(> .dpp-box:nth-child(6):last-child) { grid-template-columns: 1fr 1fr 1fr; }
-    .diagram-print-photos:has(> .dpp-box:nth-child(7)) { grid-template-columns: 1fr 1fr 1fr; }
     .dpp-box {
       border: 1px solid #aaa;
       overflow: hidden;
@@ -2156,17 +2191,17 @@
       print-color-adjust: exact;
     }
     .dpp-frame {
-      height: 60mm;
       display: flex;
       align-items: center;
       justify-content: center;
       background: #fafafa;
       overflow: hidden;
     }
-    /* 写真枚数別の高さ調整（多いほど低くして1ページに収める） */
-    .diagram-print-photos:has(> .dpp-box:nth-child(3)) .dpp-frame { height: 50mm; }
-    .diagram-print-photos:has(> .dpp-box:nth-child(5)) .dpp-frame { height: 42mm; }
-    .diagram-print-photos:has(> .dpp-box:nth-child(7)) .dpp-frame { height: 32mm; }
+    /* 1枚の高さ。列の幅に対して写真（横位置4:3）がちょうど収まる高さにしてある。 */
+    .dpp-frame { height: 70mm; }                                                     /* 1〜2枚 */
+    .diagram-print-photos:has(> .dpp-box:nth-child(3):last-child) .dpp-frame { height: 44mm; }
+    .diagram-print-photos:has(> .dpp-box:nth-child(4):last-child) .dpp-frame { height: 33mm; }
+    .diagram-print-photos:has(> .dpp-box:nth-child(5)) .dpp-frame { height: 44mm; }  /* 5〜6枚＝3列2段 */
     .dpp-frame img {
       max-width: 100%;
       max-height: 100%;
@@ -2177,7 +2212,7 @@
     .dpp-frame img[src=""] {
       display: none;
     }
-    /* 多枚数時は測定表のフォントを少し圧縮して縦方向を確保 */
+    /* 5枚以上あるときは測定表を少し詰めて、系統図の高さを守る */
     .diagram-wrap:has(.diagram-print-photos > .dpp-box:nth-child(5)) .diagram-print-meas table {
       font-size: 7pt;
     }
@@ -2185,6 +2220,27 @@
     .diagram-wrap:has(.diagram-print-photos > .dpp-box:nth-child(5)) .diagram-print-meas table td {
       padding: 0.3mm 1mm;
     }
+
+    /* ===== 工事写真ページ（写真が7枚以上のときだけ出る独立ページ） ===== */
+    #photos-print-page.has-photos {
+      display: block !important;
+      page-break-before: always;
+      break-before: page;
+    }
+    #photos-print-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 3mm;
+      width: 182mm;
+    }
+    #photos-print-grid .dpp-box {
+      border: 1px solid #aaa;
+      overflow: hidden;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    #photos-print-grid .dpp-frame { height: 50mm; }
+    #photos-print-grid .dpp-title { font-size: 8pt; }
 
     /* 積算書を1ページに収める: フォント/パディング圧縮 + page-break-inside:avoid */
     .estimate-panel {
@@ -2206,33 +2262,51 @@
       font-size: 9pt !important;
       margin-top: 1mm !important;
     }
+    /* 列幅は下の指定どおりに配る。auto のままだと数量欄(number入力)が
+       勝手に広がって、品名が折り返し・単位が潰れる。 */
     table.estimate {
       font-size: 8pt !important;
+      table-layout: fixed !important;
+      width: 100% !important;
     }
+    table.estimate th:nth-child(1) { width: 38% !important; }   /* 品名 */
+    table.estimate th:nth-child(2) { width: 15% !important; }   /* 型番 */
+    table.estimate th:nth-child(3) { width:  7% !important; }   /* 数量 */
+    table.estimate th:nth-child(4) { width:  7% !important; }   /* 単位 */
+    table.estimate th:nth-child(5) { width: 11% !important; }   /* 材料 */
+    table.estimate th:nth-child(6) { width: 11% !important; }   /* 労務 */
+    table.estimate th:nth-child(7) { width: 11% !important; }   /* 小計 */
     table.estimate th {
-      padding: 1mm 2mm !important;
+      padding: 1mm 1.5mm !important;
       font-size: 8pt !important;
+      white-space: nowrap !important;
     }
     table.estimate td {
-      padding: 0.6mm 2mm !important;
+      padding: 0.5mm 1.5mm !important;
       line-height: 1.2 !important;
+      word-break: break-word;         /* 長い型番でも列からはみ出さない */
+      overflow-wrap: anywhere;
     }
+    /* 品名の下の但し書きは小さく（行数が増えて紙が2枚になるのを防ぐ） */
+    table.estimate td.name > div { font-size: 6.5pt !important; line-height: 1.15 !important; }
     table.estimate tbody tr.category-head td {
       padding: 0.4mm 2mm !important;
       font-size: 8pt !important;
     }
     .total-area {
-      margin-top: 3mm !important;
-      padding: 3mm 5mm !important;
+      margin-top: 2.5mm !important;
+      padding: 2.5mm 5mm !important;
+      page-break-inside: avoid;
+      break-inside: avoid;
     }
     .total-row {
-      font-size: 10pt !important;
-      padding: 1mm 0 !important;
+      font-size: 9.5pt !important;
+      padding: 0.6mm 0 !important;
     }
     .total-row.grand {
       font-size: 12pt !important;
-      margin-top: 2mm !important;
-      padding-top: 2mm !important;
+      margin-top: 1.5mm !important;
+      padding-top: 1.5mm !important;
     }
     .total-area, table.estimate th, table.estimate tr.category-head td {
       background: #eef2f6 !important;
@@ -2246,7 +2320,10 @@
       border: none !important;
       background: transparent !important;
       padding: 0 !important;
-      width: auto !important;
+      width: 100% !important;          /* auto だと number 入力の既定幅（とても広い）になる */
+      min-width: 0 !important;
+      text-align: right !important;
+      font-size: 8pt !important;
       -moz-appearance: textfield;
     }
     table.estimate td .qty-input::-webkit-outer-spin-button,
@@ -3524,6 +3601,20 @@
     -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .lg-apt-chip.rep { background: #4a148c; }
   table.ledger-table tr.lg-apt td:first-child { box-shadow: inset 3px 0 0 #6a1b9a; }
+  /* 入居者がまだ分からない世帯。空欄と区別が付くようにする */
+  .lg-apt-noname { color: #8a4b00; font-weight: 600; }
+  /* 同意書は建物で1通。世帯の行はチェック欄を出さず、建物の状態を映すだけにする */
+  td.lg-apt-consent .ok { color: #1b7a3d; font-weight: 700; font-size: 13px; }
+  td.lg-apt-consent .ng { color: #b0bac3; font-weight: 700; font-size: 13px; }
+  /* 「大家」「入居者」のどちらの書類かを、欄の下に小さく添える */
+  table.ledger-table td .who {
+    display: block; font-size: 8.5px; color: #6a1b9a; line-height: 1.1; margin-top: 1px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* 名前の欄に建物の名前が入っているときの断り書き */
+  .lg-apt-bldgname { display: inline-block; background: #ede7f6; color: #4a148c;
+    font-size: 9px; font-weight: 700; padding: 0 4px; border-radius: 6px;
+    margin-left: 4px; vertical-align: 1px; white-space: nowrap;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   table.ledger-table tr.lg-apt-last td { border-bottom: 2px solid #ce93d8; }
   table.ledger-table tr.lg-apt-band td {
     background: #f3e5f5; color: #4a148c; font-size: 11.5px; font-weight: 600;
@@ -3531,6 +3622,36 @@
     -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .lg-apt-band .ab-n { background: #6a1b9a; color: #fff; border-radius: 8px;
     padding: 0 6px; font-size: 10px; margin-left: 4px; }
+  .lg-apt-band .ab-addr { color: #4a148c; margin-left: 8px; font-weight: 500; }
+  .lg-apt-band .ab-oaddr { color: #6a1b9a; margin-left: 6px; font-weight: 500; font-size: 10.5px; }
+  .lg-apt-band .ab-date { margin-left: 4px; font-size: 11px; padding: 0 3px;
+    border: 1px solid #ce93d8; border-radius: 3px; background: #fff; color: #4a148c; }
+  .lg-apt-band .ab-warn { color: #c62828; font-weight: 700; margin-left: 5px; font-size: 10.5px; }
+  /* 印刷では日付の入力欄が消えるので、紙には文字で出す（画面では出さない） */
+  .lg-apt-band .ab-date-print { display: none; }
+  body.lg-print-preview .lg-apt-band .ab-date-print { display: inline !important; margin-left: 4px; }
+  /* 完了確認書をもらえないまま期限で切り替えた世帯の数 */
+  .lg-apt-band .ab-waive, table tr.apt-band-simple .ab-waive {
+    display: inline-block; background: #ef6c00; color: #fff; border-radius: 8px;
+    padding: 0 7px; font-size: 10.5px; font-weight: 700; margin-left: 6px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* 台帳の「完了書」欄。書なしで完了にするボタンと、その印 */
+  td.lg-apt-compdoc .lg-waive {
+    display: block; margin: 1px auto 0; padding: 0 3px; font-size: 8.5px; line-height: 1.3;
+    background: #fff; color: #a1887f; border: 1px dashed #bcaaa4; border-radius: 3px; cursor: pointer; }
+  td.lg-apt-compdoc .lg-waive:hover { color: #ef6c00; border-color: #ef6c00; }
+  td.lg-apt-compdoc .lg-waived {
+    display: block; margin: 1px auto 0; padding: 0 3px; font-size: 8.5px; line-height: 1.15;
+    background: #ef6c00; color: #fff; border: 1px solid #e65100; border-radius: 3px; cursor: pointer;
+    font-weight: 700; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* 一覧（標準・工事別フォルダ）に挟む建物の帯。押す所は無い */
+  table tr.apt-band-simple > td {
+    background: #f3e5f5; color: #4a148c; font-size: 11.5px; font-weight: 600;
+    padding: 3px 8px !important; border-top: 2px solid #ce93d8;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .lg-apt-band .ab-note { color: #6a1b9a; font-weight: 500; font-size: 10.5px; }
+  .apt-band-simple .ab-doc { color: #8a4b00; }
+  .apt-band-simple .ab-doc.ok { color: #1b7a3d; }
   .lg-apt-band .ab-com { color: #00695c; margin-left: 8px; font-weight: 700; }
   .lg-apt-band .ab-com.off { color: #8a4b00; }
   .lg-apt-band .ab-sep { color: #b39ddb; margin: 0 6px; }
@@ -4380,6 +4501,8 @@
      画面では常に非表示。印刷時、body.bukken-case-print が付いた時だけ積算書ページと差し替わる。
      表内フォント/パディングは既存 table.estimate 印刷圧縮＋base を継承（ここで再指定しない）。 */
   #bukken-print-page { display: none; }
+  /* 工事写真ページ。写真が多い戸別のときだけ印刷に出る（画面では常に非表示） */
+  #photos-print-page { display: none; }
   @media print {
     /* body.mobile-layout .estimate-panel{display:block !important} に勝つ（複合セレクタで特異度↑＋後方定義） */
     body.bukken-case-print .estimate-panel,
@@ -4650,10 +4773,12 @@
       <!-- 出力 -->
       <span class="tb-grp">
         <span class="tb-split">
-          <button id="btn-print" title="いま開いている戸別の見積・図面を印刷 / PDF">🖨 印刷</button>
-          <details class="uc-menu"><summary class="tb-caret" title="工事調書を印刷">▾</summary>
+          <button id="btn-print-chosho" title="お客様情報・測定記録・系統図・使用材料・写真をA4縦1ページにまとめて印刷（ふだんの印刷はこちら）">🖨 工事調書</button>
+          <details class="uc-menu"><summary class="tb-caret" title="そのほかの印刷（図面・積算／工事調書 全件）">▾</summary>
             <div class="uc-menu-pop">
-              <button id="btn-print-chosho" title="お客様情報・測定記録・系統図・使用材料・写真をA4縦1ページにまとめて印刷">工事調書</button>
+              <div class="uc-menu-cap">この戸別</div>
+              <button id="btn-print" title="系統図・測定記録・工事写真・積算書・アンテナ取付図をA4縦で印刷 / PDF（1枚に1つずつ）">📐 図面・積算</button>
+              <div class="uc-menu-cap">まとめて</div>
               <button id="btn-print-chosho-all" title="読み込んだ全戸別（一覧／物件）の工事調書を1戸1ページで連続印刷">📚 工事調書 全件</button>
             </div>
           </details>
@@ -4810,6 +4935,14 @@
           <div class="field apt-only">
             <label>大家 電話</label>
             <input type="text" id="apt_owner_tel">
+          </div>
+          <div class="field apt-only">
+            <label><span data-tip="同意書に書いてもらう大家（または不動産屋）の住所。建物の住所とは違うことが多いので、別に持ちます。">大家・不動産 住所</span></label>
+            <input type="text" id="apt_owner_addr" placeholder="例: 三沢市中央町2丁目1番1号">
+          </div>
+          <div class="field apt-only">
+            <label><span data-tip="同意書を受け取った日。建物に1通なので、この日付も建物の全世帯で同じになります。受付台帳の帯からも入れられます。">同意書 受取日</span></label>
+            <input type="date" id="apt_consent_at">
           </div>
           <div class="field apt-only">
             <label><span data-tip="同じ建物の世帯をまとめるための合い言葉。空欄なら管理番号から枝番を外したもの（2611AAA001-03 → 2611AAA001）を使います。&#10;管理番号を打ち直しても群がばらけないよう、ここに実体を持たせておくこともできます。">建物キー</span></label>
@@ -5551,6 +5684,14 @@
         <thead><tr><th>区分</th><th>型番</th><th>数量</th><th>単位</th></tr></thead>
         <tbody></tbody>
       </table>
+    </section>
+    <!-- ============ 工事写真 印刷専用ページ（写真が7枚以上のときだけ・画面では常に非表示） ============ -->
+    <section id="photos-print-page">
+      <div class="print-header">
+        <h2>工事写真</h2>
+        <div class="meta" id="print-meta-photos"></div>
+      </div>
+      <div id="photos-print-grid"></div>
     </section>
     <!-- ============ 物件モード 戸別印刷 内訳ページ（画面では常に非表示・bukken-case-print 印刷時のみ表示） ============ -->
     <section id="bukken-print-page">
@@ -6439,7 +6580,7 @@
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "131";
+const APP_VERSION = "132";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -6718,6 +6859,8 @@ const DEFAULT_PARTS = {
   remove_drop:    { name:"引込線撤去",            category:"removal",   model:"-",          material_cost:    0, labor_cost:   95, unit:"m",  diagram_label:"引込撤去" },
   high_work:      { name:"高所作業車損料",        category:"misc",      model:"-",          material_cost:    0, labor_cost: 3250, unit:"h",  diagram_label:"高所車" },
   adjust_drop:    { name:"宅内調整・引込線撤去等",category:"misc",      model:"-",          material_cost:    0, labor_cost:11000, unit:"式", diagram_label:"調整等" },
+  // アパートの世帯ごとのチャンネル調整。1箇所 ¥10,000（戸建ての宅内調整 ¥10,500 とは別単価）
+  indoor_adjust_apt:{ name:"宅内調整（アパート）",  category:"misc",      model:"-",          material_cost:    0, labor_cost:10000, unit:"式", diagram_label:"調整" },
   misc_work:      { name:"雑工事",                category:"misc",      model:"-",          material_cost:    0, labor_cost: 3160, unit:"式", diagram_label:"雑工事" },
   fa_relay:       { name:"FA（中継）",            category:"misc",      model:"FA",         material_cost:  430, labor_cost:    0, unit:"個", diagram_label:"FA" }, // 材料費430円（単価マスター記録用）。積算には計上しない（FA中継は積算add()しない・下記参照）
 };
@@ -7439,7 +7582,7 @@ function buildBOM(input, qtyOverridesOpt) {
   //   ・単独戸別（物件を開いていない）では従来どおり個別計上（下記 else ＋ 宅内CH調整の通常計上）。
   //   ・系統図の撤去表示（保安器×・引込線バッジ・ダミー警告・FA中継）は input を直接参照するため本変更の影響なし。
   //   ・アパートは保安器・引込線が建物に1つなので、束ねるのは代表（1世帯目）だけ。
-  //     2世帯目以降は撤去を計上せず、宅内調整 ¥10,500 のみとする。
+  //     2世帯目以降は撤去を計上せず、宅内調整（アパート）¥10,000 のみとする。
   const catvBundle = (typeof _currentProject !== "undefined" && !!_currentProject) && !!input.is_catv && !APT_SUB;
   if(input.is_catv && !APT_SUB){
     APT_SCOPE_BUILDING = APT_ON;
@@ -7464,9 +7607,10 @@ function buildBOM(input, qtyOverridesOpt) {
   if(input.high_work && !APT_SUB){ APT_SCOPE_BUILDING = APT_ON; add("high_work", 4, { note:"半日4時間（既定）、数量欄で調整可" }); APT_SCOPE_BUILDING = false; }
   if(input.apt_units > 0){
     // アパートはチャンネル調整が世帯ごとに要る（共用部の有無に関わらず世帯数分）。
-    // 代表がCATVの束ね ¥11,000 に入っているときだけ、そちらに含まれるので足さない。
+    // 単価は1箇所 ¥10,000（戸建ての宅内調整 ¥10,500 とは別）。
+    // 代表がCATVの束ね ¥11,000 に入っているときだけ、そちらに宅内調整が含まれるので足さない。
     if(!catvBundle){
-      add("indoor_adjust", 1, { note:"宅内CH調整 一式（アパート " + input.apt_idx + "世帯目）" });
+      add("indoor_adjust_apt", 1, { note:"宅内CH調整 一式（アパート " + input.apt_idx + "世帯目・1箇所¥10,000）" });
     }
   } else if(input.indoor_adj && !catvBundle){
     // 宅内CH調整は一式固定価格（TV台数・BD接続に関係なく同額）
@@ -7757,19 +7901,54 @@ function prepareGuidePrintPage(){
   }
   const svgHost = document.getElementById("ag-print-svg");
   if(svgHost) svgHost.innerHTML = renderAntennaGuideSVG(guide);
-  const tbody = panel.querySelector("#ag-print-bom tbody");
-  if(tbody){
+  const table = panel.querySelector("#ag-print-bom");
+  if(table){
     const rows = renderAntennaGuideBomRows(guide);
-    tbody.innerHTML = rows.length
+    // 単位は部材によっては空。全部が空なら列ごと出さない（空欄だけの列は紙の無駄）
+    const hasUnit = rows.some(r => !!(r.unit || "").trim());
+    let h = "<thead><tr><th>区分</th><th>型番</th><th>数量</th>"
+          + (hasUnit ? "<th>単位</th>" : "") + "</tr></thead><tbody>";
+    h += rows.length
       ? rows.map(r => "<tr><td>" + escapeHtml(r.kind) + "</td><td class=\"center\">" + escapeHtml(r.product)
-          + "</td><td class=\"right\">" + r.qty + "</td><td class=\"center\">" + escapeHtml(r.unit || "") + "</td></tr>").join("")
-      : "<tr><td colspan=\"4\" class=\"empty-notice\">部材が未選択です</td></tr>";
+          + "</td><td class=\"right\">" + r.qty
+          + (hasUnit ? "</td><td class=\"center\">" + escapeHtml(r.unit || "") : "")
+          + "</td></tr>").join("")
+      : "<tr><td colspan=\"" + (hasUnit ? 4 : 3) + "\" class=\"empty-notice\">部材が未選択です</td></tr>";
+    h += "</tbody>";
+    table.innerHTML = h;
   }
   panel.classList.add("has-guide");
 }
 function cleanupGuidePrintPage(){
   const panel = document.getElementById("ag-print-page");
   if(panel) panel.classList.remove("has-guide");
+}
+
+/* 系統図と同じ紙に載せられる写真の枚数。これを超えたら「工事写真」の紙を1枚起こす。 */
+const PRINT_PHOTOS_INPAGE_MAX = 6;
+/* 印刷の直前に、写真が多いときだけ写真を別の紙へ移す。
+   画面に出ているサムネイルの箱をそのまま動かす（写真をもう一組作らない＝重くならない）。 */
+function preparePhotosPrintPage(){
+  const src  = document.getElementById("diagram-print-photos");
+  const page = document.getElementById("photos-print-page");
+  const grid = document.getElementById("photos-print-grid");
+  if(!src || !page || !grid) return;
+  cleanupPhotosPrintPage();
+  const boxes = Array.from(src.children).filter(el => el.classList.contains("dpp-box"));
+  const withImg = boxes.filter(el => { const im = el.querySelector("img"); return !!(im && im.getAttribute("src")); });
+  if(withImg.length <= PRINT_PHOTOS_INPAGE_MAX) return;
+  boxes.forEach(el => grid.appendChild(el));
+  src.classList.add("dpp-offpage");
+  page.classList.add("has-photos");
+}
+function cleanupPhotosPrintPage(){
+  const src  = document.getElementById("diagram-print-photos");
+  const page = document.getElementById("photos-print-page");
+  const grid = document.getElementById("photos-print-grid");
+  if(!src || !page || !grid) return;
+  Array.from(grid.children).forEach(el => src.appendChild(el));
+  src.classList.remove("dpp-offpage");
+  page.classList.remove("has-photos");
 }
 
 /* ============================================================
@@ -7844,8 +8023,10 @@ function prepareBukkenPrintPage(){
   const noAmt = "作成日：" + dateStr + "　／　管理番号：" + (sr.mgmtNo || "―");
   const m1 = document.getElementById("print-meta-diagram");
   const m3 = document.getElementById("print-meta-guide");
+  const m4 = document.getElementById("print-meta-photos");
   if(m1) m1.textContent = noAmt;
   if(m3) m3.textContent = noAmt;
+  if(m4) m4.textContent = noAmt;
   document.body.classList.add("bukken-case-print");
   return true;
 }
@@ -8126,9 +8307,23 @@ function getProjOutsourceFee(){
 function projOutsourceFeeActive(){
   return !!(typeof _currentProject !== "undefined" && _currentProject) && getProjOutsourceFee() != null;
 }
-/* 戸別が物件の諸経費に追従する（auto）か。outsource_fee_auto:false のみ個別上書き＝非追従。 */
+/* 保存データが物件の諸経費に追従する（auto）かどうか。
+   outsource_fee_auto:false は「この戸別だけ個別の額にする」という印。
+   ただし、印が false でも実際には個別の額を持っていない戸別（金額0、または
+   物件と同じ額）は追従とみなして戻す。理由：
+   ・現場入力アプリを通した戸別は、この印が意図せず false になって返ってくることがあった
+   ・物件の諸経費を決める前に保存した戸別も false で焼き付いてしまう
+   どちらも「わざと個別にした」わけではないので、物件の額へ戻すのが正しい。 */
+function savedFeeIsAuto(d){
+  if(!d) return true;
+  if(d.outsource_fee_auto !== false) return true;
+  const amt = Math.max(0, parseFloat(d.outsource_fee_amount) || 0);
+  const proj = (typeof getProjOutsourceFee === "function") ? getProjOutsourceFee() : null;
+  return !(amt > 0 && proj != null && amt !== proj);   // 物件と違う額を持っている時だけ「個別」
+}
+/* 戸別が物件の諸経費に追従する（auto）か。 */
 function rowFeeIsAuto(r){
-  return !!(r && r.data) && r.data.outsource_fee_auto !== false;
+  return !!(r && r.data) && savedFeeIsAuto(r.data);
 }
 /* auto戸別の row.data へ物件の額を書き戻し、金額キャッシュを破棄。個別上書き戸別は触らない。 */
 function resolveRowOutsourceFee(r){
@@ -8304,9 +8499,11 @@ function renderTotals(){
   const m1 = document.getElementById("print-meta-diagram");
   const m2 = document.getElementById("print-meta-estimate");
   const m3 = document.getElementById("print-meta-guide"); // アンテナ取付図 印刷ページ（既存print-metaの慣例をそのまま流用）
+  const m4 = document.getElementById("print-meta-photos"); // 工事写真 印刷ページ
   if(m1) m1.textContent = metaHtml;
   if(m2) m2.textContent = metaHtml;
   if(m3) m3.textContent = metaHtml;
+  if(m4) m4.textContent = metaHtml;
 }
 
 /* ============================================================
@@ -13410,7 +13607,8 @@ function collectState(){
     "chosho_mgmt_no","chosho_date","chosho_time","chosho_cust_name","chosho_cust_addr","chosho_cust_tel",
     "chosho_status","chosho_note",
     // アパート（集合住宅）。戸建てでは apt_units が空なので、以降の分岐は全部オフになる。
-    "apt_units","apt_idx","apt_name","apt_room","apt_common","apt_owner_name","apt_owner_tel","apt_bldg",
+    "apt_units","apt_idx","apt_name","apt_room","apt_common","apt_owner_name","apt_owner_tel",
+    "apt_owner_addr","apt_consent_at","apt_bldg",
     "apt_common_done"];
   const s = {};
   ids.forEach(id => {
@@ -13487,6 +13685,7 @@ function collectState(){
         const o = { label: String((p && p.label) || ""), dataUri };
         const id = (p && p.id) || (dataUri ? photoContentId(dataUri) : "");
         if(id) o.id = id;
+        if(p && p.chosho) o.chosho = true;   // 工事調書に載せる写真の印
         return o;
       })
     : migratePhotosShape(STATE.photos);
@@ -14295,7 +14494,9 @@ function applyStateData(s){
   // 物件の諸経費が有効な場合、auto戸別（個別上書きでない）は物件の額に追従させる。
   {
     const useProj = document.getElementById("outsource_fee_use_proj");
-    const auto = (s.outsource_fee_auto !== false); // undefined→auto（既存戸別は物件の額に追従）
+    // undefined→auto（既存戸別は物件の額に追従）。false でも実際に個別の額を
+    // 持っていない戸別は追従へ戻す（savedFeeIsAuto のコメント参照）。
+    const auto = savedFeeIsAuto(s);
     if(typeof projOutsourceFeeActive === "function" && projOutsourceFeeActive() && auto){
       if(useProj) useProj.checked = true;
       const amt = getProjOutsourceFee();
@@ -17492,17 +17693,38 @@ function renderListStandardMode(rows, tbl){
     + '<th class="no-print"></th>'
     + '</tr></thead><tbody>';
   let doneCount = 0, pendingCount = 0;
-  rows.forEach((r, i) => {
+  // アパートは同じ建物の行を隣どうしに寄せ、建物ごとに帯を1本挟む
+  const rowsG = aptRegroup(rows);
+  const aptG = new Map();
+  rowsG.forEach(r => {
+    const k = aptBldgKeyOfRow(r); if(!k) return;
+    if(!aptG.has(k)) aptG.set(k, []);
+    aptG.get(k).push(r);
+  });
+  const aptAddrG = new Map();
+  aptG.forEach((g, k) => aptAddrG.set(k, aptCommonAddr(g)));
+  const aptSeen = new Set();
+  rowsG.forEach((r, i) => {
     const d = r.data;
     if(r.fileType !== "full" || r.unlocked){
       if(d.chosho_status === "completed") doneCount++; else pendingCount++;
     }
-    const addrEsc = escapeHtml(d.chosho_cust_addr || "");
-    html += '<tr data-list-idx="' + i + '">'
+    const aptKey = aptBldgKeyOfRow(r);
+    if(aptKey && !aptSeen.has(aptKey)){
+      aptSeen.add(aptKey);
+      html += aptBandSimpleHtml(r, aptG.get(aptKey) || [r], 9, aptAddrG.get(aptKey) || "");
+    }
+    // アパートの住所は建物ぶんが帯に出ているので、行は部屋番号だけにする
+    const addrText = aptKey
+      ? (aptRoomAddrText(r, aptAddrG.get(aptKey) || "") || String(d.chosho_cust_addr || ""))
+      : String(d.chosho_cust_addr || "");
+    const addrEsc = escapeHtml(addrText);
+    html += '<tr class="' + (aptKey ? "lg-apt" : "") + '" data-list-idx="' + i + '">'
       + '<td>' + listTypeBadge(r) + '</td>'
       + '<td>' + listStatusBadge(d, r.fileType, r.unlocked) + '</td>'
       + mgmtNoCellHtml(d, dupSet)
-      + '<td class="wrap" title="' + addrEsc + '">' + addrEsc + '</td>'
+      + '<td class="wrap" title="' + escapeHtml(d.chosho_cust_addr || "") + '">' + addrEsc
+      +   (aptKey ? aptChipHtml(r) : '') + '</td>'
       + '<td>' + escapeHtml(d.chosho_date || "") + '</td>'
       + listMountCellHtml(r)
       + '<td class="file-name no-print" title="' + escapeHtml(r._detached ? ("ファイルが見当たりません" + (r._detached.path ? "（前の場所: " + r._detached.path + "）" : "")) : (r._manual ? "受付台帳で作成（ファイル未保存）" : r.file)) + '">'
@@ -17525,8 +17747,8 @@ function renderListStandardMode(rows, tbl){
     + '</tr>'
     + '</tfoot>';
   tbl.innerHTML = html;
-  tbl._filteredRows = rows;
-  attachListRowHandlers(tbl, rows);
+  tbl._filteredRows = rowsG;      // 帯で並べ替えた順。data-list-idx はこの並びを指す
+  attachListRowHandlers(tbl, rowsG);
 }
 
 /* 選択中のフォルダ名バナー（工事別フォルダ／費用詳細モードの先頭に表示） */
@@ -17588,9 +17810,22 @@ function renderListByFolderMode(rows, container){
       + '<th title="石綿みなし判定">石綿</th>'
       + '<th class="no-print"></th>'
       + '</tr></thead><tbody>';
-    list.forEach(r => {
+    // アパートは同じ建物の世帯を隣どうしに寄せ、建物ごとに帯を1本挟む
+    const listG = aptRegroup(list);
+    const fAptG = new Map();
+    listG.forEach(x => { const k = aptBldgKeyOfRow(x); if(!k) return;
+      if(!fAptG.has(k)) fAptG.set(k, []); fAptG.get(k).push(x); });
+    const fAptAddr = new Map();
+    fAptG.forEach((g, k) => fAptAddr.set(k, aptCommonAddr(g)));
+    const fAptSeen = new Set();
+    listG.forEach(r => {
       const globalIdx = rows.indexOf(r);
       const d = r.data;
+      const fAptKey = aptBldgKeyOfRow(r);
+      if(fAptKey && !fAptSeen.has(fAptKey)){
+        fAptSeen.add(fAptKey);
+        inner += aptBandSimpleHtml(r, fAptG.get(fAptKey) || [r], 10, fAptAddr.get(fAptKey) || "");
+      }
       const amt = calcRowTotalExclMisc(r);
       const amtStr = (amt === null) ? "―" : yen(amt);
       if(amt !== null) folderSum += amt;
@@ -17878,6 +18113,9 @@ function renderListCostDetailMode(rows, container){
 
   let html = renderSelectedFolderBanner();
 
+  // 協力会社諸経費が物件の額に揃っているか（一目で分かるように費用画面の先頭に出す）
+  html += projFeeFollowHtml(rows);
+
   // 予定と完了に分けた集計。工事が終わっていない戸別にも金額は付くので、
   // 全部の合計だけを見ていると「もう終わったぶん」が分からない。
   html += doneSplitHtml(costSplit, { title: "予定と完了（材料費・労務費／税抜）" });
@@ -18065,6 +18303,64 @@ function renderListCostDetailMode(rows, container){
   }
 
   container.innerHTML = html;
+  {
+    const b = container.querySelector("#pf-refollow");
+    if(b) b.onclick = () => { restoreAllProjFeeFollow(); };
+  }
+}
+
+/* 協力会社諸経費が物件の額に揃っているかを、費用画面の先頭に出す。
+   「物件の諸経費を使う」が外れている戸別を名指しで並べ、まとめて戻せるようにする。
+   （上書き保存や現場入力を通したときに外れることがあり、金額が静かにずれるため） */
+function projFeeFollowHtml(rows){
+  if(typeof _currentProject === "undefined" || !_currentProject) return "";  // 物件を開いている時だけ
+  const amt = getProjOutsourceFee();
+  const box = (body, tone) =>
+    '<div class="cost-detail-section pf-follow" style="border-left:4px solid ' + tone + ';">'
+    + '<h3>協力会社諸経費（物件の額）</h3>' + body + '</div>';
+  if(amt == null){
+    return box('<div class="pf-msg" style="color:#8a5300;">'
+      + 'この物件の「1戸あたり」の額がまだ決まっていません。'
+      + 'メニューの<b>物件</b>画面で額を入れると、読み込んだ戸別すべてに同じ額が入ります。'
+      + '</div>', "#e6a23c");
+  }
+  const sgn = n => (n > 0 ? "+" : n < 0 ? "-" : "±") + yen(Math.abs(n));
+  const sgnStyle = n => n < 0 ? "color:#1565c0;" : n > 0 ? "color:#c62828;" : "color:#667482;";
+  const target = (rows || []).filter(r => r && r.data && !(r.fileType === "full" && !r.unlocked));
+  const off = target.filter(r => !rowFeeIsAuto(r));
+  const on  = target.length - off.length;
+  let body = '<div class="pf-msg">1戸あたり <b>' + yen(amt) + '</b>　／　'
+    + '<b class="pf-on">' + on + ' 件</b> が物件の額　'
+    + (off.length
+        ? '<b class="pf-off">' + off.length + ' 件</b> だけ別の額（個別）'
+        : '<span class="pf-on">全部そろっています</span>')
+    + '</div>';
+  if(off.length){
+    body += '<table class="pf-table"><thead><tr>'
+      + '<th style="width:140px">管理番号</th><th>お客様名</th>'
+      + '<th class="num" style="width:110px">この戸別の額</th>'
+      + '<th class="num" style="width:110px">物件の額</th>'
+      + '<th class="num" style="width:100px">差</th></tr></thead><tbody>';
+    off.forEach(r => {
+      const a = Math.max(0, parseFloat(r.data.outsource_fee_amount) || 0);
+      const on2 = !!r.data.outsource_fee_on;
+      body += '<tr>'
+        + '<td class="mgmt-no">' + escapeHtml(r.data.chosho_mgmt_no || "―") + '</td>'
+        + '<td>' + escapeHtml(r.data.chosho_cust_name || "") + '</td>'
+        + '<td class="num">' + (on2 ? yen(a) : "計上なし") + '</td>'
+        + '<td class="num">' + yen(amt) + '</td>'
+        + '<td class="num" style="' + sgnStyle((on2 ? a : 0) - amt) + '">'
+        + sgn((on2 ? a : 0) - amt) + '</td>'
+        + '</tr>';
+    });
+    body += '</tbody></table>'
+      + '<div class="pf-act no-print">'
+      + '<button type="button" id="pf-refollow" title="上に並んだ戸別を、まとめて物件の額に戻します。'
+      + '個別の額にしておきたい戸別があるときは押さないでください。">↩ 全部この額にそろえる</button>'
+      + '<span class="pf-note">※ わざと別の額にしている戸別があるときは、そのままで構いません。</span>'
+      + '</div>';
+  }
+  return box(body, off.length ? "#c62828" : "#1b5e20");
 }
 
 /* ============================================================
@@ -18264,11 +18560,63 @@ function doneSplitHtml(sp, opts){
 const APT_MIN_UNITS = 2, APT_MAX_UNITS = 12;
 /* 建物に1つの値。どの世帯で直しても建物ぜんぶに同じものを配る。 */
 const APT_GROUP_FIELDS = ["apt_units", "apt_name", "apt_common", "apt_common_done",
-                          "apt_owner_name", "apt_owner_tel", "apt_bldg"];
+                          "apt_owner_name", "apt_owner_tel", "apt_owner_addr",
+                          "apt_consent_at", "apt_bldg"];
 /* 全通電（全端子電流通過型）分配器で実在する分配数。9世帯以上はこれをカスケードする。 */
 const APT_SPLIT_SIZES = [2, 3, 4, 5, 6, 8];
 const APT_BRANCH_RE = /^(.+)-(\d{1,2})$/;
 
+/* ============================================================
+   完了書なしで完了した世帯（期限切れによる強制切替）
+   ------------------------------------------------------------
+   入居者と最後まで連絡が取れず、手紙を入れて期限で切り替えた世帯。
+   市役所との取り決めで、工事としては完了だが「工事完了書」は受け取れていない。
+   完了書を受け取った世帯とは扱いが違うので、必ず区別して記録に残す。
+
+   ・記録は戸別ファイル（row.data）に置く。この端末のメモ（localStorage）では
+     PCを替えたときに消えてしまい、あとから「なぜ完了書が無いのか」が分からなくなる。
+   ・compdoc_waived     … "yes" ＝ 完了書なしで完了にした
+   ・compdoc_waived_at  … その日（YYYY-MM-DD）
+   ・compdoc_waived_note… 事情（手紙の投函日・期限など）
+   ============================================================ */
+function isCompdocWaived(d){
+  return String((d && d.compdoc_waived) || "") === "yes";
+}
+function compdocWaivedAt(d){ return String((d && d.compdoc_waived_at) || ""); }
+function compdocWaivedNote(d){ return String((d && d.compdoc_waived_note) || ""); }
+/* 完了書なし完了にする／解除する。工事そのものは終わっているので状態は「完了」にする。 */
+function setCompdocWaived(row, on, at, note){
+  if(!row || !row.data) return false;
+  // row.data は作り直して入れ替える（他の欄と同じ扱い。書き換えたことを台帳が気づけるように）
+  const d = Object.assign({}, row.data);
+  if(on){
+    d.compdoc_waived = "yes";
+    d.compdoc_waived_at = String(at || "").trim();
+    d.compdoc_waived_note = String(note || "").trim();
+  } else {
+    delete d.compdoc_waived; delete d.compdoc_waived_at; delete d.compdoc_waived_note;
+  }
+  row.data = d;
+  if(row.fileType === "hybrid" && row.envelope && row.envelope.plain){
+    row.envelope = Object.assign({}, row.envelope);
+    row.envelope.plain = Object.assign({}, row.envelope.plain);
+    ["compdoc_waived","compdoc_waived_at","compdoc_waived_note"].forEach(k => {
+      if(d[k] === undefined) delete row.envelope.plain[k]; else row.envelope.plain[k] = d[k];
+    });
+  }
+  /* 戸別ファイルにはまだ入っていない。フォルダを読み直すと消えてしまうので、
+     直したことを控えておく（「💾 戸別ファイルへ反映」で書き込まれる）。 */
+  row._lgEdited = true;
+  try { lgMarkTouched(row); } catch(_){}
+  // 完了書は受け取っていないが、工事そのものは終わっている。
+  // 状態は他の欄と同じ道（lgWriteCaseField）で「完了」にする。
+  if(on && row.data.chosho_status !== "completed"){
+    try { lgWriteCaseField(row, "status", "completed"); } catch(_){ row.data.chosho_status = "completed"; }
+  }
+  row._amtCache = undefined; row._bomCache = undefined;
+  try { projTouch(); } catch(_){}
+  return true;
+}
 /* 総世帯数。アパートでなければ 0 を返す（＝これが戸建てとの唯一の分かれ道） */
 function aptUnits(d){
   const n = parseInt(d && d.apt_units, 10);
@@ -18363,10 +18711,16 @@ function aptGroupRows(rows, key){
 /* 建物の進み具合。完了は caseWorkDone のみで判定する（金額からは絶対に判定しない）。 */
 function aptGroupStat(rows, key){
   const g = aptGroupRows(rows, key);
-  let done = 0;
-  g.forEach(r => { if(caseWorkDone(r)) done++; });
+  let done = 0, compdoc = 0, waived = 0;
+  g.forEach(r => {
+    if(caseWorkDone(r)) done++;
+    if(getLedger(subCaseKey(r)).compdoc) compdoc++;          // 完了確認書を受け取った
+    else if(isCompdocWaived(r.data)) waived++;               // 期限切れで切替（完了書なし）
+  });
   const units = g.length ? aptUnits(g[0].data) : 0;
-  return { rows: g, n: g.length, done: done, units: units || g.length };
+  return { rows: g, n: g.length, done: done, compdoc: compdoc, waived: waived,
+           rest: Math.max(0, g.length - compdoc - waived),
+           units: units || g.length };
 }
 
 /* 共用部ありのボックス。2〜5世帯=OP14-33A / 6〜12世帯=OP20-65A。 */
@@ -18555,33 +18909,131 @@ function aptRegroup(rows){
 
 /* 建物の見出し帯。世帯数・共用部の有無・大家・同意書・完了の進み具合を1行で出す。
    完了は caseWorkDone だけで数える（金額からは絶対に判定しない）。 */
-function aptBandRowHtml(row, members, colSpan){
+/* 建物の中で共通している住所（＝地番まで）。世帯ごとに違うのは部屋番号だけ、を前提にする。
+   途中の数字で切れないよう、共通部分は最後の区切り（空白・全角空白）まで戻す。 */
+function aptCommonAddr(members){
+  const list = (members || []).map(m => String(((m && m.data) || {}).chosho_cust_addr || "").trim())
+                              .filter(Boolean);
+  if(!list.length) return "";
+  let pre = list[0];
+  for(let i = 1; i < list.length; i++){
+    const b = list[i];
+    let k = 0;
+    while(k < pre.length && k < b.length && pre.charAt(k) === b.charAt(k)) k++;
+    pre = pre.slice(0, k);
+    if(!pre) break;
+  }
+  if(pre.length === list[0].length) return pre.trim();   // 全部まったく同じ住所
+  const m = pre.match(/^(.*[\s\u3000])[^\s\u3000]*$/);   // 数字の途中で切らない
+  return (m ? m[1] : pre).trim();
+}
+/* 世帯の行に、紙で出す住所。建物で共通の部分を除いた残り（＝部屋番号）だけにする。
+   同じ住所が世帯数ぶん縦に並ぶと台帳が読みづらいので、建物の住所は帯に1回だけ出す。 */
+function aptRoomAddrText(row, common){
+  const d = (row && row.data) || {};
+  const full = String(d.chosho_cust_addr || "").trim();
+  const rest = (common && full.length > common.length && full.indexOf(common) === 0)
+    ? full.slice(common.length).trim() : "";
+  return rest || aptUnitLabel(d) || "";
+}
+function aptBandRowHtml(row, members, colSpan, commonAddr){
   const d = row.data || {};
   const n = members.length;
   const done = members.filter(caseWorkDone).length;
   const units = aptUnits(d) || n;
   const consent = members.some(m => getLedger(subCaseKey(m)).consent);
   const compdoc = members.filter(m => getLedger(subCaseKey(m)).compdoc).length;
+  // 完了書をもらえないまま期限で切り替えた世帯（完了書ありとは別に数える）
+  const waived = members.filter(m => !getLedger(subCaseKey(m)).compdoc && isCompdocWaived(m.data)).length;
   const key = aptBldgKey(d);
   const common = aptHasCommon(d);
   const cdone = aptCommonDone(d);
+  const addr = (commonAddr !== undefined) ? commonAddr : aptCommonAddr(members);
   return '<tr class="lg-apt-band" data-aptkey="' + escapeHtml(key) + '"><td colspan="' + colSpan + '">'
     + '🏢 ' + escapeHtml(aptBldgName(d))
     + '<span class="ab-n">' + n + (n !== units ? ' / ' + units : '') + '世帯</span>'
+    + (addr ? '<span class="ab-addr" title="建物の住所（世帯ごとに違うのは部屋番号だけなので、ここに1回だけ出します）">'
+              + escapeHtml(toHalfWidthAn(addr)) + '</span>' : '')
     + '<span class="ab-com' + (common ? '' : ' off') + '" title="'
       + (common ? '共用部（外部）のボックスに増幅器・電源部・全端子電流通過型の屋内用分配器・安全ブレーカー・コンセントを収めます'
                 : '共用部が無いので、世帯ごとに電源部BPS6W・小型漏電遮断機2ZA2030・コンセントWK1512Kが要ります')
       + '">' + (common ? '共用部あり' : '共用部なし') + '</span>'
-    + '<span class="ab-sep">|</span>大家 ' + escapeHtml(d.apt_owner_name || "―")
+    + '<span class="ab-sep">|</span>大家・不動産 ' + escapeHtml(d.apt_owner_name || "―")
     + (d.apt_owner_tel ? '（' + escapeHtml(d.apt_owner_tel) + '）' : '')
+    + (d.apt_owner_addr ? '<span class="ab-oaddr">' + escapeHtml(d.apt_owner_addr) + '</span>' : '')
     + '<span class="ab-sep">|</span>'
-    + '<label title="建物にアンテナを付ける承諾は大家から1つもらえば足ります。ここを押すと建物内の全世帯の同意書に同じ印が付きます。">'
-    + '<input type="checkbox" data-aptf="consent"' + (consent ? ' checked' : '') + '>同意書（大家）</label>'
+    + '<label title="建物にアンテナを付ける承諾は大家から1通もらえば足ります。ここを押すと建物内の全世帯の同意書に同じ印が付きます。">'
+    + '<input type="checkbox" data-aptf="consent"' + (consent ? ' checked' : '') + '>同意書は大家から1通</label>'
+    + (consent
+        ? ('<input type="date" class="ab-date" data-aptf="consentat" value="' + escapeHtml(d.apt_consent_at || "")
+           + '" title="同意書を受け取った日。建物に1通なので日付も建物ぜんぶで共通です。">'
+           + '<span class="ab-date-print">' + escapeHtml(d.apt_consent_at ? ('受取 ' + d.apt_consent_at) : '受取日 未記入') + '</span>'
+           + (d.apt_consent_at ? '' : '<span class="ab-warn">受け取った日を入れてください</span>'))
+        : '<span class="ab-warn">未受領</span>')
     + '<span class="ab-sep">|</span>'
     + '<label title="共用部（アンテナ・増幅器・ボックス）の工事が終わったら印を付けます。&#10;全体費用詳細の「予定／完了」で、建物ぶんの金額はこの印で分けます（入居者の切替とは別に数えます）。">'
     + '<input type="checkbox" data-aptf="commondone"' + (cdone ? ' checked' : '') + '>共用部の工事済</label>'
-    + '<span class="ab-sep">|</span>完了届 ' + compdoc + ' / ' + n
-    + '<span class="ab-sep">|</span>工事完了 <b>' + done + ' / ' + n + '</b>'
+    + '<span class="ab-sep">|</span><span class="ab-note">大家に完了確認書・ビラは要りません</span>'
+    + '<span class="ab-sep">|</span>完了確認書は入居者ごと <b>' + compdoc + ' / ' + n + ' 通</b>'
+    + (waived ? '<span class="ab-waive" title="連絡が取れないまま期限で切り替えた世帯です。工事は終わっていますが、完了確認書は受け取れていません。">＋書なし完了 ' + waived + '</span>' : '')
+    + '<span class="ab-sep">|</span>工事完了 <b>' + done + ' / ' + n + ' 世帯</b>'
+    + '</td></tr>';
+}
+
+/* 「2026-09-20」を「9/20」にする（狭い欄に日付を出すため）。空なら空。 */
+function lgShortDate(v){
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v || "").trim());
+  return m ? (parseInt(m[2],10) + "/" + parseInt(m[3],10)) : String(v || "");
+}
+
+/* アパートの世帯の「名前」。入居者の名前がまだ入っていなければ、空欄ではなく
+   「入居者 未確認」と出す。空欄のままだと、まだ連絡が取れていないのか、単に
+   書き忘れているのかが紙の台帳から分からない。
+   名前の欄に建物の名前が入っている（市の一覧から来たまま）ときは、その旨を添える。 */
+function aptNameCell(row, tCell){
+  const d = (row && row.data) || {};
+  const nm = String(d.chosho_cust_name || "").trim();
+  const bldg = String(aptBldgName(d) || "").trim();
+  if(!nm){
+    return tCell("name", "", '<span class="lg-apt-noname" title="この世帯の入居者がまだ分かっていません。'
+      + '大家さんに聞くか、手紙を入れる対象です。クリックで入力できます。">入居者 未確認</span>');
+  }
+  if(bldg && nm === bldg){
+    return tCell("name", d.chosho_cust_name)
+      + '<span class="lg-apt-bldgname" title="ここに入っているのは建物の名前です（入居者の名前ではありません）。'
+      + '入居者が分かったら書き替えてください。建物の名前は帯に出ています。">建物名</span>';
+  }
+  return tCell("name", d.chosho_cust_name);
+}
+
+/* 一覧（標準・工事別フォルダ）に挟む建物の帯。受付台帳の帯と違って押す所は無く、
+   「ここからここまでが1棟」「建物名・住所・大家」「同意書は大家に1通」「完了確認書は入居者ごと」
+   がひと目で分かるようにするためだけの行。 */
+function aptBandSimpleHtml(row, members, colSpan, commonAddr){
+  const d = row.data || {};
+  const n = members.length;
+  const units = aptUnits(d) || n;
+  const done = members.filter(caseWorkDone).length;
+  const consent = members.some(m => getLedger(subCaseKey(m)).consent);
+  const compdoc = members.filter(m => getLedger(subCaseKey(m)).compdoc).length;
+  const waived = members.filter(m => !getLedger(subCaseKey(m)).compdoc && isCompdocWaived(m.data)).length;
+  const addr = (commonAddr !== undefined) ? commonAddr : aptCommonAddr(members);
+  return '<tr class="lg-apt-band apt-band-simple"><td colspan="' + colSpan + '">'
+    + '🏢 ' + escapeHtml(aptBldgName(d))
+    + '<span class="ab-n">' + n + (n !== units ? ' / ' + units : '') + '世帯</span>'
+    + (addr ? '<span class="ab-addr">' + escapeHtml(toHalfWidthAn(addr)) + '</span>' : '')
+    + '<span class="ab-sep">|</span>大家・不動産 ' + escapeHtml(d.apt_owner_name || "―")
+    + (d.apt_owner_tel ? '（' + escapeHtml(d.apt_owner_tel) + '）' : '')
+    + (d.apt_owner_addr ? '<span class="ab-oaddr">' + escapeHtml(d.apt_owner_addr) + '</span>' : '')
+    + '<span class="ab-sep">|</span>'
+    + '<span class="ab-doc' + (consent ? ' ok' : '') + '">同意書は大家から1通'
+      + (consent ? ('：受領済' + (d.apt_consent_at ? '（' + escapeHtml(lgShortDate(d.apt_consent_at)) + '）' : '')) : '：未')
+      + '</span>'
+    + '<span class="ab-sep">|</span>'
+    + '<span class="ab-doc' + ((compdoc + waived) >= n ? ' ok' : '') + '">完了確認書は入居者ごと '
+      + compdoc + ' / ' + n + ' 通</span>'
+    + (waived ? '<span class="ab-waive" title="連絡が取れないまま期限で切り替えた世帯です。工事は終わっていますが、完了確認書は受け取れていません。">＋書なし完了 ' + waived + '</span>' : '')
+    + '<span class="ab-sep">|</span>工事完了 <b>' + done + ' / ' + n + ' 世帯</b>'
     + '</td></tr>';
 }
 
@@ -20236,6 +20688,8 @@ function migratePhotosShape(p){
       const o = { label: String((it && it.label) || ""), dataUri };
       const id = (it && it.id) || (dataUri ? photoContentId(dataUri) : "");
       if(id) o.id = id;   // 安定な写真IDを維持（現場入力との重複突合に使う）
+      // 工事調書に載せる写真の印。ここで落とすと、読み直したときに選び直しになる。
+      if(it && it.chosho) o.chosho = true;
       return o;
     });
   }
@@ -20683,6 +21137,15 @@ function renderPhotoInputs(){
   if(!wrap) return;
   if(!Array.isArray(STATE.photos)) STATE.photos = migratePhotosShape(STATE.photos);
   let html = "";
+  const choshoN = STATE.photos.filter(x => x && x.chosho && x.dataUri).length;
+  /* 工事調書に載せる写真の選び方の案内。0枚＝従来どおり全部載る。 */
+  html += '<div class="ph-chosho-note" style="font-size:10.5px;line-height:1.5;color:#37474f;background:#eef4fa;'
+    + 'border:1px solid #bcd8ef;border-radius:3px;padding:4px 7px;margin-bottom:5px;">'
+    + '「<b>調書</b>」に印を付けた写真だけが <b>工事調書</b> に載ります（代表2枚など）。'
+    + '<br>1枚も付けていないときは、これまでどおり登録した写真が全部載ります。'
+    + '<br>いま選ばれている枚数: <b id="ph-chosho-count">' + choshoN + '</b> 枚'
+    + (choshoN ? '' : '（＝全部載る）')
+    + '</div>';
   STATE.photos.forEach((p, i) => {
     const sizeText = p.dataUri
       ? "登録済（約" + Math.round((p.dataUri.length * 0.75) / 1024).toLocaleString() + "KB）"
@@ -20691,7 +21154,14 @@ function renderPhotoInputs(){
       + '<input type="text" data-photo-label="' + i + '" value="' + escapeHtml(p.label || "") + '" placeholder="ラベル名 (例: 施工前)" style="padding:2px 6px;font-size:11px;border:1px solid #cdd3da;border-radius:3px;width:100%;box-sizing:border-box;">'
       + '<input type="file" data-photo-file="' + i + '" accept="image/*" style="font-size:11px;width:160px;">'
       + '<button type="button" data-photo-del="' + i + '" title="この写真行を削除" style="background:#fff;color:#d32f2f;border:1px solid #d32f2f;padding:2px 8px;border-radius:3px;cursor:pointer;font-size:11px;">×</button>'
-      + '<div style="grid-column:1 / -1;font-size:10px;color:#555;margin-top:1px;">' + sizeText + (p.dataUri ? ' <button type="button" data-photo-clear="' + i + '" style="margin-left:6px;background:#fff;color:#666;border:1px solid #999;padding:0 6px;border-radius:3px;cursor:pointer;font-size:10px;">画像クリア</button>' : '') + '</div>'
+      + '<div style="grid-column:1 / -1;font-size:10px;color:#555;margin-top:1px;">' + sizeText + (p.dataUri ? ' <button type="button" data-photo-clear="' + i + '" style="margin-left:6px;background:#fff;color:#666;border:1px solid #999;padding:0 6px;border-radius:3px;cursor:pointer;font-size:10px;">画像クリア</button>' : '')
+      + (p.dataUri
+          ? '<label class="ph-chosho-pick" title="この写真を工事調書に載せます。1枚も選ばないときは全部載ります。"'
+            + ' style="margin-left:8px;font-size:10px;color:#1e5b8f;background:#eaf3fb;border:1px solid #bcd8ef;border-radius:3px;padding:0 6px;cursor:pointer;">'
+            + '<input type="checkbox" data-photo-chosho="' + i + '"' + (p.chosho ? ' checked' : '')
+            + ' style="vertical-align:middle;margin-right:2px;">調書</label>'
+          : '')
+      + '</div>'
       + '</div>';
   });
   wrap.innerHTML = html;
@@ -20713,6 +21183,24 @@ function renderPhotoInputs(){
       const i = parseInt(e.target.dataset.photoDel, 10);
       if(!confirm("この写真行を削除しますか？")) return;
       removePhotoEntry(i);
+    });
+  });
+  wrap.querySelectorAll('[data-photo-chosho]').forEach(el => {
+    el.addEventListener("change", e => {
+      const i = parseInt(e.target.dataset.photoChosho, 10);
+      if(STATE.photos[i]) STATE.photos[i].chosho = !!e.target.checked;
+      // 枚数の案内だけ書き替える（描き直すとチェック操作の手応えが飛ぶ）
+      const c = document.getElementById("ph-chosho-count");
+      if(c){
+        const n = STATE.photos.filter(x => x && x.chosho && x.dataUri).length;
+        c.textContent = n;
+        const note = c.closest(".ph-chosho-note");
+        if(note){
+          const tail = note.lastChild;
+          if(tail && tail.nodeType === 3) tail.textContent = n ? " 枚" : " 枚（＝全部載る）";
+        }
+      }
+      if(typeof projAutoSaveEdit === "function") projAutoSaveEdit(); // 調書に載せる印を物件へ自動保存
     });
   });
   wrap.querySelectorAll('[data-photo-clear]').forEach(el => {
@@ -20756,6 +21244,14 @@ function agShowInChosho(){
   try { return localStorage.getItem(AG_CHOSHO_KEY) !== "0"; } catch(_){ return true; }
 }
 
+/* 工事調書に載せる写真。「調書」を1枚でも選んでいればそれだけ、
+   1枚も選んでいなければ登録した写真を全部（従来どおり）。 */
+function choshoPhotosForPrint(){
+  const all = Array.isArray(STATE.photos) ? STATE.photos : migratePhotosShape(STATE.photos);
+  // 画像が入っているものだけを「選んだ」とみなす（画像を消した行が空枠だけ残るのを防ぐ）
+  const picked = all.filter(p => p && p.chosho && p.dataUri);
+  return picked.length ? picked : all;
+}
 function renderChosho(){
   const inp = STATE.input || getInputs();
   const mgmt = document.getElementById("chosho_mgmt_no").value.trim();
@@ -20880,10 +21376,11 @@ function renderChosho(){
   document.getElementById("chosho-mat-view").innerHTML = mat;
 
   // 写真（複数枚動的描画）
+  // 「調書」にチェックを付けた写真だけを載せる。1枚も選んでいないときは、
+  // これまでどおり登録した写真を全部載せる（今までのデータの見え方を変えないため）。
   const photosRow = document.getElementById("chosho-photos-row");
   if(photosRow){
-    const photos = Array.isArray(STATE.photos) ? STATE.photos : migratePhotosShape(STATE.photos);
-    photosRow.className = "chosho-photos-row photos-" + Math.min(photos.length || 1, 9);
+    const photos = choshoPhotosForPrint();
     let ph = "";
     photos.forEach(p => {
       ph += '<div class="chosho-box chosho-photo-box">'
@@ -21046,6 +21543,8 @@ function renderDiagramPrintExtras(){
   if(measEl) measEl.innerHTML = mh;
 
   // 写真（複数枚動的描画）
+  // 印刷用に「工事写真」ページへ移してある途中なら、まず元へ戻してから作り直す
+  if(typeof cleanupPhotosPrintPage === "function") cleanupPhotosPrintPage();
   const photosWrap = document.getElementById("diagram-print-photos");
   if(photosWrap){
     const photos = Array.isArray(STATE.photos) ? STATE.photos : migratePhotosShape(STATE.photos);
@@ -22590,7 +23089,10 @@ async function ensureRowThumbs(row){
     const t = (p.dataUri.startsWith("data:image/jpeg") && p.dataUri.length < 150000)
       ? p.dataUri
       : await makeThumbDataUri(p.dataUri, PROJ_THUMB_MAXPX, PROJ_THUMB_QUALITY);
-    thumbs.push({ label: p.label || "", dataUri: t });
+    const th = { label: p.label || "", dataUri: t };
+    if(p.id) th.id = p.id;             // 写真IDは現場入力との突合の鍵
+    if(p.chosho) th.chosho = true;     // 工事調書に載せる印
+    thumbs.push(th);
   }
   row._thumbs = thumbs;
   thumbMemoPut(row.file, row.lastModified, thumbs);   // 次にフォルダを読んだ時は作り直さない
@@ -25168,6 +25670,16 @@ function renderListLedgerMode(rows, container){
   });
   // 地図は建物1つに管理番号1つしかリンクできない。アパートは棟のどこかが
   // リンクされていれば全世帯を「登録済み」と見なす（代表番号でも枝番付きでも拾える）。
+  // 建物ごとに共通の住所（地番まで）。紙では帯に1回だけ出し、各行は部屋番号だけにする。
+  const aptCommonAddrs = new Map();
+  aptGroups.forEach((g, k) => { aptCommonAddrs.set(k, aptCommonAddr(g)); });
+  // 紙に出す住所。アパートの世帯は部屋番号だけにする（建物の住所は帯に1回だけ出す）。
+  const aptAddrPrint = (r) => {
+    const d = (r && r.data) || {};
+    if(!isApartmentRow(r)) return String(d.chosho_cust_addr || "");
+    return aptRoomAddrText(r, aptCommonAddrs.get(aptBldgKeyOfRow(r)) || "")
+        || String(d.chosho_cust_addr || "");
+  };
   const aptMapReg = new Map();
   aptGroups.forEach((g, k) => {
     let hit = isMapRegistered(k);
@@ -25255,8 +25767,8 @@ function renderListLedgerMode(rows, container){
     + '<th data-col="flyer" data-sort="flyer" style="width:42px;" title="ビラ配布済み">ビラ ' + arrow("flyer") + '</th>'
     + '<th data-col="done" data-sort="done" style="width:42px;" title="工事完了">完了 ' + arrow("done") + '</th>'
     + '<th data-col="hold" data-sort="hold" style="width:42px;" title="保留（着工を止めている戸別）。地図では管理番号の右肩に橙色の「保」マークが付きます">保留 ' + arrow("hold") + '</th>'
-    + '<th data-col="consent" style="width:42px;" title="住民からの同意書 受領済み">同意書</th>'
-    + '<th data-col="compdoc" style="width:42px;" title="完了書 受領／提出済み">完了書</th>'
+    + '<th data-col="consent" style="width:42px;" title="同意書（工事の承諾）。戸建ては住民から1通。&#10;アパートは大家から1通で建物ぜんぶ分になります（世帯ごとには要りません）。">同意書</th>'
+    + '<th data-col="compdoc" style="width:42px;" title="完了確認書。戸建ては住民から1通。&#10;アパートは入居者ごとに1通ずつ必要です（世帯数分）。">完了書</th>'
     + '<th data-col="note">備考</th>'
     + '<th data-col="open" style="width:140px;">開く</th>'
     + '</tr></thead><tbody>';
@@ -25267,7 +25779,8 @@ function renderListLedgerMode(rows, container){
     const prevKey = i > 0 ? aptBldgKeyOfRow(shownG[i - 1]) : "";
     const nextKey = (i + 1 < shownG.length) ? aptBldgKeyOfRow(shownG[i + 1]) : "";
     if(aptKey && aptKey !== prevKey){
-      html += aptBandRowHtml(r, aptGroups.get(aptKey) || [r], LG_LEDGER_COLSPAN);
+      html += aptBandRowHtml(r, aptGroups.get(aptKey) || [r], LG_LEDGER_COLSPAN,
+                             aptCommonAddrs.get(aptKey) || "");
     }
     const uid = "lg" + i;
     _ledgerShown[uid] = r;
@@ -25286,8 +25799,9 @@ function renderListLedgerMode(rows, container){
     if(lg.hold) cls.push("lg-hold");   // 完了・仮受付と重なっても保留の色を出す（CSS側で後勝ち）
     if(_ledgerHighlightKey && tk === _ledgerHighlightKey) cls.push("lg-hl");
     if(aptKey){ cls.push("lg-apt"); if(aptKey !== nextKey) cls.push("lg-apt-last"); }
-    const tCell = (f, v) => lgEditableField(r, f)
-      ? '<span class="lg-edit" data-f="' + f + '" title="クリックで編集">' + (escapeHtml(v || "") || "<span style='color:#b8c2cc;'>―</span>") + '</span>'
+    // ph＝値が空のときに出す文字（省略すると「―」）
+    const tCell = (f, v, ph) => lgEditableField(r, f)
+      ? '<span class="lg-edit" data-f="' + f + '" title="クリックで編集">' + (escapeHtml(v || "") || (ph || "<span style='color:#b8c2cc;'>―</span>")) + '</span>'
       : '<span class="lg-lock" title="' + (enabled ? "暗号化項目（戸別を開いて編集）" : "全暗号化（🔓一括復号で閲覧可・編集はファイルから）") + '">' + escapeHtml(v || "―") + ' 🔒</span>';
     html += '<tr class="' + cls.join(" ") + '" data-uid="' + uid + '">';
     // 選択印刷チェック（全暗号化の未復号は印刷不可のため無効）
@@ -25322,10 +25836,10 @@ function renderListLedgerMode(rows, container){
           + (r._detached.path ? "。前の場所: " + escapeHtml(r._detached.path) : "") + '">ファイル無</span>' : '')
       + '<span class="lg-dwg-ind" title="' + (lgHasDrawing(r) ? "図面・積算データあり" : "図面未作成（📐ボタンで台帳の情報を流し込んで新規作成）") + '">' + (lgHasDrawing(r) ? "📄" : "－") + '</span>'
       + '<span class="lg-map-ind" title="' + (mapReg ? "地図に登録済み（建物にこの管理番号をリンク済み）" : "地図に未登録（地図で建物にこの管理番号をリンクすると🗺️になります）") + '">' + (mapReg ? "🗺️" : "－") + '</span></td>'
-      + '<td>' + tCell("name", d.chosho_cust_name) + '</td>'
+      + '<td>' + (isApartmentRow(r) ? aptNameCell(r, tCell) : tCell("name", d.chosho_cust_name)) + '</td>'
       + '<td class="lg-c lg-ctr-cell">' + lgContractorCellHtml(r, false) + '</td>'
       + '<td data-col="addr">' + tCell("addr", d.chosho_cust_addr)
-      +   '<span class="lg-addr-print">' + escapeHtml(toHalfWidthAn(d.chosho_cust_addr || "")) + '</span></td>'
+      +   '<span class="lg-addr-print">' + escapeHtml(toHalfWidthAn(aptAddrPrint(r))) + '</span></td>'
       + '<td>' + tCell("tel", d.chosho_cust_tel) + '</td>';
     // 工事日程予定（日付=chosho_date ＋ 時間=ledger.time）
     // 印刷では入力欄を隠し、「8/1-10:00」の1行表示にする（縦に積まれた入力欄が行を高くし、枚数が増えるため）
@@ -25352,13 +25866,50 @@ function renderListLedgerMode(rows, container){
     html += '<td class="lg-c"><input type="datetime-local" data-f="meet" value="' + escapeHtml(lg.meetAt || "") + '"' + (enabled ? "" : " disabled") + '>'
       + '<span class="lg-dt-print">' + escapeHtml(lgFmtMeetAt(lg.meetAt)) + '</span></td>';
     // ビラ・完了
-    html += '<td class="lg-c"><input type="checkbox" data-f="flyer"' + (lg.flyer ? " checked" : "") + (enabled ? "" : " disabled") + ' title="ビラ配布済み"></td>';
+    // ビラは入居者へ配る。大家へは配らないので、帯にはビラの欄を出さない。
+    html += '<td class="lg-c"><input type="checkbox" data-f="flyer"' + (lg.flyer ? " checked" : "") + (enabled ? "" : " disabled")
+      + ' title="' + (isApartmentRow(r) ? "ビラ配布済み（入居者へ配ります。大家へは配りません）" : "ビラ配布済み") + '">'
+      + (isApartmentRow(r) ? '<span class="who">入居者</span>' : '') + '</td>';
     html += '<td class="lg-c"><input type="checkbox" data-f="done"' + (isDone ? " checked" : "") + (lgEditableField(r, "done") ? "" : " disabled") + ' title="工事完了"></td>';
     // 保留（着工を止める印）。地図側は管理番号でこの値を見て「保」マークを出す
     html += '<td class="lg-c"><input type="checkbox" data-f="hold"' + (lg.hold ? " checked" : "") + (enabled ? "" : " disabled") + ' title="保留（地図の管理番号の右肩に「保」マークを表示）"></td>';
     // 同意書・完了書
-    html += '<td class="lg-c"><input type="checkbox" data-f="consent"' + (lg.consent ? " checked" : "") + (enabled ? "" : " disabled") + ' title="住民からの同意書 受領済み"></td>';
-    html += '<td class="lg-c"><input type="checkbox" data-f="compdoc"' + (lg.compdoc ? " checked" : "") + (enabled ? "" : " disabled") + ' title="完了書 受領／提出済み"></td>';
+    /* アパートの決めごと（ユーザー確定）
+         ・同意書 … 大家から1通だけ。入居者の行にはチェック欄を置かない（帯で付ける）
+         ・完了確認書 … 入居者ごとに1通。行のチェック欄を使う（大家には要らない）
+         ・ビラ … 入居者へ配る。大家へは配らない
+       入居者の行に同意書のチェック欄を並べると「世帯数ぶん要る」と読めてしまうので、
+       ここでは大家の状態を映すだけの印にしてある。 */
+    if(isApartmentRow(r)){
+      html += '<td class="lg-c lg-apt-consent" title="同意書は大家から1通で、この建物の全世帯ぶんです。'
+        + '入居者ごとには要りません。&#10;付け外しは上の帯にある「同意書は大家から1通」で行います。">'
+        + (lg.consent ? '<span class="ok">✓</span>' : '<span class="ng">―</span>')
+        + '<span class="who">大家</span></td>';
+    } else {
+      html += '<td class="lg-c"><input type="checkbox" data-f="consent"' + (lg.consent ? " checked" : "") + (enabled ? "" : " disabled") + ' title="住民からの同意書 受領済み"></td>';
+    }
+    /* 完了確認書。アパートで、連絡が取れないまま期限で切り替えた世帯は
+       「書なし完了」として別に記録する（完了書を受け取った世帯とは扱いが違うため）。 */
+    const waived = isCompdocWaived(d);
+    html += '<td class="lg-c' + (isApartmentRow(r) ? ' lg-apt-compdoc' : '') + '">'
+      + '<input type="checkbox" data-f="compdoc"' + (lg.compdoc ? " checked" : "") + (enabled ? "" : " disabled")
+      + ' title="' + (isApartmentRow(r)
+          ? '完了確認書。アパートは入居者ごとに1通ずつ必要です（この世帯のぶん）。'
+          : '完了書 受領／提出済み') + '">'
+      + (isApartmentRow(r) ? '<span class="who">入居者</span>' : '')
+      + (isApartmentRow(r) && !lg.compdoc
+          ? (waived
+              ? ('<button type="button" class="lg-waived" data-f="waive" title="'
+                 + escapeHtml('完了確認書をもらえないまま、期限で切り替えた世帯です。\n'
+                   + '切替日: ' + (compdocWaivedAt(d) || "（未記入）")
+                   + (compdocWaivedNote(d) ? ("\n事情: " + compdocWaivedNote(d)) : "")
+                   + '\n\n押すと取り消せます。')
+                 + '">書なし<br>' + escapeHtml(lgShortDate(compdocWaivedAt(d))) + '</button>')
+              : ('<button type="button" class="lg-waive" data-f="waive" title="'
+                 + '連絡が取れないまま期限が来て、完了確認書をもらわずに切り替えたときに押します。'
+                 + '&#10;工事は「完了」になりますが、完了確認書を受け取った世帯とは分けて記録に残します。">書なし</button>'))
+          : '')
+      + '</td>';
     // 備考
     /* 受付台帳の備考は「管理番号ごとに1つ」。同じ管理番号の戸別が2つ以上あると、
        どの行から書いても同じ内容が出る。黙っていると「他の戸別のものへズレた」ように
@@ -25814,7 +26365,13 @@ function buildReceptionLedgerPayload(){
       apt_common: String(d.apt_common || ""),
       apt_common_done: String(d.apt_common_done || ""),
       apt_owner_name: String(d.apt_owner_name || ""),
-      apt_owner_tel:  String(d.apt_owner_tel  || "")
+      apt_owner_tel:  String(d.apt_owner_tel  || ""),
+      apt_owner_addr: String(d.apt_owner_addr || ""),
+      apt_consent_at: String(d.apt_consent_at || ""),
+      // 完了書をもらえないまま期限で切り替えた世帯（現場でも「書なし完了」と分かるように）
+      compdoc_waived:      String(d.compdoc_waived      || ""),
+      compdoc_waived_at:   String(d.compdoc_waived_at   || ""),
+      compdoc_waived_note: String(d.compdoc_waived_note || "")
     };
   }).filter(x => x.mgmt_no || x.name || x.addr);
   const projName = (typeof _currentProject !== "undefined" && _currentProject && _currentProject.name) ? String(_currentProject.name) : "";
@@ -25957,7 +26514,8 @@ function buildLedgerHtmlSnapshot(){
     // アパート（集合住宅）。ここは項目を選んで渡す形なので、書いておかないと落ちる。
     // 落ちると、書き出したHTMLの台帳で建物のまとまりが分からなくなる。
     ["apt_units","apt_idx","apt_bldg","apt_name","apt_room","apt_common",
-     "apt_common_done","apt_owner_name","apt_owner_tel"].forEach(k => {
+     "apt_common_done","apt_owner_name","apt_owner_tel","apt_owner_addr","apt_consent_at",
+     "compdoc_waived","compdoc_waived_at","compdoc_waived_note"].forEach(k => {
       const v = String(d[k] || "").trim();
       if(v) fields[k] = v;
     });
@@ -26089,7 +26647,9 @@ const LGIMP_FIELDS = [
 function lgimpAptFields(x){
   const o = {};
   ["apt_units", "apt_idx", "apt_bldg", "apt_name", "apt_room",
-   "apt_common", "apt_common_done", "apt_owner_name", "apt_owner_tel"].forEach(k => {
+   "apt_common", "apt_common_done", "apt_owner_name", "apt_owner_tel",
+   "apt_owner_addr", "apt_consent_at",
+   "compdoc_waived", "compdoc_waived_at", "compdoc_waived_note"].forEach(k => {
     const v = String((x && x[k]) || "").trim();
     if(v) o[k] = v;
   });
@@ -26867,6 +27427,36 @@ function bindLedgerHandlers(container){
       return;
     }
     if(e.target.closest("#lg-print-sel")){ printSelectedChosho(); return; }
+    // 完了確認書をもらえないまま期限で切り替えた世帯の印
+    {
+      const wb = e.target.closest("button[data-f=\"waive\"]");
+      if(wb){
+        const tr = wb.closest("tr[data-uid]");
+        const row = tr && _ledgerShown[tr.dataset.uid];
+        if(!row) return;
+        const d = row.data || {};
+        if(isCompdocWaived(d)){
+          if(!confirm("「完了確認書なしで完了」の印を取り消しますか？\n\n"
+            + "切替日: " + (compdocWaivedAt(d) || "（未記入）")
+            + (compdocWaivedNote(d) ? ("\n事情: " + compdocWaivedNote(d)) : "")
+            + "\n\n※ 工事の状態（完了）はそのまま残ります。必要なら状態の欄で戻してください。")) return;
+          setCompdocWaived(row, false);
+        } else {
+          const at = prompt("完了確認書をもらわずに切り替えた日を入れてください（例 2026-09-20）。\n\n"
+            + "連絡が取れないまま期限が来て、手紙でお知らせして切り替えた世帯に使います。\n"
+            + "工事は「完了」になりますが、完了確認書を受け取った世帯とは分けて記録に残します。",
+            lgDateStrToday(0));
+          if(at === null) return;
+          const note = prompt("事情を残しておきます（手紙の投函日・期限・立会の有無など）。\n"
+            + "あとから「なぜ完了書が無いのか」を説明できるようにしておくためのものです。\n"
+            + "空のままでもかまいません。", "連絡不通のため手紙で通知し、期限到来により切替");
+          if(note === null) return;
+          setCompdocWaived(row, true, at, note);
+        }
+        renderListTable();
+        return;
+      }
+    }
     if(e.target.closest("#lg-print-clear")){ _ledgerPrintSel.clear(); renderListTable(); return; }
     /* ★ここで確認や別の処理を挟まないこと★
        フォルダを選ぶ画面は「押した直後」しか開けない。間に何か挟むとその権利が切れ、
@@ -27010,6 +27600,8 @@ function bindLedgerHandlers(container){
           if(t.dataset.aptf === "consent"){
             aptSetGroupConsent(g[0], t.checked);
             lgMarkTouched(subCaseKey(g[0]));
+          } else if(t.dataset.aptf === "consentat"){
+            aptSetGroupField(g[0], "apt_consent_at", t.value);
           } else if(t.dataset.aptf === "commondone"){
             aptSetGroupField(g[0], "apt_common_done", t.checked ? "yes" : "no");
             g.forEach(m => { m._amtCache = undefined; m._bomCache = undefined; });
@@ -27208,7 +27800,12 @@ function hkCaseHit(row, src){
     case "survey":   return d.survey_done === true || lg.survey === true;
     case "flyer":    return lg.flyer === true || d.flyer_done === true;
     case "consent":  return lg.consent === true || d.consent_received === true;
-    case "compdoc":  return lg.compdoc === true || d.compdoc_received === true;
+    /* 完成書類。連絡が取れないまま期限で切り替えた世帯（完了書なし完了）も、
+       市役所との取り決めで工事としては完了なので出来高には数える。
+       「完了書を受け取った世帯」との違いは、受付台帳の橙の「書なし」の印と
+       戸別ファイルの compdoc_waived_at / _note に記録として残す。 */
+    case "compdoc":  return lg.compdoc === true || d.compdoc_received === true
+                         || isCompdocWaived(d);
     case "done":     return caseWorkDone(row);
     case "meetPast": {
       const v = String(lg.meetAt || "").slice(0, 10);
@@ -27876,6 +28473,7 @@ async function pjLoad(){
       const got = await loadRowPhotos(r);
       if(got && Array.isArray(got.photos)) c.photos = got.photos.map(x => ({
         label: x.label || "", dataUri: x.dataUri, id: x.id || "",
+        chosho: !!x.chosho,                     // 工事調書に載せる印（書き戻しで消さない）
         src0: x.dataUri, rot: 0 }));            // src0＝元の写真。回すときは毎回ここから作り直す
       c.fp = pjFingerprint(c.photos);           // 読み込んだ時の写真の指紋（外から変わっていないか見る）
       if(got && got.locked)   c.err = "暗号化（パスワード未入力）";
@@ -28041,6 +28639,7 @@ async function pjWriteBack(){
         const o = { label: x.label || "", dataUri: x.dataUri };
         const id = x.id || (x.dataUri ? photoContentId(x.dataUri) : "");
         if(id) o.id = id;
+        if(x.chosho) o.chosho = true;   // 工事調書に載せる印を消さない
         return o;
       });
       delete json.chosho_photos_thumb;   // 物件専用のしるしは個別ファイルに残さない
@@ -29749,7 +30348,8 @@ function mergeGenbaPhotos(mainPhotos, genbaPhotos, opts, report){
   const norm = arr => (Array.isArray(arr)?arr:[]).map(p => {
     const dataUri=(p&&p.dataUri)||null;
     const id=(p&&p.id)||(dataUri?photoContentId(dataUri):"");
-    return { label:String((p&&p.label)||""), dataUri, id, _key: id || ("uri:"+(dataUri||"")) };
+    return { label:String((p&&p.label)||""), dataUri, id, chosho:!!(p&&p.chosho),
+             _key: id || ("uri:"+(dataUri||"")) };
   });
   const M=norm(mainPhotos), G=norm(genbaPhotos);
   const gReal=G.filter(hasImg);
@@ -29762,9 +30362,14 @@ function mergeGenbaPhotos(mainPhotos, genbaPhotos, opts, report){
   const put=(p, from)=>{
     if(!hasImg(p)) return;                 // 空スロットは統合対象外
     if(dropKeys.has(p._key) || (p.id && dropKeys.has(p.id))) return; // L2で除外指定
-    const cand={ p:{label:p.label, dataUri:p.dataUri, id:p.id||undefined}, from };
+    const cand={ p:{label:p.label, dataUri:p.dataUri, id:p.id||undefined,
+                    chosho:p.chosho||undefined}, from };
     if(!map.has(p._key)){ map.set(p._key, cand); order.push(p._key); return; }
-    map.set(p._key, pickBetterPhoto(map.get(p._key), cand)); // 同一写真→高画質1枚に
+    const prev = map.get(p._key);
+    const both = !!(prev.p.chosho || cand.p.chosho);   // 調書に載せる印は片方にあれば残す
+    const win = pickBetterPhoto(prev, cand);           // 同一写真→高画質1枚に
+    if(both) win.p.chosho = true;
+    map.set(p._key, win);
   };
   M.forEach(p=>put(p,"main"));   // main を土台に
   G.forEach(p=>put(p,"genba"));  // genba で追加/高画質化
@@ -31029,11 +31634,12 @@ function init(){
   document.getElementById("btn-base-preset-use-current").onclick = saveCurrentAsBasePreset;
   document.getElementById("btn-print").onclick = () => {
     prepareGuidePrintPage();
+    preparePhotosPrintPage();   // 写真が多いときは「工事写真」の紙を1枚起こす
     // 物件モード時は積算書(材料込み)を協力会社内訳（材料費なし）へ差し替え（OFF時は従来どおり）
     const bk = prepareBukkenPrintPage();
-    if(bk === "abort"){ cleanupGuidePrintPage(); return; }
+    if(bk === "abort"){ cleanupGuidePrintPage(); cleanupPhotosPrintPage(); return; }
     printWithFilename(buildPrintFilename(bk ? "図面_内訳" : "図面_積算"),
-      () => { cleanupGuidePrintPage(); cleanupBukkenPrintPage(); });
+      () => { cleanupGuidePrintPage(); cleanupPhotosPrintPage(); cleanupBukkenPrintPage(); });
   };
   document.getElementById("btn-print-chosho").onclick = printChosho;
   { const _ba = document.getElementById("btn-print-chosho-all"); if(_ba) _ba.onclick = printAllChosho; }
