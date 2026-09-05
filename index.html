@@ -6652,7 +6652,7 @@
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "138";
+const APP_VERSION = "139";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -14366,6 +14366,48 @@ async function buildIndividualContent(row, existingFh){
   return data;
 }
 /* 現在エディタで開いている戸別の個別JSONを工事フォルダへ書き戻す。戻り値＝結果メッセージ（alertに添える）。 */
+/* 暗号化した戸別は中身を開けないので、書いた長さが合っているかだけ確かめる。
+   途中で切れた・空になった、を捕まえるためのもの。 */
+async function fileSizeVerify(fh, text){
+  /* 読み返せない相手（このブラウザが getFile を持たない・共有先が返してくれない等）は
+     「確かめられない」だけで、失敗ではない。ここで失敗にすると、正しく保存できているのに
+     毎回「中身が合いません」と出てしまう。 */
+  if(!fh || typeof fh.getFile !== "function") return "";
+  try {
+    const t = await (await fh.getFile()).text();
+    if(t.length === String(text).length) return "";
+    return "\u30fbファイルの大きさが合いません（書いたはず " + String(text).length
+         + " 文字 ／ ファイル " + t.length + " 文字）";
+  } catch(e){
+    return "\u30fb読み返せませんでした（" + ((e && e.message) || e) + "）";
+  }
+}
+/* 書いた戸別ファイルを読み返して、入っているはずのものが入っているか確かめる。
+   合わないところを文章で返す（合っていれば空）。現場入力アプリの saveVerify と同じ考え方。 */
+async function caseFileVerify(fh, obj){
+  /* 読み返せない相手（このブラウザが getFile を持たない・共有先が返してくれない等）は
+     「確かめられない」だけで、失敗ではない。ここで失敗にすると、正しく保存できているのに
+     毎回「中身が合いません」と出てしまう。 */
+  if(!fh || typeof fh.getFile !== "function") return "";
+  try {
+    const o = JSON.parse(await (await fh.getFile()).text());
+    const ng = [];
+    const same = (k, label) => {
+      const a = String((obj && obj[k]) == null ? "" : obj[k]);
+      const b = String((o && o[k]) == null ? "" : o[k]);
+      if(a !== b) ng.push("\u30fb" + label + "： 入れたはず「" + (a || "空") + "」／ ファイル「" + (b || "空") + "」");
+    };
+    same("chosho_mgmt_no", "管理番号");
+    same("chosho_cust_name", "お客様氏名");
+    same("chosho_date", "工事予定日");
+    const pa = ((obj && obj.chosho_photos) || []).filter(x => x && x.dataUri).length;
+    const pb = ((o && o.chosho_photos) || []).filter(x => x && x.dataUri).length;
+    if(pa !== pb) ng.push("\u30fb写真の枚数： 入れたはず " + pa + " 枚 ／ ファイル " + pb + " 枚");
+    return ng.length ? ng.join("\n") : "";
+  } catch(e){
+    return "\u30fb読み返せませんでした（" + ((e && e.message) || e) + "）";
+  }
+}
 async function writeCurrentCaseToIndividualFile(){
   const row = _editingRow;
   if(!row || _listRows.indexOf(row) < 0) return "";
@@ -14404,7 +14446,25 @@ async function writeCurrentCaseToIndividualFile(){
   let perm = await fh.queryPermission({ mode: "readwrite" }); if(perm !== "granted") perm = await fh.requestPermission({ mode: "readwrite" });
   if(perm !== "granted") return "\n⚠ 戸別の個別JSONへの書込権限が得られませんでした。";
   const contentObj = await buildIndividualContent(row, photoSrcFh);
-  const w = await fh.createWritable(); await w.write(JSON.stringify(contentObj, null, 2)); await w.close();
+  /* ★書けなかったときに例外で飛ばさない／書いたら読み返して確かめる★
+     ここは図面・積算・写真が入る本体のファイル。空き容量が足りないと
+     close() で失敗するが、これまでは受け止めておらず、呼び出し元によっては
+     何も出ないまま「保存した」ことになっていた。
+     現場入力アプリは前から読み返して確かめているので、こちらも同じにする。 */
+  try {
+    const w = await fh.createWritable();
+    await w.write(JSON.stringify(contentObj, null, 2));
+    await w.close();
+  } catch(e){
+    console.warn("[戸別] 個別JSONの書込に失敗:", e);
+    return "\n\u26a0 戸別の個別JSONを保存できませんでした（" + ((e && e.message) || e) + "）。\n"
+         + "\u3000 空き容量を確認して、もう一度お試しください。中身はこの画面に残っています。";
+  }
+  { const bad = await caseFileVerify(fh, contentObj);
+    if(bad){
+      return "\n\u26a0 戸別の個別JSONを書いたあと読み返したところ、中身が合いませんでした。\n" + bad
+           + "\n\u3000 空き容量を確認して、もう一度お試しください。中身はこの画面に残っています。";
+    } }
   // 旧名ファイル(.antenna.json等)を削除して「管理番号.json」に一本化。
   // ★写真喪失防止ガード：旧に写真があるのに新に無い場合は削除しない（＝旧をバックアップとして残す）。
   let renamedNote = "";
@@ -14509,6 +14569,14 @@ async function saveState(){
       const writable = await handle.createWritable();
       await writable.write(content);
       await writable.close();
+      /* 書いたあと読み返して、中身が入っているか確かめる。
+         現場入力アプリは前から確かめている。黙って空のファイルを渡すと、
+         PCで開くまで誰も気付けない。 */
+      { const bad = await caseFileVerify(handle, s);
+        if(bad){
+          alert("\u26a0 保存したファイルを読み返したところ、中身が合いませんでした。\n\n" + bad
+            + "\n\n空き容量を確認して、もう一度保存してください。\n入力した内容はこの画面に残っています。");
+        } }
       // 同一セッション内で次回のダイアログ初期位置として記憶
       try {
         lastSaveDirHandle = await handle.getParent ? await handle.getParent() : null;
@@ -14734,6 +14802,11 @@ async function saveStateEncrypted(){
       const writable = await handle.createWritable();
       await writable.write(content);
       await writable.close();
+      { const bad = await fileSizeVerify(handle, content);
+        if(bad){
+          alert("\u26a0 保存したファイルを読み返したところ、中身が合いませんでした。\n\n" + bad
+            + "\n\n空き容量を確認して、もう一度保存してください。\n入力した内容はこの画面に残っています。");
+        } }
       try {
         lastSaveDirHandle = await handle.getParent ? await handle.getParent() : null;
       } catch(_){ /* 非対応環境 */ }
@@ -14795,6 +14868,11 @@ async function saveStateHybrid(){
       const writable = await handle.createWritable();
       await writable.write(content);
       await writable.close();
+      { const bad = await fileSizeVerify(handle, content);
+        if(bad){
+          alert("\u26a0 保存したファイルを読み返したところ、中身が合いませんでした。\n\n" + bad
+            + "\n\n空き容量を確認して、もう一度保存してください。\n入力した内容はこの画面に残っています。");
+        } }
       try {
         lastSaveDirHandle = await handle.getParent ? await handle.getParent() : null;
       } catch(_){}
@@ -16670,6 +16748,18 @@ async function lgwbApply(list){
       const w = await fh.createWritable();
       await w.write(JSON.stringify(json, null, 2));
       await w.close();
+      /* ★書いたら読み返して確かめる★
+         ここで確かめないと、書けていないファイルでも「反映しました」と出て、
+         台帳側の「まだ入っていません」の印まで落ちてしまう（＝直したことを見失う）。
+         読み直しは全部書けたときにしか走らないので、印が落ちると気づく手がかりが無くなる。 */
+      const back = JSON.parse(await (await fh.getFile()).text());
+      const ng = it.diffs.filter(d => {
+        const f = lgwbField(d.k);
+        const now = (f && f.bool) ? !!back[d.k] : String(back[d.k] == null ? "" : back[d.k]);
+        return now !== d.to;
+      });
+      if(ng.length) throw new Error("書いたあと読み返したら入っていませんでした（"
+        + ng.map(d => d.label).join("・") + "）");
       ok++; okRows.push(it.row);
     } catch(e){ fails.push("・" + it.name + "：" + ((e && e.message) || e)); }
   }
@@ -22546,9 +22636,23 @@ function projHandleDelete(id){
    ・履歴から任意の世代へワンクリック復元（復元前に現状を自動で控える＝戻し過ぎても戻せる）。
    ============================================================ */
 function backupNewId(){ return "bk" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+/* ★世代の本体は「書き終わってから」成功にすること★
+   ここは最後の頼み綱。put() の成功で終わりにすると、空き容量が足りずに
+   取引が取り消されても成功として扱われ、履歴の一覧には並ぶのに
+   開こうとすると中身が無い、という状態になる。 */
 function backupPut(rec){
   return projOpenDb().then(db => new Promise((res, rej) => {
-    try { const tx = db.transaction(PROJ_BACKUP_STORE, "readwrite"); const r = tx.objectStore(PROJ_BACKUP_STORE).put(rec); r.onsuccess = () => res(true); r.onerror = () => rej(r.error); }
+    try {
+      let done = false;
+      const ok = () => { if(!done){ done = true; res(true); } };
+      const ng = e => { if(!done){ done = true; rej(e || new Error("世代の保存が取り消されました")); } };
+      const tx = db.transaction(PROJ_BACKUP_STORE, "readwrite");
+      const r = tx.objectStore(PROJ_BACKUP_STORE).put(rec);
+      r.onerror = () => ng(r.error);
+      tx.oncomplete = ok;
+      tx.onabort = () => ng(tx.error);
+      tx.onerror = () => ng(tx.error);
+    }
     catch(e){ rej(e); }
   }));
 }
@@ -22899,7 +23003,17 @@ async function manualBackupProject(pid){
   if(_currentProject && _currentProject.id === pid){ try { await projSaveNow(); } catch(_){} }
   const p = await projIdbGet(pid);
   if(!p || !p.id){ alert("バックアップ対象の物件が見つかりません。"); return; }
-  await createProjectBackup(p, "manual");
+  /* 手で押した控えは、できたかどうかを必ず伝える。
+     黙って失敗すると「控えたつもり」で先へ進んでしまう。 */
+  try {
+    await createProjectBackup(p, "manual");
+    alert("🕘 いまの状態を1世代控えました。\n\nメニューの「履歴」からいつでも戻せます。");
+  } catch(e){
+    console.warn("[物件] 手動バックアップに失敗:", e);
+    alert("⚠ 控えを作れませんでした（" + ((e && e.message) || e) + "）。\n\n"
+      + "パソコンの空き容量を確認してください。\n"
+      + "急ぐときは、メニューの物件ファイル保存でファイルへ残してください。");
+  }
 }
 /* 世代を復元：復元前に現状を自動で控え→その世代を物件へ適用して開く。 */
 async function restoreProjectBackup(bid){
@@ -33203,13 +33317,24 @@ window.addEventListener("DOMContentLoaded", init);
     // 地図に変更（書込）があったことを記録 → projSaveNow が共有ファイル/バックアップへ地図を同梱する際、
     // 変更時だけ重い画像base64化を再実行する（性能対策のdirtyフラグ）。
     if(mode === "readwrite"){ try { window.__mapsDirty = true; } catch(_e){} }
+    /* ★書き込みは「書き終わってから」成功にすること★
+       地図の背景画像はこのアプリでいちばん大きい。空き容量が足りないと
+       put() が通ってから取引が取り消されるので、req.onsuccess で成功にすると
+       「保存した地図が次に開くと無い」が黙って起きる。取消(onabort)も必ず失敗として返す。 */
     return projOpenDb().then(function(db){
       return new Promise(function(res, rej){
         try {
+          var done = false;
+          var ok = function(v){ if(!done){ done = true; res(v); } };
+          var ng = function(e){ if(!done){ done = true; rej(e || new Error("地図の取引が取り消されました")); } };
           var tx = db.transaction(store, mode);
           var req = fn(tx.objectStore(store));
-          req.onsuccess = function(){ res(req.result); };
-          req.onerror = function(){ rej(req.error); };
+          var result;
+          req.onsuccess = function(){ result = req.result; if(mode !== "readwrite") ok(result); };
+          req.onerror = function(){ ng(req.error); };
+          tx.oncomplete = function(){ ok(result); };
+          tx.onabort = function(){ ng(tx.error); };
+          tx.onerror = function(){ ng(tx.error); };
         } catch(e){ rej(e); }
       });
     });
