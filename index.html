@@ -6580,7 +6580,7 @@
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "133";
+const APP_VERSION = "134";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -14480,6 +14480,16 @@ function applyStateData(s){
     const el = document.getElementById(k);
     if(el) el.value = s[k];
   }
+  /* アパートの「何世帯目」だけは、世帯数に合わせて選択肢を作ってからでないと入らない。
+     この <select> は最初は空なので、上の el.value = "2" が素通りして空のままになり、
+     そのあと画面を組み直すときに 1世帯目（代表）へ戻ってしまっていた。
+     ＝2世帯目の戸別をエディタで開くと、黙って代表に化ける（積算も図面も別物になる）。 */
+  try {
+    if(typeof aptSyncUi === "function") aptSyncUi();
+    const _iEl = document.getElementById("apt_idx");
+    const _iv = String(s.apt_idx == null ? "" : s.apt_idx);
+    if(_iEl && _iv) _iEl.value = _iv;
+  } catch(_){}
   if(s.tax_mode){
     const r = document.querySelector('input[name=tax_mode][value="'+s.tax_mode+'"]');
     if(r) r.checked = true;
@@ -26507,6 +26517,8 @@ function buildLedgerHtmlSnapshot(){
       chosho_cust_addr: d.chosho_cust_addr || "",
       chosho_cust_tel:  d.chosho_cust_tel  || "",
       chosho_date:      d.chosho_date      || "",
+      chosho_time:      d.chosho_time      || "",
+      chosho_meet_at:   d.chosho_meet_at   || "",
       chosho_status:    d.chosho_status    || "in_progress",
       chosho_note:      d.chosho_note      || "",
       work_type:        d.work_type        || ""
@@ -30170,6 +30182,25 @@ function noteSyncToEditor(row){
    一覧へ戻る時・保存時に呼ばれ、台帳・物件自動保存へ編集内容を反映する。 */
 /* エディタの内容（図面・積算・写真）を、開いている一覧行データへ丸ごと取り込む（保存はしない）。
    保存直前(projSaveNow)・一覧へ戻る時・明示保存時に呼ぶ内部版。collectState を1回だけ実行。 */
+/* エディタ（積算・図面）の画面には無いけれど、戸別データが持っている欄。
+   collectState() は画面の入力欄から作るので、ここに書いておかないと
+   「エディタで開いて保存しただけ」で丸ごと消える。
+   ★実際に消えていたもの★
+     ・打合せ予定（画面に欄が無い。持ち主は受付台帳）
+     ・工程の印と日時（下見・ビラ・工事・同意書・工事完了書。現場入力が押す）
+     ・完了書なし完了の記録（もらえなかった事情を残すためのもの。消してはいけない）
+   ※ outsource_fee_auto はここに入れないこと。あれは「画面に欄が出ていない時は
+     キーごと落として、読込側の既定＝物件の諸経費に追従、へ委ねる」ための仕組み。 */
+const EDITOR_KEEP_FIELDS = [
+  "chosho_meet_at",
+  "survey_done","survey_done_at",
+  "flyer_done","flyer_done_at",
+  "work_done","work_done_at",
+  "consent_received","consent_received_at",
+  "compdoc_received","compdoc_received_at",
+  "compdoc_waived","compdoc_waived_at","compdoc_waived_note",
+  "_passthrough","_otherFile","_mergedFrom"
+];
 function syncEditorToRowData(force){
   if(!_editingRow || _listRows.indexOf(_editingRow) < 0) return;
   // 開いてから何も触っていなければ書き戻さない（見ただけで工事内容・金額が入るのを防ぐ）。
@@ -30178,6 +30209,9 @@ function syncEditorToRowData(force){
   try { markCaseEdited(_editingRow); } catch(_){} // Phase2: 開いている戸別をマージ上乗せ対象に
   try {
     const s = collectState();
+    // 画面に無い欄は collectState が作らないので、いま行が持っているものを引き継ぐ
+    { const prev = _editingRow.data || {};
+      EDITOR_KEEP_FIELDS.forEach(k => { if((k in prev) && !(k in s)) s[k] = prev[k]; }); }
     // 住所・電話の数字は半角へ統一（台帳での編集と揃える）
     if(s.chosho_cust_addr) s.chosho_cust_addr = toHalfWidthAn(s.chosho_cust_addr);
     if(s.chosho_cust_tel)  s.chosho_cust_tel  = toHalfWidthAn(s.chosho_cust_tel);
@@ -30424,6 +30458,43 @@ function genbaMergeCaseData(mainData, genbaData, opts){
       } else { base.chosho_date=gd; report.date={from:md,to:gd}; }
     }
   }
+  /* D-2. 時刻・打合せ予定
+     現場入力の画面には「ここで入れると保存した戸別ファイルからPCの台帳へ戻ります」と
+     書いてあるのに、この取込だけ拾っていなかった（フォルダ読込では拾えていた）。
+     入れ物が空のときは拾わない＝現場が触っていない戸別で、事務所が入れた時刻を消さない。
+     日付(D)と違って予定そのものではなく時刻なので、非空どうしがぶつかっても現場を採る
+     （現場でお客様と決め直した時刻のほうが新しいため）。 */
+  [["chosho_time","時刻"], ["chosho_meet_at","打合せ予定"]].forEach(([k, label]) => {
+    const mv = String((mainData && mainData[k]) || "").trim();
+    const gv = String(g[k] || "").trim();
+    if(!gv || gv === mv) return;
+    base[k] = gv;
+    report.technical.push(k);
+    if(mv) report.notes.push(label + ": 現場の " + gv + " を採用（PCは " + mv + "）");
+  });
+  /* D-3. アパートの欄（建物名・世帯数・大家・書なし完了）
+     持ち主はPC側で、現場入力は戸別JSONに写して返しているだけ。ふだんはPCの値をそのまま使う。
+     ただし現場のファイルにしか無い管理番号を取り込むと、PCにはその行が無いので
+     空の行から始まり、建物のまとまりが丸ごと消えてしまう。
+     そこで「PCがこの戸別をアパートだと知らないとき」だけ、現場のファイルから写す。
+     知っているときは触らないので、PCで取り消した「書なし完了」が復活することもない。 */
+  if(!String((mainData && mainData.apt_units) || "").trim()){
+    const seeded = [];
+    ["apt_units","apt_idx","apt_bldg","apt_name","apt_room","apt_common","apt_common_done",
+     "apt_owner_name","apt_owner_tel","apt_owner_addr","apt_consent_at",
+     "compdoc_waived","compdoc_waived_at","compdoc_waived_note"].forEach(k => {
+      const gv = String(g[k] || "").trim();
+      if(!gv) return;
+      if(String((mainData && mainData[k]) || "").trim()) return;
+      base[k] = gv; seeded.push(k);
+    });
+    if(seeded.length){
+      const nm = String(g.apt_name || g.apt_bldg || "").trim();
+      const rm = String(g.apt_room || "").trim();
+      report.notes.push("アパート: 現場のファイルから建物の情報を引き継ぎました"
+        + (nm ? "（" + nm + (rm ? " " + rm : "") + "）" : "") );
+    }
+  }
   // E. 写真 和集合＋重複統合
   base.chosho_photos = mergeGenbaPhotos(mainData&&mainData.chosho_photos, g.chosho_photos, opts.photo, report);
   // F. hard-keep（base は main クローン＝これらは既に main 値。許可リスト外なので genba は混入しない）
@@ -30651,6 +30722,23 @@ async function applyGenbaMergeToRow(row, genbaData, opts){
     try{ const ntk = subCaseKey(row);
          if(ntk) noteAdopt(ntk, String(merged.chosho_note || "")); }catch(_){}
   }
+  /* 時刻・打合せ予定は受付台帳（_ledgerMap）にも同じものを置いている。
+     戸別データだけ直して台帳を放っておくと、台帳の画面が古いままになる。
+     控え(*Src)も一緒に置いて、次にフォルダを読み直した時に取り合いにならないようにする。 */
+  try {
+    const ttk = subCaseKey(row);
+    if(ttk){
+      const patch = {};
+      [["chosho_time","time","timeSrc"], ["chosho_meet_at","meetAt","meetSrc"]].forEach(([k, lgk, srck]) => {
+        const v = String(merged[k] || "").trim();
+        if(!v) return;                                  // 空では台帳を消さない
+        const lg = getLedger(ttk) || {};
+        if(String(lg[lgk] || "") === v && String(lg[srck] || "") === v) return;
+        patch[lgk] = v; patch[srck] = v;
+      });
+      if(Object.keys(patch).length) setLedger(ttk, patch);
+    }
+  } catch(_){}
   // 工程（ビラ配り・同意書・工事完了書）を受付台帳の「ビラ・同意書・完了書」へ入れる
   try { flowAdoptRow(row, genbaData); } catch(_){}
   const note = await _genbaWriteRowIndividual(row);  // 原寸写真は温存して個別JSONへ書戻し
