@@ -3757,9 +3757,13 @@
   td.lg-note-dup::before { content: "⚠"; color: #b05a00; font-size: 10px; margin-right: 2px; }
   /* 📥 受付台帳の差分取り込み */
   /* 🏢 マンション管理（建物ごとの画面） */
+  .lg-apt-band .ab-rep-warn { background: #ffebee; border: 1px solid #ef9a9a; border-radius: 3px; padding: 0 6px; margin-left: 8px; }
   .lg-apt-band .ab-mg { margin-left: 10px; background: #6a1b9a; color: #fff; border: 1px solid #4a148c;
     border-radius: 3px; font-size: 11px; padding: 1px 8px; cursor: pointer; font-family: inherit; }
   @media print { .lg-apt-band .ab-mg { display: none !important; } }
+  /* 印刷の見え方を画面で確かめるモードでも、押すところは出さない */
+  body.lg-print-preview .lg-apt-band .ab-mg,
+  body.list-print-mode .lg-apt-band .ab-mg { display: none !important; }
   #aptmg-ov { position: fixed; inset: 0; background: rgba(20,30,45,.55); z-index: 9000; display: flex; align-items: center; justify-content: center; }
   #aptmg-ov .aptmg-box { background: #fff; border-radius: 8px; width: min(1120px, 96vw); max-height: 92vh; display: flex; flex-direction: column; box-shadow: 0 8px 30px rgba(0,0,0,.3); }
   #aptmg-ov .amg-head { background: #6a1b9a; color: #fff; font-weight: 700; padding: 9px 14px; border-radius: 8px 8px 0 0; display: flex; align-items: center; }
@@ -6648,7 +6652,7 @@
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "136";
+const APP_VERSION = "137";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -18766,6 +18770,30 @@ function aptBldgKey(d){
 }
 function aptBldgKeyOfRow(row){ return row ? aptBldgKey(row.data) : ""; }
 
+/* 建物の代表（1世帯目）は必ず1つ。
+   0つだと、建物に1つで足りるもの（共用部のボックス一式・保安器撤去・引込線撤去）が
+   どこにも計上されず、2つあると二重に計上される。実測で ±43,510円 ずれた。
+   金額が黙ってずれるので、受付台帳の帯とマンション管理の両方で知らせる。
+   ※ apt_idx が空の行は 1（代表）扱いになるので、行を手で足したときに増えやすい。 */
+function aptRepCount(members){
+  return (members || []).filter(m => m && aptIdx(m.data) === 1).length;
+}
+/* 帯に出す「代表がおかしい」の一言。正しければ空。
+   ★数えるのは一覧ぜんぶの中の同じ建物★ 帯に渡ってくるのは絞り込んだ後の世帯なので、
+   それを数えると「未完了だけ表示」しただけで代表が隠れ、「代表がいません」と
+   嘘の警告が出てしまう。 */
+function aptRepWarnHtml(members){
+  const first = (members || [])[0];
+  const key = first ? aptBldgKeyOfRow(first) : "";
+  const all = key ? aptGroupRows(_listRows, key) : [];
+  const n = aptRepCount(all.length ? all : members);
+  if(n === 1) return "";
+  return '<span class="ab-warn ab-rep-warn" title="建物に1つで足りるもの（共用部のボックス一式・保安器撤去・引込線撤去）は、'
+    + '1世帯目（代表）にだけ計上されます。'
+    + (n === 0 ? '代表がいないので、この建物ぶんがどこにも計上されていません。'
+               : '代表が' + n + 'つあるので、この建物ぶんが' + n + '重に計上されています。')
+    + '「🏢 管理」から直せます。">⚠ 代表 ' + n + '（1つにしてください）</span>';
+}
 /* 帯に出す連絡先。大家と不動産（管理会社）は別物なので、入っている方だけ並べる。
    住所も出す。大家は建物に住んでいないので、建物の住所とは別の場所になる。 */
 function aptOwnerLineHtml(d){
@@ -19074,6 +19102,7 @@ function aptBandRowHtml(row, members, colSpan, commonAddr){
     + '<span class="ab-sep">|</span>完了確認書は入居者ごと <b>' + compdoc + ' / ' + n + ' 通</b>'
     + (waived ? '<span class="ab-waive" title="連絡が取れないまま期限で切り替えた世帯です。工事は終わっていますが、完了確認書は受け取れていません。">＋書なし完了 ' + waived + '</span>' : '')
     + '<span class="ab-sep">|</span>工事完了 <b>' + done + ' / ' + n + ' 世帯</b>'
+    + aptRepWarnHtml(members)
     + '<button class="ab-mg" data-aptmg="' + escapeHtml(key) + '" title="この建物のことだけをまとめて見ます（大家・不動産の連絡先、同意書、足りない世帯など）">🏢 管理</button>'
     + '</td></tr>';
 }
@@ -19130,6 +19159,7 @@ function aptBandSimpleHtml(row, members, colSpan, commonAddr){
       + compdoc + ' / ' + n + ' 通</span>'
     + (waived ? '<span class="ab-waive" title="連絡が取れないまま期限で切り替えた世帯です。工事は終わっていますが、完了確認書は受け取れていません。">＋書なし完了 ' + waived + '</span>' : '')
     + '<span class="ab-sep">|</span>工事完了 <b>' + done + ' / ' + n + ' 世帯</b>'
+    + aptRepWarnHtml(members)
     + '</td></tr>';
 }
 
@@ -19297,6 +19327,23 @@ function aptMgRender(){
       + '<div class="amg-alert-n">1世帯目＝代表には、建物に1つで足りるもの（共用部のボックス一式・保安器撤去・引込線撤去）が乗ります。'
       + 'ずれたままだと、その世帯の積算に建物1棟ぶんが乗ってしまいます。</div>'
       + '<button type="button" id="amg-fixidx">枝番に合わせて直す</button></div>';
+  }
+
+  /* 代表（1世帯目）の数。1つでないと、建物に1つで足りるものが
+     どこにも乗らない／二重に乗る。金額が黙ってずれるので、いちばん上で知らせる。 */
+  const repN = aptRepCount(b.rows);
+  if(repN !== 1){
+    const withBr1 = b.rows.filter(r => aptMgmtBranch((r.data || {}).chosho_mgmt_no) === 1);
+    html += '<div class="amg-alert"><b>代表（1世帯目）が ' + repN + ' つです。建物にはちょうど1つ必要です。</b>'
+      + '<div class="amg-alert-n">共用部のボックス一式・保安器撤去・引込線撤去は、建物に1つで足りるので'
+      + '<b>代表にだけ</b>計上されます。'
+      + (repN === 0
+          ? 'いま代表がいないので、この建物ぶんが<b>どこにも計上されていません</b>（金額が足りません）。'
+          : '代表が' + repN + 'つあるので、この建物ぶんが<b>' + repN + '重に計上されています</b>（金額が多すぎます）。')
+      + (repN === 0 && !withBr1.length
+          ? '　まず上の「足りない世帯を作る」で -01 を戻すか、フォルダを読み直してください。'
+          : '　下の「枝番に合わせて直す」か、世帯の表の「何世帯目」を直してください。')
+      + '</div></div>';
   }
 
   const stray = aptMgStray(b);
