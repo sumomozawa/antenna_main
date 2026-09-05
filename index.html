@@ -6652,7 +6652,7 @@
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "137";
+const APP_VERSION = "138";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -16413,7 +16413,30 @@ const LGWB_FIELDS = [
   { k:"hold_flag",         label:"保留",   bool:true, lg:"hold" },
   { k:"flyer_done",        label:"ビラ",   bool:true, lg:"flyer" },
   { k:"consent_received",  label:"同意書", bool:true, lg:"consent" },
-  { k:"compdoc_received",  label:"完了書", bool:true, lg:"compdoc" }
+  { k:"compdoc_received",  label:"完了書", bool:true, lg:"compdoc" },
+  /* アパート（集合住宅）。受付台帳と「🏢 マンション管理」でしか直せない欄なので、
+     ここに書いておかないと戸別ファイルには入らない。
+     入らないと、フォルダを読み直しただけで建物の情報がファイルの中身で上書きされて消え、
+     別のPCにも渡らない（建物のまとまりが向こうで分からなくなる）。 */
+  { k:"apt_units",       label:"世帯数" },
+  { k:"apt_idx",         label:"何世帯目" },
+  { k:"apt_bldg",        label:"建物キー" },
+  { k:"apt_name",        label:"アパート名" },
+  { k:"apt_room",        label:"部屋番号" },
+  { k:"apt_common",      label:"共用部" },
+  { k:"apt_common_done", label:"共用部の工事" },
+  { k:"apt_owner_name",  label:"大家 氏名" },
+  { k:"apt_owner_tel",   label:"大家 電話" },
+  { k:"apt_owner_addr",  label:"大家 住所" },
+  { k:"apt_agent_name",  label:"不動産 会社名" },
+  { k:"apt_agent_tel",   label:"不動産 電話" },
+  { k:"apt_agent_addr",  label:"不動産 住所" },
+  { k:"apt_consent_at",  label:"同意書 受取日" },
+  /* 連絡が取れないまま期限で切り替えた世帯。記録として必ず残すものなので、
+     戸別ファイルにも入れて、読み直しても別のPCでも消えないようにする。 */
+  { k:"compdoc_waived",      label:"書なし完了" },
+  { k:"compdoc_waived_at",   label:"書なし完了 日" },
+  { k:"compdoc_waived_note", label:"書なし完了 覚え書き" }
 ];
 /* 戸別ファイルに置き場所が無く、書き戻せない台帳の欄。
    工事時刻（chosho_time）と打合せ予定（chosho_meet_at）を戸別ファイルへ入れたので、
@@ -19185,6 +19208,12 @@ function aptSetGroupField(row, key, value){
     if(!m || !m.data) return;
     m.data[key] = value;
     try { markCaseEdited(m); } catch(_){}
+    /* ★「まだ戸別ファイルに入っていない」印を必ず付ける★
+       直しているのは読み込んだ行そのもので、フォルダの戸別ファイルはまだ古い。
+       この印が無いと、フォルダを読み直すときの警告も出ず、
+       「💾 戸別ファイルへ反映」の対象にもならないので、黙って消える。 */
+    m._lgEdited = true;
+    try { lgMarkTouched(m); } catch(_){}
   });
   try { projTouch(); } catch(_){}
 }
@@ -19192,7 +19221,14 @@ function aptSetGroupField(row, key, value){
    履行報告・書き出し・現場入力の作りに手を入れずに済む）。 */
 function aptSetGroupConsent(row, checked){
   const g = aptGroupRows(_listRows, aptBldgKeyOfRow(row));
-  (g.length ? g : [row]).forEach(m => setLedger(subCaseKey(m), { consent: !!checked }));
+  (g.length ? g : [row]).forEach(m => {
+    setLedger(subCaseKey(m), { consent: !!checked });
+    /* 同意書は建物ぜんぶの世帯に付くので、反映が要るのも建物ぜんぶ。
+       以前は帯の中で先頭の1件だけに印を付けていたので、残りの世帯は
+       戸別ファイルへ書かれないまま取り残されていた。 */
+    m._lgEdited = true;
+    try { lgMarkTouched(m); } catch(_){}
+  });
 }
 /* ============================================================
    🏢 マンション管理（建物ごとの画面）
@@ -22442,12 +22478,35 @@ function projOpenDb(){
     req.onerror = () => reject(req.error || new Error("IndexedDB open failed"));
   });
 }
+/* ★書き込みは「入れ物に入った」ではなく「本当に書き終わった」で成功とすること★
+   IndexedDB は put() が成功しても、最後に書き込む段階で容量が足りないと
+   取引ごと取り消される（abort）。req.onsuccess で成功にしてしまうと、
+   ・「保存しました」と出たのに何も書かれていない
+   ・「まだ保存していません」の印まで消える（＝直したことを知らせる手がかりが無くなる）
+   ・abort が onsuccess より先に来た場合は、どちらも呼ばれず約束が永久に宙づりになり、
+     _projSaving が立ったまま以後の自動保存が全部素通りする
+   という、いちばん困る壊れ方をする。取引の完了(oncomplete)を待ち、
+   取消(onabort)と失敗(onerror)は必ず失敗として返す。 */
 function projIdbReq(mode, fn){
   return projOpenDb().then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction(PROJ_STORE, mode);
-    const req = fn(tx.objectStore(PROJ_STORE));
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    let done = false;
+    const ok = v => { if(!done){ done = true; resolve(v); } };
+    const ng = e => { if(!done){ done = true; reject(e || new Error("IndexedDBの取引が取り消されました")); } };
+    let tx;
+    try { tx = db.transaction(PROJ_STORE, mode); } catch(e){ ng(e); return; }
+    let req;
+    try { req = fn(tx.objectStore(PROJ_STORE)); } catch(e){ ng(e); return; }
+    let result;
+    if(req){
+      req.onsuccess = () => {
+        result = req.result;
+        if(mode !== "readwrite") ok(result);   // 読むだけなら、その場で結果を返してよい
+      };
+      req.onerror = () => ng(req.error);
+    }
+    tx.oncomplete = () => ok(result);          // 書き終わってから成功にする
+    tx.onabort = () => ng(tx.error);
+    tx.onerror = () => ng(tx.error);
   }));
 }
 /* ---------- 共有ファイルハンドルの保存/取得（物件ID別・再起動後の自動再接続用） ----------
@@ -23108,8 +23167,29 @@ let _ledgerMap = (() => {
   try { return JSON.parse(localStorage.getItem(LEDGER_KEY)) || {}; }
   catch { return {}; }
 })();
+/* 受付台帳の記録（時刻・打合せ・備考・ビラ・同意書・完了書・保留）を端末へ。
+   ★失敗を黙って捨てないこと★ 物件を開いていないとき（フォルダだけで使うとき）は
+   ここが唯一の置き場なので、空き容量が足りずに書けないと、閉じた瞬間に全部消える。
+   物件を開いていれば物件ファイルにも入るが、それでも知らせないと気付けない。 */
 function saveLedgerMap(){
-  try { localStorage.setItem(LEDGER_KEY, JSON.stringify(_ledgerMap)); } catch(_){}
+  try {
+    localStorage.setItem(LEDGER_KEY, JSON.stringify(_ledgerMap));
+    saveLedgerMap._warned = false;
+  } catch(e){
+    console.warn("[台帳] この端末への保存に失敗:", e);
+    if(!saveLedgerMap._warned){
+      saveLedgerMap._warned = true;
+      try {
+        alert("⚠ 受付台帳の記録を、このパソコンに保存できませんでした。\n\n"
+          + "（時刻・打合せ予定・備考・ビラ・同意書・完了書・保留 の記録です）\n"
+          + "ブラウザの保存領域がいっぱいの可能性があります。\n\n"
+          + "・物件を開いていれば、物件ファイルの方には入ります\n"
+          + "・物件を開いていないときは、閉じると消えます。先に\n"
+          + "　「💾 戸別ファイルへ反映」でファイルへ残してください\n\n"
+          + "（この知らせは1回だけ出ます）");
+      } catch(_){}
+    }
+  }
 }
 // この端末に残っている分も、起動のときに1回だけ引っ越す
 try { lgMigrateHanKeys(); } catch(_){}
@@ -24054,6 +24134,18 @@ function projTouch(){
   if(_projSaveTimer) clearTimeout(_projSaveTimer);
   _projSaveTimer = setTimeout(() => { _projSaveTimer = null; projSaveNow(); }, 1500);
 }
+/* 画面を閉じる・裏へ回すときに、待たせている保存を先に走らせる。
+   自動保存は 1.5秒 待ってからまとめて走るので、直した直後にタブやアプリを閉じると
+   その1回ぶんが丸ごと消えていた（現場入力には前から同じ仕組みが入っている）。 */
+function projFlushSave(){
+  if(!_currentProject) return;
+  if(_projSaveTimer){ clearTimeout(_projSaveTimer); _projSaveTimer = null; }
+  try { projSaveNow(); } catch(e){ console.warn("[物件] 閉じる前の保存に失敗:", e); }
+}
+document.addEventListener("visibilitychange", () => {
+  if(document.visibilityState === "hidden") projFlushSave();
+});
+window.addEventListener("pagehide", projFlushSave);
 async function projSaveNow(){
   if(!_currentProject) return;
   // 多重実行ガード：保存中に来た要求は1回だけ予約し、完了後に再実行（書込交錯・マーク消失を防ぐ・指摘#3/#5/#6）
@@ -24127,11 +24219,31 @@ async function projSaveNow(){
     }
     // 書込/取り込みに成功した分だけ編集マークを消す（保存中に来た新規編集マークは残し、次回マージで上乗せ）
     if(consumed){ try { subtractMarks(cap); } catch(_){} }
+    projSaveNow._failWarned = false;   // 1度成功したら、次に失敗したときはまた知らせる
     const t = new Date();
     _projLastSaved = String(t.getHours()).padStart(2, "0") + ":" + String(t.getMinutes()).padStart(2, "0") + ":" + String(t.getSeconds()).padStart(2, "0");
     updateProjBar();
   } catch(err){
     console.warn("[物件] 自動保存に失敗:", err);
+    /* ★黙って失敗させない★ 空き容量が足りない・ブラウザが保存を拒んだ等で
+       端末内の物件レコードに書けなかったとき、これまでは console に出るだけで
+       画面には何も出ていなかった。直した内容は画面の中にしか無いので、
+       そのまま閉じると丸ごと消える。物件バーに出し、1度だけ知らせる。 */
+    _projWriteWarn = "⚠ 物件の自動保存に失敗しました（空き容量を確認してください）。"
+      + "直した内容はまだこの画面の中だけです。";
+    try { updateProjBar(); } catch(_){}
+    if(!projSaveNow._failWarned){
+      projSaveNow._failWarned = true;
+      try {
+        alert("⚠ 物件の自動保存に失敗しました。\n\n"
+          + "直した内容は、まだこの画面の中にしかありません。\n"
+          + "このまま閉じると消えます。\n\n"
+          + "・パソコンの空き容量を空けてから、もう一度何か直してください（自動保存がやり直されます）\n"
+          + "・急ぐときは 受付台帳の「💾 戸別ファイルへ反映」や、メニューの物件ファイル保存で\n"
+          + "　ファイルへ残してください\n\n"
+          + "（この知らせは1回だけ出ます）");
+      } catch(_){}
+    }
   } finally {
     _projSaving = false;
     if(_projSaveQueued){ _projSaveQueued = false; setTimeout(() => { projSaveNow(); }, 0); } // 実行中に来た保存を1回だけ処理
