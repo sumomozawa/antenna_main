@@ -6644,6 +6644,97 @@
 </div>
 
 <script>
+/* ============================================================================
+   この端末に残す記録の置き場所
+   ★本体は IndexedDB★
+   受付台帳の記録・持出・確認・施工会社の割当などは、これまで localStorage だけに
+   置いていた。localStorage は約5MBしか無く、いっぱいになっても
+   「空き容量を空けてください」としか言えない（利用者にできることが無い）。
+   IndexedDB は桁違いに大きく、物件も世代バックアップもそこに入っている。
+   なのでこれらの記録も IndexedDB を本体にし、localStorage は
+   「起動直後に IndexedDB を読み終える前でも画面が出る」ための写しにする。
+   写しが取れなくても記録は失われない。
+   ※ 物件レコードと同じ入れ物を使うが、id を "ls:" で始め、schema を持たせないので
+      物件の一覧（projIdbList）には出てこない。
+   ============================================================================ */
+let _lsBackup = {};          // IndexedDB から読んだ控え（起動時に入る）
+/* 返り値は「本当に端末に残せたか」の約束（Promise<boolean>）。
+   残せたかどうかを利用者に伝える場面（ひな型を覚えた等）では、これを待つこと。
+   ふつうの記録は待たなくてよい（失敗は console と、次の起動での読み直しで拾える）。
+   ※ この約束は決して reject しない＝待たない呼び出しでも警告を出さない。 */
+/* 写しに置いてよい大きさの上限。localStorage は全部で約5MBしか無いので、
+   受付台帳HTMLのひな型のような大物を写すと、それだけで他の小さな設定
+   （会社名・並び順・列幅など）まで書けなくしてしまう。大物は本体だけに置く。 */
+const LS_COPY_MAX = 64 * 1024;
+function lsSet(key, str){
+  let lsOk = false;
+  if(String(str).length <= LS_COPY_MAX){
+    try { localStorage.setItem(key, str); lsOk = true; } catch(_){ lsOk = false; }   // 写しが取れなくても本体は下で残す
+  }
+  _lsBackup[key] = str;
+  let pr;
+  try { pr = projIdbPut({ id: "ls:" + key, v: str, at: Date.now() }); }
+  catch(e){ pr = Promise.reject(e); }
+  return pr.then(() => true, e => {
+    console.warn("[控え] IndexedDBへの保存に失敗:", key, e);
+    return lsOk;                      // 写しには入った＝閉じても消えない
+  });
+}
+function lsGet(key){
+  let v = null;
+  try { v = localStorage.getItem(key); } catch(_){ v = null; }
+  if(v === null || v === undefined) v = (_lsBackup[key] === undefined ? null : _lsBackup[key]);
+  return v;
+}
+/* 消すときは3か所（画面・控え・本体）を必ず揃える。どれか1つでも残ると
+   「消したのに次の起動で戻ってくる」ことになる。 */
+function lsDel(key){
+  try { localStorage.removeItem(key); } catch(_){}
+  delete _lsBackup[key];
+  try {
+    projIdbDelete("ls:" + key)
+      .catch(e => console.warn("[控え] IndexedDBから消せませんでした:", key, e));
+  } catch(e){ console.warn("[控え] IndexedDBから消せませんでした:", key, e); }
+}
+/* 起動時に本体（IndexedDB）を読み、写し（localStorage）に無いものを戻す。
+   前の版で localStorage にしか無かった記録は、次に直したときに本体へ移る。 */
+async function lsRestoreFromIdb(){
+  let all = [];
+  try { all = await projIdbReq("readonly", st => st.getAll()); } catch(_){ return 0; }
+  let restored = 0;
+  (all || []).forEach(r => {
+    if(!r || typeof r.id !== "string" || r.id.indexOf("ls:") !== 0) return;
+    const key = r.id.slice(3);
+    /* ★この起動でもう書き換えた記録は上書きしない★ 読み直しの最中に物件が開くと、
+       物件の値を lsSet で入れた直後に、読む前の古い値で控えを潰してしまう。
+       lsSet は必ず控えを埋めるので、埋まっていない＝まだ触っていない、で見分けられる。 */
+    if(_lsBackup[key] === undefined) _lsBackup[key] = r.v;
+    let cur = null;
+    try { cur = localStorage.getItem(key); } catch(_){}
+    if(cur === null || cur === undefined){
+      if(String(r.v).length <= LS_COPY_MAX){ try { localStorage.setItem(key, r.v); } catch(_){} }
+      restored++;
+    }
+  });
+  if(restored){
+    // 画面が使っている控えを読み直す（起動の途中で本体が見つかった場合）
+    try { _ledgerMap = loadLedgerMap(); } catch(_){}
+    try { _takeoutMap = loadTakeoutMap(); } catch(_){}
+    try { _reviewMap = loadReviewMap(); } catch(_){}
+    try { _contractorMap = loadContractorMap(); } catch(_){}
+    try { _contractorList = loadContractorList(); } catch(_){}
+    try { _contractorDigitMap = loadContractorDigitMap(); } catch(_){}
+    try { _calFreeEvents = loadCalFreeEvents(); } catch(_){}
+    // ↓この3つは「読み込みの途中（画面を組み立てる前）」に一度読んでいるので、
+    //   本体が後から見つかった場合は入れ直しが要る。
+    try { applyPartsOverrideObj(loadGlobalPartsOverride()); refreshPartsAndPresetUI(); } catch(_){}
+    try { const a = JSON.parse(lsGet(LG_NOTE_LOG_KEY)); if(Array.isArray(a)) _lgNoteLog = a; } catch(_){}
+    try { _baseJobPresetKey = lsGet(BASE_PRESET_KEY) || ""; } catch(_){}
+    try { const d = JSON.parse(lsGet(DETACHED_KEY)); if(d && typeof d === "object") _detachedMap = d; } catch(_){}
+    try { renderListTable(); } catch(_){}
+  }
+  return restored;
+}
 /* ============================================================
    アプリの版（更新日ベース）。画面の隅に控えめに表示し、
    現場入力(genba)と「どちらが新しいか」を突き合わせられるようにする。
@@ -6652,7 +6743,7 @@
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "139";
+const APP_VERSION = "140";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -6958,7 +7049,7 @@ function applyPartsOverrideObj(overrides){
 }
 /* 端末ローカル(全物件共通＝通常)の単価マスター上書きを取得 */
 function loadGlobalPartsOverride(){
-  try { return JSON.parse(localStorage.getItem("antenna_parts_master_override")) || {}; }
+  try { return JSON.parse(lsGet("antenna_parts_master_override")) || {}; }
   catch(_){ return {}; }
 }
 
@@ -11029,7 +11120,7 @@ function computePartsDiff(){
 function savePartsToLocal(){
   const diff = computePartsDiff();
   try {
-    localStorage.setItem(PARTS_STORAGE_KEY, JSON.stringify(diff));
+    lsSet(PARTS_STORAGE_KEY, JSON.stringify(diff));
     clearPartsDirty();
     // 単価が変わった → 一覧の金額キャッシュを破棄して再計算（費用詳細・協力会社請求も更新）
     try { (_listRows || []).forEach(r => { if(r){ r._bomCache = undefined; r._amtCache = undefined; } }); if(typeof renderListTable === "function") renderListTable(); } catch(_){}
@@ -11132,7 +11223,7 @@ function importPartsJson(){
 function resetPartsMaster(){
   if(!confirm("全項目を標準単価(令和8年度単価表)に戻しますか？\nブラウザ保存された変更も削除されます。")) return;
   PARTS = JSON.parse(JSON.stringify(DEFAULT_PARTS));
-  try { localStorage.removeItem(PARTS_STORAGE_KEY); } catch(_){}
+  try { lsDel(PARTS_STORAGE_KEY); } catch(_){}
   clearPartsDirty();
   renderPartsEditor();
   populateTerminalSelects();
@@ -12865,7 +12956,7 @@ const BUILTIN_PRESETS_LABEL = {
 // ユーザープリセット（localStorage）
 const USER_PRESET_KEY = "antenna_user_presets_v1";
 function loadUserPresets(){
-  try { return JSON.parse(localStorage.getItem(USER_PRESET_KEY) || "{}"); }
+  try { return JSON.parse(lsGet(USER_PRESET_KEY) || "{}"); }
   catch { return {}; }
 }
 /* プリセットとして保存する状態。
@@ -12881,7 +12972,7 @@ function collectStateForPreset(){
   return s;
 }
 function saveUserPresets(p){
-  localStorage.setItem(USER_PRESET_KEY, JSON.stringify(p));
+  lsSet(USER_PRESET_KEY, JSON.stringify(p));
   // 物件に内包される設定：編集した端末を競合マージで優先させ、ついでに自動保存も予約する
   try { markProjMetaEdited("userPresets"); } catch(_){}
   try { projTouch(); } catch(_){}
@@ -13344,7 +13435,7 @@ function applyAsbestosState(a){
 const ASBESTOS_PRESET_KEY = "asbestos_office_preset_v1";
 function loadAsbestosOfficePreset(){
   try {
-    const raw = localStorage.getItem(ASBESTOS_PRESET_KEY);
+    const raw = lsGet(ASBESTOS_PRESET_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch(_){ return null; }
 }
@@ -13360,7 +13451,7 @@ function saveAsbestosOfficePreset(){
     saved_at: new Date().toISOString()
   };
   try {
-    localStorage.setItem(ASBESTOS_PRESET_KEY, JSON.stringify(preset));
+    lsSet(ASBESTOS_PRESET_KEY, JSON.stringify(preset));
     updateAsbestosPresetStatus();
     // 物件に内包される設定：編集した端末を競合マージで優先させ、ついでに自動保存も予約する
     try { markProjMetaEdited("asbestosOffice"); } catch(_){}
@@ -13372,7 +13463,7 @@ function saveAsbestosOfficePreset(){
   }
 }
 function clearAsbestosOfficePreset(){
-  try { localStorage.removeItem(ASBESTOS_PRESET_KEY); } catch(_){}
+  try { lsDel(ASBESTOS_PRESET_KEY); } catch(_){}
   updateAsbestosPresetStatus();
 }
 function applyAsbestosPresetToFields(){
@@ -15079,14 +15170,14 @@ let _costOnlyWithDrawing = false;
    スキャンされた全戸別は『追加工事』として集計される。 */
 const BASE_PRESET_KEY = "antenna_base_preset_v1";
 let _baseJobPresetKey = (() => {
-  try { return localStorage.getItem(BASE_PRESET_KEY) || ""; }
+  try { return lsGet(BASE_PRESET_KEY) || ""; }
   catch { return ""; }
 })();
 function setBaseJobPreset(key){
   _baseJobPresetKey = key || "";
   try {
-    if(_baseJobPresetKey) localStorage.setItem(BASE_PRESET_KEY, _baseJobPresetKey);
-    else localStorage.removeItem(BASE_PRESET_KEY);
+    if(_baseJobPresetKey) lsSet(BASE_PRESET_KEY, _baseJobPresetKey);
+    else lsDel(BASE_PRESET_KEY);
   } catch(_){}
   // 物件に内包される設定：編集した端末を競合マージで優先させ、ついでに自動保存も予約する
   try { markProjMetaEdited("basePresetKey"); } catch(_){}
@@ -15199,7 +15290,7 @@ function saveCurrentAsBasePreset(){
   saveUserPresets(up);
   renderPresetButtons();
   _baseJobPresetKey = name;
-  try { localStorage.setItem(BASE_PRESET_KEY, name); } catch(_){}
+  try { lsSet(BASE_PRESET_KEY, name); } catch(_){}
   populateBasePresetSelector();
   renderListTable();
   alert("プリセット「" + name + "」を基本工事として指定しました");
@@ -16550,11 +16641,11 @@ function lgFillEmptyFrom(target, src){
 const LG_NOTE_LOG_KEY = "antenna_ledger_note_log_v1";
 const LG_NOTE_LOG_MAX = 100;
 let _lgNoteLog = (() => {
-  try { const a = JSON.parse(localStorage.getItem(LG_NOTE_LOG_KEY)); return Array.isArray(a) ? a : []; }
+  try { const a = JSON.parse(lsGet(LG_NOTE_LOG_KEY)); return Array.isArray(a) ? a : []; }
   catch(_){ return []; }
 })();
 function lgNoteLogSave(){
-  try { localStorage.setItem(LG_NOTE_LOG_KEY, JSON.stringify(_lgNoteLog.slice(0, LG_NOTE_LOG_MAX))); } catch(_){}
+  try { lsSet(LG_NOTE_LOG_KEY, JSON.stringify(_lgNoteLog.slice(0, LG_NOTE_LOG_MAX))); } catch(_){}
 }
 /* 備考が変わるとき、変わる前の内容を控える。同じ中身なら控えない。 */
 function lgNoteLogPush(tk, before, after, why){
@@ -18574,13 +18665,12 @@ function projFeeFollowHtml(rows){
      対下請けの本モードには反映しない（業者間で統一金額を決めているため）。
    ============================================================ */
 const TAKEOUT_KEY = "antenna_takeout_v1";
-let _takeoutMap = (() => {
-  try { return JSON.parse(localStorage.getItem(TAKEOUT_KEY)) || {}; }
+function loadTakeoutMap(){
+  try { return JSON.parse(lsGet(TAKEOUT_KEY)) || {}; }
   catch { return {}; }
-})();
-function saveTakeoutMap(){
-  try { localStorage.setItem(TAKEOUT_KEY, JSON.stringify(_takeoutMap)); } catch(_){}
 }
+let _takeoutMap = loadTakeoutMap();
+function saveTakeoutMap(){ lsSet(TAKEOUT_KEY, JSON.stringify(_takeoutMap)); }
 let _subOnlyTakeout = false;   // 「持出材料ありのみ表示」絞り込み
 let _subExpanded = {};         // takeoutKey → 展開状態（セッションのみ）
 let _subComputed = {};         // uid → 算定済データ（チェック即時再計算・CSV用）
@@ -18590,13 +18680,12 @@ let _subCompanyFilter = "all"; // 施工会社の絞り込み: all / "__none__"(
 /* 確認状態＋備考（A-5）：労務費の突合チェック業務用。localStorage に別保存。
    全体費用詳細・持出計算・戸別JSON には一切影響しない（確認用メタのみ）。 */
 const REVIEW_KEY = "antenna_sub_review_v1";
-let _reviewMap = (() => {
-  try { return JSON.parse(localStorage.getItem(REVIEW_KEY)) || {}; }
+function loadReviewMap(){
+  try { return JSON.parse(lsGet(REVIEW_KEY)) || {}; }
   catch { return {}; }
-})();
-function saveReviewMap(){
-  try { localStorage.setItem(REVIEW_KEY, JSON.stringify(_reviewMap)); } catch(_){}
 }
+let _reviewMap = loadReviewMap();
+function saveReviewMap(){ lsSet(REVIEW_KEY, JSON.stringify(_reviewMap)); }
 
 /* 持出材料チェック＋確認状態を JSON ファイルへ書き出し（端末間移行・バックアップ・サンプル配布用）。
    持出フラグは localStorage 保存のため戸別JSON/フォルダ読込には載らない。これで明示的に持ち運ぶ。 */
@@ -20248,10 +20337,10 @@ function exportSubcontractorCsv(){
    ============================================================ */
 const SFP_PREF_KEY = "antenna_sub_fullprint_v1";
 function sfpLoadPrefs(){
-  try { return JSON.parse(localStorage.getItem(SFP_PREF_KEY)) || {}; } catch { return {}; }
+  try { return JSON.parse(lsGet(SFP_PREF_KEY)) || {}; } catch { return {}; }
 }
 function sfpSavePrefs(p){
-  try { localStorage.setItem(SFP_PREF_KEY, JSON.stringify(p)); } catch(_){}
+  try { lsSet(SFP_PREF_KEY, JSON.stringify(p)); } catch(_){}
   // 物件に内包される設定：編集した端末を競合マージで優先させ、ついでに自動保存も予約する
   try { markProjMetaEdited("sfpPref"); } catch(_){}
   try { projTouch(); } catch(_){}
@@ -22462,10 +22551,10 @@ const PROJ_MANAGED_KEYS = [PARTS_STORAGE_KEY, BASE_PRESET_KEY, USER_PRESET_KEY, 
 /* 物件を初めて開く時、現在の『通常』状態を退避。既に退避済み（物件モード継続・起動時の自動再開）なら何もしない＝通常を保持。 */
 function snapshotNormalIfNeeded(){
   try {
-    if(localStorage.getItem(PREPROJECT_KEY) != null) return;
+    if(lsGet(PREPROJECT_KEY) != null) return;
     const snap = {};
-    PROJ_MANAGED_KEYS.forEach(k => { snap[k] = localStorage.getItem(k); });
-    localStorage.setItem(PREPROJECT_KEY, JSON.stringify(snap));
+    PROJ_MANAGED_KEYS.forEach(k => { snap[k] = lsGet(k); });
+    lsSet(PREPROJECT_KEY, JSON.stringify(snap));
   } catch(_){}
 }
 /* 単価マスター/プリセットの差し替え後にUIを更新（存在する関数のみ） */
@@ -22478,18 +22567,18 @@ function refreshPartsAndPresetUI(){
 /* 物件から切り離して『通常(全物件共通)』状態へ復元 */
 function restoreNormalState(){
   let snap = null;
-  try { snap = JSON.parse(localStorage.getItem(PREPROJECT_KEY) || "null"); } catch(_){}
+  try { snap = JSON.parse(lsGet(PREPROJECT_KEY) || "null"); } catch(_){}
   if(snap && typeof snap === "object"){
     PROJ_MANAGED_KEYS.forEach(k => {
       const v = snap[k];
-      if(v == null) localStorage.removeItem(k);
-      else localStorage.setItem(k, v);
+      if(v == null) lsDel(k);
+      else lsSet(k, v);
     });
   }
-  try { localStorage.removeItem(PREPROJECT_KEY); } catch(_){}
+  try { lsDel(PREPROJECT_KEY); } catch(_){}
   // メモリ上の単価マスター・基本工事プリセット選択も通常へ
   applyPartsOverrideObj(loadGlobalPartsOverride());
-  try { _baseJobPresetKey = localStorage.getItem(BASE_PRESET_KEY) || ""; } catch(_){ _baseJobPresetKey = ""; }
+  try { _baseJobPresetKey = lsGet(BASE_PRESET_KEY) || ""; } catch(_){ _baseJobPresetKey = ""; }
   refreshPartsAndPresetUI();
 }
 /* 物件を開く時の下地リセット：PREPROJECT退避（＝通常/全物件共通の値）を localStorage へ戻すが、
@@ -22497,15 +22586,15 @@ function restoreNormalState(){
    この直後に applyProject がこの物件固有の partsOverride 等（あれば）を上書き適用する。 */
 function applyNormalBaselineForProject(){
   let snap = null;
-  try { snap = JSON.parse(localStorage.getItem(PREPROJECT_KEY) || "null"); } catch(_){}
+  try { snap = JSON.parse(lsGet(PREPROJECT_KEY) || "null"); } catch(_){}
   if(snap && typeof snap === "object"){
     PROJ_MANAGED_KEYS.forEach(k => {
       const v = snap[k];
-      try { if(v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch(_){}
+      try { if(v == null) lsDel(k); else lsSet(k, v); } catch(_){}
     });
   }
   applyPartsOverrideObj(loadGlobalPartsOverride());
-  try { _baseJobPresetKey = localStorage.getItem(BASE_PRESET_KEY) || ""; } catch(_){ _baseJobPresetKey = ""; }
+  try { _baseJobPresetKey = lsGet(BASE_PRESET_KEY) || ""; } catch(_){ _baseJobPresetKey = ""; }
 }
 
 /* ---------- IndexedDB ラッパー ---------- */
@@ -22537,9 +22626,16 @@ let _projLastWrittenUpdatedAt = "";
 // true の1回だけ競合検出を無視して強制上書きする（手動の「強制上書き」用）。
 let _projForceWrite = false;
 const PROJ_FS_SUPPORTED = !!(window.showOpenFilePicker && window.showSaveFilePicker);
+/* ★開くのは一度だけ★ 起動直後は複数の保存が同時に走る（控えの読み直し・物件の下地戻し・
+   自動保存）。開き終わる前にもう一度開くと、別々の接続ができてしまい、
+   ・同じ記録への書き込みの順番が保証されなくなる（あとから書いたはずの方が負ける）
+   ・次に版を上げるとき、片方の接続が邪魔をして開けなくなる（onblocked）
+   という壊れ方をする。開いている最中の約束を覚えておき、皆で同じ接続を使う。 */
+let _projDbOpening = null;
 function projOpenDb(){
-  return new Promise((resolve, reject) => {
-    if(_projDb) return resolve(_projDb);
+  if(_projDb) return Promise.resolve(_projDb);
+  if(_projDbOpening) return _projDbOpening;
+  _projDbOpening = new Promise((resolve, reject) => {
     const req = indexedDB.open(PROJ_DB_NAME, 5); // v4→v5: 世代バックアップの軽量メタ用ストアを加算（既存ストアは消さない）
     req.onupgradeneeded = () => {
       const db = req.result;
@@ -22564,9 +22660,13 @@ function projOpenDb(){
       }
     };
     req.onblocked = () => { console.warn("[物件DB] 別タブが旧バージョンを保持中。全タブを閉じ直すと更新されます。"); };
-    req.onsuccess = () => { _projDb = req.result; resolve(_projDb); };
-    req.onerror = () => reject(req.error || new Error("IndexedDB open failed"));
+    req.onsuccess = () => { _projDb = req.result; _projDbOpening = null; resolve(_projDb); };
+    req.onerror = () => { _projDbOpening = null; reject(req.error || new Error("IndexedDB open failed")); };
   });
+  /* 開けなかったときに「誰も受け取らなかった失敗」で警告が出ないようにする。
+     ここで受けても、本来の呼び出し側の約束は別に失敗のまま伝わる。 */
+  _projDbOpening.catch(() => {});
+  return _projDbOpening;
 }
 /* ★書き込みは「入れ物に入った」ではなく「本当に書き終わった」で成功とすること★
    IndexedDB は put() が成功しても、最後に書き込む段階で容量が足りないと
@@ -23277,33 +23377,19 @@ function projNewId(){
 /* ---------- 受付台帳の追加フィールド（caseKey単位・localStorage） ----------
    { time:"HH:MM", meetAt:"YYYY-MM-DDTHH:MM", flyer:bool, hold:bool, note:"" }
    既定値のみのエントリは保存しない（肥大化防止・takeout/review と同パターン） */
-let _ledgerMap = (() => {
-  try { return JSON.parse(localStorage.getItem(LEDGER_KEY)) || {}; }
+function loadLedgerMap(){
+  try { return JSON.parse(lsGet(LEDGER_KEY)) || {}; }
   catch { return {}; }
-})();
+}
+let _ledgerMap = loadLedgerMap();
 /* 受付台帳の記録（時刻・打合せ・備考・ビラ・同意書・完了書・保留）を端末へ。
    ★失敗を黙って捨てないこと★ 物件を開いていないとき（フォルダだけで使うとき）は
    ここが唯一の置き場なので、空き容量が足りずに書けないと、閉じた瞬間に全部消える。
    物件を開いていれば物件ファイルにも入るが、それでも知らせないと気付けない。 */
 function saveLedgerMap(){
-  try {
-    localStorage.setItem(LEDGER_KEY, JSON.stringify(_ledgerMap));
-    saveLedgerMap._warned = false;
-  } catch(e){
-    console.warn("[台帳] この端末への保存に失敗:", e);
-    if(!saveLedgerMap._warned){
-      saveLedgerMap._warned = true;
-      try {
-        alert("⚠ 受付台帳の記録を、このパソコンに保存できませんでした。\n\n"
-          + "（時刻・打合せ予定・備考・ビラ・同意書・完了書・保留 の記録です）\n"
-          + "ブラウザの保存領域がいっぱいの可能性があります。\n\n"
-          + "・物件を開いていれば、物件ファイルの方には入ります\n"
-          + "・物件を開いていないときは、閉じると消えます。先に\n"
-          + "　「💾 戸別ファイルへ反映」でファイルへ残してください\n\n"
-          + "（この知らせは1回だけ出ます）");
-      } catch(_){}
-    }
-  }
+  /* 本体は IndexedDB（lsSet が面倒を見る）。localStorage は起動直後に出すための写し。
+     写しが取れなくても記録は失われないので、ここではもう何も言わない。 */
+  lsSet(LEDGER_KEY, JSON.stringify(_ledgerMap));
 }
 // この端末に残っている分も、起動のときに1回だけ引っ越す
 try { lgMigrateHanKeys(); } catch(_){}
@@ -23573,21 +23659,23 @@ function flowAdoptRow(row, genbaData){
    どちらも全体費用詳細・戸別JSONには影響しない（物件メタ）。 */
 const CONTRACTOR_KEY = "antenna_contractor_v1";
 const CONTRACTOR_LIST_KEY = "antenna_contractor_list_v1";
-let _contractorMap = (() => {
-  try { return JSON.parse(localStorage.getItem(CONTRACTOR_KEY)) || {}; }
+function loadContractorMap(){
+  try { return JSON.parse(lsGet(CONTRACTOR_KEY)) || {}; }
   catch { return {}; }
-})();
+}
+let _contractorMap = loadContractorMap();
 // 施工会社マスター（作業中リスト）。localStorageに保持し、物件を開くとその物件の値へ切替・物件保存時に内包。
-let _contractorList = (() => {
-  try { return JSON.parse(localStorage.getItem(CONTRACTOR_LIST_KEY)) || []; }
+function loadContractorList(){
+  try { return JSON.parse(lsGet(CONTRACTOR_LIST_KEY)) || []; }
   catch { return []; }
-})();
+}
+let _contractorList = loadContractorList();
 function saveContractorMap(){
-  try { localStorage.setItem(CONTRACTOR_KEY, JSON.stringify(_contractorMap)); } catch(_){}
+  lsSet(CONTRACTOR_KEY, JSON.stringify(_contractorMap));
   invalidateContractorColors();   // 割当が変われば色の並びも変わりうる
 }
 function saveContractorList(){
-  try { localStorage.setItem(CONTRACTOR_LIST_KEY, JSON.stringify(_contractorList)); } catch(_){}
+  lsSet(CONTRACTOR_LIST_KEY, JSON.stringify(_contractorList));
   invalidateContractorColors();
 }
 function getContractor(tk){ return _contractorMap[tk] || ""; }
@@ -23610,16 +23698,17 @@ function setContractorList(arr){
 /* 施工業者の「番号」対応表（1〜4 → 会社名）。管理番号の左から4桁目で施工会社を自動判別するのに使う。
    物件JSONに含めて共有（contractorDigits）。未設定なら自動判別はしない。 */
 const CONTRACTOR_DIGIT_KEY = "antenna_contractor_digit_v1";
-let _contractorDigitMap = (() => {
-  try { const o = JSON.parse(localStorage.getItem(CONTRACTOR_DIGIT_KEY)); return (o && typeof o === "object") ? o : {}; }
+function loadContractorDigitMap(){
+  try { const o = JSON.parse(lsGet(CONTRACTOR_DIGIT_KEY)); return (o && typeof o === "object") ? o : {}; }
   catch { return {}; }
-})();
+}
+let _contractorDigitMap = loadContractorDigitMap();
 function getContractorDigitMap(){ return (_contractorDigitMap && typeof _contractorDigitMap === "object") ? _contractorDigitMap : {}; }
 function setContractorDigitMap(obj){
   const out = {};
   ["1", "2", "3", "4"].forEach(k => { const v = String((obj && obj[k]) || "").trim(); if(v) out[k] = v; });
   _contractorDigitMap = out;
-  try { localStorage.setItem(CONTRACTOR_DIGIT_KEY, JSON.stringify(out)); } catch(_){}
+  lsSet(CONTRACTOR_DIGIT_KEY, JSON.stringify(out));
   invalidateContractorColors();
   try { markProjMetaEdited("contractorDigits"); } catch(_){}   // 競合マージでこの変更が disk へ戻らないように
   projTouch();
@@ -24427,30 +24516,30 @@ async function applyProject(p, opts){
     }
     if(p.contractorDigits !== undefined){
       _contractorDigitMap = (p.contractorDigits && typeof p.contractorDigits === "object") ? Object.assign({}, p.contractorDigits) : {};
-      try { localStorage.setItem(CONTRACTOR_DIGIT_KEY, JSON.stringify(_contractorDigitMap)); } catch(_){}
+      lsSet(CONTRACTOR_DIGIT_KEY, JSON.stringify(_contractorDigitMap));
     }
     invalidateContractorColors();   // 物件を切り替えたら色の並びを引き直す
     if(p.calEvents !== undefined){
       _calFreeEvents = Array.isArray(p.calEvents) ? p.calEvents.slice() : [];
-      try { localStorage.setItem(CAL_FREE_KEY, JSON.stringify(_calFreeEvents)); } catch(_){}
+      lsSet(CAL_FREE_KEY, JSON.stringify(_calFreeEvents));
     }
     // 物件ごとに変わる設定（単価マスター・プリセット等）をこの物件の値へ切替（旧物件ファイルは該当キー無し＝従来通り）
     if(p.partsOverride !== undefined){
       applyPartsOverrideObj(p.partsOverride || {});
-      try { localStorage.setItem(PARTS_STORAGE_KEY, JSON.stringify(p.partsOverride || {})); } catch(_){}
+      try { lsSet(PARTS_STORAGE_KEY, JSON.stringify(p.partsOverride || {})); } catch(_){}
     }
     if(p.userPresets !== undefined){
-      try { localStorage.setItem(USER_PRESET_KEY, JSON.stringify(p.userPresets || {})); } catch(_){}
+      try { lsSet(USER_PRESET_KEY, JSON.stringify(p.userPresets || {})); } catch(_){}
     }
     if(p.basePresetKey !== undefined){
       _baseJobPresetKey = p.basePresetKey || "";
-      try { _baseJobPresetKey ? localStorage.setItem(BASE_PRESET_KEY, _baseJobPresetKey) : localStorage.removeItem(BASE_PRESET_KEY); } catch(_){}
+      try { _baseJobPresetKey ? lsSet(BASE_PRESET_KEY, _baseJobPresetKey) : lsDel(BASE_PRESET_KEY); } catch(_){}
     }
     if(p.asbestosOffice !== undefined){
-      try { p.asbestosOffice ? localStorage.setItem(ASBESTOS_PRESET_KEY, JSON.stringify(p.asbestosOffice)) : localStorage.removeItem(ASBESTOS_PRESET_KEY); } catch(_){}
+      try { p.asbestosOffice ? lsSet(ASBESTOS_PRESET_KEY, JSON.stringify(p.asbestosOffice)) : lsDel(ASBESTOS_PRESET_KEY); } catch(_){}
     }
     if(p.sfpPref !== undefined){
-      try { localStorage.setItem(SFP_PREF_KEY, JSON.stringify(p.sfpPref || {})); } catch(_){}
+      try { lsSet(SFP_PREF_KEY, JSON.stringify(p.sfpPref || {})); } catch(_){}
     }
     refreshPartsAndPresetUI();
     // 「最終保存した会社」の刻印もここで持ち回る。id と name しか持たせていなかったため、
@@ -27278,17 +27367,16 @@ function lghtmlTplBuiltIn(){
 }
 function lghtmlTplGet(){
   try {
-    const o = JSON.parse(localStorage.getItem(LGHTML_TPL_KEY) || "null");
+    const o = JSON.parse(lsGet(LGHTML_TPL_KEY) || "null");
     if(o && typeof o.text === "string" && LGHTML_SLOT_RE.test(o.text)) return o;
   } catch(_){}
   return null;
 }
-function lghtmlTplPut(text, name, fileAt){
+async function lghtmlTplPut(text, name, fileAt){
   try {
-    localStorage.setItem(LGHTML_TPL_KEY, JSON.stringify({ text: text, name: name || "受付台帳.html",
+    return await lsSet(LGHTML_TPL_KEY, JSON.stringify({ text: text, name: name || "受付台帳.html",
       at: new Date().toISOString(), fileAt: fileAt || 0 }));
-    return true;
-  } catch(_){ return false; }   // 保存容量が足りない等。控えられなくても、その回の書き出しはできる
+  } catch(_){ return false; }   // 覚えられなくても、その回の書き出しはできる
 }
 /* ひな型（受付台帳.html）を選んでもらう。差し込み口があれば控えて返す。取消・不適合は null。 */
 function lghtmlTplPick(){
@@ -27318,7 +27406,7 @@ function lghtmlTplPick(){
           + "　もう一度お試しください（index.html だけ新しくしても書き出せません）。");
         res(null); return;
       }
-      res({ text: text, name: f.name, stored: lghtmlTplPut(text, f.name, f.lastModified) });
+      res({ text: text, name: f.name, stored: await lghtmlTplPut(text, f.name, f.lastModified) });
     });
     inp.click();
   });
@@ -27407,6 +27495,7 @@ async function exportReceptionLedgerAsHtml(repick){
     if(!tpl.stored){
       alert("ひな型をこの端末に覚えられませんでした（保存容量が足りない可能性があります）。\n"
         + "書き出しはできますが、毎回ファイルを選ぶ画面が出ます。");
+      return;
     }
     // ここで一度区切る。保存先を選ぶ画面は「ボタンを押した直後」でないと出せない決まりで、
     // ファイルを選んだ流れのまま続けると、保存先を選べずにダウンロードへ落ちてしまう。
@@ -28570,7 +28659,7 @@ let _hk = null;
 function hkLoad(){
   if(_hk) return _hk;
   let o = null;
-  try { o = JSON.parse(localStorage.getItem(HK_LS) || "null"); } catch(_){}
+  try { o = JSON.parse(lsGet(HK_LS) || "null"); } catch(_){}
   _hk = (o && typeof o === "object") ? o : {};
   if(!_hk.rate || typeof _hk.rate !== "object") _hk.rate = {};
   if(!_hk.src  || typeof _hk.src  !== "object") _hk.src  = {};
@@ -28594,7 +28683,7 @@ function hkSave(){
     try { projTouch(); } catch(_){}   // 物件JSONへ自動保存
     return;
   }
-  try { localStorage.setItem(HK_LS, JSON.stringify(hkLoad())); }
+  try { lsSet(HK_LS, JSON.stringify(hkLoad())); }
   catch(e){ console.warn("履行報告の保存に失敗", e); }
 }
 /* 物件スナップショットに入れる形。中身は hkLoad と同じ。 */
@@ -29949,13 +30038,14 @@ let _calPanel = null;                 // {type:"day",date} / {type:"event",tk,ev
 /* ---------- 戸別に紐づかない予定（元請との打合せ・社内会議など） ----------
    台帳の戸別とは無関係にカレンダーへ登録できる。物件JSONに含めて共有（calEvents）。 */
 const CAL_FREE_KEY = "antenna_cal_free_v1";
-let _calFreeEvents = (() => {
-  try { const a = JSON.parse(localStorage.getItem(CAL_FREE_KEY)); return Array.isArray(a) ? a : []; }
+function loadCalFreeEvents(){
+  try { const a = JSON.parse(lsGet(CAL_FREE_KEY)); return Array.isArray(a) ? a : []; }
   catch { return []; }
-})();
+}
+let _calFreeEvents = loadCalFreeEvents();
 function getCalFreeEvents(){ return Array.isArray(_calFreeEvents) ? _calFreeEvents : []; }
 function saveCalFreeEvents(){
-  try { localStorage.setItem(CAL_FREE_KEY, JSON.stringify(getCalFreeEvents())); } catch(_){}
+  lsSet(CAL_FREE_KEY, JSON.stringify(getCalFreeEvents()));
   try { markProjMetaEdited("calEvents"); } catch(_){}   // 競合マージでこの変更が disk へ戻らないように
   projTouch();
 }
@@ -31727,10 +31817,10 @@ function lgMergeDialog(manualRow, fileRow){
 const LS_LIST_CENSUS = "antenna_list_census_v1";   // 前回そのフォルダで見えていた戸別
 const DETACHED_KEY   = "antenna_detached_v1";      // ファイルが無くても台帳に残す戸別
 let _detachedMap = (() => {
-  try { return JSON.parse(localStorage.getItem(DETACHED_KEY)) || {}; } catch(_){ return {}; }
+  try { return JSON.parse(lsGet(DETACHED_KEY)) || {}; } catch(_){ return {}; }
 })();
 function saveDetachedMap(){
-  try { localStorage.setItem(DETACHED_KEY, JSON.stringify(_detachedMap)); }
+  try { lsSet(DETACHED_KEY, JSON.stringify(_detachedMap)); }
   catch(e){ console.warn("[一覧] 名前だけ残した戸別を控えられませんでした", e); }
 }
 /* 突合キー。名前だけ残した行は、元の行のキーをそのまま持ち続ける。 */
@@ -31753,7 +31843,7 @@ function missEntryOf(row){
 }
 function listCensusLoad(){
   try {
-    const c = JSON.parse(localStorage.getItem(LS_LIST_CENSUS));
+    const c = JSON.parse(lsGet(LS_LIST_CENSUS));
     return (c && c.entries) ? c : { root: "", entries: {} };
   } catch(_){ return { root: "", entries: {} }; }
 }
@@ -31766,10 +31856,10 @@ function listCensusSave(root, rows, carry){
     });
     // まだ決めていないものは控えに残す。消すと次から気付けなくなる。
     Object.keys(carry || {}).forEach(k => { if(!entries[k]) entries[k] = carry[k]; });
-    localStorage.setItem(LS_LIST_CENSUS, JSON.stringify({ v: 1, root: String(root || ""), at: Date.now(), entries }));
+    lsSet(LS_LIST_CENSUS, JSON.stringify({ v: 1, root: String(root || ""), at: Date.now(), entries }));
   } catch(e){ console.warn("[一覧] 前回の控えを残せませんでした", e); }
 }
-function listCensusClear(){ try { localStorage.removeItem(LS_LIST_CENSUS); } catch(_){} }
+function listCensusClear(){ try { lsDel(LS_LIST_CENSUS); } catch(_){} }
 /* 控えから1件だけ外す。自分で一覧から消した戸別を、次の読み込みで
    「ファイルが見当たりません」と毎回聞かれないようにするため。 */
 function listCensusForget(key){
@@ -31778,7 +31868,7 @@ function listCensusForget(key){
     const c = listCensusLoad();
     if(c && c.entries && c.entries[key]){
       delete c.entries[key];
-      localStorage.setItem(LS_LIST_CENSUS,
+      lsSet(LS_LIST_CENSUS,
         JSON.stringify({ v: 1, root: String(c.root || ""), at: Date.now(), entries: c.entries }));
     }
   } catch(e){ console.warn("[一覧] 前回の控えから外せませんでした", e); }
@@ -32721,6 +32811,11 @@ function init(){
   applyPreset("standard");
   // 物件管理（メニュー画面・受付台帳・予定カレンダー・自動保存）
   initProjectFeatures();
+  /* この端末に残す記録の本体は IndexedDB。localStorage はその写しで、
+     いっぱいになったり利用者が消したりすると空になる。起動のたびに本体を読み、
+     写しに無いものを戻す（戻したら、その記録を使っている画面も読み直す）。 */
+  try { lsRestoreFromIdb().catch(e => console.warn("[控え] 本体からの読み直しに失敗:", e)); }
+  catch(e){ console.warn("[控え] 本体からの読み直しに失敗:", e); }
 }
 window.addEventListener("DOMContentLoaded", init);
 </script>
@@ -32839,12 +32934,12 @@ window.addEventListener("DOMContentLoaded", init);
     return t;
   }
   function loadTemplate(){
-    try{ var t=JSON.parse(localStorage.getItem(TPL_KEY)||'null');
+    try{ var t=JSON.parse(lsGet(TPL_KEY)||'null');
       if(t&&Array.isArray(t.sections)&&Array.isArray(t.dests)&&t.dests.length) return ensureBuiltinExtras(t);
     }catch(e){}
     return ensureBuiltinExtras(defaultTpl());
   }
-  function saveTemplate(){ try{localStorage.setItem(TPL_KEY,JSON.stringify(TPL));}catch(e){} }
+  function saveTemplate(){ try{lsSet(TPL_KEY,JSON.stringify(TPL));}catch(e){} }
   var TPL=loadTemplate();
   function destByKey(k){ for(var i=0;i<TPL.dests.length;i++) if(TPL.dests[i].key===k) return TPL.dests[i]; return null; }
   function destLabel(k){ var d=destByKey(k); return d?d.label:(k||'―'); }
@@ -32865,7 +32960,7 @@ window.addEventListener("DOMContentLoaded", init);
   var curKey=null, state={items:{},meta:{}}, editMode=false;
   function load(){
     curKey=projKey();
-    try{ state=JSON.parse(localStorage.getItem(curKey)||'{}'); }catch(e){ state={}; }
+    try{ state=JSON.parse(lsGet(curKey)||'{}'); }catch(e){ state={}; }
     if(!state||typeof state!=='object') state={};
     state.items=state.items||{}; state.meta=state.meta||{};
     /* 旧バージョン（装飾テキスト＝保存時刻入りキー等）からの自動移行：
@@ -32889,7 +32984,7 @@ window.addEventListener("DOMContentLoaded", init);
      物件側の自動保存も予約し、競合マージでこの端末の変更が優先されるよう印を付ける
      （以前は他の操作が偶然保存を起こすまで共有ファイルに乗らず、競合すると無言で他社の版へ戻っていた）。 */
   function save(){
-    try{localStorage.setItem(curKey,JSON.stringify(state));}catch(e){}
+    try{lsSet(curKey,JSON.stringify(state));}catch(e){}
     try{ if(typeof markProjMetaEdited==='function') markProjMetaEdited('teishutsu'); }catch(e){}
     try{ if(typeof projTouch==='function') projTouch(); }catch(e){}
   }
@@ -33016,7 +33111,7 @@ window.addEventListener("DOMContentLoaded", init);
         TPL = ensureBuiltinExtras(clone(cap.template)); saveTemplate();
       }
       if(cap.state && typeof cap.state === 'object' && pid){
-        try { localStorage.setItem('tsl_teishutsu_v1::' + pid, JSON.stringify(cap.state)); } catch(e){}
+        try { lsSet('tsl_teishutsu_v1::' + pid, JSON.stringify(cap.state)); } catch(e){}
       }
       if(typeof full === 'function') full();
     } catch(e){}
