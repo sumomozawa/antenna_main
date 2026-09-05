@@ -82,6 +82,9 @@ svg#diagram{ cursor:default !important; }
 
 /* ---------- 写真：閲覧専用なので「工事調書に載せる」印は付け外しさせない ---------- */
 .ph-chosho-pick, .ph-chosho-note{ display:none !important; }
+/* 並び順の番号は見せる（何枚目かが分かる）。つまんで動かす操作はさせない。
+   ▲▼ のボタンは上の「#photo-list button」で既に消えている。 */
+#photo-list .ph-grip{ cursor:default !important; }
 
 /* ---------- アパート：記録を書き替える操作は出さない（見るのは自由） ---------- */
 /* 「完了確認書なしで完了」にする誘いのボタン。付いた印（.lg-waived）はそのまま見せる。 */

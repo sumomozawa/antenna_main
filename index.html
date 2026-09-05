@@ -6580,7 +6580,7 @@
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "134";
+const APP_VERSION = "135";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -20722,6 +20722,28 @@ function addPhotoEntry(label){
   STATE.photos.push({ label: label || "写真" + (STATE.photos.length + 1), dataUri: null });
   renderPhotoInputs();
 }
+/* 写真の並び替え（from の1枚を to の位置へ入れ直す）。
+   工事調書・工事写真・写真台帳・図面の写真は、どれも STATE.photos の順にそのまま出るので、
+   ここを入れ替えれば紙に出る順番まで一緒に変わる。
+   ▲▼ ボタンも、番号をつまんで動かす操作も、どちらもここを通る。 */
+function movePhotoEntry(from, to){
+  if(!Array.isArray(STATE.photos)) return false;
+  const n = STATE.photos.length;
+  from = parseInt(from, 10);
+  to   = parseInt(to, 10);
+  if(!(from >= 0 && from < n)) return false;
+  if(!(to === to)) return false;                 // NaN は何もしない
+  if(to < 0) to = 0;
+  if(to > n - 1) to = n - 1;
+  if(from === to) return false;
+  const moved = STATE.photos.splice(from, 1)[0];
+  STATE.photos.splice(to, 0, moved);
+  renderPhotoInputs();
+  if(typeof projAutoSaveEdit === "function") projAutoSaveEdit(); // 並び替えを物件へ自動保存
+  return true;
+}
+/* つまんで動かしている最中の写真の位置（-1＝つまんでいない） */
+let _phDragFrom = -1;
 /* 写真エントリ削除 */
 function removePhotoEntry(idx){
   if(idx < 0 || idx >= STATE.photos.length) return;
@@ -21153,6 +21175,8 @@ function renderPhotoInputs(){
     + 'border:1px solid #bcd8ef;border-radius:3px;padding:4px 7px;margin-bottom:5px;">'
     + '「<b>調書</b>」に印を付けた写真だけが <b>工事調書</b> に載ります（代表2枚など）。'
     + '<br>1枚も付けていないときは、これまでどおり登録した写真が全部載ります。'
+    + '<br>並び順は左の <b>▲▼</b> か、番号をつまんで動かすと変えられます'
+    +   '（工事調書・工事写真・写真台帳・印刷は、すべてこの順に出ます）。'
     + '<br>いま選ばれている枚数: <b id="ph-chosho-count">' + choshoN + '</b> 枚'
     + (choshoN ? '' : '（＝全部載る）')
     + '</div>';
@@ -21160,14 +21184,34 @@ function renderPhotoInputs(){
     const sizeText = p.dataUri
       ? "登録済（約" + Math.round((p.dataUri.length * 0.75) / 1024).toLocaleString() + "KB）"
       : "未登録";
-    html += '<div class="photo-entry" data-photo-idx="' + i + '" style="display:grid;grid-template-columns:1fr auto auto;gap:4px;align-items:center;padding:4px 6px;border:1px solid #cdd3da;border-radius:3px;background:#fafbfc;">'
+    const isFirst = (i === 0), isLast = (i === STATE.photos.length - 1);
+    /* 並べ替えのボタン。いちばん上の▲といちばん下の▼は押せなくしておく
+       （押せるのに何も起きない、という分かりにくさを作らないため）。 */
+    const ordBtn = (dir, mark, title, off) =>
+      '<button type="button" data-photo-' + dir + '="' + i + '" title="' + title + '"' + (off ? ' disabled' : '')
+      + ' style="width:20px;height:13px;line-height:11px;padding:0;font-size:9px;border:1px solid #b0bec5;border-radius:2px;'
+      + 'background:' + (off ? '#eceff1' : '#fff') + ';color:' + (off ? '#c3cdd3' : '#37474f') + ';'
+      + 'cursor:' + (off ? 'default' : 'pointer') + ';">' + mark + '</button>';
+    html += '<div class="photo-entry" data-photo-idx="' + i + '" style="display:grid;grid-template-columns:auto 1fr auto;gap:4px;align-items:center;padding:4px 6px;border:1px solid #cdd3da;border-radius:3px;background:#fafbfc;">'
+      + '<div class="ph-ord" style="display:flex;align-items:center;gap:3px;">'
+      +   '<span class="ph-grip"' + (window.__VIEWER_MODE__ ? '' : ' draggable="true"') + ' data-photo-grip="' + i + '"'
+      +     ' title="この番号をつまんで上下に動かすと、並び順を変えられます"'
+      +     ' style="display:inline-block;min-width:17px;text-align:center;font-size:10px;font-weight:600;color:#455a64;'
+      +     'background:#eceff1;border:1px solid #cfd8dc;border-radius:3px;padding:1px 3px;cursor:grab;">' + (i + 1) + '</span>'
+      +   '<span style="display:flex;flex-direction:column;gap:1px;">'
+      +     ordBtn("up", "▲", "1つ上へ", isFirst)
+      +     ordBtn("down", "▼", "1つ下へ", isLast)
+      +   '</span>'
+      + '</div>'
       + '<input type="text" data-photo-label="' + i + '" value="' + escapeHtml(p.label || "") + '" placeholder="ラベル名 (例: 施工前)" style="padding:2px 6px;font-size:11px;border:1px solid #cdd3da;border-radius:3px;width:100%;box-sizing:border-box;">'
-      + '<input type="file" data-photo-file="' + i + '" accept="image/*" style="font-size:11px;width:160px;">'
       + '<button type="button" data-photo-del="' + i + '" title="この写真行を削除" style="background:#fff;color:#d32f2f;border:1px solid #d32f2f;padding:2px 8px;border-radius:3px;cursor:pointer;font-size:11px;">×</button>'
-      + '<div style="grid-column:1 / -1;font-size:10px;color:#555;margin-top:1px;">' + sizeText + (p.dataUri ? ' <button type="button" data-photo-clear="' + i + '" style="margin-left:6px;background:#fff;color:#666;border:1px solid #999;padding:0 6px;border-radius:3px;cursor:pointer;font-size:10px;">画像クリア</button>' : '')
+      + '<div style="grid-column:1 / -1;display:flex;flex-wrap:wrap;align-items:center;gap:5px;font-size:10px;color:#555;margin-top:1px;">'
+      + '<input type="file" data-photo-file="' + i + '" accept="image/*" style="font-size:11px;width:168px;max-width:100%;">'
+      + '<span>' + sizeText + '</span>'
+      + (p.dataUri ? '<button type="button" data-photo-clear="' + i + '" style="background:#fff;color:#666;border:1px solid #999;padding:0 6px;border-radius:3px;cursor:pointer;font-size:10px;">画像クリア</button>' : '')
       + (p.dataUri
           ? '<label class="ph-chosho-pick" title="この写真を工事調書に載せます。1枚も選ばないときは全部載ります。"'
-            + ' style="margin-left:8px;font-size:10px;color:#1e5b8f;background:#eaf3fb;border:1px solid #bcd8ef;border-radius:3px;padding:0 6px;cursor:pointer;">'
+            + ' style="font-size:10px;color:#1e5b8f;background:#eaf3fb;border:1px solid #bcd8ef;border-radius:3px;padding:0 6px;cursor:pointer;">'
             + '<input type="checkbox" data-photo-chosho="' + i + '"' + (p.chosho ? ' checked' : '')
             + ' style="vertical-align:middle;margin-right:2px;">調書</label>'
           : '')
@@ -21211,6 +21255,48 @@ function renderPhotoInputs(){
         }
       }
       if(typeof projAutoSaveEdit === "function") projAutoSaveEdit(); // 調書に載せる印を物件へ自動保存
+    });
+  });
+  wrap.querySelectorAll('[data-photo-up]').forEach(el => {
+    el.addEventListener("click", e => {
+      const i = parseInt(e.currentTarget.dataset.photoUp, 10);
+      movePhotoEntry(i, i - 1);
+    });
+  });
+  wrap.querySelectorAll('[data-photo-down]').forEach(el => {
+    el.addEventListener("click", e => {
+      const i = parseInt(e.currentTarget.dataset.photoDown, 10);
+      movePhotoEntry(i, i + 1);
+    });
+  });
+  /* 番号をつまんで動かす。ラベル欄の文字を選ぶ操作と喧嘩しないよう、
+     つまめるのは番号（.ph-grip）だけにしてある。 */
+  if(!window.__VIEWER_MODE__) wrap.querySelectorAll('[data-photo-grip]').forEach(el => {
+    el.addEventListener("dragstart", e => {
+      _phDragFrom = parseInt(e.currentTarget.dataset.photoGrip, 10);
+      try { e.dataTransfer.setData("text/plain", String(_phDragFrom)); e.dataTransfer.effectAllowed = "move"; } catch(_){}
+      const row = e.currentTarget.closest(".photo-entry");
+      if(row) row.style.opacity = "0.5";
+    });
+    el.addEventListener("dragend", () => {
+      _phDragFrom = -1;
+      wrap.querySelectorAll(".photo-entry").forEach(r => { r.style.opacity = ""; r.style.outline = ""; });
+    });
+  });
+  if(!window.__VIEWER_MODE__) wrap.querySelectorAll(".photo-entry").forEach(row => {
+    row.addEventListener("dragover", e => {
+      if(_phDragFrom < 0) return;
+      e.preventDefault();
+      try { e.dataTransfer.dropEffect = "move"; } catch(_){}
+      row.style.outline = "2px solid #1e88e5";
+    });
+    row.addEventListener("dragleave", () => { row.style.outline = ""; });
+    row.addEventListener("drop", e => {
+      if(_phDragFrom < 0) return;
+      e.preventDefault();
+      const from = _phDragFrom;
+      _phDragFrom = -1;
+      movePhotoEntry(from, parseInt(row.dataset.photoIdx, 10));
     });
   });
   wrap.querySelectorAll('[data-photo-clear]').forEach(el => {
