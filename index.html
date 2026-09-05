@@ -3756,6 +3756,62 @@
   td.lg-note-dup { background: #fff8e1; }
   td.lg-note-dup::before { content: "⚠"; color: #b05a00; font-size: 10px; margin-right: 2px; }
   /* 📥 受付台帳の差分取り込み */
+  /* 🏢 マンション管理（建物ごとの画面） */
+  .lg-apt-band .ab-mg { margin-left: 10px; background: #6a1b9a; color: #fff; border: 1px solid #4a148c;
+    border-radius: 3px; font-size: 11px; padding: 1px 8px; cursor: pointer; font-family: inherit; }
+  @media print { .lg-apt-band .ab-mg { display: none !important; } }
+  #aptmg-ov { position: fixed; inset: 0; background: rgba(20,30,45,.55); z-index: 9000; display: flex; align-items: center; justify-content: center; }
+  #aptmg-ov .aptmg-box { background: #fff; border-radius: 8px; width: min(1120px, 96vw); max-height: 92vh; display: flex; flex-direction: column; box-shadow: 0 8px 30px rgba(0,0,0,.3); }
+  #aptmg-ov .amg-head { background: #6a1b9a; color: #fff; font-weight: 700; padding: 9px 14px; border-radius: 8px 8px 0 0; display: flex; align-items: center; }
+  #aptmg-ov .amg-head button { margin-left: auto; background: transparent; border: 0; color: #fff; font-size: 16px; cursor: pointer; line-height: 1; }
+  #aptmg-ov .amg-pick { padding: 8px 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; border-bottom: 1px solid #e6e1ea; }
+  #aptmg-ov .amg-pick select { font-size: 13px; padding: 3px 6px; font-family: inherit; }
+  #aptmg-ov .amg-sum { color: #4a5560; }
+  #aptmg-ov .amg-warn { color: #c62828; }
+  #aptmg-ov .amg-scroll { overflow: auto; padding: 10px 14px 4px; }
+  #aptmg-ov .amg-card { border: 1px solid #e0dae6; border-radius: 6px; padding: 8px 10px 10px; margin-bottom: 10px; }
+  #aptmg-ov .amg-t { font-weight: 700; color: #4a148c; font-size: 12px; margin-bottom: 6px; }
+  #aptmg-ov .amg-note { font-size: 11px; color: #5c6670; line-height: 1.6; margin: -2px 0 6px; }
+  #aptmg-ov .amg-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  #aptmg-ov .amg-two .amg-card { margin-bottom: 10px; }
+  #aptmg-ov .amg-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 10px; }
+  #aptmg-ov .amg-grid1 { display: grid; grid-template-columns: 1fr; gap: 6px; }
+  #aptmg-ov .amg-wide { grid-column: 1 / -1; }
+  #aptmg-ov .amg-f { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+  #aptmg-ov .amg-f > span { flex: 0 0 82px; color: #4a5560; }
+  #aptmg-ov .amg-f > span[title] { cursor: help; border-bottom: 1px dotted #b0bec5; }
+  #aptmg-ov .amg-f input, #aptmg-ov .amg-f select { flex: 1 1 auto; min-width: 0; font-size: 12px; padding: 3px 6px; border: 1px solid #cdd3da; border-radius: 3px; font-family: inherit; }
+  #aptmg-ov .amg-f input[readonly] { background: #f2f4f6; color: #55606a; }
+  #aptmg-ov .amg-inline { display: inline-flex; width: auto; margin-left: 12px; }
+  #aptmg-ov .amg-inline > span { flex: 0 0 auto; }
+  #aptmg-ov .amg-chk { font-size: 12px; cursor: pointer; }
+  #aptmg-ov .amg-consent .amg-note { margin-top: 6px; }
+  #aptmg-ov .amg-alert { border: 1px solid #ef9a9a; background: #ffebee; border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; font-size: 12px; line-height: 1.7; }
+  #aptmg-ov .amg-alert2 { border-color: #ffcc80; background: #fff8e1; }
+  #aptmg-ov .amg-alert3 { border-color: #90caf9; background: #e3f2fd; }
+  #aptmg-ov .amg-alert3 .amg-alert-b { color: #0d47a1; }
+  #aptmg-ov .amg-stray { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
+  #aptmg-ov .amg-stray button { background: #fff; color: #0d47a1; border: 1px solid #0d47a1; font-size: 12px; padding: 3px 10px; border-radius: 3px; cursor: pointer; font-family: inherit; }
+  #aptmg-ov .amg-alert-b { font-family: monospace; font-size: 12px; color: #b71c1c; margin: 2px 0; }
+  #aptmg-ov .amg-alert2 .amg-alert-b { color: #8d6e00; }
+  #aptmg-ov .amg-alert-n { color: #5c6670; font-size: 11px; }
+  #aptmg-ov .amg-alert button { margin-top: 5px; font-size: 12px; padding: 4px 12px; border-radius: 3px; cursor: pointer; font-family: inherit; background: #c62828; color: #fff; border: 1px solid #8e1f1f; }
+  #aptmg-ov .amg-alert2 button { background: #ef6c00; border-color: #b35300; }
+  #aptmg-ov table.amg-tbl { border-collapse: collapse; width: 100%; font-size: 12px; }
+  #aptmg-ov table.amg-tbl th { background: #f3e5f5; color: #4a148c; padding: 4px 6px; text-align: left; position: sticky; top: 0; }
+  #aptmg-ov table.amg-tbl td { padding: 3px 6px; border-top: 1px solid #eef1f4; }
+  #aptmg-ov table.amg-tbl input[type=text], #aptmg-ov table.amg-tbl input[type=date] { width: 100%; box-sizing: border-box; font-size: 12px; padding: 2px 5px; border: 1px solid #cdd3da; border-radius: 3px; font-family: inherit; }
+  #aptmg-ov tr.amg-off { background: #fff8e1; }
+  #aptmg-ov .amg-no { white-space: nowrap; color: #4a5560; }
+  #aptmg-ov .amg-rep { background: #6a1b9a; color: #fff; border-radius: 2px; font-size: 10px; padding: 0 3px; margin-left: 3px; }
+  #aptmg-ov .amg-mg { white-space: nowrap; font-family: monospace; }
+  #aptmg-ov .amg-st { white-space: nowrap; color: #4a5560; }
+  #aptmg-ov .amg-cd { white-space: nowrap; }
+  #aptmg-ov .amg-wv { background: #ede7f6; color: #4a148c; border: 1px solid #b39ddb; border-radius: 2px; font-size: 10px; padding: 0 3px; margin-left: 3px; }
+  #aptmg-ov table.amg-tbl button { font-size: 12px; padding: 1px 7px; border: 1px solid #6a1b9a; color: #6a1b9a; background: #fff; border-radius: 3px; cursor: pointer; }
+  #aptmg-ov .amg-foot { padding: 8px 14px; display: flex; align-items: center; gap: 10px; border-top: 1px solid #e6e1ea; }
+  #aptmg-ov .amg-foot span { margin-right: auto; font-size: 11px; color: #5c6670; }
+  #aptmg-ov .amg-foot button { font-size: 13px; padding: 5px 16px; border-radius: 4px; cursor: pointer; font-family: inherit; border: 1px solid #6a1b9a; background: #6a1b9a; color: #fff; }
   #lgimp-ov { position: fixed; inset: 0; background: rgba(20,30,45,.55); z-index: 9000; display: flex; align-items: center; justify-content: center; }
   #lgimp-ov .lgimp-box { background: #fff; border-radius: 8px; width: min(1040px, 94vw); max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 8px 30px rgba(0,0,0,.3); }
   #lgimp-ov .lgimp-head { background: #00695c; color: #fff; font-weight: 700; padding: 10px 16px; border-radius: 8px 8px 0 0; }
@@ -4929,7 +4985,7 @@
             </select>
           </div>
           <div class="field apt-only">
-            <label><span data-tip="建物にアンテナを付ける承諾は大家からもらいます。同意書は大家の1つで、建物内の世帯で共有します。&#10;その後の打合せ・日程調整は各入居者と個別に行うので、入居者の連絡先は上の「電話番号」に入れてください。">大家 氏名</span></label>
+            <label><span data-tip="建物にアンテナを付ける承諾は大家（または任されている不動産屋）からもらいます。同意書は建物に1つで、建物内の世帯で共有します。&#10;その後の打合せ・日程調整は各入居者と個別に行うので、入居者の連絡先は上の「電話番号」に入れてください。">大家 氏名</span></label>
             <input type="text" id="apt_owner_name" placeholder="例: 佐藤 一郎">
           </div>
           <div class="field apt-only">
@@ -4937,8 +4993,20 @@
             <input type="text" id="apt_owner_tel">
           </div>
           <div class="field apt-only">
-            <label><span data-tip="同意書に書いてもらう大家（または不動産屋）の住所。建物の住所とは違うことが多いので、別に持ちます。">大家・不動産 住所</span></label>
+            <label><span data-tip="大家の住所。大家は建物に住んでいないことがほとんどなので、建物の住所とは別に持ちます。">大家 住所</span></label>
             <input type="text" id="apt_owner_addr" placeholder="例: 三沢市中央町2丁目1番1号">
+          </div>
+          <div class="field apt-only">
+            <label><span data-tip="大家がお金を払って建物の管理を任せている不動産屋（管理会社）。&#10;窓口が不動産屋になっている建物では、打合せの相手はこちらになります。&#10;大家が自分で管理している建物では空欄のままで構いません。">不動産 会社名</span></label>
+            <input type="text" id="apt_agent_name" placeholder="例: みちのく不動産（無ければ空欄）">
+          </div>
+          <div class="field apt-only">
+            <label>不動産 電話</label>
+            <input type="text" id="apt_agent_tel">
+          </div>
+          <div class="field apt-only">
+            <label><span data-tip="不動産屋（管理会社）の住所。">不動産 住所</span></label>
+            <input type="text" id="apt_agent_addr" placeholder="例: 三沢市中央町1丁目1番1号">
           </div>
           <div class="field apt-only">
             <label><span data-tip="同意書を受け取った日。建物に1通なので、この日付も建物の全世帯で同じになります。受付台帳の帯からも入れられます。">同意書 受取日</span></label>
@@ -6580,7 +6648,7 @@
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "135";
+const APP_VERSION = "136";
 /* 自社名（この端末を使っている会社）。「最終保存した会社」の記録と、共有フォルダに置く .bak の
    ファイル名（他業者と被らせない）に使う。端末ごとの設定＝localStorage。 */
 const COMPANY_KEY = "antenna_company_name_v1";
@@ -13608,7 +13676,7 @@ function collectState(){
     "chosho_status","chosho_note",
     // アパート（集合住宅）。戸建てでは apt_units が空なので、以降の分岐は全部オフになる。
     "apt_units","apt_idx","apt_name","apt_room","apt_common","apt_owner_name","apt_owner_tel",
-    "apt_owner_addr","apt_consent_at","apt_bldg",
+    "apt_owner_addr","apt_agent_name","apt_agent_tel","apt_agent_addr","apt_consent_at","apt_bldg",
     "apt_common_done"];
   const s = {};
   ids.forEach(id => {
@@ -18571,6 +18639,11 @@ const APT_MIN_UNITS = 2, APT_MAX_UNITS = 12;
 /* 建物に1つの値。どの世帯で直しても建物ぜんぶに同じものを配る。 */
 const APT_GROUP_FIELDS = ["apt_units", "apt_name", "apt_common", "apt_common_done",
                           "apt_owner_name", "apt_owner_tel", "apt_owner_addr",
+                          /* 大家が自分で管理していることもあれば、お金を払って不動産屋に
+                             任せていることもある。どちらか片方だけのことも多いので、
+                             大家と不動産を別々に持ち、入っている方だけ表に出す。
+                             住所はどちらも建物の住所とは別（大家は建物に住んでいない）。 */
+                          "apt_agent_name", "apt_agent_tel", "apt_agent_addr",
                           "apt_consent_at", "apt_bldg"];
 /* 全通電（全端子電流通過型）分配器で実在する分配数。9世帯以上はこれをカスケードする。 */
 const APT_SPLIT_SIZES = [2, 3, 4, 5, 6, 8];
@@ -18693,6 +18766,22 @@ function aptBldgKey(d){
 }
 function aptBldgKeyOfRow(row){ return row ? aptBldgKey(row.data) : ""; }
 
+/* 帯に出す連絡先。大家と不動産（管理会社）は別物なので、入っている方だけ並べる。
+   住所も出す。大家は建物に住んでいないので、建物の住所とは別の場所になる。 */
+function aptOwnerLineHtml(d){
+  const one = (label, nm, tel, ad) => {
+    nm = String(nm || "").trim(); tel = String(tel || "").trim(); ad = String(ad || "").trim();
+    if(!nm && !tel && !ad) return "";
+    return '<span class="ab-own">' + label + ' ' + escapeHtml(nm || "―")
+      + (tel ? '（' + escapeHtml(tel) + '）' : '')
+      + (ad ? '<span class="ab-oaddr">' + escapeHtml(ad) + '</span>' : '')
+      + '</span>';
+  };
+  const a = one("大家", d && d.apt_owner_name, d && d.apt_owner_tel, d && d.apt_owner_addr);
+  const b = one("不動産", d && d.apt_agent_name, d && d.apt_agent_tel, d && d.apt_agent_addr);
+  if(!a && !b) return '<span class="ab-own">大家・不動産 ―</span>';
+  return a + ((a && b) ? '<span class="ab-sep">|</span>' : '') + b;
+}
 /* 建物の表示名。建物名が無ければ代表番号で代用する（空欄で「無題」にしない）。 */
 function aptBldgName(d){
   const n = String((d && d.apt_name) || "").trim();
@@ -18968,9 +19057,7 @@ function aptBandRowHtml(row, members, colSpan, commonAddr){
       + (common ? '共用部（外部）のボックスに増幅器・電源部・全端子電流通過型の屋内用分配器・安全ブレーカー・コンセントを収めます'
                 : '共用部が無いので、世帯ごとに電源部BPS6W・小型漏電遮断機2ZA2030・コンセントWK1512Kが要ります')
       + '">' + (common ? '共用部あり' : '共用部なし') + '</span>'
-    + '<span class="ab-sep">|</span>大家・不動産 ' + escapeHtml(d.apt_owner_name || "―")
-    + (d.apt_owner_tel ? '（' + escapeHtml(d.apt_owner_tel) + '）' : '')
-    + (d.apt_owner_addr ? '<span class="ab-oaddr">' + escapeHtml(d.apt_owner_addr) + '</span>' : '')
+    + '<span class="ab-sep">|</span>' + aptOwnerLineHtml(d)
     + '<span class="ab-sep">|</span>'
     + '<label title="建物にアンテナを付ける承諾は大家から1通もらえば足ります。ここを押すと建物内の全世帯の同意書に同じ印が付きます。">'
     + '<input type="checkbox" data-aptf="consent"' + (consent ? ' checked' : '') + '>同意書は大家から1通</label>'
@@ -18987,6 +19074,7 @@ function aptBandRowHtml(row, members, colSpan, commonAddr){
     + '<span class="ab-sep">|</span>完了確認書は入居者ごと <b>' + compdoc + ' / ' + n + ' 通</b>'
     + (waived ? '<span class="ab-waive" title="連絡が取れないまま期限で切り替えた世帯です。工事は終わっていますが、完了確認書は受け取れていません。">＋書なし完了 ' + waived + '</span>' : '')
     + '<span class="ab-sep">|</span>工事完了 <b>' + done + ' / ' + n + ' 世帯</b>'
+    + '<button class="ab-mg" data-aptmg="' + escapeHtml(key) + '" title="この建物のことだけをまとめて見ます（大家・不動産の連絡先、同意書、足りない世帯など）">🏢 管理</button>'
     + '</td></tr>';
 }
 
@@ -19032,9 +19120,7 @@ function aptBandSimpleHtml(row, members, colSpan, commonAddr){
     + '🏢 ' + escapeHtml(aptBldgName(d))
     + '<span class="ab-n">' + n + (n !== units ? ' / ' + units : '') + '世帯</span>'
     + (addr ? '<span class="ab-addr">' + escapeHtml(toHalfWidthAn(addr)) + '</span>' : '')
-    + '<span class="ab-sep">|</span>大家・不動産 ' + escapeHtml(d.apt_owner_name || "―")
-    + (d.apt_owner_tel ? '（' + escapeHtml(d.apt_owner_tel) + '）' : '')
-    + (d.apt_owner_addr ? '<span class="ab-oaddr">' + escapeHtml(d.apt_owner_addr) + '</span>' : '')
+    + '<span class="ab-sep">|</span>' + aptOwnerLineHtml(d)
     + '<span class="ab-sep">|</span>'
     + '<span class="ab-doc' + (consent ? ' ok' : '') + '">同意書は大家から1通'
       + (consent ? ('：受領済' + (d.apt_consent_at ? '（' + escapeHtml(lgShortDate(d.apt_consent_at)) + '）' : '')) : '：未')
@@ -19078,6 +19164,335 @@ function aptSetGroupConsent(row, checked){
   const g = aptGroupRows(_listRows, aptBldgKeyOfRow(row));
   (g.length ? g : [row]).forEach(m => setLedger(subCaseKey(m), { consent: !!checked }));
 }
+/* ============================================================
+   🏢 マンション管理（建物ごとの画面）
+   受付台帳は「1世帯＝1行」で並ぶので、建物としてまとめて直したいこと
+   （アパート名・世帯数・共用部・大家と不動産の連絡先・同意書）や、
+   「-01 が抜けている」「-02 なのに1世帯目（代表）のまま」といった
+   建物としての狂いは、行を1つずつ開かないと気付けなかった。
+   ここは建物を1つ選んで、その建物のことだけを見て直すための画面。
+   ============================================================ */
+let _aptMgKey = "";
+/* いま一覧に載っているアパートを、建物ごとにまとめる（管理番号順） */
+function aptMgBuildings(){
+  const keys = [], seen = new Set();
+  (Array.isArray(_listRows) ? _listRows : []).forEach(r => {
+    const k = aptBldgKeyOfRow(r);
+    if(k && !seen.has(k)){ seen.add(k); keys.push(k); }
+  });
+  return keys.map(k => {
+    const rows = aptGroupRows(_listRows, k);
+    const d = (rows[0] && rows[0].data) || {};
+    return { key: k, rows: rows, d: d, units: aptUnits(d) || rows.length };
+  }).sort((a, b) => String(a.key).localeCompare(String(b.key), "ja", { numeric: true }));
+}
+function aptMgFind(key){
+  const all = aptMgBuildings();
+  return all.find(b => b.key === key) || all[0] || null;
+}
+/* 建物に居るはずなのに一覧に無い世帯（枝番）。
+   受付台帳から行を消したり、戸別ファイルを読み込み損ねたりすると出る。 */
+function aptMgMissing(b){
+  const have = new Set();
+  (b.rows || []).forEach(r => {
+    const br = aptMgmtBranch((r.data || {}).chosho_mgmt_no);
+    have.add(br >= 1 ? br : (aptIdx(r.data) || 0));
+  });
+  const out = [];
+  for(let i = 1; i <= b.units; i++) if(!have.has(i)) out.push(i);
+  return out;
+}
+/* 「何世帯目」が管理番号の枝番とずれている世帯。
+   -02 なのに1世帯目（代表）のままだと、建物に1つで足りるもの
+   （共用部のボックス一式・保安器撤去・引込線撤去）がその世帯にも乗って、
+   積算が丸ごと別物になる。 */
+function aptMgIdxMismatch(b){
+  return (b.rows || []).filter(r => {
+    const br = aptMgmtBranch((r.data || {}).chosho_mgmt_no);
+    return br >= 1 && br <= b.units && aptIdx(r.data) !== br;
+  });
+}
+/* 管理番号はこの建物のものなのに、アパートの世帯として扱われていない行。
+   （世帯数が入っていないので建物の帯の外に出る＝関係の無い行に見えてしまい、
+     「余っている行だ」と思って消される。実際にそれで代表の世帯が消えた。）
+   ここに出して、消す前に中身を確かめられるようにする。 */
+function aptMgStray(b){
+  const base = aptMgmtBase((((b.rows || [])[0] || {}).data || {}).chosho_mgmt_no) || b.key;
+  if(!base) return [];
+  return (Array.isArray(_listRows) ? _listRows : []).filter(r => {
+    if(!r || !r.data) return false;
+    if(aptBldgKeyOfRow(r)) return false;                       // すでに世帯として扱われている
+    const mg = toHalfWidthAn(String(r.data.chosho_mgmt_no || "")).trim();
+    if(!mg) return false;
+    return aptMgmtBase(mg) === base;
+  });
+}
+function aptMgOpen(key){
+  const b = key ? aptMgFind(key) : (aptMgFind(_aptMgKey) || null);
+  if(!b){ alert("この一覧にアパートの世帯がありません。\n\n戸別の「🏢 アパート」で世帯数を選ぶと、アパートとして扱われます。"); return; }
+  _aptMgKey = b.key;
+  let ov = document.getElementById("aptmg-ov");
+  if(!ov){
+    ov = document.createElement("div");
+    ov.id = "aptmg-ov";
+    document.body.appendChild(ov);
+    ov.addEventListener("click", e => { if(e.target === ov) aptMgClose(); });
+  }
+  aptMgRender();
+}
+function aptMgClose(){
+  const ov = document.getElementById("aptmg-ov");
+  if(ov && ov.parentNode) ov.parentNode.removeChild(ov);
+}
+function aptMgRender(){
+  const ov = document.getElementById("aptmg-ov"); if(!ov) return;
+  const all = aptMgBuildings();
+  const b = aptMgFind(_aptMgKey);
+  if(!b){ aptMgClose(); return; }
+  _aptMgKey = b.key;
+  const d = b.d;
+  const miss = aptMgMissing(b);
+  const bad = aptMgIdxMismatch(b);
+  const commonAddr = aptCommonAddr(b.rows);
+  const consent = b.rows.some(r => getLedger(subCaseKey(r)).consent);
+  const compdoc = b.rows.filter(r => getLedger(subCaseKey(r)).compdoc).length;
+  const waived = b.rows.filter(r => !getLedger(subCaseKey(r)).compdoc && isCompdocWaived(r.data)).length;
+  const workDone = b.rows.filter(caseWorkDone).length;
+
+  const opt = (v, label, cur) => '<option value="' + escapeHtml(v) + '"' + (String(cur) === String(v) ? ' selected' : '') + '>' + escapeHtml(label) + '</option>';
+  const fld = (label, id, val, ph, tip) =>
+    '<label class="amg-f"><span' + (tip ? ' title="' + escapeHtml(tip) + '"' : '') + '>' + escapeHtml(label) + '</span>'
+    + '<input type="text" data-amgg="' + id + '" value="' + escapeHtml(val || "") + '" placeholder="' + escapeHtml(ph || "") + '"></label>';
+
+  let unitOpts = "";
+  for(let i = APT_MIN_UNITS; i <= APT_MAX_UNITS; i++) unitOpts += opt(String(i), i + "世帯", d.apt_units);
+
+  let html = '<div class="aptmg-box">'
+    + '<div class="amg-head">🏢 マンション管理'
+    +   '<button type="button" id="amg-x" title="閉じる">✕</button></div>'
+    + '<div class="amg-pick">'
+    +   '<span>建物</span><select id="amg-pick">'
+    +     all.map(x => '<option value="' + escapeHtml(x.key) + '"' + (x.key === b.key ? ' selected' : '') + '>'
+            + escapeHtml(aptBldgName(x.d) || x.key) + '（' + x.rows.length + ' / ' + x.units + '世帯）</option>').join("")
+    +   '</select>'
+    +   '<span class="amg-sum">工事完了 <b>' + workDone + ' / ' + b.rows.length + '</b> 世帯'
+    +     '　／　完了確認書 <b>' + compdoc + '</b> 通' + (waived ? '（＋書なし完了 ' + waived + '）' : '')
+    +     '　／　同意書 ' + (consent ? '<b>受領済</b>' + (d.apt_consent_at ? '（' + escapeHtml(d.apt_consent_at) + '）' : '') : '<b class="amg-warn">未受領</b>')
+    +   '</span>'
+    + '</div>'
+    + '<div class="amg-scroll">';
+
+  // ---- 足りない世帯・世帯番号のずれ（あるときだけ、いちばん上に出す） ----
+  if(miss.length){
+    const base = aptMgmtBase(((b.rows[0] || {}).data || {}).chosho_mgmt_no) || b.key;
+    html += '<div class="amg-alert"><b>この建物の世帯が ' + miss.length + ' つ足りません。</b>'
+      + '<div class="amg-alert-b">' + miss.map(i => escapeHtml(aptMgmtWithBranch(base, i))).join("　") + '</div>'
+      + '<div class="amg-alert-n">戸別ファイルがフォルダに残っているなら、先に「📁 フォルダ読込」で読み直してください'
+      + '（写真や図面ごと戻ります）。ファイルごと無いときだけ、下のボタンで作り直してください。</div>'
+      + '<button type="button" id="amg-make">足りない ' + miss.length + ' 世帯を作る</button></div>';
+  }
+  if(bad.length){
+    html += '<div class="amg-alert amg-alert2"><b>「何世帯目」が管理番号の枝番とずれている世帯が ' + bad.length + ' つあります。</b>'
+      + '<div class="amg-alert-b">' + bad.map(r => escapeHtml((r.data || {}).chosho_mgmt_no || "") + '（' + aptIdx(r.data) + '世帯目のまま）').join("　") + '</div>'
+      + '<div class="amg-alert-n">1世帯目＝代表には、建物に1つで足りるもの（共用部のボックス一式・保安器撤去・引込線撤去）が乗ります。'
+      + 'ずれたままだと、その世帯の積算に建物1棟ぶんが乗ってしまいます。</div>'
+      + '<button type="button" id="amg-fixidx">枝番に合わせて直す</button></div>';
+  }
+
+  const stray = aptMgStray(b);
+  if(stray.length){
+    html += '<div class="amg-alert amg-alert3"><b>この建物の番号なのに、アパートの世帯として扱われていない行が ' + stray.length + ' つあります。</b>'
+      + '<div class="amg-alert-b">' + stray.map(r => escapeHtml(((r.data || {}).chosho_mgmt_no) || "")
+          + '（' + escapeHtml(((r.data || {}).chosho_cust_name) || "名前なし") + '）').join("　") + '</div>'
+      + '<div class="amg-alert-n">世帯数が入っていないので、受付台帳では建物の帯の外に出ます。'
+      + 'アパートに分ける前の元の1行のこともあれば、写真や図面が入ったままの<b>大事な世帯</b>のこともあります。'
+      + '消す前に ✏️ で開いて中身を確かめてください。'
+      + '世帯として扱いたいときは、開いて「🏢 アパート」で世帯数と何世帯目を入れてください。</div>'
+      + '<div class="amg-stray">' + stray.map(r => '<button type="button" data-amgopen="1" data-amgk2="'
+          + escapeHtml(subCaseKey(r)) + '">✏️ ' + escapeHtml(((r.data || {}).chosho_mgmt_no) || "") + '</button>').join("") + '</div>'
+      + '</div>';
+  }
+
+  // ---- 建物 ----
+  html += '<div class="amg-card"><div class="amg-t">建物</div><div class="amg-grid">'
+    + fld("アパート名", "apt_name", d.apt_name, "例: さくら荘", "受付台帳の帯に出る名前です。")
+    + '<label class="amg-f"><span title="建物の総世帯数。1世帯＝1戸別として台帳に並びます。">世帯数</span>'
+    +   '<select data-amgg="apt_units">' + unitOpts + '</select></label>'
+    + '<label class="amg-f"><span title="共用部あり＝外のボックスに増幅器・電源部・全端子通過の分配器・ブレーカー・コンセントを収めます（代表の世帯にだけ計上）。&#10;なし＝世帯ごとに電源部BPS6W・小型漏電遮断機・コンセントが要ります。">共用部</span>'
+    +   '<select data-amgg="apt_common">' + opt("no", "なし（世帯ごとに電源部）", d.apt_common || "no") + opt("yes", "あり（共用部にボックス）", d.apt_common || "no") + '</select></label>'
+    + '<label class="amg-f"><span title="共用部（アンテナ・増幅器・ボックス）の工事が終わったら「済」にします。建物ぶんの金額の予定／完了はこの印で分けます。">共用部の工事</span>'
+    +   '<select data-amgg="apt_common_done">' + opt("no", "まだ（予定）", d.apt_common_done || "no") + opt("yes", "済", d.apt_common_done || "no") + '</select></label>'
+    + '<label class="amg-f"><span title="同じ建物の世帯をまとめる合い言葉。ふつうは管理番号から枝番を外したものです。">建物キー</span>'
+    +   '<input type="text" value="' + escapeHtml(b.key) + '" readonly></label>'
+    + '<label class="amg-f amg-wide"><span title="世帯の住所から自動で出した、建物で共通の部分です。">建物の住所</span>'
+    +   '<input type="text" value="' + escapeHtml(commonAddr || "") + '" readonly></label>'
+    + '</div></div>';
+
+  // ---- 大家・不動産 ----
+  html += '<div class="amg-two">'
+    + '<div class="amg-card"><div class="amg-t">大家</div>'
+    +   '<div class="amg-note">大家は建物に住んでいないことがほとんどです。住所は建物とは別に入れてください。</div>'
+    +   '<div class="amg-grid1">'
+    +     fld("氏名", "apt_owner_name", d.apt_owner_name, "例: 佐藤 一郎")
+    +     fld("電話", "apt_owner_tel", d.apt_owner_tel, "")
+    +     fld("住所", "apt_owner_addr", d.apt_owner_addr, "例: 三沢市中央町2丁目1番1号")
+    +   '</div></div>'
+    + '<div class="amg-card"><div class="amg-t">不動産（管理会社）</div>'
+    +   '<div class="amg-note">大家がお金を払って管理を任せている場合の窓口です。大家が自分で管理している建物では空欄のままで構いません。</div>'
+    +   '<div class="amg-grid1">'
+    +     fld("会社名", "apt_agent_name", d.apt_agent_name, "例: みちのく不動産（無ければ空欄）")
+    +     fld("電話", "apt_agent_tel", d.apt_agent_tel, "")
+    +     fld("住所", "apt_agent_addr", d.apt_agent_addr, "例: 三沢市中央町1丁目1番1号")
+    +   '</div></div>'
+    + '</div>';
+
+  // ---- 同意書 ----
+  html += '<div class="amg-card amg-consent">'
+    + '<div class="amg-t">同意書（建物に1通）</div>'
+    + '<label class="amg-chk"><input type="checkbox" id="amg-consent"' + (consent ? ' checked' : '') + '>'
+    +   '大家（または任されている不動産屋）から受け取った</label>'
+    + '<label class="amg-f amg-inline"><span>受取日</span>'
+    +   '<input type="date" data-amgg="apt_consent_at" value="' + escapeHtml(d.apt_consent_at || "") + '"' + (consent ? '' : ' disabled') + '></label>'
+    + (consent && !d.apt_consent_at ? '<span class="amg-warn">受け取った日を入れてください</span>' : '')
+    + '<div class="amg-note">入居者に同意書は要りません。入居者からは工事完了確認書を1通ずつもらいます。ビラは入居者へだけ配ります（大家・不動産へは配りません）。</div>'
+    + '</div>';
+
+  // ---- 世帯 ----
+  html += '<div class="amg-card"><div class="amg-t">世帯（' + b.rows.length + '）</div>'
+    + '<table class="amg-tbl"><thead><tr>'
+    + '<th>世帯</th><th>管理番号</th><th>部屋番号</th><th>入居者</th><th>電話</th><th>工事予定日</th><th>状態</th><th>完了書</th><th></th>'
+    + '</tr></thead><tbody>';
+  b.rows.forEach(r => {
+    const rd = r.data || {};
+    const tk = subCaseKey(r);
+    const lg = getLedger(tk) || {};
+    const br = aptMgmtBranch(rd.chosho_mgmt_no);
+    const idx = aptIdx(rd);
+    const off = (br >= 1 && idx !== br);
+    const wv = isCompdocWaived(rd);
+    html += '<tr data-amgk="' + escapeHtml(tk) + '"' + (off ? ' class="amg-off"' : '') + '>'
+      + '<td class="amg-no">' + idx + '/' + b.units + (idx === 1 ? '<span class="amg-rep">代</span>' : '') + '</td>'
+      + '<td class="amg-mg">' + escapeHtml(rd.chosho_mgmt_no || "") + '</td>'
+      + '<td><input type="text" data-amgr="apt_room" value="' + escapeHtml(rd.apt_room || "") + '" placeholder="例: 103号室"></td>'
+      + '<td><input type="text" data-amgr="name" value="' + escapeHtml(rd.chosho_cust_name || "") + '" placeholder="入居者 未確認"></td>'
+      + '<td><input type="text" data-amgr="tel" value="' + escapeHtml(rd.chosho_cust_tel || "") + '"></td>'
+      + '<td><input type="date" data-amgr="date" value="' + escapeHtml(rd.chosho_date || "") + '"></td>'
+      + '<td class="amg-st">' + escapeHtml(LGIMP_ST_NAME[rd.chosho_status] || "") + '</td>'
+      + '<td class="amg-cd"><input type="checkbox" data-amgc="1"' + (lg.compdoc ? ' checked' : '') + '>'
+      +   (wv ? '<span class="amg-wv" title="連絡が取れないまま期限で切り替えた世帯です。工事は終わっていますが、完了確認書は受け取れていません。">書なし</span>' : '') + '</td>'
+      + '<td><button type="button" data-amgopen="1" title="この世帯の積算・図面を開きます">✏️</button></td>'
+      + '</tr>';
+  });
+  html += '</tbody></table></div>';
+
+  html += '</div>'
+    + '<div class="amg-foot"><span>建物の欄（アパート名・世帯数・共用部・大家・不動産・同意書）は、この建物の世帯すべてに同じものが入ります。</span>'
+    + '<button type="button" id="amg-close">閉じる</button></div>'
+    + '</div>';
+  ov.innerHTML = html;
+}
+/* 建物ぜんぶに配る欄を1つ直す */
+function aptMgSetGroup(key, value){
+  const b = aptMgFind(_aptMgKey); if(!b || !b.rows.length) return;
+  aptSetGroupField(b.rows[0], key, value);
+  b.rows.forEach(m => { m._amtCache = undefined; m._bomCache = undefined; });
+  try { renderListTable(); } catch(_){}
+  aptMgRender();
+}
+/* 足りない世帯を作る */
+function aptMgMakeMissing(){
+  const b = aptMgFind(_aptMgKey); if(!b) return;
+  const miss = aptMgMissing(b); if(!miss.length) return;
+  const src = (b.rows[0] || {}).data || {};
+  const base = aptMgmtBase(src.chosho_mgmt_no) || b.key;
+  if(!base){ alert("代表の管理番号が分からないので作れません。"); return; }
+  if(!confirm("「" + (aptBldgName(src) || b.key) + "」の足りない " + miss.length + " 世帯を作ります。\n\n"
+    + miss.map(i => "・" + aptMgmtWithBranch(base, i)).join("\n")
+    + "\n\n※ 戸別ファイルがフォルダに残っているなら、作る前に「📁 フォルダ読込」で読み直してください。\n"
+    + "　 写真や図面ごと戻ります（ここで作るのは空の行です）。")) return;
+  const shared = {};
+  APT_GROUP_FIELDS.forEach(k => { const v = src[k]; if(v != null && String(v) !== "") shared[k] = v; });
+  shared.apt_units = String(b.units);
+  shared.apt_bldg = b.key;
+  miss.forEach(i => {
+    createManualRow(Object.assign({
+      chosho_mgmt_no: aptMgmtWithBranch(base, i),
+      chosho_cust_addr: String(src.chosho_cust_addr || ""),
+      chosho_status: "provisional"
+    }, shared, { apt_idx: String(i) }), "apartment");
+  });
+  try { renderListTable(); } catch(_){}
+  aptMgRender();
+  alert(miss.length + " 世帯ぶんの行を作りました。入居者の氏名・電話・日程を入れてください。");
+}
+/* 「何世帯目」を管理番号の枝番に合わせ直す */
+function aptMgFixIdx(){
+  const b = aptMgFind(_aptMgKey); if(!b) return;
+  const bad = aptMgIdxMismatch(b); if(!bad.length) return;
+  if(!confirm(bad.length + " 世帯の「何世帯目」を、管理番号の枝番に合わせて直します。\n\n"
+    + bad.map(r => "・" + ((r.data || {}).chosho_mgmt_no || "") + "： " + aptIdx(r.data) + "世帯目 → "
+        + aptMgmtBranch((r.data || {}).chosho_mgmt_no) + "世帯目").join("\n")
+    + "\n\n積算と図面も、この世帯の分に計算し直されます。")) return;
+  bad.forEach(r => {
+    const br = aptMgmtBranch((r.data || {}).chosho_mgmt_no);
+    lgWriteCaseField(r, "apt_idx", String(br));
+    r._amtCache = undefined; r._bomCache = undefined;
+  });
+  try { projTouch(); } catch(_){}
+  try { renderListTable(); } catch(_){}
+  aptMgRender();
+}
+/* 画面の操作をまとめて受ける */
+document.addEventListener("click", e => {
+  const ov = e.target.closest && e.target.closest("#aptmg-ov");
+  if(!ov) return;
+  if(e.target.closest("#amg-x, #amg-close")){ aptMgClose(); return; }
+  if(e.target.closest("#amg-make")){ aptMgMakeMissing(); return; }
+  if(e.target.closest("#amg-fixidx")){ aptMgFixIdx(); return; }
+  const ob = e.target.closest("[data-amgopen]");
+  if(ob){
+    const tr = ob.closest("tr[data-amgk]");
+    const key = ob.dataset.amgk2 || (tr && tr.dataset.amgk) || "";
+    const row = key && (_listRows || []).find(r => subCaseKey(r) === key);
+    if(row){ aptMgClose(); try { openCaseInEditor(row); } catch(_){} }
+    return;
+  }
+});
+document.addEventListener("change", e => {
+  const ov = e.target.closest && e.target.closest("#aptmg-ov");
+  if(!ov) return;
+  const t = e.target;
+  if(t.id === "amg-pick"){ _aptMgKey = t.value; aptMgRender(); return; }
+  if(t.id === "amg-consent"){
+    const b = aptMgFind(_aptMgKey);
+    if(b && b.rows.length){
+      aptSetGroupConsent(b.rows[0], t.checked);
+      try { lgMarkTouched(subCaseKey(b.rows[0])); } catch(_){}
+      try { renderListTable(); } catch(_){}
+    }
+    aptMgRender();
+    return;
+  }
+  if(t.dataset.amgg){ aptMgSetGroup(t.dataset.amgg, t.value); return; }
+  const tr = t.closest("tr[data-amgk]");
+  if(tr){
+    const row = (_listRows || []).find(r => subCaseKey(r) === tr.dataset.amgk);
+    if(!row) return;
+    if(t.dataset.amgr){
+      lgWriteCaseField(row, t.dataset.amgr, t.value);
+      row._amtCache = undefined; row._bomCache = undefined;
+      try { renderListTable(); } catch(_){}
+      return;
+    }
+    if(t.dataset.amgc){
+      setLedger(subCaseKey(row), { compdoc: !!t.checked });
+      try { lgMarkTouched(subCaseKey(row)); } catch(_){}
+      try { renderListTable(); } catch(_){}
+      aptMgRender();
+      return;
+    }
+  }
+});
 function subCaseKey(row){
   // 管理番号は半角でキーにする（全角のまま保存された古いファイルと同じ戸別として扱う）
   const mg = toHalfWidthAn((row.data && row.data.chosho_mgmt_no || "")).trim();
@@ -25826,6 +26241,15 @@ function renderListLedgerMode(rows, container){
              + (_ledgerOnlyApt ? " checked" : "") + '> 🏢 アパート（' + aptN + '）</label>')
           : '')
     + '</div>'
+    // ②-2 建物ごとに見る（アパートが1件でもある時だけ）
+    + (aptN > 0
+        ? ('<div class="lgc-grp"><span class="lgc-ttl">アパート</span>'
+           + '<button id="lg-apt-manage" title="建物を1つ選んで、その建物のことだけをまとめて見ます。'
+           + 'アパート名・世帯数・共用部・大家と不動産の連絡先・同意書は建物に1つなので、ここで直すと建物ぜんぶに入ります。'
+           + '足りない世帯や、管理番号の枝番と「何世帯目」がずれている世帯もここで分かります。" '
+           + 'style="background:#6a1b9a;color:#fff;border:1px solid #4a148c;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">🏢 マンション管理</button>'
+           + '</div>')
+        : '')
     // ③ 印刷する
     + '<div class="lgc-grp"><span class="lgc-ttl">印刷</span>'
     +   '<button id="lg-print-layout" title="印刷したときの見た目のまま、台帳の各列の幅をその場で調整できます（この端末だけの設定）。" style="background:#37474f;color:#fff;border:1px solid #263238;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">🖨 レイアウト調整</button>'
@@ -26301,6 +26725,44 @@ function buildStyledXlsxBlob(cols, rows, sheetName, title){
     { name:"xl/worksheets/sheet1.xml", text: sheet }
   ], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 }
+/* Excel の住所欄に足す「どの部屋か」。
+   アパートの世帯は地番まで住所が同じなので、Excel に並べると
+   どの行がどの部屋なのか分からなくなる。住所の末尾に
+   「アパート名-枝番」（部屋番号が入っていればそれも）を足して見分けられるようにする。
+     例: 三沢市日の出2丁目94番地368号 BMロックスペースⅡ-01
+   画面と紙の台帳は建物の帯で分かるので、足すのは書き出しのときだけ。
+   読み戻し（📗 Excel）では lgXlsxStripAptAddr で外すので、住所は二重にならない。 */
+function aptAddrSuffix(d){
+  if(!isApartmentData(d)) return "";
+  const name = aptBldgName(d);
+  const br = aptMgmtBranch(d && d.chosho_mgmt_no) || aptIdx(d);
+  const no = br ? ("-" + (br < 10 ? "0" + br : String(br))) : "";
+  const room = String((d && d.apt_room) || "").trim();
+  const head = (String(name || "") + no).trim();
+  if(!head) return room;
+  return room ? (head + " " + room) : head;
+}
+function lgXlsxAddr(d){
+  const base = String((d && d.chosho_cust_addr) || "");
+  const suf = aptAddrSuffix(d);
+  if(!suf) return base;
+  return base ? (base + " " + suf) : suf;
+}
+/* 書き出しで足した分を読み戻しのときに外す。
+   外さないと住所の差分に出てきて、取り込むたびに末尾が二重・三重になる。 */
+function lgXlsxStripAptAddr(addr, mgmtNo){
+  const a = String(addr == null ? "" : addr).trim();
+  if(!a) return a;
+  const key = toHalfWidthAn(String(mgmtNo || "")).trim();
+  if(!key) return a;
+  const r = (Array.isArray(_listRows) ? _listRows : []).find(x =>
+    toHalfWidthAn(String(((x && x.data) || {}).chosho_mgmt_no || "")).trim() === key);
+  const suf = r ? aptAddrSuffix(r.data) : "";
+  if(!suf) return a;
+  if(a === suf) return "";
+  const tail = " " + suf;
+  return (a.length > tail.length && a.slice(-tail.length) === tail) ? a.slice(0, -tail.length).trim() : a;
+}
 /* 受付台帳を Excel へ書き出すときの列。幅は実際に使っている表に合わせてある。 */
 const LG_XLSX_COLS = [
   { label:"管理番号",     w:14.7, align:"l" },
@@ -26329,7 +26791,7 @@ async function exportReceptionLedgerToXlsx(){
     const meet = String(lg.meetAt || "").replace("T", " ");
     return [ (d.chosho_mgmt_no || "").trim(), st, d.chosho_cust_name || "",
       (typeof rowContractor === "function") ? (rowContractor(r) || "") : "",
-      d.chosho_cust_addr || "", d.chosho_cust_tel || "", date, meet,
+      lgXlsxAddr(d), d.chosho_cust_tel || "", date, meet,
       yn(lg.flyer), yn(d.chosho_status === "completed"), yn(lg.hold), yn(lg.consent), yn(lg.compdoc), lg.note || "" ];
   }).filter(a => a[0] || a[2] || a[4]);
   if(!body.length){ alert("書き出す受付台帳の行がありません。先に戸別一覧を読み込むか、台帳に行を追加してください。"); return; }
@@ -26463,6 +26925,9 @@ function buildReceptionLedgerPayload(){
       apt_owner_name: String(d.apt_owner_name || ""),
       apt_owner_tel:  String(d.apt_owner_tel  || ""),
       apt_owner_addr: String(d.apt_owner_addr || ""),
+      apt_agent_name: String(d.apt_agent_name || ""),
+      apt_agent_tel:  String(d.apt_agent_tel  || ""),
+      apt_agent_addr: String(d.apt_agent_addr || ""),
       apt_consent_at: String(d.apt_consent_at || ""),
       // 完了書をもらえないまま期限で切り替えた世帯（現場でも「書なし完了」と分かるように）
       compdoc_waived:      String(d.compdoc_waived      || ""),
@@ -26612,7 +27077,8 @@ function buildLedgerHtmlSnapshot(){
     // アパート（集合住宅）。ここは項目を選んで渡す形なので、書いておかないと落ちる。
     // 落ちると、書き出したHTMLの台帳で建物のまとまりが分からなくなる。
     ["apt_units","apt_idx","apt_bldg","apt_name","apt_room","apt_common",
-     "apt_common_done","apt_owner_name","apt_owner_tel","apt_owner_addr","apt_consent_at",
+     "apt_common_done","apt_owner_name","apt_owner_tel","apt_owner_addr",
+     "apt_agent_name","apt_agent_tel","apt_agent_addr","apt_consent_at",
      "compdoc_waived","compdoc_waived_at","compdoc_waived_note"].forEach(k => {
       const v = String(d[k] || "").trim();
       if(v) fields[k] = v;
@@ -26746,7 +27212,7 @@ function lgimpAptFields(x){
   const o = {};
   ["apt_units", "apt_idx", "apt_bldg", "apt_name", "apt_room",
    "apt_common", "apt_common_done", "apt_owner_name", "apt_owner_tel",
-   "apt_owner_addr", "apt_consent_at",
+   "apt_owner_addr", "apt_agent_name", "apt_agent_tel", "apt_agent_addr", "apt_consent_at",
    "compdoc_waived", "compdoc_waived_at", "compdoc_waived_note"].forEach(k => {
     const v = String((x && x[k]) || "").trim();
     if(v) o[k] = v;
@@ -27215,7 +27681,7 @@ function lgXlsxAsLedgerPayload(rows, fileName){
     const row = { mgmt_no: no };
     // 列が無い項目は載せない。載せない＝差分に出ない＝いまの台帳の値をそのまま残す。
     if(has("name")) row.name = get(x, "name");
-    if(has("addr")) row.addr = get(x, "addr");
+    if(has("addr")) row.addr = lgXlsxStripAptAddr(get(x, "addr"), no);
     if(has("tel")) row.tel = get(x, "tel");
     if(has("date")) row.date = lgxDate(get(x, "date"));
     if(has("time")) row.time = lgxTime(get(x, "time"));
@@ -27561,6 +28027,9 @@ function bindLedgerHandlers(container){
        押しても何も起きなくなる（listSelectFolder の中で順番を守って処理している）。 */
     if(e.target.closest("#lg-load-folder")){ listSelectFolder(); return; }
     if(e.target.closest("#lg-import-ledger")){ lgPickLedgerFile(); return; }
+    { const mg = e.target.closest("[data-aptmg]");
+      if(mg){ aptMgOpen(mg.dataset.aptmg || ""); return; } }
+    if(e.target.closest("#lg-apt-manage")){ aptMgOpen(""); return; }
     if(e.target.closest("#lg-xlsx-import")){ ledgerXlsxImportFlow(); return; }
     if(e.target.closest("#lg-xlsx-export")){ exportReceptionLedgerToXlsx(); return; }
     if(e.target.closest("#lg-writeback, #lgs-writeback")){ lgwbButton(); return; }
@@ -30567,7 +31036,8 @@ function genbaMergeCaseData(mainData, genbaData, opts){
   if(!String((mainData && mainData.apt_units) || "").trim()){
     const seeded = [];
     ["apt_units","apt_idx","apt_bldg","apt_name","apt_room","apt_common","apt_common_done",
-     "apt_owner_name","apt_owner_tel","apt_owner_addr","apt_consent_at",
+     "apt_owner_name","apt_owner_tel","apt_owner_addr",
+     "apt_agent_name","apt_agent_tel","apt_agent_addr","apt_consent_at",
      "compdoc_waived","compdoc_waived_at","compdoc_waived_note"].forEach(k => {
       const gv = String(g[k] || "").trim();
       if(!gv) return;
