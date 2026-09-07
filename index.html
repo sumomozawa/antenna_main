@@ -1460,6 +1460,11 @@
     body.list-print-mode .lg-dup-badge,
     body.list-print-mode .pj-box figcaption .pj-i,
     body.list-print-mode .pj-part { color: var(--fg, #fff) !important; }
+    /* アパートの紫のチップ（🏢 3/8・帯の「18世帯」）と青の印は白文字。
+       上の一括黒文字に負けると、紙では紫の上に黒で読めない（実際に読めないと言われた）。 */
+    body.list-print-mode .lg-apt-chip,
+    body.list-print-mode .lg-apt-band .ab-n,
+    body.list-print-mode .lg-any-badge { color: #fff !important; }
     body.list-print-mode .lg-asb-chip.asb-blank { color: #667482 !important; }
     body.list-print-mode .cal-ctr-badge-none { color: #111 !important; }
     body.list-print-mode .cu-ctr-only { color: #fff !important; }
@@ -6758,7 +6763,7 @@ async function lsRestoreFromIdb(){
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "143";
+const APP_VERSION = "144";
 /* ============================================================
    ★日時の表示は、必ずこの端末の時刻で★
    保存している日時は世界時のISO文字列（…T01:03:00.000Z）。これを文字のまま
