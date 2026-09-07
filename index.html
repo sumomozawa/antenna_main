@@ -3797,6 +3797,9 @@
   #aptmg-ov .amg-alert2 { border-color: #ffcc80; background: #fff8e1; }
   #aptmg-ov .amg-alert3 { border-color: #90caf9; background: #e3f2fd; }
   #aptmg-ov .amg-alert3 .amg-alert-b { color: #0d47a1; }
+  #aptmg-ov .amg-asb-mixed { border-color: #ffb74d; background: #fff8e1; }
+  #aptmg-ov .amg-asb-now { font-size: 12px; margin: 4px 0 6px; }
+  #aptmg-ov .amg-asb .amg-chk { align-self: end; padding-bottom: 4px; }
   #aptmg-ov .amg-stray { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
   #aptmg-ov .amg-stray-card { border-top: 1px dashed #90caf9; padding-top: 6px; margin-top: 6px; }
   #aptmg-ov .amg-stray-bits { font-family: inherit; color: #37474f; font-weight: 400; margin-left: 10px; }
@@ -4987,7 +4990,7 @@
             <input type="text" id="apt_room" placeholder="例: 203号室">
           </div>
           <div class="field apt-only">
-            <label><span data-tip="共用部あり＝共用部（外部）にボックスを付け、中に増幅器・電源部・全端子電流通過型の屋内用分配器・安全ブレーカー型漏電遮断器・コンセントを収めます。ボックス一式は代表の世帯にだけ計上します。&#10;共用部なし＝世帯ごとに 電源部BPS6W＋小型漏電遮断機2ZA2030＋コンセントWK1512K が要ります。&#10;どちらでも宅内調整は世帯数分かかります。">共用部</span></label>
+            <label><span data-tip="共用部あり＝共用部（外部）にボックスを付け、中に増幅器・電源部・屋内用分配器（電源部より下流なので普通の分配器）・安全ブレーカー型漏電遮断器・コンセントを収めます。ボックス一式は代表の世帯にだけ計上します。&#10;共用部なし＝世帯ごとに 電源部BPS6W＋小型漏電遮断機2ZA2030＋コンセントWK1512K が要ります。&#10;どちらでも宅内調整は世帯数分かかります。">共用部</span></label>
             <select id="apt_common">
               <option value="no">なし（世帯ごとに電源部）</option>
               <option value="yes">あり（共用部にボックス）</option>
@@ -6755,7 +6758,7 @@ async function lsRestoreFromIdb(){
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "142";
+const APP_VERSION = "143";
 /* ============================================================
    ★日時の表示は、必ずこの端末の時刻で★
    保存している日時は世界時のISO文字列（…T01:03:00.000Z）。これを文字のまま
@@ -7666,8 +7669,8 @@ function buildBOM(input, qtyOverridesOpt) {
   }
 
   // ===== アパート（集合住宅）の電源まわり ===================================
-  // 共用部あり: 共用部（外部）のボックスの中に、増幅器の電源部・全端子電流通過型の
-  //   屋内用分配器・安全ブレーカー型漏電遮断器・コンセントを収める。建物に1つなので
+  // 共用部あり: 共用部（外部）のボックスの中に、増幅器の電源部・屋内用分配器（普通の分配器。
+  //   電源部より下流なので全通電は要らない）・安全ブレーカー型漏電遮断器・コンセントを収める。建物に1つなので
   //   代表（1世帯目）にだけ計上する。ボックス本体は上の外部電源の区間で計上済み。
   // 共用部なし: 共用部が無いので世帯ごとに 電源部BPS6W＋小型漏電遮断機2ZA2030＋
   //   コンセントWK1512K が必要になる。
@@ -7684,7 +7687,7 @@ function buildBOM(input, qtyOverridesOpt) {
         }
         const aptPlan = aptSplitterPlan(input.apt_units);
         aptPlan.rows.forEach(x => {
-          add(x.id, x.qty, { note:"共用部ボックス内 全通電分配器（" + input.apt_units + "世帯 "
+          add(x.id, x.qty, { note:"共用部ボックス内 分配器（" + input.apt_units + "世帯 "
                                   + aptSplitterPlanText(aptPlan) + "）" });
         });
         APT_SCOPE_BUILDING = false;
@@ -10571,7 +10574,7 @@ function renderAptCommonDiagram(svg, input, W, H){
     if(!plan.cascade){
       const p = plan.rows[0];
       headNode = mkNode(svg, bx + 14, spTop, bw - 28, 40, aptPartLabel(p.id, p.size + "分配"),
-        { id: p.id, existing: false, sublabel: "全通電", nodeKey: "apt_sp_head" });
+        { id: p.id, existing: false, nodeKey: "apt_sp_head" });
       for(let i = 0; i < units; i++) splitOuts.push(headNode.right);
     } else {
       const head = plan.rows[0], br = plan.rows[1];
@@ -10656,7 +10659,7 @@ function renderAptUnitDiagram(svg, input, W, H){
 
   // ---- 共用部からの引き込み ----
   const srcY = 330;
-  const src = mkNode(svg, 50, srcY, 170, 44, "共用部より\n（全通電分配器）",
+  const src = mkNode(svg, 50, srcY, 170, 44, "共用部より\n（ボックス内の分配器）",
     { existing: true, sublabel: baseNo ? aptMgmtWithBranch(baseNo, 1) : "代表の世帯",
       nodeKey: "apt_src" });
   let prev = src.right;
@@ -16659,7 +16662,11 @@ const LGWB_FIELDS = [
      戸別ファイルにも入れて、読み直しても別のPCでも消えないようにする。 */
   { k:"compdoc_waived",      label:"書なし完了" },
   { k:"compdoc_waived_at",   label:"書なし完了 日" },
-  { k:"compdoc_waived_note", label:"書なし完了 覚え書き" }
+  { k:"compdoc_waived_note", label:"書なし完了 覚え書き" },
+  /* 石綿判定は中身が入れ物（着工日・判定の決め方・建材…）なので obj:true。
+     アパートは建物で1つの判定を全世帯へ配るので、ここに無いと配った先のファイルに入らない。
+     行が持っていないときは比べない（ファイルの判定を消さない）。 */
+  { k:"asbestos",            label:"石綿判定", obj:true }
 ];
 /* 戸別ファイルに置き場所が無く、書き戻せない台帳の欄。
    工事時刻（chosho_time）と打合せ予定（chosho_meet_at）を戸別ファイルへ入れたので、
@@ -16853,6 +16860,10 @@ function lgConfirmDiscardCaseEdits(what){
 function lgwbShow(k, v){
   const f = lgwbField(k);
   if(f && f.bool) return v ? "○" : "―";
+  if(f && f.obj){
+    if(k === "asbestos") return asbestosStatusBadge({ data: { asbestos: v } }).label;   // 「🟢 不要」「🟠 みなしLV3」など
+    return v ? "あり" : "（空欄）";
+  }
   v = String(v == null ? "" : v);
   if(!v) return "（空欄）";
   if(k === "chosho_status") return LGWB_STATUS[v] || v;
@@ -16865,6 +16876,7 @@ function lgwbWanted(row){
   const lg = (tk ? getLedger(tk) : null) || {};
   const o = {};
   LGWB_FIELDS.forEach(f => {
+    if(f.obj){ if(d[f.k] && typeof d[f.k] === "object") o[f.k] = d[f.k]; return; }   // 入れ物は持っているときだけ
     o[f.k] = f.bool ? !!lg[f.lg]                       // ○×の欄は台帳が持ち主
                     : String(d[f.k] == null ? "" : d[f.k]);
   });
@@ -16912,6 +16924,12 @@ async function lgwbScan(rows){
     if(!json || typeof json !== "object") continue;
     const want = lgwbWanted(row), diffs = [];
     LGWB_FIELDS.forEach(f => {
+      if(f.obj){
+        if(!(f.k in want)) return;                      // 行が持っていない入れ物は、ファイルの中身を消さない
+        const J = v => JSON.stringify(v == null ? null : v);
+        if(J(json[f.k]) !== J(want[f.k])) diffs.push({ k:f.k, label:f.label, from:json[f.k], to:want[f.k] });
+        return;
+      }
       // ○×の欄は、キーの無い古いファイル＝「×」として比べる（無駄な書き込みを増やさない）
       const now = f.bool ? !!json[f.k] : String(json[f.k] == null ? "" : json[f.k]);
       if(now !== want[f.k]) diffs.push({ k:f.k, label:f.label, from:now, to:want[f.k] });
@@ -17009,6 +17027,7 @@ async function lgwbApply(list){
       const back = JSON.parse(await (await fh.getFile()).text());
       const ng = it.diffs.filter(d => {
         const f = lgwbField(d.k);
+        if(f && f.obj) return JSON.stringify(back[d.k] == null ? null : back[d.k]) !== JSON.stringify(d.to == null ? null : d.to);
         const now = (f && f.bool) ? !!back[d.k] : String(back[d.k] == null ? "" : back[d.k]);
         return now !== d.to;
       });
@@ -19076,8 +19095,12 @@ const APT_GROUP_FIELDS = ["apt_units", "apt_name", "apt_common", "apt_common_don
                              住所はどちらも建物の住所とは別（大家は建物に住んでいない）。 */
                           "apt_agent_name", "apt_agent_tel", "apt_agent_addr",
                           "apt_consent_at", "apt_bldg"];
-/* 全通電（全端子電流通過型）分配器で実在する分配数。9世帯以上はこれをカスケードする。 */
-const APT_SPLIT_SIZES = [2, 3, 4, 5, 6, 8];
+/* 共用部のボックスに入れる分配器で実在する分配数（普通の分配器 2SPFW〜6SPFW。8分配は無い）。
+   ★全通電（全端子電流通過型）でなくてよい★ 電源部がボックスの中にあり、増幅器への電源は
+   電源部から上（アンテナ側）へ流れる。分配器は電源部より下流なので電流を通す必要が無い。
+   （共用部なし＝各世帯に電源部、のときは建物の分配器をここでは計上していない）
+   7世帯以上は「元の分配器 → 枝の分配器×元の口数」のカスケードにする。 */
+const APT_SPLIT_SIZES = [2, 3, 4, 5, 6];
 const APT_BRANCH_RE = /^(.+)-(\d{1,2})$/;
 
 /* ============================================================
@@ -19221,6 +19244,40 @@ function aptRepWarnHtml(members){
                : '代表が' + n + 'つあるので、この建物ぶんが' + n + '重に計上されています。')
     + '「🏢 管理」から直せます。">⚠ 代表 ' + n + '（1つにしてください）</span>';
 }
+/* 建物の石綿判定。アパートの石綿は建物の着工日で決まるので、世帯ごとに違うことは無い。
+   代表（1世帯目）に判定が入っていればそれ。無ければ判定の入っている最初の世帯のもの。どこにも無ければ null。 */
+function aptAsbestosOf(members){
+  const list = (members || []).filter(r => r && r.data);
+  const has = r => { const c = asbestosStatusBadge(r).cat; return c !== "blank" && c !== "locked"; };
+  const src = list.find(r => aptIdx(r.data) === 1 && has(r)) || list.find(has) || null;
+  return src ? _genbaClone(src.data.asbestos) : null;
+}
+/* 世帯ごとの判定の種類と数（{ noneed:1, blank:7 } など）。暗号化のまま（🔐）の世帯は読めないので数えない。 */
+function aptAsbestosCats(members){
+  const cats = {};
+  (members || []).forEach(r => {
+    if(!r || !r.data) return;
+    const c = asbestosStatusBadge(r).cat;
+    if(c === "locked") return;
+    cats[c] = (cats[c] || 0) + 1;
+  });
+  return cats;
+}
+/* 判定の種類が2つ以上ある＝ばらついている */
+function aptAsbestosMixed(members){ return Object.keys(aptAsbestosCats(members)).length > 1; }
+/* 帯に出す「石綿の判定がそろっていない」の一言。そろっていれば空。
+   ★数えるのは一覧ぜんぶの中の同じ建物★（代表の警告と同じ理由：絞り込みで隠れた世帯を数え落とさない） */
+function aptAsbWarnHtml(members){
+  const first = (members || [])[0];
+  const key = first ? aptBldgKeyOfRow(first) : "";
+  const all = key ? aptGroupRows(_listRows, key) : (members || []);
+  const cats = aptAsbestosCats(all.length ? all : members);
+  if(Object.keys(cats).length <= 1) return "";
+  const txt = Object.keys(cats).map(c => (ASB_CHIP_SHORT[c] || c) + " " + cats[c] + "世帯").join("／");
+  return '<span class="ab-warn ab-asb-warn" title="石綿の判定は建物の着工日で決まるので、同じ建物の世帯で違うことはありません。'
+    + 'いま ' + escapeHtml(txt) + ' とばらついています。「🏢 管理」の「石綿判定（建物で1つ）」で決めると、'
+    + '全世帯に同じ判定が入ります。">⚠ 石綿の判定がそろっていません</span>';
+}
 /* 帯に出す連絡先。大家と不動産（管理会社）は別物なので、入っている方だけ並べる。
    住所も出す。大家は建物に住んでいないので、建物の住所とは別の場所になる。 */
 function aptOwnerLineHtml(d){
@@ -19282,45 +19339,44 @@ function aptBoxPartsId(units){
   const u = parseInt(units, 10) || 0;
   return (u >= 6) ? "box_op20_65a" : "box_op14_33a";
 }
-/* n口以上で一番小さい全通電分配器 */
+/* n口以上で一番小さい分配器（普通の分配器）。要る口数がいちばん大きい分配器を超えるときは、その最大のものを返す */
 function aptSplitFor(n){
   const need = Math.max(2, parseInt(n, 10) || 2);
   const size = APT_SPLIT_SIZES.find(x => x >= need) || APT_SPLIT_SIZES[APT_SPLIT_SIZES.length - 1];
-  return { id: "sp_" + size + "spfdw", size: size };
+  return { id: "sp_" + size + "spfw", size: size };
 }
-/* 世帯数から全通電分配器の組み合わせを決める。
-   8分配までしか実在しないので、9世帯以上は「元の分配器 → 枝の分配器×元の口数」のカスケードにする。
+/* 世帯数から共用部ボックス内の分配器（普通の分配器）の組み合わせを決める。
+   6分配までしか実在しないので、7世帯以上は「元の分配器 → 枝の分配器×元の口数」のカスケードにする。
    ★口数は必ず世帯数以上にすること★
    元を2分配で固定していたため、17・18世帯では 2分配→8分配×2＝16口 にしかならず、
    口数が足りない組み合わせを出していた（16世帯までは足りるので気づきにくい）。
    元の分配数を小さい順に試し、足りる中でいちばん小さいものを採る。
-   こうすると12世帯までの組み合わせは今までと同じまま（元は2分配）で、
-   17・18世帯だけ 3分配 → 6分配×3（18口）になる。
-   例) 12世帯 = 2分配×1 + 6分配×2（12口）／ 9世帯 = 2分配×1 + 5分配×2（10口・1口余り）
+   例) 8世帯 = 2分配×1 + 4分配×2（8口）／ 9世帯 = 2分配×1 + 5分配×2（10口・1口余り）
+       12世帯 = 2分配×1 + 6分配×2（12口）／ 15世帯 = 3分配×1 + 5分配×3（15口）
        18世帯 = 3分配×1 + 6分配×3（18口）
    積算では数量を手で直せるので、ここは「妥当な既定値」を出すだけでよい。 */
 function aptSplitterPlan(units){
   const u = Math.max(APT_MIN_UNITS, Math.min(APT_MAX_UNITS, parseInt(units, 10) || APT_MIN_UNITS));
-  if(u <= 8){
+  const big = APT_SPLIT_SIZES[APT_SPLIT_SIZES.length - 1];    // いちばん大きい分配器（6分配）
+  if(u <= big){
     const p = aptSplitFor(u);
     return { rows: [{ id: p.id, qty: 1, size: p.size }], ports: p.size, cascade: false, units: u };
   }
-  const big = APT_SPLIT_SIZES[APT_SPLIT_SIZES.length - 1];
   let head = 0, br = null;
   for(const f of APT_SPLIT_SIZES){
     const need = Math.ceil(u / f);
     const p = aptSplitFor(need);
-    /* aptSplitFor は「要る口数以上でいちばん小さいもの」を返すが、8分配より大きいものは
-       実在しないので、そのときだけ足りない値（8分配）が返る。ここで弾く。
+    /* aptSplitFor は「要る口数以上でいちばん小さいもの」を返すが、いちばん大きい分配器より
+       大きいものは実在しないので、そのときだけ足りない値が返る。ここで弾く。
        弾かなければ f × p.size ≥ f × ⌈u/f⌉ ≥ u なので、口数は必ず世帯数以上になる。 */
     if(p.size < need) continue;
     head = f; br = p; break;
   }
-  if(!head){                                      // ここには来ない（8分配×8＝64口まで組める）
+  if(!head){                                      // ここには来ない（6分配×6＝36口まで組める）
     head = big; br = aptSplitFor(big);
   }
   return {
-    rows: [{ id: "sp_" + head + "spfdw", qty: 1, size: head },
+    rows: [{ id: "sp_" + head + "spfw", qty: 1, size: head },
            { id: br.id, qty: head, size: br.size }],
     ports: br.size * head, cascade: true, units: u
   };
@@ -19373,9 +19429,10 @@ function aptNoteHtml(units){
     const plan = aptSplitterPlan(units);
     const box = PARTS[aptBoxPartsId(units)];
     L.push("共用部あり：ボックス <b>" + escapeHtml(box ? box.name : "") + "</b> に 増幅器・電源部・"
-         + "全端子電流通過型の屋内用分配器・安全ブレーカー 2P2E20A・コンセント WK1512K を収めます。");
+         + "屋内用分配器・安全ブレーカー 2P2E20A・コンセント WK1512K を収めます"
+         + "（電源部がボックスの中にあるので、分配器は全通電でなく普通のもので足ります）。");
     L.push("分配器は <b>" + escapeHtml(aptSplitterPlanText(plan)) + "</b>"
-         + (plan.cascade ? "（8分配までしか無いのでカスケードします）" : "") + "。");
+         + (plan.cascade ? "（6分配までしか無いので、元の分配器から枝の分配器へつなぎます）" : "") + "。");
     L.push(rep ? "このボックス一式は<b>代表のこの世帯にだけ</b>計上します。"
                : "ボックス一式は代表（1世帯目）に計上するので、この世帯には計上しません。");
   } else {
@@ -19441,12 +19498,15 @@ function aptFillUnits(){
   }
   const bEl = document.getElementById("apt_bldg");
   if(bEl && !bEl.value.trim()) bEl.value = bldg;
+  /* 石綿の判定も建物で1つ。開いている世帯で判定が決まっていれば、新しい世帯にも同じものを入れる */
+  const asbCur = collectAsbestosState();
+  const asbOk = asbestosStatusBadge({ data: { asbestos: asbCur } }).cat !== "blank";
   want.forEach(i => {
     createManualRow(Object.assign({
       chosho_mgmt_no: aptMgmtWithBranch(base, i),
       chosho_cust_addr: v("chosho_cust_addr"),
       chosho_status: "provisional"
-    }, shared, { apt_idx: String(i) }), "apartment");
+    }, shared, { apt_idx: String(i) }, asbOk ? { asbestos: _genbaClone(asbCur) } : {}), "apartment");
   });
   try { rebuild(); } catch(_){}
   try { renderListTable(); } catch(_){}
@@ -19530,7 +19590,7 @@ function aptBandRowHtml(row, members, colSpan, commonAddr){
     + (addr ? '<span class="ab-addr" title="建物の住所（世帯ごとに違うのは部屋番号だけなので、ここに1回だけ出します）">'
               + escapeHtml(toHalfWidthAn(addr)) + '</span>' : '')
     + '<span class="ab-com' + (common ? '' : ' off') + '" title="'
-      + (common ? '共用部（外部）のボックスに増幅器・電源部・全端子電流通過型の屋内用分配器・安全ブレーカー・コンセントを収めます'
+      + (common ? '共用部（外部）のボックスに増幅器・電源部・屋内用分配器・安全ブレーカー・コンセントを収めます（電源部がボックス内なので分配器は普通のもの）'
                 : '共用部が無いので、世帯ごとに電源部BPS6W・小型漏電遮断機2ZA2030・コンセントWK1512Kが要ります')
       + '">' + (common ? '共用部あり' : '共用部なし') + '</span>'
     + '<span class="ab-sep">|</span>' + aptOwnerLineHtml(d)
@@ -19550,7 +19610,7 @@ function aptBandRowHtml(row, members, colSpan, commonAddr){
     + '<span class="ab-sep">|</span>完了確認書は入居者ごと <b>' + compdoc + ' / ' + n + ' 通</b>'
     + (waived ? '<span class="ab-waive" title="連絡が取れないまま期限で切り替えた世帯です。工事は終わっていますが、完了確認書は受け取れていません。">＋書なし完了 ' + waived + '</span>' : '')
     + '<span class="ab-sep">|</span>工事完了 <b>' + done + ' / ' + n + ' 世帯</b>'
-    + aptRepWarnHtml(members)
+    + aptRepWarnHtml(members) + aptAsbWarnHtml(members)
     + '<button class="ab-mg" data-aptmg="' + escapeHtml(key) + '" title="この建物のことだけをまとめて見ます（大家・不動産の連絡先、同意書、足りない世帯など）">🏢 管理</button>'
     + '</td></tr>';
 }
@@ -19607,7 +19667,7 @@ function aptBandSimpleHtml(row, members, colSpan, commonAddr){
       + compdoc + ' / ' + n + ' 通</span>'
     + (waived ? '<span class="ab-waive" title="連絡が取れないまま期限で切り替えた世帯です。工事は終わっていますが、完了確認書は受け取れていません。">＋書なし完了 ' + waived + '</span>' : '')
     + '<span class="ab-sep">|</span>工事完了 <b>' + done + ' / ' + n + ' 世帯</b>'
-    + aptRepWarnHtml(members)
+    + aptRepWarnHtml(members) + aptAsbWarnHtml(members)
     + '</td></tr>';
 }
 
@@ -20078,7 +20138,7 @@ function aptMgRender(){
     + fld("アパート名", "apt_name", d.apt_name, "例: さくら荘", "受付台帳の帯に出る名前です。")
     + '<label class="amg-f"><span title="建物の総世帯数。1世帯＝1戸別として台帳に並びます。">世帯数</span>'
     +   '<select data-amgg="apt_units">' + unitOpts + '</select></label>'
-    + '<label class="amg-f"><span title="共用部あり＝外のボックスに増幅器・電源部・全端子通過の分配器・ブレーカー・コンセントを収めます（代表の世帯にだけ計上）。&#10;なし＝世帯ごとに電源部BPS6W・小型漏電遮断機・コンセントが要ります。">共用部</span>'
+    + '<label class="amg-f"><span title="共用部あり＝外のボックスに増幅器・電源部・分配器・ブレーカー・コンセントを収めます（代表の世帯にだけ計上）。&#10;なし＝世帯ごとに電源部BPS6W・小型漏電遮断機・コンセントが要ります。">共用部</span>'
     +   '<select data-amgg="apt_common">' + opt("no", "なし（世帯ごとに電源部）", d.apt_common || "no") + opt("yes", "あり（共用部にボックス）", d.apt_common || "no") + '</select></label>'
     + '<label class="amg-f"><span title="共用部（アンテナ・増幅器・ボックス）の工事が終わったら「済」にします。建物ぶんの金額の予定／完了はこの印で分けます。">共用部の工事</span>'
     +   '<select data-amgg="apt_common_done">' + opt("no", "まだ（予定）", d.apt_common_done || "no") + opt("yes", "済", d.apt_common_done || "no") + '</select></label>'
@@ -20087,6 +20147,46 @@ function aptMgRender(){
     + '<label class="amg-f amg-wide"><span title="世帯の住所から自動で出した、建物で共通の部分です。">建物の住所</span>'
     +   '<input type="text" value="' + escapeHtml(commonAddr || "") + '" readonly></label>'
     + '</div></div>';
+
+  // ---- 石綿判定（建物で1つ） ----
+  {
+    const asb = aptAsbestosOf(b.rows) || {};
+    const cats = aptAsbestosCats(b.rows);
+    const mixed = Object.keys(cats).length > 1;
+    const catTxt = Object.keys(cats).map(c => (ASB_CHIP_SHORT[c] || c) + " " + cats[c] + "世帯").join("　");
+    const sel = (label, id, cur, pairs, tip) =>
+      '<label class="amg-f"><span' + (tip ? ' title="' + escapeHtml(tip) + '"' : '') + '>' + escapeHtml(label) + '</span>'
+      + '<select data-amga="' + id + '">' + pairs.map(x => opt(x[0], x[1], cur)).join("") + '</select></label>';
+    const chk = (label, id, on, tip) =>
+      '<label class="amg-chk amg-f"' + (tip ? ' title="' + escapeHtml(tip) + '"' : '') + '><input type="checkbox" data-amga="' + id + '"' + (on ? ' checked' : '') + '>' + escapeHtml(label) + '</label>';
+    html += '<div class="amg-card amg-asb' + (mixed ? ' amg-asb-mixed' : '') + '"><div class="amg-t">石綿判定（建物で1つ）</div>'
+      + '<div class="amg-note">石綿の判定は建物の着工日で決まるので、同じ建物の世帯で違うことはありません。'
+      + 'ここで決めて「全世帯にそろえる」を押すと、この建物の世帯すべてに同じ判定が入り、戸別ファイルにもその場で書き込まれます。'
+      + '費用（石綿みなし対応 諸経費）は代表の世帯にだけ乗ります。</div>'
+      + '<div class="amg-asb-now">いま： <b>' + escapeHtml(catTxt || "未入力") + '</b>'
+      + (mixed ? '<span class="amg-warn">　⚠ そろっていません</span>' : '') + '</div>'
+      + '<div class="amg-grid">'
+      + sel("判定の決め方", "applicability_mode", asb.applicability_mode || "auto",
+            [["auto", "着工日から決める（2006/9/1より前ならみなし）"], ["force_no", "不要（石綿なし）"], ["force_yes", "みなし（石綿あり）"]],
+            "「着工日から決める」が基本です。資料で分かっているときだけ「不要」「みなし」を直接選びます。")
+      + '<label class="amg-f"><span title="建物の新築着工日。2006年9月1日より前ならみなし扱いです。">建築着工日</span>'
+      +   '<input type="date" data-amga="construction_date" value="' + escapeHtml(asb.construction_date || "") + '"></label>'
+      + chk("着工日が分からない（みなし扱い）", "date_unknown", !!asb.date_unknown, "着工日を確かめられないときは、みなし扱いになります。")
+      + sel("確認した資料", "date_source", asb.date_source || "kenchiku_kakunin",
+            Object.keys(ASBESTOS_DATE_SOURCE_LABEL).map(k => [k, ASBESTOS_DATE_SOURCE_LABEL[k]]), "着工日を何で確かめたか。")
+      + sel("外壁の建材", "material", asb.material || "siding",
+            Object.keys(ASBESTOS_MATERIAL_LABEL).map(k => [k, ASBESTOS_MATERIAL_LABEL[k]]), "穿孔する外壁の建材。")
+      + '<label class="amg-f"><span>建材（その他のとき）</span>'
+      +   '<input type="text" data-amga="material_other" value="' + escapeHtml(asb.material_other || "") + '" placeholder="建材が「その他」のときだけ"></label>'
+      + sel("レベル", "level", asb.level || "level3",
+            [["level3", "レベル3（みなし対応で施工できる）"], ["level1", "レベル1（要専門業者・別途届出）"], ["level2", "レベル2（要専門業者・別途届出）"]],
+            "ふつうはレベル3です。")
+      + chk("非発じん工法（電動工具・穿孔を使わない。みなしでも諸経費は乗せない）", "no_dust_method", !!asb.no_dust_method,
+            "手締めなど石綿を飛ばさない工法で施工するとき。みなし判定はそのままで、費用だけ乗せません。")
+      + '</div>'
+      + '<div class="amg-stray"><button type="button" id="amg-asb-apply">🧱 この判定を全世帯（' + b.rows.length + '）にそろえる</button></div>'
+      + '</div>';
+  }
 
   // ---- 大家・不動産 ----
   html += '<div class="amg-two">'
@@ -20159,6 +20259,124 @@ function aptMgSetGroup(key, value){
   try { renderListTable(); } catch(_){}
   aptMgRender();
 }
+/* 戸別ファイルの中身を、ここに書いた項目だけ差し替える。★写真は触らない★
+   ファイルを丸ごと読み、項目を入れ替えて、そのまま書き戻す。
+   書いたら読み返し、入れたものが入っていること・写真の枚数が減っていないことを確かめる。
+   （ブラウザのファイル書き込みは、閉じるまで元のファイルを置き換えないので、途中で失敗しても元は無事）
+   戻り値: "written"＝書いた／"same"＝もう同じだった／"nofile"＝ファイルを持たない行／
+           "encrypted"＝暗号化ファイル（開いて保存してもらう）。失敗は例外（そのときは何も変えていない）。 */
+async function caseFilePatch(row, patch){
+  if(!row || !(row._dir && row._name) || row._detached) return "nofile";
+  if(row.fileType !== "plain") return "encrypted";
+  const keys = Object.keys(patch || {});
+  if(!keys.length) return "same";
+  const J = v => JSON.stringify(v == null ? null : v);
+  if(!(await dupEnsureWritable(row._dir))) throw new Error("フォルダへの書き込み許可が得られませんでした");
+  const fh = await row._dir.getFileHandle(row._name);
+  const json = JSON.parse(await (await fh.getFile()).text());
+  if(!json || typeof json !== "object" || Array.isArray(json)) throw new Error("ファイルの中身が戸別の形ではありません");
+  if(keys.every(k => J(json[k]) === J(patch[k]))) return "same";
+  const cnt = o => (Array.isArray(o && o.chosho_photos) ? o.chosho_photos : []).filter(x => x && x.dataUri).length;
+  const before = cnt(json);
+  keys.forEach(k => { json[k] = _genbaClone(patch[k]); });
+  json.editedAt = new Date().toISOString();
+  const w = await fh.createWritable();
+  await w.write(JSON.stringify(json, null, 2));
+  await w.close();
+  const back = JSON.parse(await (await fh.getFile()).text());
+  const ng = keys.filter(k => J(back[k]) !== J(patch[k]));
+  if(ng.length) throw new Error("書いたあと読み返したら入っていませんでした（" + ng.join("・") + "）");
+  if(cnt(back) < before) throw new Error("書いたあと写真の枚数が " + before + "枚 → " + cnt(back) + "枚 に減っていました。すぐに開いて確かめてください");
+  row.fileHandle = fh;
+  return "written";
+}
+/* 石綿の判定を、建物の世帯（members）の行にそろえる（手元の行だけ。ファイルは aptAsbestosApplyAll が書く）。
+   変えた行には「まだ戸別ファイルに入っていない」印を付ける。戻り値＝変えた行。 */
+function aptAsbestosShare(members, asb){
+  const changed = [];
+  const J = v => JSON.stringify(v == null ? null : v);
+  (members || []).forEach(m => {
+    if(!m || !m.data) return;
+    if(J(m.data.asbestos) === J(asb)) return;
+    m.data = Object.assign({}, m.data, { asbestos: _genbaClone(asb) });
+    if(m.fileType === "hybrid" && m.envelope && m.envelope.plain){
+      m.envelope = Object.assign({}, m.envelope);
+      m.envelope.plain = Object.assign({}, m.envelope.plain, { asbestos: _genbaClone(asb) });
+    }
+    m._amtCache = undefined; m._bomCache = undefined;
+    try { markCaseEdited(m); } catch(_){}
+    m._lgEdited = true;
+    try { lgMarkTouched(m); } catch(_){}
+    changed.push(m);
+  });
+  if(changed.length){ try { projTouch(); } catch(_){} }
+  return changed;
+}
+/* 石綿の判定を建物の全世帯にそろえ、戸別ファイルにもその場で書く。
+   ★費用は増えない★ 石綿みなし対応 諸経費は代表（1世帯目）にだけ乗る作りなので、
+   全世帯に同じ判定を入れても二重にはならない。
+   書けなかった世帯には「まだ入っていません」の印を残す（「💾 戸別ファイルへ反映」でも石綿判定は入る）。 */
+async function aptAsbestosApplyAll(members, asb){
+  const res = { done: 0, written: 0, same: 0, nofile: 0, encrypted: 0, fails: [] };
+  const wasMarked = new Set((members || []).filter(m => m && m._lgEdited));
+  aptAsbestosShare(members, asb);
+  for(const m of (members || [])){
+    if(!m || !m.data) continue;
+    res.done++;
+    let state = "fail";
+    try { state = await caseFilePatch(m, { asbestos: _genbaClone(asb) }); }
+    catch(e){
+      state = "fail";
+      res.fails.push("・" + String((m.data || {}).chosho_mgmt_no || m._name || "") + "：" + ((e && e.message) || e));
+    }
+    if(state === "written" || state === "same"){
+      res[state]++;
+      /* ファイルに入ったので、この操作で付けた印は下ろす（前から付いていた印はそのまま） */
+      if(!wasMarked.has(m)){ delete m._lgEdited; try { lgClearTouched([subCaseKey(m)]); } catch(_){} }
+    } else if(state === "nofile"){ res.nofile++; }
+    else if(state === "encrypted"){ res.encrypted++; }
+  }
+  if(_editingRow && (members || []).indexOf(_editingRow) >= 0){ try { applyAsbestosState(_genbaClone(asb)); } catch(_){} }
+  return res;
+}
+/* マンション管理の「石綿判定（建物で1つ）」→「全世帯にそろえる」 */
+async function aptMgAsbestosApply(){
+  const b = aptMgFind(_aptMgKey); if(!b || !b.rows.length) return;
+  const ov = document.getElementById("aptmg-ov"); if(!ov) return;
+  /* フォルダの書き込み許可は「押した直後」しか求められない。確認を出す前に取り切る。 */
+  const dirs = []; b.rows.forEach(r => { if(r && r._dir && dirs.indexOf(r._dir) < 0) dirs.push(r._dir); });
+  for(const d of dirs){ try { await dupEnsureWritable(d); } catch(_){} }
+  const asb = Object.assign({ level: "level3", material: "siding", date_source: "kenchiku_kakunin",
+                              applicability_mode: "auto", deemed_fee: ASBESTOS_DEEMED_FEE_DEFAULT },
+                            aptAsbestosOf(b.rows) || {});
+  ov.querySelectorAll("[data-amga]").forEach(el => {
+    const k = el.dataset.amga;
+    asb[k] = (el.type === "checkbox") ? !!el.checked : String(el.value || "");
+  });
+  if(!asb.level) asb.level = "level3";
+  if(!asb.material) asb.material = "siding";
+  if(!asb.date_source) asb.date_source = "kenchiku_kakunin";
+  if(!asb.applicability_mode) asb.applicability_mode = "auto";
+  const badge = asbestosStatusBadge({ data: { asbestos: asb } });
+  if(badge.cat === "blank"){
+    alert("判定がまだ決まっていません。\n\n建築着工日を入れる／「着工日が分からない」に印を付ける／「不要」か「みなし」を選ぶ、のどれかをしてください。");
+    return;
+  }
+  if(!confirm("「" + (aptBldgName(b.d) || b.key) + "」の " + b.rows.length + " 世帯すべてに、石綿の判定「" + badge.label + "」を入れます。\n\n"
+    + "世帯ごとに違う判定が入っていても、すべてこの判定に置き換わります。\n"
+    + "戸別ファイルにもその場で書き込みます（写真・図面・入力した内容は触りません）。\n"
+    + "費用（石綿みなし対応 諸経費）は代表の世帯にだけ乗ります。")) return;
+  const res = await aptAsbestosApplyAll(b.rows, asb);
+  try { renderListTable(); } catch(_){}
+  aptMgRender();
+  const lines = ["✅ " + b.rows.length + " 世帯の石綿判定を「" + badge.label + "」にそろえました。"];
+  if(res.written) lines.push("・戸別ファイルに書き込んだ： " + res.written + " 世帯");
+  if(res.same) lines.push("・ファイルはもう同じだった： " + res.same + " 世帯");
+  if(res.nofile) lines.push("・ファイルがまだ無い： " + res.nofile + " 世帯（「💾 戸別ファイルへ反映」で作れます）");
+  if(res.encrypted) lines.push("・暗号化されたファイル： " + res.encrypted + " 世帯（開いて保存すると入ります）");
+  if(res.fails.length) lines.push("⚠ 書き込めなかった世帯（「まだ入っていません」の印を残しました。「💾 戸別ファイルへ反映」でもう一度入れられます）：\n" + res.fails.join("\n"));
+  alert(lines.join("\n"));
+}
 /* 足りない世帯を作る */
 function aptMgMakeMissing(){
   const b = aptMgFind(_aptMgKey); if(!b) return;
@@ -20174,12 +20392,13 @@ function aptMgMakeMissing(){
   APT_GROUP_FIELDS.forEach(k => { const v = src[k]; if(v != null && String(v) !== "") shared[k] = v; });
   shared.apt_units = String(b.units);
   shared.apt_bldg = b.key;
+  const asbAll = aptAsbestosOf(b.rows);        // 石綿の判定も建物で1つ。新しい世帯にも同じものを入れる
   miss.forEach(i => {
     createManualRow(Object.assign({
       chosho_mgmt_no: aptMgmtWithBranch(base, i),
       chosho_cust_addr: String(src.chosho_cust_addr || ""),
       chosho_status: "provisional"
-    }, shared, { apt_idx: String(i) }), "apartment");
+    }, shared, { apt_idx: String(i) }, asbAll ? { asbestos: _genbaClone(asbAll) } : {}), "apartment");
   });
   try { renderListTable(); } catch(_){}
   aptMgRender();
@@ -20209,6 +20428,7 @@ document.addEventListener("click", e => {
   if(e.target.closest("#amg-x, #amg-close")){ aptMgClose(); return; }
   if(e.target.closest("#amg-make")){ aptMgMakeMissing(); return; }
   if(e.target.closest("#amg-fixidx")){ aptMgFixIdx(); return; }
+  if(e.target.closest("#amg-asb-apply")){ aptMgAsbestosApply(); return; }
   const sb = e.target.closest("[data-amgstray]");
   if(sb){
     const tag = sb.dataset.amgs || "";
@@ -31524,6 +31744,7 @@ let _editingRow = null;   // エディタ（積算・図面）で開いている
    これを「見ただけで戻った」場合にも行へ書き戻していたため、触っていないのに金額が付いていた。
    触っていなければ書き戻さない。明示保存(force)のときだけ無条件に書き戻す。 */
 let _editorDirty = false;
+let _asbEdited = false;    // この編集で石綿の欄を触ったか（アパートは建物の全世帯へ配る）
 function markEditorDirty(){ if(!_projLoading) _editorDirty = true; }
 function clearEditorDirty(){ _editorDirty = false; }
 /* 入力パネル・図面パネル全体の入力を拾って「触った」印にする（個別のフックの取りこぼし対策）。
@@ -31577,12 +31798,22 @@ function calQuickAdd(dateS, no, time){
    どちらも _editingRow に追跡され、以後 名前・住所等は台帳⇄エディタで双方向反映。 */
 async function openCaseInEditor(row, gotoDiagram){
   if(!row) return;
+  _asbEdited = false;
   if(lgHasDrawing(row) || row.fileType !== "plain"){
     await listLoadRow(row);   // 内部で applyStateData → setLoadedOrigin(＝_editingRow 設定)
   } else {
     // 未作成 → 標準プリセット＋台帳情報の流し込み（写真・測定値・図面操作は初期状態）
     const base = JSON.parse(JSON.stringify(PRESETS.standard || {}));
     LG_EDITOR_FIELDS.forEach(k => { base[k] = (row.data && row.data[k]) || (k === "chosho_status" ? "in_progress" : ""); });
+    /* ★アパートの欄・石綿判定・工事種別・CATV住宅も引き継ぐ★
+       標準プリセットにはどれも無い。ここで引き継がないと「開いて保存しただけ」で
+       世帯が建物の帯から外れ（世帯数・建物キーが空になる）、石綿判定も消える。
+       実際に代表の -01 がこれで帯の外に出て、「代表がいません」になっていた。 */
+    ["apt_idx", "apt_room", "work_type", "is_catv"].concat(APT_GROUP_FIELDS).forEach(k => {
+      const v = row.data ? row.data[k] : null;
+      if(v != null && String(v) !== "") base[k] = v;
+    });
+    if(row.data && row.data.asbestos && typeof row.data.asbestos === "object") base.asbestos = _genbaClone(row.data.asbestos);
     base.chosho_photos = [];
     applyStateData(base);
     applyProjectEstimateDefaults(); // 物件時の新規戸別の既定：諸経費なし＋協力会社諸経費オン
@@ -31670,6 +31901,13 @@ function syncEditorToRowData(force){
        利用者が写真を全部消した場合も、その意思どおり消えるようにするため。 */
     _editingRow._photosKnown = true;
     _editingRow._slim = false;
+    /* アパートの石綿判定は建物で1つ。ここで石綿の欄を直したなら、同じ建物の他の世帯にも同じ判定を入れる。
+       触っていないときは配らない（未入力の世帯を開いて保存しただけで、代表の判定を消さないため）。 */
+    if(_asbEdited && isApartmentRow(_editingRow) && s.asbestos && typeof s.asbestos === "object"){
+      const sib = aptGroupRows(_listRows, aptBldgKeyOfRow(_editingRow)).filter(m => m && m !== _editingRow);
+      try { aptAsbestosShare(sib, s.asbestos); } catch(_){}
+      _asbEdited = false;
+    }
     // ハイブリッド行：エディタ編集（図面・積算・測定値など非機微フィールド）を envelope.plain へも同期する。
     // 物件保存(buildProjectSnapshot)・個別JSON書戻し(buildIndividualContent)は envelope をそのまま採用する
     // ため、ここで plain を作り直さないと編集が旧内容のまま書き戻され、無言で巻き戻る（データ喪失）。
@@ -32839,6 +33077,8 @@ function init(){
     if(e.target.id === "tv_count") {
       renderTvList();
     }
+    // 石綿の欄を触った印（保存のときにアパートの全世帯へ配るかどうかを決める）
+    if(/^asbestos_/.test(String(e.target.id || ""))) _asbEdited = true;
     // 「何世帯目」を変えたら管理番号の枝番も合わせる（2611AAA001-01 → -03）。
     // 代表番号が空のときは何もしない。手で打ち直した番号はそのまま残る。
     if(e.target.id === "apt_idx"){
