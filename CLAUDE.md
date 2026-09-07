@@ -1,0 +1,37 @@
+# Claude への覚え書き（antenna_main / antenna_genba / antenna_viewer）
+
+このファイルはアプリの動作に一切影響しない。Claude（AI）が作業するときの決めごとを残すためのもの。
+
+## 3つのリポジトリ
+- antenna_main … メイン（PC）。`index.html` 1枚。ビルド無し・npm無し・外部CDN無し。
+- antenna_genba … 現場入力（スマホ）。`index.html` 1枚。
+- antenna_viewer … 閲覧用。**手で直さない**。main から生成する:
+  `python3 開発ツール/ビューア生成.py --main index.html --block 開発ツール/viewer-block.html --out ../antenna_viewer/index.html`
+- 版は `APP_VERSION`（main と genba）。3つとも同じ版番号で合わせてマージする。
+
+## 絶対に守ること
+1. **写真（chosho_photos）はいかなる経路でも減らさない。** 融合は和集合。ファイルを消すのは「書く → 読み返す → 枚数・中身を確かめる」の後だけ。確かめられなければ何も消さない。
+2. **工事完了の判定に金額を使わない。** 全体費用に金額が入っていても完了と見なさない。完了は受付台帳の「完了」チェックと現場入力の工事完了だけ。
+3. `==ANTENNA-GUIDE-CORE==` のブロックは main と genba で byte-identical。触らない。
+4. UI の文言は日本語・平易。利用者は現場のアンテナ工事の方。プログラム用語を出さない。
+5. 既存の戸建て・アパート・マンション管理のデータを壊さない。新しい項目は任意・既定オフ。
+
+## エージェントを回すときのモデルの規則（利用者の指定）
+- **検証**（監査の反証、敵対的な確認、差分のレビュー）→ **Opus 5**（`model: 'claude-opus-5'`）
+- **設計**（設計案、採点、統合、実装計画）→ **Fable 5.1**（`model: 'claude-fable-5-1'`）
+- それ以外（洗い出し・実装・試験・抜け探し）→ 指定なし（会話のモデルに従う）
+
+## 作業の作法
+- パッチは Python で。`io.open(p, encoding="utf-8", newline="")` で読み、改行は CRLF（`x.replace("\n","\r\n")`）。置換は件数を assert してから書く（失敗時はファイル無傷）。`grep` は `grep -a`。
+- 構文チェック: `python3 <scratchpad>/syn.py index.html`
+- 試験: scratchpad の `smoke_*.js`（playwright-core、`/opt/pw-browsers/chromium-*/chrome-linux/chrome`）。全件は `./runall.sh` → `runall.out`。
+- 直したら**変異試験**で「壊すと赤くなる」ことを確かめる（1箇所ずつ壊す → 試験 → 復元）。
+- 全件試験は編集を終えてから取り直す。緑になってからマージ。
+- マージ: 3リポジトリとも `momo/…` ブランチに push → draft PR → 利用者の指示でマージ。
+
+## データの形（要点）
+- 1行 = 1戸別 = 1管理番号 = 1JSONファイル（`管理番号.json`）。`subCaseKey(row) = "m:" + 半角管理番号`。
+- 行の印: `_slim`（写真を常駐させない。`chosho_photos: null`）／`_photosKnown`（行の写真を当てにしてよい）／`_detached`（ファイル無・名前だけ）／`_manual`（台帳で作った行）／`_fromProject`／`_lgEdited`（まだ戸別ファイルに入っていない）。
+- 受付台帳の控え `_ledgerMap`（備考・時刻・打合せ・ビラ・同意書・完了書・保留）は管理番号キーで共有。
+- アパート: `apt_units`（世帯数）・`apt_idx`（何世帯目。1＝代表）・`apt_bldg`（建物キー）。建物に1つで足りるもの（共用部ボックス一式・石綿みなし諸経費・保安器撤去など）は代表にだけ計上。石綿判定は建物で1つ（全世帯に同じものを入れる）。
+- 共用部あり: 電源部がボックス内 → 分配器は普通のもの（spfw）。共用部なし: 世帯ごとに電源部。
