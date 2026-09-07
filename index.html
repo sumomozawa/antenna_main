@@ -3798,6 +3798,9 @@
   #aptmg-ov .amg-alert3 { border-color: #90caf9; background: #e3f2fd; }
   #aptmg-ov .amg-alert3 .amg-alert-b { color: #0d47a1; }
   #aptmg-ov .amg-stray { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
+  #aptmg-ov .amg-stray-card { border-top: 1px dashed #90caf9; padding-top: 6px; margin-top: 6px; }
+  #aptmg-ov .amg-stray-bits { font-family: inherit; color: #37474f; font-weight: 400; margin-left: 10px; }
+  #aptmg-ov .amg-stray button[data-amgstray] { background: #0d47a1; color: #fff; }
   #aptmg-ov .amg-stray button { background: #fff; color: #0d47a1; border: 1px solid #0d47a1; font-size: 12px; padding: 3px 10px; border-radius: 3px; cursor: pointer; font-family: inherit; }
   #aptmg-ov .amg-alert-b { font-family: monospace; font-size: 12px; color: #b71c1c; margin: 2px 0; }
   #aptmg-ov .amg-alert2 .amg-alert-b { color: #8d6e00; }
@@ -4946,7 +4949,7 @@
       </details>
 
       <details class="section uc-card" data-uc="in.apartment">
-        <summary title="アパート（2〜12世帯）はここで世帯数と共用部の有無を決めます"><span class="uc-t">🏢 アパート</span></summary>
+        <summary title="アパート（2〜18世帯）はここで世帯数と共用部の有無を決めます"><span class="uc-t">🏢 アパート</span></summary>
         <div class="section-body" id="apt-body">
           <div class="field">
             <label><span data-tip="アパート（集合住宅）のとき建物の総世帯数を選びます。&#10;1世帯=1戸別として台帳に並べ、管理番号は「代表番号-01」「-02」…と枝番で分けます。&#10;戸建てのままにしたいときは「戸建て」を選んでください（既定）。">世帯数</span></label>
@@ -4963,6 +4966,12 @@
               <option value="10">10世帯</option>
               <option value="11">11世帯</option>
               <option value="12">12世帯</option>
+              <option value="13">13世帯</option>
+              <option value="14">14世帯</option>
+              <option value="15">15世帯</option>
+              <option value="16">16世帯</option>
+              <option value="17">17世帯</option>
+              <option value="18">18世帯</option>
             </select>
           </div>
           <div class="field apt-only">
@@ -6746,7 +6755,7 @@ async function lsRestoreFromIdb(){
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "141";
+const APP_VERSION = "142";
 /* ============================================================
    ★日時の表示は、必ずこの端末の時刻で★
    保存している日時は世界時のISO文字列（…T01:03:00.000Z）。これを文字のまま
@@ -7035,7 +7044,7 @@ const DEFAULT_PARTS = {
   box_op14:       { name:"OPBOX WB-DM",           category:"indoor",    model:"WB-DM",      material_cost: 1450, labor_cost: 4100, unit:"個", diagram_label:"BOX" },
   ve16:           { name:"電線管 VE16",           category:"indoor",    model:"VE16",       material_cost:  130, labor_cost: 1100, unit:"m",  diagram_label:"VE16" },
   wk1512k:        { name:"露出コンセント WK1512K",category:"indoor",    model:"WK1512K",    material_cost:  510, labor_cost: 2500, unit:"個", diagram_label:"CN" },
-  // アパート用ボックス。共用部ありのとき世帯数で選ぶ（2〜5世帯=OP14-33A / 6〜12世帯=OP20-65A）。
+  // アパート用ボックス。共用部ありのとき世帯数で選ぶ（2〜5世帯=OP14-33A / 6世帯以上=OP20-65A）。
   // 戸建ての外部電源は従来どおり box_op14（OPBOX WB-DM）のままで、ここは使わない。
   box_op14_33a:   { name:"OPBOX OP14-33A",        category:"indoor",    model:"OP14-33A",   material_cost: 3450, labor_cost: 5000, unit:"個", diagram_label:"BOX" },
   box_op20_65a:   { name:"OPBOX OP20-65A",        category:"indoor",    model:"OP20-65A",   material_cost:18000, labor_cost: 5000, unit:"個", diagram_label:"BOX" },
@@ -7622,7 +7631,7 @@ function buildBOM(input, qtyOverridesOpt) {
 
   // 外部電源（屋外コンセント・ボックス内に電源部を設置）
   // アパートで共用部ありのときは、このボックスが「共用部のボックス」そのものになる。
-  //   ・ボックスは世帯数で選ぶ（2〜5世帯=OP14-33A / 6〜12世帯=OP20-65A）
+  //   ・ボックスは世帯数で選ぶ（2〜5世帯=OP14-33A / 6世帯以上=OP20-65A）
   //   ・建物に1つなので代表（1世帯目）にだけ計上し、2世帯目以降はこの区間を丸ごと飛ばす
   //   ・共用部なしのアパートは電源部が世帯ごとになるのでこの区間は使わない
   //     （下の「アパートの電源まわり」で BPS6W・2ZA2030・WK1512K を計上する）
@@ -9429,7 +9438,12 @@ function mkLabel(svg, x, y, text, cls="boundary-label"){
 function renderDiagram(input){
   const svg = document.getElementById("diagram");
   svg.innerHTML = "";
-  const W = 1160, H = 780;
+  const W = 1160;
+  /* 共用部の図は右端に世帯を縦一列で並べる。世帯数で高さを割るので、13世帯を超えると
+     1世帯ぶんが潰れて管理番号が読めなくなる。世帯が多いときだけ紙を縦に伸ばす。 */
+  const _aptU = Math.min(APT_MAX_UNITS, parseInt(input.apt_units, 10) || 0);
+  const _aptRep = _aptU >= APT_MIN_UNITS && (parseInt(input.apt_idx, 10) || 1) === 1;
+  const H = (_aptRep && _aptU > 12) ? (780 + (_aptU - 12) * 34) : 780;
   svg.setAttribute("viewBox", "0 0 "+W+" "+H);
   svg.setAttribute("width", W);
   svg.setAttribute("height", H);
@@ -10562,9 +10576,9 @@ function renderAptCommonDiagram(svg, input, W, H){
     } else {
       const head = plan.rows[0], br = plan.rows[1];
       headNode = mkNode(svg, bx + 14, spTop, bw - 28, 36,
-        aptPartLabel(head.id, "2分配") + "  ← 元",
+        aptPartLabel(head.id, head.size + "分配") + "  ← 元",
         { id: head.id, existing: false, nodeKey: "apt_sp_head" });
-      const brW = (bw - 40) / 2;
+      const brW = (bw - 28 - 12 * (br.qty - 1)) / br.qty;   // 枝の数だけ横に並べる（3本以上でもはみ出さない）
       for(let k = 0; k < br.qty; k++){
         const n = mkNode(svg, bx + 14 + (brW + 12) * k, spTop + 62, brW, 36,
           aptPartLabel(br.id, br.size + "分配"),
@@ -19052,7 +19066,7 @@ function doneSplitHtml(sp, opts){
    実体を持たせてあるので、後から管理番号を打ち直しても群が散らばらない。
    建物ごとの値（総世帯数・建物名・共用部の有無・大家）は各行に同じものを持たせる。
    1行だけ開いても情報が欠けないようにするため。書き換えは群全体へ伝播させる。 */
-const APT_MIN_UNITS = 2, APT_MAX_UNITS = 12;
+const APT_MIN_UNITS = 2, APT_MAX_UNITS = 18;
 /* 建物に1つの値。どの世帯で直しても建物ぜんぶに同じものを配る。 */
 const APT_GROUP_FIELDS = ["apt_units", "apt_name", "apt_common", "apt_common_done",
                           "apt_owner_name", "apt_owner_tel", "apt_owner_addr",
@@ -19263,7 +19277,7 @@ function aptGroupStat(rows, key){
            units: units || g.length };
 }
 
-/* 共用部ありのボックス。2〜5世帯=OP14-33A / 6〜12世帯=OP20-65A。 */
+/* 共用部ありのボックス。2〜5世帯=OP14-33A / 6世帯以上=OP20-65A。 */
 function aptBoxPartsId(units){
   const u = parseInt(units, 10) || 0;
   return (u >= 6) ? "box_op20_65a" : "box_op14_33a";
@@ -19275,8 +19289,15 @@ function aptSplitFor(n){
   return { id: "sp_" + size + "spfdw", size: size };
 }
 /* 世帯数から全通電分配器の組み合わせを決める。
-   8分配までしか実在しないので、9世帯以上は 2分配 → ⌈世帯数/2⌉分配 ×2 のカスケードにする。
+   8分配までしか実在しないので、9世帯以上は「元の分配器 → 枝の分配器×元の口数」のカスケードにする。
+   ★口数は必ず世帯数以上にすること★
+   元を2分配で固定していたため、17・18世帯では 2分配→8分配×2＝16口 にしかならず、
+   口数が足りない組み合わせを出していた（16世帯までは足りるので気づきにくい）。
+   元の分配数を小さい順に試し、足りる中でいちばん小さいものを採る。
+   こうすると12世帯までの組み合わせは今までと同じまま（元は2分配）で、
+   17・18世帯だけ 3分配 → 6分配×3（18口）になる。
    例) 12世帯 = 2分配×1 + 6分配×2（12口）／ 9世帯 = 2分配×1 + 5分配×2（10口・1口余り）
+       18世帯 = 3分配×1 + 6分配×3（18口）
    積算では数量を手で直せるので、ここは「妥当な既定値」を出すだけでよい。 */
 function aptSplitterPlan(units){
   const u = Math.max(APT_MIN_UNITS, Math.min(APT_MAX_UNITS, parseInt(units, 10) || APT_MIN_UNITS));
@@ -19284,10 +19305,24 @@ function aptSplitterPlan(units){
     const p = aptSplitFor(u);
     return { rows: [{ id: p.id, qty: 1, size: p.size }], ports: p.size, cascade: false, units: u };
   }
-  const p = aptSplitFor(Math.ceil(u / 2));
+  const big = APT_SPLIT_SIZES[APT_SPLIT_SIZES.length - 1];
+  let head = 0, br = null;
+  for(const f of APT_SPLIT_SIZES){
+    const need = Math.ceil(u / f);
+    const p = aptSplitFor(need);
+    /* aptSplitFor は「要る口数以上でいちばん小さいもの」を返すが、8分配より大きいものは
+       実在しないので、そのときだけ足りない値（8分配）が返る。ここで弾く。
+       弾かなければ f × p.size ≥ f × ⌈u/f⌉ ≥ u なので、口数は必ず世帯数以上になる。 */
+    if(p.size < need) continue;
+    head = f; br = p; break;
+  }
+  if(!head){                                      // ここには来ない（8分配×8＝64口まで組める）
+    head = big; br = aptSplitFor(big);
+  }
   return {
-    rows: [{ id: "sp_2spfdw", qty: 1, size: 2 }, { id: p.id, qty: 2, size: p.size }],
-    ports: p.size * 2, cascade: true, units: u
+    rows: [{ id: "sp_" + head + "spfdw", qty: 1, size: head },
+           { id: br.id, qty: head, size: br.size }],
+    ports: br.size * head, cascade: true, units: u
   };
 }
 /* 組み合わせを一言で（「2分配 → 6分配×2（12口）」） */
@@ -19683,6 +19718,218 @@ function aptMgStray(b){
     return aptMgmtBase(mg) === base;
   });
 }
+/* 帯の外の行1つぶんの中身と、片付け方。
+   ・kind: "parent"＝枝番なし（アパートに分ける前の元の1行）／"dup"＝同じ枝番の世帯が既にある／
+           "free"＝その枝番の世帯がまだ無い（世帯として取り込める）
+   ・target: まとめる先の世帯（parent は代表、dup は同じ枝番の世帯）
+   ・empty: 写真・図面・備考・印・時刻のどれも無い＝消しても失うものが無い
+   ※ 名前・住所は数えない。元の1行は名前欄に建物名、住所欄に建物の住所が入っているだけで、
+     世帯の側に同じものがもう入っているため。 */
+function aptMgStrayInfo(b, r){
+  const d = (r && r.data) || {};
+  const mg = toHalfWidthAn(String(d.chosho_mgmt_no || "")).trim();
+  const br = aptMgmtBranch(mg);
+  const key = subCaseKey(r);
+  const hasFile = !!(r._dir && r._name) && !r._detached;
+  let target = null, kind = "free";
+  if(br === 0){
+    kind = "parent";
+    target = (b.rows || []).find(x => aptMgmtBranch(((x.data || {}).chosho_mgmt_no)) === 1)
+          || (b.rows || []).find(x => aptIdx(x.data) === 1) || null;
+  } else {
+    target = (b.rows || []).find(x => aptMgmtBranch(((x.data || {}).chosho_mgmt_no)) === br)
+          || (b.rows || []).find(x => aptIdx(x.data) === br) || null;
+    kind = target ? "dup" : "free";
+  }
+  const sameKey = !!(target && subCaseKey(target) === key);
+  /* 台帳の控え（備考・印・時刻・打合せ）は管理番号ごとに1つ。同じ番号の世帯が帯の中にあるなら、
+     その控えは世帯のもので、この行だけの中身ではない（消してもその控えは残る）。 */
+  const lg = sameKey ? {} : (getLedger(key) || {});
+  const photos = lgPhotoCountOf(d, r);
+  const drawing = caseHasDrawingData(r);
+  const note = String(lg.note || (sameKey ? "" : d.chosho_note) || "").trim();
+  const flags = ["flyer", "consent", "compdoc", "hold"].filter(k => !!lg[k]);
+  const time = String(lg.time || (sameKey ? "" : d.chosho_time) || "").trim();
+  const meet = String(lg.meetAt || (sameKey ? "" : d.chosho_meet_at) || "").trim();
+  const empty = (photos === 0) && !drawing && !note && !flags.length && !time && !meet;
+  const bothDrawing = !!(target && drawing && caseHasDrawingData(target));
+  return { row: r, key, mg, br, photos, drawing, note, flags, time, meet, hasFile, target, kind, empty, bothDrawing, sameKey };
+}
+/* 帯の外の行を一覧から外す。同じ管理番号を使う行がほかに残るなら、台帳の控え（備考・印）は消さない。 */
+/* 帯の外の行に振った札 → 行。同じ管理番号の行が2つある（重複）ので、番号では掴めない。 */
+let _aptMgStrayShown = {};
+function aptMgStrayRow(tag){ return (_aptMgStrayShown[tag] && _listRows.indexOf(_aptMgStrayShown[tag]) >= 0) ? _aptMgStrayShown[tag] : null; }
+function aptMgRemoveRow(row){
+  const idx = _listRows.indexOf(row);
+  if(idx < 0) return;
+  const key = subCaseKey(row);
+  try { markCaseDeleted(row); } catch(_){}
+  const shared = _listRows.some(x => x && x !== row && subCaseKey(x) === key);
+  /* 「名前だけ残す」の控えと「前回見えていた戸別」の控えは、必ず外す。
+     外さないと、読み直すたびに同じ行が「ファイル無」で戻ってくる。
+     台帳の記入（備考・印）は、同じ管理番号の行がほかに残るなら消さない（本物の -01 の備考のため）。 */
+  try { const mk = missKeyOf(row); undetach(mk); listCensusForget(mk); if(!shared) missPurgeAnno(mk); } catch(_){}
+  _listRows.splice(idx, 1);
+  if(_editingRow === row) _editingRow = null;
+  try { lgClearTouched([key]); } catch(_){}
+}
+/* 「N世帯目として取り込む」：建物の欄（世帯数・アパート名・大家・不動産…）を写して、何世帯目を枝番にそろえる */
+function aptMgStrayAdopt(tag){
+  const b = aptMgFind(_aptMgKey); if(!b) return;
+  const r = aptMgStrayRow(tag); if(!r) return;
+  const info = aptMgStrayInfo(b, r);
+  if(info.kind !== "free" || !(info.br >= 1)){ alert("この行は枝番が無いか、その枝番の世帯が既にあるので、取り込めません。"); return; }
+  if(info.br > b.units){
+    alert("枝番 " + info.br + " は世帯数（" + b.units + "）より大きいので取り込めません。\n先に建物の「世帯数」を増やしてください。"); return;
+  }
+  const src = (b.rows[0] || {}).data || {};
+  if(!confirm(info.mg + " を「" + (aptBldgName(src) || b.key) + "」の " + info.br + " 世帯目として取り込みます。\n\n"
+    + "建物の欄（世帯数・アパート名・共用部・大家・不動産・同意書）は建物と同じものが入ります。\n"
+    + "この行の写真・図面・備考はそのまま残ります。")) return;
+  APT_GROUP_FIELDS.forEach(k => { const v = src[k]; if(v != null && String(v) !== "") lgWriteCaseField(r, k, String(v), { quiet: true, keepStatus: true }); });
+  lgWriteCaseField(r, "apt_units", String(b.units), { quiet: true, keepStatus: true });
+  lgWriteCaseField(r, "apt_bldg", b.key, { quiet: true, keepStatus: true });
+  lgWriteCaseField(r, "apt_idx", String(info.br), { quiet: true, keepStatus: true });
+  r._amtCache = undefined; r._bomCache = undefined;
+  try { projTouch(); } catch(_){}
+  try { renderListTable(); } catch(_){}
+  aptMgRender();
+}
+/* 「消す」：写真・図面・備考・印のどれも無い行だけ。ファイルがあれば、ファイルも消すか聞く。 */
+async function aptMgStrayDrop(tag){
+  const b = aptMgFind(_aptMgKey); if(!b) return;
+  const r = aptMgStrayRow(tag); if(!r) return;
+  const info = aptMgStrayInfo(b, r);
+  if(!info.empty){ alert("この行には写真・図面・備考のどれかが入っています。「まとめて消す」か、✏️ で開いて確かめてください。"); return; }
+  const who = info.mg + (((r.data || {}).chosho_cust_name) ? ("　" + r.data.chosho_cust_name) : "");
+  const choice = info.hasFile ? await lgDelDialog(r, who) : (confirm(who + " を消します。\n\n写真・図面・備考・印は入っていません。\n消すと戻せません。") ? "list" : null);
+  if(!choice) return;
+  if(!(await lgDelApply(r, choice))) return;
+  aptMgRemoveRow(r);
+  try { projTouch(); } catch(_){}
+  try { renderListTable(); } catch(_){}
+  aptMgRender();
+}
+/* 写真を「まとめる先」のファイルへ移す。★元の写真は1枚も減らさない★
+   ・両方にファイルがある … まとめる先のファイルに和集合を書き、読み返して全部入ったことを確かめてから、元のファイルを消す
+   ・まとめる先にファイルが無い … 元のファイルをまとめる先の持ち物にする（次の「戸別ファイルへ反映」で名前が付け替わる）
+   ・元にファイルが無い … 手元にある写真だけを移す
+   戻り値＝{ moved:枚数, note:文言 }。失敗は例外で知らせる（その場合は何も消していない）。 */
+async function aptMgMovePhotos(target, stray){
+  const readJson = async row => JSON.parse(await (await row._dir.getFileHandle(row._name)).getFile().then(f => f.text()));
+  const cnt = arr => (Array.isArray(arr) ? arr : []).filter(x => x && x.dataUri).length;
+  const strayHasFile = !!(stray._dir && stray._name) && !stray._detached;
+  const targetHasFile = !!(target._dir && target._name) && !target._detached;
+  let strayPhotos = null;
+  if(strayHasFile){ const sj = await readJson(stray); strayPhotos = Array.isArray(sj.chosho_photos) ? sj.chosho_photos : []; }
+  else strayPhotos = Array.isArray((stray.data || {}).chosho_photos) ? stray.data.chosho_photos : [];
+  const n = cnt(strayPhotos);
+  if(!n) return { moved: 0, note: "" };
+  if(targetHasFile){
+    if(!(await dupEnsureWritable(target._dir))) throw new Error("フォルダへの書き込み許可が得られませんでした");
+    const tfh = await target._dir.getFileHandle(target._name);
+    const tj = JSON.parse(await (await tfh.getFile()).text());
+    const merged = mergeGenbaPhotos(tj.chosho_photos, strayPhotos, {}, null);
+    if(cnt(merged) < Math.max(cnt(tj.chosho_photos), n)) throw new Error("写真をまとめた結果が減っています（何もしていません）");
+    tj.chosho_photos = merged;
+    tj.editedAt = new Date().toISOString();
+    const w = await tfh.createWritable(); await w.write(JSON.stringify(tj, null, 2)); await w.close();
+    const back = JSON.parse(await (await tfh.getFile()).text());
+    const ids = new Set((back.chosho_photos || []).filter(x => x && x.dataUri).map(x => x.id || photoContentId(x.dataUri)));
+    const missing = strayPhotos.filter(x => x && x.dataUri && !ids.has(x.id || photoContentId(x.dataUri)));
+    if(missing.length) throw new Error("書いたあと読み返したら、写真 " + missing.length + " 枚が入っていませんでした（元のファイルは消していません）");
+    target._photoCount = cnt(back.chosho_photos);
+    target._photosKnown = false;         // 行の写真は当てにしない＝書き出しはこのファイルの写真を採る
+    if(strayHasFile){
+      if(!(await dupEnsureWritable(stray._dir))) throw new Error("元のファイルのフォルダへの書き込み許可が得られませんでした（写真は移してあります）");
+      await stray._dir.removeEntry(stray._name);
+    }
+    return { moved: n, note: "写真 " + n + " 枚を " + target._name + " へ移しました" };
+  }
+  if(strayHasFile){
+    // まとめる先はまだファイルを持たない → 元のファイルをそのまま持たせる
+    target._dir = stray._dir; target._name = stray._name; target._dirPath = stray._dirPath || "";
+    target._size = stray._size; target.fileHandle = stray.fileHandle; target.file = stray.file;
+    target._slim = true; target._photoCount = stray._photoCount; target._photosKnown = false;
+    target._manual = false; delete target._detached;
+    target._lgEdited = true; try { lgMarkTouched(target); } catch(_){}
+    return { moved: n, note: "元のファイル " + stray._name + " を " + ((target.data || {}).chosho_mgmt_no || "") + " の持ち物にしました（「💾 戸別ファイルへ反映」で名前が付け替わります）" };
+  }
+  // どちらにもファイルが無い → 手元の写真を合わせる
+  target.data = Object.assign({}, target.data || {}, { chosho_photos: mergeGenbaPhotos((target.data || {}).chosho_photos, strayPhotos, {}, null) });
+  target._photoCount = cnt(target.data.chosho_photos); target._photosKnown = true;
+  return { moved: n, note: "写真 " + n + " 枚を移しました" };
+}
+/* 「まとめて消す」：帯の外の行の 写真・備考・印・時刻 をまとめる先の世帯へ移し、行を消す。
+   移せない（図面が両方にある等）ときは何もしないで知らせる。 */
+async function aptMgStrayMerge(tag){
+  const b = aptMgFind(_aptMgKey); if(!b) return;
+  const r = aptMgStrayRow(tag); if(!r) return;
+  const info = aptMgStrayInfo(b, r);
+  const t = info.target;
+  if(!t){ alert("まとめる先の世帯が見つかりません。"); return; }
+  if(info.bothDrawing){ alert("この行にも、まとめる先の世帯にも図面が入っています。\nどちらを残すか機械では決められないので、✏️ で開いて見比べてください。"); return; }
+  if(info.photos < 0){ alert("この行は暗号化されていて、写真を読めません。先に開いて復号してください。"); return; }
+  const tmg = String((t.data || {}).chosho_mgmt_no || "");
+  const tk = subCaseKey(t), tlg = getLedger(tk) || {};
+  const plan = [];
+  if(info.photos > 0) plan.push("写真 " + info.photos + " 枚 → " + tmg);
+  if(info.drawing) plan.push("図面・積算 → " + tmg + "（まとめる先には無いので、そのまま移します）");
+  if(info.note && !info.sameKey){
+    const tn = String(tlg.note || "").trim();
+    plan.push(tn && tn.indexOf(info.note) < 0 ? ("備考 → " + tmg + " の備考の後ろに足す") : (tn ? "備考 → 同じ内容がもう入っています" : ("備考 → " + tmg)));
+  }
+  if(!info.sameKey){
+    if(info.time && !String(tlg.time || "").trim()) plan.push("工事の時刻 → " + tmg);
+    if(info.meet && !String(tlg.meetAt || "").trim()) plan.push("打合せ予定 → " + tmg);
+    info.flags.forEach(k => { if(!tlg[k]) plan.push(({flyer:"ビラ",consent:"同意書",compdoc:"完了書",hold:"保留"})[k] + "の印 → " + tmg); });
+  }
+  const who = info.mg + (((r.data || {}).chosho_cust_name) ? ("　" + r.data.chosho_cust_name) : "");
+  if(!confirm(who + " を " + tmg + " へまとめて消します。\n\n"
+    + (plan.length ? plan.map(x => "・" + x).join("\n") : "・移すものはありません（中身が同じか空です）")
+    + "\n\n" + (info.hasFile ? "この行のファイルは、写真が移ったことを確かめてから消します。" : "この行はファイルを持っていません（一覧から消えるだけです）。")
+    + "\nまとめる先の世帯の中身は減りません。")) return;
+  try {
+    // 写真（失敗したら例外＝何も消さない）
+    const ph = await aptMgMovePhotos(t, r);
+    // 図面・積算（まとめる先に無いときだけ、丸ごと写す）
+    if(info.drawing && !caseHasDrawingData(t)){
+      const src = r.data || {};
+      GENBA_AUTHORITATIVE_FIELDS.forEach(k => { if(k in src && !["chosho_note"].includes(k)) t.data[k] = _genbaClone(src[k]); });
+      t._amtCache = undefined; t._bomCache = undefined; t._lgEdited = true; try { lgMarkTouched(t); } catch(_){}
+    }
+    if(!info.sameKey){
+      if(info.note){
+        const tn = String(tlg.note || "").trim();
+        if(tn.indexOf(info.note) < 0) lgSetNote(tk, tn ? (tn + "\n" + info.note) : info.note, info.mg + " からまとめた");
+      }
+      const put = {};
+      if(info.time && !String(tlg.time || "").trim()) put.time = info.time;
+      if(info.meet && !String(tlg.meetAt || "").trim()) put.meetAt = info.meet;
+      info.flags.forEach(k => { if(!tlg[k]) put[k] = true; });
+      if(Object.keys(put).length){ setLedger(tk, put); try { lgMarkTouched(tk); } catch(_){} }
+      // 電話・工事日は、まとめる先が空のときだけ入れる（名前・住所は入れない＝建物名・建物住所のため）
+      ["chosho_cust_tel", "chosho_date"].forEach(k => {
+        const sv = String((r.data || {})[k] || "").trim(), tv = String((t.data || {})[k] || "").trim();
+        if(sv && !tv) lgWriteCaseField(t, k, sv, { quiet: true, keepStatus: true });
+      });
+    }
+    // 元の行のファイルが残っていれば消す（写真が移せていないときは aptMgMovePhotos が例外で止めている）
+    if(info.hasFile && r._dir && r._name && !(t._dir === r._dir && t._name === r._name)){
+      try { await r._dir.removeEntry(r._name); } catch(e){ console.warn("[アパート] 元のファイルを消せませんでした", e); }
+    }
+    aptMgRemoveRow(r);
+    try { projTouch(); } catch(_){}
+    try { renderListTable(); } catch(_){}
+    aptMgRender();
+    alert("✅ " + who + " を " + tmg + " へまとめました。\n\n" + (ph.note ? (ph.note + "\n") : "")
+      + (plan.length ? plan.map(x => "・" + x).join("\n") : "")
+      + "\n\n受付台帳の「💾 戸別ファイルへ反映」を押すと、ファイルにも入ります。");
+  } catch(e){
+    console.warn("[アパート] まとめられませんでした", e);
+    alert("⚠ まとめられませんでした。何も消していません。\n\n" + ((e && e.message) || e));
+  }
+}
 function aptMgOpen(key){
   const b = key ? aptMgFind(key) : (aptMgFind(_aptMgKey) || null);
   if(!b){ alert("この一覧にアパートの世帯がありません。\n\n戸別の「🏢 アパート」で世帯数を選ぶと、アパートとして扱われます。"); return; }
@@ -19775,15 +20022,55 @@ function aptMgRender(){
   const stray = aptMgStray(b);
   if(stray.length){
     html += '<div class="amg-alert amg-alert3"><b>この建物の番号なのに、アパートの世帯として扱われていない行が ' + stray.length + ' つあります。</b>'
-      + '<div class="amg-alert-b">' + stray.map(r => escapeHtml(((r.data || {}).chosho_mgmt_no) || "")
-          + '（' + escapeHtml(((r.data || {}).chosho_cust_name) || "名前なし") + '）').join("　") + '</div>'
       + '<div class="amg-alert-n">世帯数が入っていないので、受付台帳では建物の帯の外に出ます。'
-      + 'アパートに分ける前の元の1行のこともあれば、写真や図面が入ったままの<b>大事な世帯</b>のこともあります。'
-      + '消す前に ✏️ で開いて中身を確かめてください。'
-      + '世帯として扱いたいときは、開いて「🏢 アパート」で世帯数と何世帯目を入れてください。</div>'
-      + '<div class="amg-stray">' + stray.map(r => '<button type="button" data-amgopen="1" data-amgk2="'
-          + escapeHtml(subCaseKey(r)) + '">✏️ ' + escapeHtml(((r.data || {}).chosho_mgmt_no) || "") + '</button>').join("") + '</div>'
-      + '</div>';
+      + '中身を調べて、下のボタンで片付けられます（開かなくて済みます）。</div>';
+    _aptMgStrayShown = {};
+    stray.forEach((r, si) => {
+      const tag = "s" + si; _aptMgStrayShown[tag] = r;
+      const info = aptMgStrayInfo(b, r);
+      const tmg = info.target ? String((info.target.data || {}).chosho_mgmt_no || "") : "";
+      const bits = [];
+      bits.push(info.photos < 0 ? "写真 🔒" : ("写真 " + (info.photos ? (info.photos + "枚") : "なし")));
+      bits.push("図面 " + (info.drawing ? "あり" : "なし"));
+      bits.push(info.note ? ("備考 あり「" + (info.note.length > 24 ? (info.note.slice(0, 24) + "…") : info.note) + "」") : "備考 なし");
+      if(info.flags.length) bits.push("印 " + info.flags.map(k => ({flyer:"ビラ",consent:"同意書",compdoc:"完了書",hold:"保留"})[k]).join("・"));
+      if(info.time || info.meet) bits.push("時刻・打合せ あり");
+      bits.push(info.hasFile ? "ファイル あり" : (r._detached ? "ファイル無（名前だけ）" : "ファイル まだ無し"));
+      let why = "", act = "";
+      const k2 = 'data-amgs="' + tag + '"';
+      if(info.kind === "parent"){
+        why = "枝番が無いので、アパートに分ける前の<b>元の1行</b>のようです。"
+            + (tmg ? ("中身は代表（" + escapeHtml(tmg) + "）へ移せます。") : "代表（-01）が見当たらないので、先に上の「足りない世帯を作る」で -01 を戻してください。");
+      } else if(info.kind === "dup"){
+        why = "同じ枝番の世帯 <b>" + escapeHtml(tmg) + "</b> が帯の中にもあります（受付台帳で「重複」と出ているのはこれです）。";
+      } else {
+        why = info.br + " 世帯目がまだ無いので、<b>この行を " + info.br + " 世帯目として取り込めます</b>。";
+      }
+      if(info.kind === "free"){
+        act = '<button type="button" data-amgstray="adopt" ' + k2 + '>🏢 ' + info.br + ' 世帯目として取り込む</button>';
+      } else if(!tmg){
+        act = "";
+      } else if(info.bothDrawing){
+        why += " ただし<b>図面が両方に入っている</b>ので、機械では決められません。✏️ で開いて見比べてください。";
+      } else if(info.empty){
+        act = '<button type="button" data-amgstray="drop" ' + k2 + '>🗑 消す（中身なし）</button>';
+      } else {
+        const mv = [];
+        if(info.photos > 0) mv.push("写真" + info.photos + "枚");
+        if(info.drawing) mv.push("図面");
+        if(info.note && !info.sameKey) mv.push("備考");
+        if((info.flags.length || info.time || info.meet) && !info.sameKey) mv.push("印・予定");
+        act = '<button type="button" data-amgstray="merge" ' + k2 + '>⇢ '
+            + (mv.length ? (mv.join("・") + " を " + escapeHtml(tmg) + " へ移して消す") : ("消す（" + escapeHtml(tmg) + " と同じ控え）")) + '</button>';
+      }
+      html += '<div class="amg-stray-card"><div class="amg-alert-b">' + escapeHtml(info.mg)
+        + '（' + escapeHtml(((r.data || {}).chosho_cust_name) || "名前なし") + '）'
+        + '<span class="amg-stray-bits">' + escapeHtml(bits.join(" ／ ")) + '</span></div>'
+        + '<div class="amg-alert-n">' + why + '</div>'
+        + '<div class="amg-stray">' + act
+        + '<button type="button" data-amgsopen="1" ' + k2 + '>✏️ 開いて確かめる</button></div></div>';
+    });
+    html += '</div>';
   }
 
   // ---- 建物 ----
@@ -19922,6 +20209,20 @@ document.addEventListener("click", e => {
   if(e.target.closest("#amg-x, #amg-close")){ aptMgClose(); return; }
   if(e.target.closest("#amg-make")){ aptMgMakeMissing(); return; }
   if(e.target.closest("#amg-fixidx")){ aptMgFixIdx(); return; }
+  const sb = e.target.closest("[data-amgstray]");
+  if(sb){
+    const tag = sb.dataset.amgs || "";
+    if(sb.dataset.amgstray === "adopt") aptMgStrayAdopt(tag);
+    else if(sb.dataset.amgstray === "drop") aptMgStrayDrop(tag);
+    else if(sb.dataset.amgstray === "merge") aptMgStrayMerge(tag);
+    return;
+  }
+  const so = e.target.closest("[data-amgsopen]");
+  if(so){
+    const row = aptMgStrayRow(so.dataset.amgs || "");
+    if(row){ aptMgClose(); try { openCaseInEditor(row); } catch(_){} }
+    return;
+  }
   const ob = e.target.closest("[data-amgopen]");
   if(ob){
     const tr = ob.closest("tr[data-amgk]");
