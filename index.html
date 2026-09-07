@@ -6763,7 +6763,7 @@ async function lsRestoreFromIdb(){
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "144";
+const APP_VERSION = "145";
 /* ============================================================
    ★日時の表示は、必ずこの端末の時刻で★
    保存している日時は世界時のISO文字列（…T01:03:00.000Z）。これを文字のまま
@@ -19549,10 +19549,28 @@ function aptRegroup(rows){
 
 /* 建物の見出し帯。世帯数・共用部の有無・大家・同意書・完了の進み具合を1行で出す。
    完了は caseWorkDone だけで数える（金額からは絶対に判定しない）。 */
+/* 住所の末尾に付いている部屋番号を外したもの（＝建物の住所）。末尾に無ければそのまま。
+   英数字は半角にそろえて比べる（住所は半角で保存するが、部屋番号は全角で入ることがある。文字数は変わらない）。 */
+function aptAddrWithoutRoom(addr, room){
+  const a = String(addr == null ? "" : addr).trim();
+  const r = String(room == null ? "" : room).trim();
+  if(!a || !r) return a;
+  const ah = toHalfWidthAn(a), rh = toHalfWidthAn(r);
+  if(ah === rh) return "";
+  return (ah.length > rh.length && ah.slice(-rh.length) === rh) ? a.slice(0, a.length - r.length).trim() : a;
+}
+/* 建物の住所に、その世帯の部屋番号を付けたもの（「住所 部屋番号」。建物の住所が無ければ空）。 */
+function aptAddrWithRoom(base, room){
+  const b = String(base == null ? "" : base).trim();
+  const r = String(room == null ? "" : room).trim();
+  if(!b) return "";
+  return r ? (b + " " + r) : b;
+}
 /* 建物の中で共通している住所（＝地番まで）。世帯ごとに違うのは部屋番号だけ、を前提にする。
+   各世帯の住所の末尾に付いている自分の部屋番号は先に外す（世帯が1つしか読めていなくても建物の住所になる）。
    途中の数字で切れないよう、共通部分は最後の区切り（空白・全角空白）まで戻す。 */
 function aptCommonAddr(members){
-  const list = (members || []).map(m => String(((m && m.data) || {}).chosho_cust_addr || "").trim())
+  const list = (members || []).map(m => { const d = (m && m.data) || {}; return aptAddrWithoutRoom(d.chosho_cust_addr, d.apt_room); })
                               .filter(Boolean);
   if(!list.length) return "";
   let pre = list[0];
@@ -19575,6 +19593,26 @@ function aptRoomAddrText(row, common){
   const rest = (common && full.length > common.length && full.indexOf(common) === 0)
     ? full.slice(common.length).trim() : "";
   return rest || aptUnitLabel(d) || "";
+}
+/* 部屋番号を入れたら、その世帯の住所の末尾に部屋番号を付ける（マンション管理の世帯の表から）。
+   前の部屋番号が末尾に付いていれば外してから付け直す。部屋番号を消せば末尾からも外す。
+   住所がまだ無い世帯には、建物の住所（ほかの世帯の住所から部屋番号を外した共通部分）を使う。
+   建物の住所も分からなければ、部屋番号だけの住所は作らない（住所は触らない）。
+   暗号化したまま（住所が伏せ字）の行も触らない。
+   受付の状態は変えない（名前・住所・電話を清書したときの自動昇格は、ここでは起こさない）。
+   戻り値＝住所を変えたか。 */
+function aptRoomAddrApply(row, members, oldRoom){
+  if(!row || !row.data || !row.unlocked) return false;
+  const d = row.data;
+  const room = String(d.apt_room || "").trim();
+  let base = aptAddrWithoutRoom(d.chosho_cust_addr, oldRoom);
+  base = aptAddrWithoutRoom(base, room);                                // もう付いていれば二重にしない
+  if(!base) base = aptCommonAddr((members || []).filter(m => m && m !== row));
+  if(!base) return false;
+  const next = aptAddrWithRoom(base, room);
+  if(toHalfWidthAn(next) === toHalfWidthAn(String(d.chosho_cust_addr || "").trim())) return false;
+  lgWriteCaseField(row, "addr", next, { keepStatus: true });
+  return true;
 }
 function aptBandRowHtml(row, members, colSpan, commonAddr){
   const d = row.data || {};
@@ -20401,7 +20439,7 @@ function aptMgMakeMissing(){
   miss.forEach(i => {
     createManualRow(Object.assign({
       chosho_mgmt_no: aptMgmtWithBranch(base, i),
-      chosho_cust_addr: String(src.chosho_cust_addr || ""),
+      chosho_cust_addr: aptAddrWithoutRoom(src.chosho_cust_addr, src.apt_room) || aptCommonAddr(b.rows),   // 代表の部屋番号は引き継がない
       chosho_status: "provisional"
     }, shared, { apt_idx: String(i) }, asbAll ? { asbestos: _genbaClone(asbAll) } : {}), "apartment");
   });
@@ -20478,7 +20516,13 @@ document.addEventListener("change", e => {
     const row = (_listRows || []).find(r => subCaseKey(r) === tr.dataset.amgk);
     if(!row) return;
     if(t.dataset.amgr){
+      const oldRoom = (t.dataset.amgr === "apt_room") ? String((row.data || {}).apt_room || "") : "";
       lgWriteCaseField(row, t.dataset.amgr, t.value);
+      if(t.dataset.amgr === "apt_room"){
+        // 部屋番号を入れたら、その世帯の住所の末尾にも付ける（前の部屋番号は外す）
+        const b = aptMgFind(_aptMgKey);
+        try { aptRoomAddrApply(row, b ? b.rows : [], oldRoom); } catch(_){}
+      }
       row._amtCache = undefined; row._bomCache = undefined;
       try { renderListTable(); } catch(_){}
       return;
@@ -27854,8 +27898,10 @@ function aptAddrSuffix(d){
   return room ? (head + " " + room) : head;
 }
 function lgXlsxAddr(d){
-  const base = String((d && d.chosho_cust_addr) || "");
   const suf = aptAddrSuffix(d);
+  // 住所の末尾に部屋番号が付いている世帯は、部屋番号を「-枝番 部屋番号」の側に出すので二重にしない
+  const base = suf ? aptAddrWithoutRoom((d && d.chosho_cust_addr) || "", d && d.apt_room)
+                   : String((d && d.chosho_cust_addr) || "");
   if(!suf) return base;
   return base ? (base + " " + suf) : suf;
 }
@@ -27870,9 +27916,18 @@ function lgXlsxStripAptAddr(addr, mgmtNo){
     toHalfWidthAn(String(((x && x.data) || {}).chosho_mgmt_no || "")).trim() === key);
   const suf = r ? aptAddrSuffix(r.data) : "";
   if(!suf) return a;
-  if(a === suf) return "";
   const tail = " " + suf;
-  return (a.length > tail.length && a.slice(-tail.length) === tail) ? a.slice(0, -tail.length).trim() : a;
+  const strip = (a === suf) ? ""
+    : ((a.length > tail.length && a.slice(-tail.length) === tail) ? a.slice(0, -tail.length).trim() : a);
+  // いまの住所の末尾に部屋番号が付いている世帯は、読み戻しも同じ形（住所 部屋番号）に戻す。
+  // 建物の住所が変わっていなければ、いまの住所そのまま（＝差分に出ない）。
+  const rd = r.data || {};
+  const cur = String(rd.chosho_cust_addr || "").trim();
+  const curBase = aptAddrWithoutRoom(cur, rd.apt_room);
+  if(cur && curBase !== cur){
+    return (toHalfWidthAn(strip) === toHalfWidthAn(curBase)) ? cur : aptAddrWithRoom(strip, rd.apt_room);
+  }
+  return strip;
 }
 /* 受付台帳を Excel へ書き出すときの列。幅は実際に使っている表に合わせてある。 */
 const LG_XLSX_COLS = [
