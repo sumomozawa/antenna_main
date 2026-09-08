@@ -5950,6 +5950,18 @@
       CH名・dB・MER・BER を編集。行の「×」で削除、「＋CH追加」で行追加。<br>
       <b style="color:#2e7d32;">※ Excel/CSVで範囲コピー → セルにCtrl+V貼り付けで一括入力</b>(行不足時は自動追加)
     </div>
+    <div style="margin-bottom:6px;padding:6px 8px;border:1px solid #cfe3e6;border-radius:4px;background:#f2fafb;">
+      <b style="font-size:11px;color:#00575f;">📥 測定器のCSVから入れる</b>
+      <span style="font-size:11px;color:#555;">（LCV4A・LCT5・LCT6）</span>
+      <select id="meas-csv-cat" style="font-size:11px;padding:2px 4px;margin:0 4px;">
+        <option value="antenna">① アンテナ出力</option>
+        <option value="amplifier">② 増幅器出力</option>
+        <option value="terminal">③ 宅内末端</option>
+      </select>
+      <button id="meas-csv-btn" type="button" style="padding:3px 10px;font-size:11px;border:1px solid #00838f;color:#fff;background:#00838f;border-radius:3px;cursor:pointer;">CSVを選ぶ</button>
+      <input type="file" id="meas-csv-input" accept=".csv,text/csv,*/*" style="display:none;">
+      <span style="font-size:10px;color:#555;">※ CH名（14・18…）が合う行だけ入ります。合わない CH は知らせます。</span>
+    </div>
     <div style="margin-bottom:6px;">
       <button id="meas-ch-add" type="button" style="padding:3px 10px;font-size:11px;border:1px solid #2e7d32;color:#2e7d32;background:#fff;border-radius:3px;cursor:pointer;">＋CH追加</button>
       <button id="meas-reset" type="button" style="margin-left:6px;padding:3px 10px;font-size:11px;border:1px solid #888;color:#555;background:#fff;border-radius:3px;cursor:pointer;">デフォルトに戻す</button>
@@ -6780,7 +6792,7 @@ async function lsRestoreFromIdb(){
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "149";
+const APP_VERSION = "150";
 /* ============================================================
    ★日時の表示は、必ずこの端末の時刻で★
    保存している日時は世界時のISO文字列（…T01:03:00.000Z）。これを文字のまま
@@ -11433,6 +11445,107 @@ function importPartsTsv(){
 
 function fillTsvTemplateWithCurrent(){
   document.getElementById("parts-tsv-text").value = partsToTsv();
+}
+/* ============================================================
+   測定器のCSVから電波測定値を入れる（LCV4A / LCT5 / LCT6）
+   ------------------------------------------------------------
+   ★測定器で見出しの言い方が違う★
+     LCV4A … 「チャンネル,バンド,LEVEL(dBμV),MER,BER」
+     LCT5/6 … 「チャンネル,測定放送,周波数(MHz),LEVEL(dBuV),MER(dB),BER,受信判定」
+   どちらも読めるように、見出しは「その言葉で始まるか」で見つける。
+   LCT は測り切れないとき「>32」と書く。数字だけを取り出して入れ、何件そうだったかを必ず知らせる。
+   CH構成（channels）は変えない。合う CH の行にだけ入れ、合わない CH は知らせる。
+   ============================================================ */
+function measCsvHan(s){
+  return String(s == null ? "" : s)
+    .replace(/[０-９．＋]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+    .replace(/[−–—－]/g, "-");
+}
+/* 「>32」「≧32」「<20」から数字を取り出す。{ v, over } を返す。 */
+function measCsvCell(s){
+  s = measCsvHan(s).trim();
+  if(s === "" || /^-+$/.test(s) || s === "---") return { v:"", over:false };
+  const m = s.match(/^[><≧≦≥≤=]+\s*(-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)/);
+  if(m){ const n = parseFloat(m[1]); return isNaN(n) ? { v:"", over:false } : { v:n, over:true }; }
+  const n = parseFloat(s);
+  return isNaN(n) ? { v:"", over:false } : { v:n, over:false };
+}
+/* 測定器のCSVは Shift_JIS のことが多い。読めた方を使う。 */
+function measCsvDecode(buf){
+  const bytes = new Uint8Array(buf);
+  for(const enc of ["shift_jis", "utf-8"]){
+    try { const t = new TextDecoder(enc, { fatal:false }).decode(bytes); if(/チャンネル/.test(t)) return t; } catch(_){}
+  }
+  return new TextDecoder("shift_jis", { fatal:false }).decode(bytes);
+}
+function measCsvParse(text){
+  const lines = String(text || "").split(/\r\n|\r|\n/);
+  let H = -1, head = null;
+  for(let i = 0; i < lines.length; i++){
+    const c = lines[i].split(",").map(x => x.trim());
+    if(c.some(x => /チャンネル/.test(x)) && c.some(x => /LEVEL|dB[uμ]V/i.test(x))){ H = i; head = c; break; }
+  }
+  if(H < 0) throw new Error("測定表のヘッダーが見つかりません（LCV4A・LCT5・LCT6 のCSVですか？）");
+  const find = pred => { for(let j = 0; j < head.length; j++) if(pred(head[j])) return j; return -1; };
+  const chCol    = find(x => /チャンネル/.test(x));
+  const bandCol  = find(x => /バンド|測定放送/.test(x));
+  const levelCol = find(x => /LEVEL|dB[uμ]V/i.test(x) && !/下限|上限/.test(x));
+  const merCol   = find(x => /^MER/i.test(x));
+  const berCol   = find(x => /^BER/i.test(x));
+  if(chCol < 0 || levelCol < 0) throw new Error("チャンネル列またはLEVEL列が見つかりません");
+  const rows = []; let over = 0;
+  for(let i = H + 1; i < lines.length; i++){
+    const raw = lines[i];
+    if(raw.trim() === "") break;
+    const c = raw.split(",").map(x => x.trim());
+    if((c[0] || "").startsWith("#")) break;
+    const ch = parseInt(measCsvHan(c[chCol] || ""), 10);
+    if(!Number.isFinite(ch)) continue;
+    const db  = measCsvCell(c[levelCol] || "");
+    const mer = merCol >= 0 ? measCsvCell(c[merCol] || "") : { v:"", over:false };
+    const ber = berCol >= 0 ? measCsvCell(c[berCol] || "") : { v:"", over:false };
+    if(db.over || mer.over || ber.over) over++;
+    rows.push({ band: bandCol >= 0 ? (c[bandCol] || "") : "", ch, db: db.v, mer: mer.v, ber: ber.v });
+  }
+  return { rows, hasMer: merCol >= 0, hasBer: berCol >= 0, over };
+}
+async function measCsvImport(file, cat){
+  const label = { antenna:"① アンテナ出力", amplifier:"② 増幅器出力", terminal:"③ 宅内末端" }[cat] || cat;
+  let parsed;
+  try {
+    const buf = await new Promise((res, rej) => {
+      const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsArrayBuffer(file);
+    });
+    parsed = measCsvParse(measCsvDecode(buf));
+  } catch(err){ alert("CSVを読み込めませんでした：\n" + ((err && err.message) || err)); return; }
+  const uhf = parsed.rows.filter(r => /UHF/i.test(r.band) || r.band === "");
+  if(!uhf.length){ alert("CSVにUHFの測定行が見つかりませんでした。"); return; }
+  const ms = STATE.measurements, chs = ms.channels || [];
+  const idxByCh = new Map();
+  chs.forEach((c, i) => { const n = parseInt(measCsvHan(c), 10); if(Number.isFinite(n) && !idxByCh.has(n)) idxByCh.set(n, i); });
+  const target = ms[cat], applyList = [], unmatched = [], seen = new Set();
+  uhf.forEach(r => {
+    if(seen.has(r.ch)) return; seen.add(r.ch);
+    if(idxByCh.has(r.ch)) applyList.push({ i: idxByCh.get(r.ch), r }); else unmatched.push(r.ch);
+  });
+  if(!applyList.length){
+    alert("CSVのCHが、この戸別のCH構成と合いませんでした。\n\nCSV: " + [...seen].join(",")
+      + "\nこの戸別: " + chs.map(c => parseInt(measCsvHan(c), 10)).join(","));
+    return;
+  }
+  const nonEmpty = v => v !== "" && v != null;
+  const willOverwrite = applyList.some(({ i }) => { const o = target[i] || {}; return nonEmpty(o.db) || nonEmpty(o.mer) || nonEmpty(o.ber); });
+  if(willOverwrite && !confirm(label + "には既に測定値があります。\nCSVの値で上書きしますか？")) return;
+  applyList.forEach(({ i, r }) => {
+    const cur = target[i] || {};
+    target[i] = { db: r.db, mer: parsed.hasMer ? r.mer : (cur.mer ?? ""), ber: parsed.hasBer ? r.ber : (cur.ber ?? "") };
+  });
+  renderMeasEditor();
+  if(typeof projAutoSaveEdit === "function") projAutoSaveEdit();
+  alert(label + "に " + applyList.length + "CH 入れました。"
+    + (unmatched.length ? ("\n\nこの戸別に無いCH（入れていません）: " + unmatched.join(",")) : "")
+    + (parsed.over ? ("\n\n" + parsed.over + " 行は「>32」のように「その値より上（下）」という書き方でした。"
+        + "\nその数字（例: 32）で入れてあります。紙に出すときは、必要なら手で直してください。") : ""));
 }
 function renderMeasEditor(){
   const body = document.getElementById("meas-editor");
@@ -34092,6 +34205,16 @@ function init(){
   document.getElementById("btn-meas-edit").onclick = openMeasModal;
   document.getElementById("meas-ch-add").onclick = addMeasChannel;
   document.getElementById("meas-reset").onclick = resetMeasurements;
+  { const b = document.getElementById("meas-csv-btn"), inp = document.getElementById("meas-csv-input");
+    if(b && inp){
+      b.onclick = () => inp.click();
+      inp.addEventListener("change", async e => {
+        const f = e.target.files[0]; e.target.value = "";
+        if(!f) return;
+        const sel = document.getElementById("meas-csv-cat");
+        await measCsvImport(f, (sel && sel.value) || "antenna");
+      });
+    } }
   document.getElementById("meas-modal").addEventListener("click", e => {
     if(e.target.id === "meas-modal") closeMeasModal();
   });
