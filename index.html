@@ -5817,6 +5817,7 @@
           <button id="btn-list-clear" title="読み込んだ一覧を空にする（ファイルは消えません）">🧽 一覧を空にする</button>
           <div class="uc-menu-cap">ファイルを整える</div>
           <button id="btn-list-dup" title="同じ管理番号のファイルが重なっているところ（iPad/iPhoneで保存すると増える「◯◯ 2.json」など）を探し、残す方を選んで「管理番号.json」にまとめます。フォルダを読み込んだ後に使えます。">🧩 重複をまとめる</button>
+          <button id="btn-list-tidy" title="戸別ファイル（管理番号.json）が複数のフォルダに散らばっているとき、1つのフォルダ（ふつうは「リスト」）へまとめて移します。移す前に書いて読み返し、中身と写真の枚数を確かめてから元を消します。">📂 1つのフォルダにそろえる</button>
           <button id="btn-list-junk" title="中身が空（0KB）のファイルを探して消します。スマホで同じ戸別を保存し直すと「管理番号_長い数字.json」という別ファイルが増え、そのうち空のものは読めないため戸別が一覧から抜けます。消す前に一覧で確かめられます。中身のある壊れたファイルは消しません。">🗑 空ファイルを消す</button>
           <div class="uc-menu-cap">まとめて書き出す</div>
           <button id="btn-list-bulk-photos" title="この物件（一覧）の全戸別の写真を、選んだフォルダの中に「管理番号」フォルダを作って、画質を落とさずまとめて書き出します。スマホ現場入力で撮った写真の取り出しに使います。">📸 写真をまとめて書き出し</button>
@@ -6520,7 +6521,12 @@
 <!-- 📒 フォルダ読み込み時の台帳マージ確認ダイアログ（管理番号重複・件ごと） -->
 <style>
 /* 重複整理と空ファイル掃除は同じ見た目の表を使う */
-#dup-modal .modal,#junk-modal .modal{min-width:640px;max-width:900px;max-height:82vh;overflow:auto;}
+#dup-modal .modal,#junk-modal .modal,#tidy-modal .modal{min-width:640px;max-width:900px;max-height:82vh;overflow:auto;}
+#tidy-modal .tidy-pick{border:1px solid #dde3ea;border-radius:5px;padding:7px 9px;margin:5px 0;font-size:12.5px;}
+#tidy-modal .tidy-pick.on{border-color:#00838f;background:#e8f4f5;}
+#tidy-modal table.dup-tbl{width:100%;border-collapse:collapse;font-size:11.5px;}
+#tidy-modal table.dup-tbl th,#tidy-modal table.dup-tbl td{border:1px solid #e3e7ec;padding:3px 6px;text-align:left;}
+#tidy-modal table.dup-tbl th{background:#f4f7fa;color:#1e3a5f;}
 #dup-modal .dup-grp,#junk-modal .dup-grp{border:1px solid #dde3ea;border-radius:5px;margin:8px 0;overflow:hidden;}
 #dup-modal .dup-grp-h,#junk-modal .dup-grp-h{background:#eef6f7;padding:5px 9px;font-weight:600;font-size:12px;color:#00575f;}
 #dup-modal table.dup-tbl,#junk-modal table.dup-tbl{width:100%;border-collapse:collapse;font-size:11.5px;}
@@ -6541,6 +6547,17 @@
     </div>
   </div>
 </div>
+<div class="modal-backdrop" id="tidy-modal">
+  <div class="modal">
+    <h3>📂 戸別ファイルを1つのフォルダにそろえる</h3>
+    <div id="tidy-body"></div>
+    <div style="display:flex;gap:6px;margin-top:10px;justify-content:flex-end;">
+      <button id="tidy-ok" style="background:#00838f;color:#fff;border:1px solid #00666f;padding:6px 14px;border-radius:3px;cursor:pointer;font-size:12px;">この内容で移す</button>
+      <button id="tidy-cancel" style="background:#666;color:#fff;border:1px solid #444;padding:6px 14px;border-radius:3px;cursor:pointer;font-size:12px;">何もしない</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="dup-modal">
   <div class="modal">
     <h3>🧹 同じ管理番号のファイルが重なっています</h3>
@@ -6763,7 +6780,7 @@ async function lsRestoreFromIdb(){
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "148";
+const APP_VERSION = "149";
 /* ============================================================
    ★日時の表示は、必ずこの端末の時刻で★
    保存している日時は世界時のISO文字列（…T01:03:00.000Z）。これを文字のまま
@@ -16469,6 +16486,148 @@ async function dupApply(groups, picks){
     }
   }
   return { renamed, done, dropped, fails, removed, backed };
+}
+/* ============================================================================
+   📂 戸別ファイルを1つのフォルダにそろえる
+   ----------------------------------------------------------------------------
+   ★なぜ要るか★ 現場の端末（iPad・Android）では「保存」のたびに端末の保存画面が出て、
+   その既定の場所は「最後に使った場所」になる。受付台帳（現場用_….json）を工事フォルダの
+   直下から読むと、そのあとの戸別の保存も直下に落ちてしまう。本当は「リスト」フォルダに
+   入れたいのに、同じ管理番号が2つのフォルダに散らばる原因になっていた。
+   ここでは、散らばった 管理番号.json を1つのフォルダへ移してそろえる。
+   ★移し方★ 書く → 読み返して中身と写真の枚数を確かめる → それから元を消す。
+   確かめられなければ元は消さない（何も失わない）。
+   移動先に同じ名前のファイルがあるときは触らない（それは本当の重複なので「🧩 重複をまとめる」へ）。
+   ============================================================================ */
+/* どのフォルダに戸別ファイルが何件あるか。多い順。 */
+function tidyCountByDir(rows){
+  const by = new Map();
+  (rows || []).forEach(r => {
+    if(!r || !r._dir || !r._name || r._detached) return;
+    const key = String(r._dirPath || "");
+    if(!by.has(key)) by.set(key, { dirPath: key, dir: r._dir, items: [] });
+    by.get(key).items.push(r);
+  });
+  const out = [];
+  by.forEach(v => out.push(v));
+  out.sort((a, b) => (b.items.length - a.items.length) || String(a.dirPath).localeCompare(String(b.dirPath)));
+  return out;
+}
+function tidyDirLabel(dirPath){ return dirPath ? dirPath : "（いちばん上）"; }
+/* 1件移す。戻り値 { ok, why }。ok が false のときは元のファイルを消していない。 */
+async function tidyMoveOne(destDir, destPath, item){
+  let text = "";
+  try { text = await (await item.fileHandle.getFile()).text(); }
+  catch(_){ return { ok:false, why:"元のファイルを読めませんでした" }; }
+  if(!text) return { ok:false, why:"元のファイルの中身が空でした" };
+  // 移動先に同じ名前があるなら触らない（本当の重複なので「🧩 重複をまとめる」で選んでもらう）
+  try { await destDir.getFileHandle(item._name); return { ok:false, why:"移す先に同じ名前のファイルがあります（先に「🧩 重複をまとめる」で片付けてください）" }; }
+  catch(_){ /* 無い＝移してよい */ }
+  try {
+    const fh = await destDir.getFileHandle(item._name, { create: true });
+    const w = await fh.createWritable();
+    await w.write(text); await w.close();
+    /* ★読み返して、一字一句そのまま入っているか確かめる★
+       ここが合っていれば、写真も測定値も欠けていない（中身がそっくり同じということ）。
+       枚数を数え直す番人は、この一致の確認より弱く、決して先に働かないので置かない。 */
+    const back = await (await fh.getFile()).text();
+    if(back !== text) return { ok:false, why:"移した先を読み返したら中身が違いました（元は消していません）" };
+  } catch(e){ return { ok:false, why:"移せませんでした（" + ((e && e.message) || e) + "）" }; }
+  try { await item._dir.removeEntry(item._name); }
+  catch(e){ return { ok:false, why:"移しましたが、元のファイルを消せませんでした（同じものが2つ残っています）" }; }
+  return { ok:true };
+}
+/* まとめて移す。 */
+async function tidyMoveApply(dest, items){
+  const res = { moved: [], fails: [] };
+  if(!(await dupEnsureWritable(dest.dir))){ res.fails.push("移す先のフォルダへ書き込めませんでした"); return res; }
+  for(const it of items){
+    if(!(await dupEnsureWritable(it._dir))){
+      res.fails.push((it._dirPath || "") + it._name + "：元のフォルダへ書き込めませんでした");
+      continue;
+    }
+    const r = await tidyMoveOne(dest.dir, dest.dirPath, it);
+    if(r.ok) res.moved.push((it._dirPath || "") + it._name);
+    else res.fails.push((it._dirPath || "") + it._name + "：" + r.why);
+  }
+  return res;
+}
+/* 窓。選んだ移動先を返す（何もしないなら null）。 */
+function tidyDialog(dirs){
+  return new Promise(resolve => {
+    const back = document.getElementById("tidy-modal");
+    const body = document.getElementById("tidy-body");
+    let destPath = dirs[0].dirPath;                          // 既定はいちばん多いフォルダ
+    const draw = () => {
+      const dest = dirs.filter(d => d.dirPath === destPath)[0] || dirs[0];
+      const move = dirs.filter(d => d !== dest);
+      const n = move.reduce((a, d) => a + d.items.length, 0);
+      let h = ''
+        + '<div style="font-size:12px;margin-bottom:8px;">戸別ファイルが <b>' + dirs.length + '</b> つのフォルダに分かれています。'
+        + '1つにそろえると、同じ管理番号が別々のフォルダにできてしまうのを防げます。<br>'
+        + '<span style="color:#1b5e20;font-weight:600;">移すときは、先に書いて読み返し、中身と写真の枚数を確かめてから元を消します。'
+        + '確かめられなければ元は消しません。</span><br>'
+        + '<span style="color:#555;">※ 移す先に同じ名前のファイルがあるものは触りません（それは本当の重複なので「🧩 重複をまとめる」で選んでください）。</span></div>'
+        + '<div style="font-size:12px;font-weight:600;margin:6px 0 2px;">どのフォルダにそろえますか？</div>';
+      dirs.forEach(d => {
+        h += '<label class="tidy-pick' + (d.dirPath === destPath ? " on" : "") + '">'
+          + '<input type="radio" name="tidy-dest" value="' + escapeHtml(d.dirPath) + '"'
+          + (d.dirPath === destPath ? " checked" : "") + '> <b>' + escapeHtml(tidyDirLabel(d.dirPath)) + '</b>'
+          + ' … 戸別ファイル ' + d.items.length + ' 件</label>';
+      });
+      h += '<div style="font-size:12px;font-weight:600;margin:10px 0 2px;">移すファイル（' + n + ' 件）</div>';
+      if(!n){ h += '<div style="font-size:12px;color:#c62828;">このフォルダに全部入っています。移すものはありません。</div>'; }
+      else {
+        h += '<table class="dup-tbl"><tr><th>いまの場所</th><th>ファイル</th><th>写真</th></tr>';
+        move.forEach(d => d.items.slice(0, 200).forEach(it => {
+          h += '<tr><td>' + escapeHtml(tidyDirLabel(d.dirPath)) + '</td><td>' + escapeHtml(it._name) + '</td>'
+            + '<td>' + ((it._photoCount || 0) ? (it._photoCount + "枚") : "―") + '</td></tr>';
+        }));
+        h += '</table>';
+      }
+      body.innerHTML = h;
+      body.querySelectorAll('input[name="tidy-dest"]').forEach(el => el.addEventListener("change", () => {
+        destPath = el.value; draw();
+      }));
+    };
+    draw();
+    back.classList.add("open");
+    const close = v => {
+      back.classList.remove("open");
+      document.getElementById("tidy-ok").onclick = null;
+      document.getElementById("tidy-cancel").onclick = null;
+      resolve(v);
+    };
+    document.getElementById("tidy-ok").onclick = () => close(destPath);
+    document.getElementById("tidy-cancel").onclick = () => close(null);
+  });
+}
+async function tidyButton(){
+  if(!_listDirHandle){
+    alert("先に「📁 フォルダ」でフォルダを読み込んでください。\n（そろえるには、そのフォルダを掴んでいる必要があります）");
+    return;
+  }
+  const dirs = tidyCountByDir(_listRows);
+  if(dirs.length < 2){
+    alert("戸別ファイルは"
+      + (dirs.length === 1 ? ("「" + tidyDirLabel(dirs[0].dirPath) + "」に " + dirs[0].items.length + " 件、すべて同じフォルダに入っています。") : "見つかりませんでした。")
+      + "\n\nそろえる必要はありません。");
+    return;
+  }
+  const destPath = await tidyDialog(dirs);
+  if(destPath === null) return;
+  const dest = dirs.filter(d => d.dirPath === destPath)[0];
+  const items = [];
+  dirs.forEach(d => { if(d !== dest) items.push.apply(items, d.items); });
+  if(!items.length){ alert("移すものはありませんでした。"); return; }
+  await fsPrepRootWritable(_listRows);
+  const res = await tidyMoveApply(dest, items);
+  alert("📂 そろえ終わりました。\n\n"
+    + "「" + tidyDirLabel(dest.dirPath) + "」へ " + res.moved.length + " 件 移しました。"
+    + (res.fails.length ? ("\n\n⚠ 移せなかったもの（元のファイルはそのままです）:\n" + res.fails.slice(0, 12).join("\n")
+        + (res.fails.length > 12 ? ("\n…ほか " + (res.fails.length - 12) + " 件") : "")) : "")
+    + "\n\n一覧を読み直します。");
+  await listReloadFolder(res.moved);
 }
 /* 入口：フォルダを読んだ後の自動確認からも、ツールバーのボタンからも呼ぶ */
 async function dupCleanupFlow(rows, quietIfNone){
@@ -33681,6 +33840,7 @@ function init(){
   document.getElementById("btn-list-close").onclick = closeListView;
   document.getElementById("btn-list-select-folder").onclick = listSelectFolder;
   { const b = document.getElementById("btn-list-dup"); if(b) b.onclick = dupCleanupButton; }
+  { const b = document.getElementById("btn-list-tidy"); if(b) b.onclick = tidyButton; }
   { const b = document.getElementById("btn-list-junk"); if(b) b.onclick = junkCleanupButton; }
   document.getElementById("btn-list-select-files").onclick = listSelectFiles;
   document.getElementById("btn-list-unlock").onclick = () => unlockListView();
