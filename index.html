@@ -6763,7 +6763,7 @@ async function lsRestoreFromIdb(){
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "147";
+const APP_VERSION = "148";
 /* ============================================================
    ★日時の表示は、必ずこの端末の時刻で★
    保存している日時は世界時のISO文字列（…T01:03:00.000Z）。これを文字のまま
@@ -16181,7 +16181,11 @@ function dupFindGroups(rows){
     // まとめた先の名前 g.canon も半角になるので、1回通せばファイル名までそろう。
     const no = toHalfWidthAn((r.data && r.data.chosho_mgmt_no) || "").trim();
     if(!no) return;
-    const key = (r._dirPath || "") + " " + no;
+    /* ★鍵は管理番号だけ★ フォルダを鍵に入れていたため、別のフォルダにある同じ管理番号は
+       別々の組になり、一覧では「重複」と出ているのに「重なっているところはありません」と
+       言われていた（利用者からの指摘：2622MAB025 が2つのフォルダにある）。
+       フォルダをまたぐ組は g.multiDir を立て、窓と確認で必ずフォルダ名を出す。 */
+    const key = no;
     if(!by.has(key)) by.set(key, { no, dir: r._dir, dirPath: r._dirPath || "", items: [] });
     by.get(key).items.push(r);
   });
@@ -16230,9 +16234,37 @@ function dupFindGroups(rows){
       || ((b.lastModified || 0) - (a.lastModified || 0)));
     g.canon = g.no + ".json";
     g.pick = g.items[0]._name;                               // 既定は先頭（いちばん新しい）
+    /* フォルダをまたぐ組か。またぐときは、残す方のフォルダにまとめ、
+       もう一方のフォルダのファイルは控えを取ってから消す（窓でフォルダ名を必ず出す）。 */
+    const dirs = [];
+    g.items.forEach(x => { const d = String(x._dirPath || ""); if(dirs.indexOf(d) < 0) dirs.push(d); });
+    g.dirs = dirs;
+    g.multiDir = dirs.length > 1;
     groups.push(g);
   });
   return groups;
+}
+/* 一覧では「重複」と出ているのに、この整理では扱えない戸別の理由を作る（無ければ空）。
+   扱えないのは、ファイルを持たない行（受付台帳で打ち込んだだけ）と、暗号化した戸別。 */
+function dupWhyNoGroupsText(rows){
+  const by = {};
+  (rows || []).forEach(r => {
+    const no = toHalfWidthAn((r && r.data && r.data.chosho_mgmt_no) || "").trim();
+    if(!no) return;
+    (by[no] = by[no] || []).push(r);
+  });
+  let noFile = 0, enc = 0;
+  Object.keys(by).forEach(no => {
+    const list = by[no];
+    if(list.length < 2) return;
+    if(list.some(r => !r._dir || !r._name)) noFile++;
+    else if(list.some(r => r.fileType !== "plain")) enc++;
+  });
+  if(!noFile && !enc) return "";
+  let t = "\n\n同じ管理番号が2つ以上ある戸別はありますが、この整理では扱えません。";
+  if(noFile) t += "\n・" + noFile + " 件：ファイルを持たない行（受付台帳で打ち込んだだけの行）が混ざっています。";
+  if(enc)    t += "\n・" + enc + " 件：暗号化した戸別が混ざっています（中身を開けないため）。";
+  return t;
 }
 /* 書き込み許可を取る（読むだけで開いたフォルダを、この操作の時だけ書けるようにする） */
 /* ★ここは「押した直後」に呼ぶこと★
@@ -16263,6 +16295,47 @@ async function dupEnsureWritable(dir){
     return (await dir.requestPermission({ mode: "readwrite" })) === "granted";
   }catch(_){ return false; }
 }
+/* ============ 消す前の控え ============
+   「まとめる」は 1つ残して他を消す。消したファイルは元に戻せないので、
+   ★消す前に原文を工事フォルダの中の「_整理前の控え」へ写し、読み返して一致を確かめる★。
+   写せなかった・読み返して違った ときは、そのファイルは消さない（何も失わない）。
+   別のフォルダのファイルを消すときは特に大事なので、フォルダ名も控えの名前に残す。 */
+const DUP_BACKUP_DIR = "_整理前の控え";
+/* 控えの置き場所（工事フォルダの直下）。作れなければ null＝控えが取れない。 */
+async function dupBackupDir(){
+  const root = (typeof _listDirHandle !== "undefined") ? _listDirHandle : null;
+  if(!root || !root.getDirectoryHandle) return null;
+  if(!(await dupEnsureWritable(root))) return null;
+  try { return await root.getDirectoryHandle(DUP_BACKUP_DIR, { create: true }); }
+  catch(_){ return null; }
+}
+async function dupBackupHas(bdir, name){
+  try { await bdir.getFileHandle(name); return true; } catch(_){ return false; }
+}
+/* 1つ写す。戻り値 { ok, name, why }。ok が false のときは絶対に消さないこと。 */
+async function dupBackupFile(bdir, item){
+  if(!bdir) return { ok:false, why:"控えの場所を作れませんでした" };
+  let text = "";
+  try { text = await (await item.fileHandle.getFile()).text(); }
+  catch(e){ return { ok:false, why:"原文を読めませんでした" }; }
+  if(!text) return { ok:false, why:"原文が空でした" };
+  // 名前に元のフォルダを残す（別フォルダの同じ名前がぶつからないように）
+  const base = (String(item._dirPath || "").replace(/[\\/]+/g, "_") + item._name).replace(/^_+/, "");
+  let name = base;
+  for(let i = 2; i <= 50 && await dupBackupHas(bdir, name); i++){
+    name = base.replace(/\.json$/i, "") + "-" + i + ".json";
+  }
+  try {
+    const fh = await bdir.getFileHandle(name, { create: true });
+    const w = await fh.createWritable();
+    await w.write(text); await w.close();
+    const back = await (await fh.getFile()).text();     // 読み返して確かめる
+    if(back !== text) return { ok:false, why:"控えを読み返したら中身が違いました" };
+    return { ok:true, name: DUP_BACKUP_DIR + "/" + name };
+  } catch(e){
+    return { ok:false, why:"控えを書けませんでした（" + ((e && e.message) || e) + "）" };
+  }
+}
 /* 整理の内容を見せて選ばせる。OKなら {groupIndex: 残すファイル名} を返す。取り消しなら null。 */
 function dupDialog(groups){
   return new Promise(resolve => {
@@ -16277,7 +16350,14 @@ function dupDialog(groups){
              + '（スマホの保存でこの名前になります）中身はそのままに <b>管理番号.json</b> へ付け直します。</span><br>')
           : "")
       + '<b>残す方はこちらで選んであります。</b>そのまま下の「この内容で整理する」を押せば済みます。<br>'
-      + '残す方の中身を <b>管理番号.json</b> という名前で書き直し、同じ組の他のファイルは削除します。'
+      + '残す方の中身を <b>管理番号.json</b> という名前で書き直し、同じ組の他のファイルは削除します。<br>'
+      + '<span style="color:#1b5e20;font-weight:600;">消す前に、そのファイルの中身をそのまま '
+      + '<b>' + escapeHtml(DUP_BACKUP_DIR) + '</b> フォルダへ写します（写せなければ消しません）。</span><br>'
+      + (groups.some(function(x){ return x.multiDir; })
+          ? '<span style="color:#c62828;font-weight:600;">⚠ 別のフォルダにまたがっている組があります。'
+            + '残す方のフォルダにまとめ、もう一方のフォルダのファイルは控えを取ってから消します。'
+            + '下の一覧でフォルダ名を確かめてください。</span><br>'
+          : "")
       + '<span style="color:#c62828;font-weight:600;">削除したファイルは元に戻せません。</span><br>'
       + '<span style="color:#555;">※ 選び方は <b>写真の多い方 → 住所が半角の方 → 中身の多い方 → 新しい方</b> の順です。'
       + '<b>いちばん新しいものとは限りません。</b>スマホの保存は失敗すると小さいファイル・空のファイルが'
@@ -16287,8 +16367,11 @@ function dupDialog(groups){
       const keep = g.items.filter(x => x._name === g.pick)[0] || g.items[0];
       const why = dupWhyKeep(keep, g.items);
       // ふだんは1行だけ見せる。中身を見比べたいときだけ開く（組数が多いと選びようがないため）
-      html += '<details class="dup-grp"><summary class="dup-grp-h">📄 ' + escapeHtml(g.no)
-        + (g.dirPath ? ' <span style="color:#777;font-weight:400;">（' + escapeHtml(g.dirPath) + '）</span>' : '')
+      html += '<details class="dup-grp"' + (g.multiDir ? ' open' : '') + '><summary class="dup-grp-h">📄 ' + escapeHtml(g.no)
+        + (g.multiDir
+            ? ' <span style="color:#c62828;font-weight:700;">⚠ 別のフォルダにまたがっています（'
+              + escapeHtml(g.dirs.map(function(d){ return d || "（いちばん上）"; }).join(" ／ ")) + '）</span>'
+            : (g.dirPath ? ' <span style="color:#777;font-weight:400;">（' + escapeHtml(g.dirPath) + '）</span>' : ''))
         + ' → <b>' + escapeHtml(g.canon) + '</b>'
         + '<span class="dup-keep-note">残す: ' + escapeHtml(keep._name)
         + ' <span class="dup-why">' + escapeHtml(why) + '</span>'
@@ -16335,12 +16418,15 @@ function dupDialog(groups){
 }
 /* 選んだとおりに書き直して、余分なファイルを消す */
 async function dupApply(groups, picks){
-  let renamed = 0, done = 0, dropped = 0; const fails = [], removed = [];
+  let renamed = 0, done = 0, dropped = 0; const fails = [], removed = [], backed = [];
+  const bdir = await dupBackupDir();     // 控えの置き場所（消す前に必ずここへ写す）
   for(let gi = 0; gi < groups.length; gi++){
     const g = groups[gi];
     const keepName = picks[gi];
     const keep = g.items.find(x => x._name === keepName) || g.items[0];
-    const dir = g.dir;
+    /* ★フォルダは「そのファイルのフォルダ」を使う★ 組はフォルダをまたぐことがあるので、
+       組に1つのフォルダ（g.dir）で消すと、別フォルダのファイルが消えない／別物を消す。 */
+    const dir = keep._dir || g.dir;
     try{
       if(!(await dupEnsureWritable(dir))){ fails.push(g.no + "：書き込みを許可されませんでした"); continue; }
       // 正式な名前でないなら、中身を 管理番号.json へ書き直す（先に書いてから消す）
@@ -16350,15 +16436,30 @@ async function dupApply(groups, picks){
         const fh = await dir.getFileHandle(g.canon, { create: true });
         const w = await fh.createWritable();
         await w.write(text); await w.close();
-        await dir.removeEntry(keep._name);                  // 元の「 2」付きを消す（中身は残っている）
+        /* ここで消すのは「名前を付け替えた元」で、中身はいま書いた 管理番号.json に入っている。
+           中身が失われないので控えは取らない（工事フォルダを無駄に太らせない）。 */
+        await dir.removeEntry(keep._name);
         removed.push((g.dirPath || "") + keep._name);
         renamed++;
       }
       for(const it of g.items){
         if(it === keep) continue;
-        if(it._name === g.canon) continue;                  // 正式名は上書き済みなので消さない
-        await dir.removeEntry(it._name);
-        removed.push((g.dirPath || "") + it._name);
+        // 正式名を上書き済みなのは「残す方と同じフォルダ」だけ。別フォルダの同名は消す対象。
+        if(it._name === g.canon && String(it._dirPath || "") === String(keep._dirPath || "")) continue;
+        /* ★消す前に原文の控えを取る★ 取れなければ消さない（元に戻せないため）。 */
+        const bk = await dupBackupFile(bdir, it);
+        if(!bk.ok){
+          fails.push(g.no + "：" + (it._dirPath || "") + it._name + " は控えを取れなかったので消していません（" + bk.why + "）");
+          continue;
+        }
+        backed.push(bk.name);
+        const idir = it._dir || dir;
+        if(!(await dupEnsureWritable(idir))){
+          fails.push(g.no + "：" + (it._dirPath || "") + it._name + " のフォルダへの書き込みを許可されませんでした");
+          continue;
+        }
+        await idir.removeEntry(it._name);
+        removed.push((it._dirPath || "") + it._name);
       }
       done++;
       dropped += g.items.length - 1;                        // この組で減ったファイル数
@@ -16367,13 +16468,17 @@ async function dupApply(groups, picks){
       fails.push(g.no + "：" + (err && err.message ? err.message : err));
     }
   }
-  return { renamed, done, dropped, fails, removed };
+  return { renamed, done, dropped, fails, removed, backed };
 }
 /* 入口：フォルダを読んだ後の自動確認からも、ツールバーのボタンからも呼ぶ */
 async function dupCleanupFlow(rows, quietIfNone){
-  const groups = dupFindGroups(rows && rows.length ? rows : _listRows);
+  const src = (rows && rows.length) ? rows : _listRows;
+  const groups = dupFindGroups(src);
   if(!groups.length){
-    if(!quietIfNone) alert("同じ管理番号のファイルが重なっているところはありませんでした。");
+    /* 一覧には「重複」と出ているのに、この整理では扱えないことがある。
+       黙って「ありません」と言うと、直しようが無いのに直せると思わせる。理由を必ず出す。 */
+    if(!quietIfNone) alert("同じ管理番号のファイルが重なっているところはありませんでした。"
+      + dupWhyNoGroupsText(src));
     return null;
   }
   const picks = await dupDialog(groups);
@@ -16393,6 +16498,10 @@ async function dupCleanupFlow(rows, quietIfNone){
   alert("🧹 重複ファイルの整理が終わりました。\n\n"
     + res.done + " 組をまとめました（余分な " + res.dropped + " ファイルが減りました）\n"
     + "うち名前を付け直した: " + res.renamed + " 件"
+    + (res.backed && res.backed.length
+        ? ("\n\n消したファイルの中身は " + DUP_BACKUP_DIR + " フォルダに "
+           + res.backed.length + " 件 残してあります。\n（いらなくなったら、このフォルダごと消してかまいません）")
+        : "")
     + (res.fails.length ? ("\n\n⚠ できなかったもの:\n" + res.fails.join("\n")) : "")
     + (hanLeft ? ("\n\n⚠ 残したファイルのうち " + hanLeft + " 件は住所が全角のままです。\n"
         + "受付台帳の「💾 戸別ファイルへ反映」を1度押してください。\n"
