@@ -66,6 +66,35 @@
   .lb img{ max-width:100%; max-height:82vh; object-fit:contain; }
   .lb .cap{ color:#fff; padding:10px 14px; font-size:14px; text-align:center; }
   .lb .cls{ position:absolute; top:calc(10px + env(safe-area-inset-top)); right:12px; }
+  .cmpbar{ display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+           background:#fff; border:1px solid var(--line); border-radius:12px; padding:9px 12px; margin-top:12px; }
+  .cmpbar .n{ font-size:13px; color:var(--sub); }
+  .list .row input[type=checkbox]{ width:20px; height:20px; flex:none; }
+  table.cmp{ width:100%; border-collapse:collapse; font-size:13px; }
+  table.cmp th, table.cmp td{ border:1px solid var(--line); padding:6px 8px; vertical-align:top;
+                              word-break:break-word; white-space:pre-wrap; }
+  table.cmp th{ background:#f4f7fa; color:#37474f; font-weight:600; text-align:left; width:26%; }
+  table.cmp tr.diff td{ background:#fff5f5; }
+  table.cmp tr.diff th{ background:#ffe9e9; color:#c62828; }
+  .cmp-h{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .cmp-h .col{ border:1px solid var(--line); border-radius:10px; padding:9px 11px; font-size:13px; }
+  .cmp-h .col b{ font-size:14px; }
+  .cmp-h .col .k{ color:var(--sub); font-size:12px; }
+  .phgrp{ margin-top:10px; }
+  .phgrp h3{ font-size:13px; margin:0 0 6px; }
+  .phgrp.only{ border-left:5px solid var(--warn); padding-left:9px; }
+  /* ★件数が多いときの見え方★
+     一覧をそのまま縦に並べると、中身がずっと下に押し出されて見えなくなる。
+     広い画面では一覧を左に置いて貼り付け、中身は右へ。せまい画面では一覧の高さを抑える。 */
+  @media (min-width:900px){
+    .wrap{ display:grid; grid-template-columns:330px minmax(0, 1fr); gap:12px; align-items:start; }
+    #cmpbar{ grid-column:1 / -1; }
+    #list{ position:sticky; top:10px; max-height:calc(100vh - 30px); overflow:auto; margin-top:12px; }
+    #view{ min-width:0; }
+  }
+  @media (max-width:899px){
+    #list{ max-height:40vh; overflow:auto; }
+  }
   .hide{ display:none !important; }
   @media (max-width:420px){ .ph img{ height:110px; } }
 </style>
@@ -73,7 +102,7 @@
 <body>
 <header>
   <h1>戸別プレビュー</h1>
-  <div class="note">管理番号.json を、写真と文字で見るだけの画面です。<b>書き換えは一切しません。</b></div>
+  <div class="note">管理番号.json を、写真と文字で見るだけの画面です（ドラッグ＆ドロップで開けます）。<b>書き換えは一切しません。</b></div>
 </header>
 
 <div class="bar">
@@ -84,9 +113,18 @@
 </div>
 <input type="file" id="file" accept=".json,.hyb,.enc,application/json,*/*" multiple style="display:none">
 
-<div class="drop" id="drop">ここに <b>管理番号.json</b> を落としても開けます（何件でも）</div>
+<div class="drop" id="drop">
+  <b>📥 ここにドラッグ＆ドロップ</b><br>
+  <b>管理番号.json</b> をマウスでつまんで、この枠の中に落としてください。<br>
+  何件でも、フォルダごとでも開けます。（上の「📄 ファイルを選ぶ」でも同じです）
+</div>
 
 <div class="wrap">
+  <div id="cmpbar" class="cmpbar hide">
+    <span class="n" id="cmpn">見比べたい戸別を 2つ えらんでください</span>
+    <button id="cmpgo" disabled>⚖ 見比べる</button>
+    <button id="cmpoff" class="hide">← 1件ずつに戻る</button>
+  </div>
   <div id="list" class="list hide"></div>
   <div id="view"></div>
 </div>
@@ -194,6 +232,15 @@ function valText(d, key, type){
 }
 function showEmpty(){ var c = document.getElementById("showempty"); return !!(c && c.checked); }
 function card(inner){ return '<div class="card">' + inner + '</div>'; }
+/* 中身の位置まで送る。広い画面は一覧が左にあるので、いちばん上へ戻すだけでよい。 */
+function scrollToView(){
+  try {
+    if(window.matchMedia && window.matchMedia("(min-width:900px)").matches){ window.scrollTo(0, 0); return; }
+    var v = document.getElementById("view");
+    if(v && v.scrollIntoView) v.scrollIntoView({ block:"start" });
+    else window.scrollTo(0, 0);
+  } catch(_){ window.scrollTo(0, 0); }
+}
 
 /* ---- 開いたファイルの一覧（2件以上のときだけ） ---- */
 function renderList(){
@@ -202,14 +249,32 @@ function renderList(){
   host.className = "list";
   host.innerHTML = _files.map(function(f, i){
     return '<div class="row' + (i === _cur ? " on" : "") + '" data-i="' + i + '">'
+      + '<input type="checkbox" data-cmp="' + i + '"' + (_pick.indexOf(i) >= 0 ? " checked" : "")
+      + ' title="見比べたい戸別を2つえらびます">'
       + '<div class="nm">' + esc(f.name)
-      + '<div class="sub">' + kb(f.size) + (f.at ? "　" + esc(ymdhm(f.at)) : "")
+      + '<div class="sub">' + (f.dirPath ? esc(f.dirPath) + "　" : "") + kb(f.size)
+      + (f.at ? "　" + esc(ymdhm(f.at)) : "")
       + (f.summary ? "　" + esc(f.summary) : "") + '</div></div>'
       + '<div class="sub">開く ›</div></div>';
   }).join("");
   Array.prototype.forEach.call(host.querySelectorAll(".row"), function(el){
-    el.addEventListener("click", function(){ show(parseInt(el.getAttribute("data-i"), 10)); });
+    el.addEventListener("click", function(e){
+      if(e.target && e.target.getAttribute && e.target.getAttribute("data-cmp") !== null) return;  // チェックは開かない
+      show(parseInt(el.getAttribute("data-i"), 10));
+    });
   });
+  Array.prototype.forEach.call(host.querySelectorAll("[data-cmp]"), function(el){
+    el.addEventListener("change", function(){
+      var i = parseInt(el.getAttribute("data-cmp"), 10);
+      var k = _pick.indexOf(i);
+      if(el.checked){ if(k < 0) _pick.push(i); } else if(k >= 0) _pick.splice(k, 1);
+      renderCmpBar();
+    });
+  });
+  renderCmpBar();
+  /* 選んでいる行が一覧の外に隠れないようにする（自分でスクロールする一覧なので） */
+  var onRow = host.querySelector(".row.on");
+  if(onRow && onRow.scrollIntoView){ try { onRow.scrollIntoView({ block:"nearest" }); } catch(_){} }
 }
 
 /* ---- 1件を出す ---- */
@@ -297,7 +362,7 @@ function show(i){
   view.innerHTML = html;
   bindPhotos(photos);
   renderList();
-  window.scrollTo(0, 0);
+  scrollToView();
 }
 function foot(f){
   return '<div class="foot">ファイル： ' + esc(f.name) + '　' + kb(f.size)
@@ -324,6 +389,112 @@ document.getElementById("lb").addEventListener("click", function(e){
   if(e.target && e.target.id === "lb") document.getElementById("lbclose").click();
 });
 
+/* ============================================================================
+   ⚖ 2件えらんで見比べる
+   ・どこにあるか（フォルダ）・大きさ・最終更新・写真の枚数を並べる
+   ・入力の内容は、違うところを赤くして並べる
+   ・写真は「両方にある」「左だけ」「右だけ」に分ける（中身で見分ける）
+   ここでも書き込みはしない。読んで並べるだけ。
+   ============================================================================ */
+var _pick = [];      // 見比べにえらんだ番号
+function renderCmpBar(){
+  var bar = document.getElementById("cmpbar");
+  var n = document.getElementById("cmpn");
+  var go = document.getElementById("cmpgo");
+  if(_files.length < 2){ bar.className = "cmpbar hide"; return; }
+  bar.className = "cmpbar";
+  n.textContent = _pick.length === 0 ? "見比べたい戸別を 2つ えらんでください"
+    : _pick.length === 1 ? "あと 1つ えらんでください"
+    : _pick.length === 2 ? "この2つを見比べます"
+    : (_pick.length + "つ えらんでいます（2つにしてください）");
+  go.disabled = (_pick.length !== 2);
+}
+/* 写真を中身で見分ける鍵（同じ写真なら同じ鍵になる） */
+function phKey(p){
+  var d = String((p && p.dataUri) || "");
+  var a = 5381, b = 0, i;
+  for(i = 0; i < d.length; i++){ var c = d.charCodeAt(i); a = ((a << 5) + a + c) >>> 0; b = (c + (b << 6) + (b << 16) - b) >>> 0; }
+  var hex = function(x){ return ("00000000" + (x >>> 0).toString(16)).slice(-8); };
+  return hex(a) + hex(b) + "_" + d.length;
+}
+function cmpBody(f){
+  var o = null;
+  try { o = JSON.parse(f.text || ""); } catch(_){ o = null; }
+  var kind = kindOf(o);
+  return { obj:o, kind:kind, d: bodyOf(o, kind), photos: photosOf(bodyOf(o, kind)) };
+}
+function cmpPhotoHtml(list, title, cls){
+  var h = '<div class="phgrp' + (cls ? " " + cls : "") + '"><h3>' + esc(title) + '（' + list.length + '枚）</h3>';
+  if(!list.length) h += '<div class="msg info">ありません。</div>';
+  else h += '<div class="photos">' + list.map(function(p){
+      return '<div class="ph"><img loading="lazy" src="' + esc(p.dataUri) + '" alt="">'
+        + '<div class="cap"><b>' + esc(p.label || "写真") + '</b></div></div>';
+    }).join("") + '</div>';
+  return h + '</div>';
+}
+function showCompare(){
+  if(_pick.length !== 2) return;
+  var A = _files[_pick[0]], B = _files[_pick[1]];
+  var a = cmpBody(A), b = cmpBody(B);
+  var view = document.getElementById("view");
+  document.getElementById("cmpoff").className = "";
+  var head = '<div class="cmp-h">'
+    + [[A, a], [B, b]].map(function(x){
+        var f = x[0], c = x[1];
+        return '<div class="col"><b>' + esc(f.name) + '</b><br>'
+          + '<span class="k">場所：</span>' + esc(f.dirPath || "（フォルダは分かりません）") + '<br>'
+          + '<span class="k">大きさ：</span>' + kb(f.size) + '<br>'
+          + '<span class="k">最終更新：</span>' + esc(ymdhm(f.at) || "―") + '<br>'
+          + '<span class="k">写真：</span>' + c.photos.length + '枚<br>'
+          + '<span class="k">形：</span>' + (c.kind === "plain" ? "ふつう" : c.kind === "hybrid" ? "一部暗号化" : c.kind === "full" ? "全暗号化" : "読めません")
+          + '</div>';
+      }).join("") + '</div>';
+  var html = card('<h2>⚖ 見比べ</h2>' + head);
+
+  /* 入力の内容 */
+  var rows = "", diffs = 0;
+  FIELDS.forEach(function(it){
+    if(String(it[0]).charAt(0) === "＿") return;
+    var va = valText(a.d, it[0], it[2]), vb = valText(b.d, it[0], it[2]);
+    var same = (va === vb);
+    if(!same) diffs++;
+    if(same && !showEmpty()) return;                 // 既定は「違うところだけ」
+    if(same && va === "" && vb === "") return;
+    rows += '<tr class="' + (same ? "" : "diff") + '"><th>' + esc(it[1]) + '</th>'
+      + '<td>' + esc(va === "" ? "―" : va) + '</td><td>' + esc(vb === "" ? "―" : vb) + '</td></tr>';
+  });
+  html += card('<h2>入力の内容（違うところ ' + diffs + ' か所）</h2>'
+    + '<div class="msg info">「空の項目も出す」を押すと、同じところも並べます。</div>'
+    + (rows ? '<table class="cmp"><tr><th>項目</th><th>' + esc(A.name) + '</th><th>' + esc(B.name) + '</th></tr>' + rows + '</table>'
+            : '<div class="msg info">出せる違いはありません。</div>'));
+
+  /* 写真 */
+  var ka = {}, kb2 = {};
+  a.photos.forEach(function(p){ ka[phKey(p)] = p; });
+  b.photos.forEach(function(p){ kb2[phKey(p)] = p; });
+  var both = [], onlyA = [], onlyB = [];
+  Object.keys(ka).forEach(function(k){ (kb2[k] ? both : onlyA).push(ka[k]); });
+  Object.keys(kb2).forEach(function(k){ if(!ka[k]) onlyB.push(kb2[k]); });
+  html += card('<h2>写真の見比べ</h2>'
+    + '<div class="msg ' + ((onlyA.length || onlyB.length) ? "warn" : "info") + '">'
+    + (onlyA.length || onlyB.length
+        ? ('片方にしかない写真があります（左だけ ' + onlyA.length + '枚 ／ 右だけ ' + onlyB.length + '枚）。'
+           + '<b>まとめるときは、両方の写真が残るようにしてください。</b>')
+        : '写真は同じです。')
+    + '</div>'
+    + cmpPhotoHtml(onlyA, "左（" + A.name + "）だけにある", (onlyA.length ? "only" : ""))
+    + cmpPhotoHtml(onlyB, "右（" + B.name + "）だけにある", (onlyB.length ? "only" : ""))
+    + cmpPhotoHtml(both, "両方にある", ""));
+
+  view.innerHTML = html;
+  scrollToView();
+}
+document.getElementById("cmpgo").addEventListener("click", showCompare);
+document.getElementById("cmpoff").addEventListener("click", function(){
+  document.getElementById("cmpoff").className = "hide";
+  if(_cur >= 0) show(_cur); else document.getElementById("view").innerHTML = "";
+});
+
 /* ---- ファイルを取り込む（読むだけ） ---- */
 function addFiles(list){
   var arr = Array.prototype.slice.call(list || []);
@@ -333,7 +504,10 @@ function addFiles(list){
   arr.forEach(function(f){
     var r = new FileReader();
     var done = function(text){
-      added.push({ name:f.name, size:f.size, at:f.lastModified, text:text });
+      /* どこにあったファイルか。フォルダごと開いた時だけ分かる（1件ずつ選んだ時は空）。 */
+      var path = String(f.__path || f.webkitRelativePath || "");
+      var dirp = path.indexOf("/") >= 0 ? path.slice(0, path.lastIndexOf("/") + 1) : "";
+      added.push({ name:f.name, size:f.size, at:f.lastModified, text:text, dirPath:dirp });
       if(--left === 0) afterAdd(added);
     };
     r.onload  = function(){ done(String(r.result || "")); };
@@ -351,11 +525,16 @@ function afterAdd(added){
 document.getElementById("pick").addEventListener("click", function(){ document.getElementById("file").click(); });
 document.getElementById("file").addEventListener("change", function(e){ addFiles(e.target.files); e.target.value = ""; });
 document.getElementById("clear").addEventListener("click", function(){
-  _files = []; _cur = -1;
+  _files = []; _cur = -1; _pick = [];
+  document.getElementById("cmpbar").className = "cmpbar hide";
+  document.getElementById("cmpoff").className = "hide";
   document.getElementById("view").innerHTML = "";
   document.getElementById("list").className = "list hide";
 });
-document.getElementById("showempty").addEventListener("change", function(){ if(_cur >= 0) show(_cur); });
+document.getElementById("showempty").addEventListener("change", function(){
+  if(document.getElementById("cmpoff").className !== "hide"){ showCompare(); return; }
+  if(_cur >= 0) show(_cur);
+});
 
 /* ---- ドラッグ＆ドロップ（画面のどこへ落としても開く） ---- */
 var drop = document.getElementById("drop");
@@ -378,7 +557,9 @@ document.addEventListener("drop", function(e){
     var fin = function(){ if(--left === 0){ if(got.length) addFiles(got); else alert("戸別ファイル（管理番号.json）が見つかりませんでした。"); } };
     var walk = function(ent, depth){
       if(!ent || depth > 3 || got.length >= 500) return;
-      if(ent.isFile){ left++; ent.file(function(f){ if(/\.(json|hyb|enc)$/i.test(f.name)) got.push(f); fin(); }, fin); }
+      if(ent.isFile){ left++; ent.file(function(f){
+          if(/\.(json|hyb|enc)$/i.test(f.name)){ try { f.__path = String(ent.fullPath || "").replace(/^\//, ""); } catch(_){} got.push(f); }
+          fin(); }, fin); }
       else if(ent.isDirectory){ left++; ent.createReader().readEntries(function(list){ list.forEach(function(x){ walk(x, depth+1); }); fin(); }, fin); }
     };
     Array.prototype.forEach.call(dt.items, function(it){ var en = it.webkitGetAsEntry && it.webkitGetAsEntry(); if(en) walk(en, 0); });
@@ -394,15 +575,17 @@ if(window.showDirectoryPicker){
     var dir;
     try { dir = await window.showDirectoryPicker({ mode:"read" }); } catch(e){ return; }
     var got = [];
-    async function walk(d, depth){
+    async function walk(d, depth, prefix){
       if(got.length >= 500 || depth > 3) return;
       for await (var ent of d.values()){
         if(got.length >= 500) return;
-        if(ent.kind === "file" && /\.(json|hyb|enc)$/i.test(ent.name)){ try { got.push(await ent.getFile()); } catch(_){} }
-        else if(ent.kind === "directory"){ try { await walk(ent, depth + 1); } catch(_){} }
+        if(ent.kind === "file" && /\.(json|hyb|enc)$/i.test(ent.name)){
+          try { var ff = await ent.getFile(); ff.__path = prefix + ent.name; got.push(ff); } catch(_){}
+        }
+        else if(ent.kind === "directory"){ try { await walk(ent, depth + 1, prefix + ent.name + "/"); } catch(_){} }
       }
     }
-    await walk(dir, 0);
+    await walk(dir, 0, dir.name + "/");
     if(!got.length){ alert("そのフォルダに戸別ファイル（管理番号.json）が見つかりませんでした。"); return; }
     addFiles(got);
   });
