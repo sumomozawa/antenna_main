@@ -5840,7 +5840,7 @@
   </header>
   <div class="list-view-body">
     <div class="list-search-row">
-      <input type="text" id="list-search" placeholder="絞り込み検索 (管理番号・氏名・住所・電話・工事状態)">
+      <input type="text" id="list-search" data-rt-nopull="1" placeholder="絞り込み検索 (管理番号・氏名・住所・電話・工事状態)">
       <label class="list-hide-dup-label" title="同じ管理番号が複数あるとき、ファイル更新日時が最新の1件だけ表示します（古い重複を隠す）"><input type="checkbox" id="list-hide-dup"> 重複を隠す <span class="hd-sub">(同一管理番号は最新日付のみ)</span></label>
     </div>
     <div class="list-mode-tabs">
@@ -5979,7 +5979,7 @@
       <button id="parts-tsv-paste" style="background:#fff;border:1px solid #2e5488;color:#2e5488;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;" title="Excelなどからコピーした表を貼付けて一括登録">📋 TSV貼付</button>
       <button id="parts-reset" style="background:#fff;border:1px solid #d32f2f;color:#d32f2f;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">↺ 初期化</button>
       <button id="parts-print-btn" style="background:#1e3a5f;color:#fff;border:1px solid #16314f;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;" title="単価一覧をA4縦で印刷/PDF出力（絞り込み中はその内容だけを印刷）">🖨 印刷</button>
-      <input type="text" id="parts-search" placeholder="絞り込み (品名/型番/カテゴリ)" style="flex:1;min-width:180px;padding:4px 8px;border:1px solid #cdd3da;border-radius:3px;font-size:12px;">
+      <input type="text" id="parts-search" data-rt-nopull="1" placeholder="絞り込み (品名/型番/カテゴリ)" style="flex:1;min-width:180px;padding:4px 8px;border:1px solid #cdd3da;border-radius:3px;font-size:12px;">
       <span id="parts-dirty-indicator" style="font-size:11px;color:#d32f2f;display:none;">● 未保存の変更あり</span>
     </div>
     <!-- ＋行追加: 新規1行入力フォーム（既定は折り畳み） -->
@@ -6490,7 +6490,7 @@
       </details>
       <details class="map-side-sec uc-card" data-uc="map.search" open>
         <summary class="map-side-head" title="管理番号・氏名・住所で建物を探す"><span class="uc-t">検索</span></summary>
-        <input type="text" id="map-search" placeholder="管理番号 / 氏名 / 住所" autocomplete="off"
+        <input type="text" id="map-search" data-rt-nopull="1" placeholder="管理番号 / 氏名 / 住所" autocomplete="off"
           style="width:100%;box-sizing:border-box;font-size:12px;padding:6px;border:1px solid #cdd3da;border-radius:4px;font-family:inherit;">
         <div id="map-search-results" class="map-link-results"></div>
         <div class="map-side-note">検索結果をクリックで該当建物へジャンプ＆ハイライト</div>
@@ -6763,7 +6763,7 @@ async function lsRestoreFromIdb(){
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "145";
+const APP_VERSION = "146";
 /* ============================================================
    ★日時の表示は、必ずこの端末の時刻で★
    保存している日時は世界時のISO文字列（…T01:03:00.000Z）。これを文字のまま
@@ -14384,6 +14384,27 @@ async function overwriteSaveCurrent(){
       if(!pw) return;
     }
   }
+  /* 画面に欄が無い項目（保留・工程の印と日時・完了書なしの記録など）は collectState が作らない。
+     このまま書くと元ファイルからキーごと消えるので、元ファイルから引き継ぐ
+     （平文はそのまま／ハイブリッドは plain 部／全暗号化はパスワードでほどいて）。
+     元ファイルに無く開いている行にだけあるものも拾う（先に入った元ファイルの値が勝つ）。
+     ※ 一覧の行へ書き戻す syncEditorToRowData と同じ引き継ぎ。写真はここでは触らない。 */
+  {
+    let prev = null;
+    listBusyShow("元ファイルを読み返しています", "保留や工程の印を引き継ぐためです。そのままお待ちください");
+    try {
+      const fresh = await rereadRowSource({ file: origin.file, fileHandle: origin.fileHandle });
+      if(fresh && typeof fresh === "object"){
+        if(fmt === "plain") prev = fresh;
+        else if(fmt === "hybrid") prev = fresh.plain;
+        else prev = JSON.parse(await decryptJsonString(fresh, pw));
+      }
+    } catch(_){ prev = null; }
+    finally { listBusyHide(); }
+    if(prev && typeof prev !== "object") prev = null;
+    editorKeepFields(stateObj, prev);
+    if(_editingRow) editorKeepFields(stateObj, _editingRow.data || null);
+  }
   // 元の方式で再エンコード
   let newData, newExt;
   try {
@@ -14399,6 +14420,10 @@ async function overwriteSaveCurrent(){
     const res = await writeRowFile({ file: origin.file, fileHandle: origin.fileHandle, fileType: fmt }, newData, newExt);
     if(res.mode === "overwrite"){
       if(fmt !== "plain" && !_sessionPassword && pw) setSessionPassword(pw);
+      // 元ファイルにだけあった印（現場入力が後から書いた分など）を、開いている行にも持たせる
+      if(_editingRow && _editingRow.fileType !== "full" && _editingRow.data && typeof _editingRow.data === "object"){
+        try { editorKeepFields(_editingRow.data, stateObj); } catch(_){}
+      }
       alert("✅ 上書き保存しました\n  " + res.name);
     } else {
       alert("⚠ 元ファイルへの書込み権限が得られなかったため、ダウンロードで保存しました。\n  " + res.name + "\n（元ファイルは変更されていません）");
@@ -15827,14 +15852,24 @@ function syncStalledNote(stats){
     + "Dropbox などの同期ソフトが止まっていると、ファイル名だけ見えて中身がこのPCへ届いていないことがあります。"
     + "同期ソフトを起動して、全部降りきってから読み直してください。";
 }
+/* 📁 読込で「中身がまだ届いていない」と分かったファイルの控え（🧹 の見回りが使う）。
+   見回りは中身を読まないので、これが無いと同期待ちの 0KB を「空」と見て消してしまう。
+   読込のたびに（📁 フォルダ・前回のフォルダ・読み直し）入れ直す。 */
+let _listUnreadPaths = [];
+function listRememberUnread(stats){
+  _listUnreadPaths = ((stats && stats.unread) || []).map(u => String(u.path || ""));
+}
 /* 読めなかったファイルを控える。skippedPaths は「戸別が消えた」の判定で今までどおり使い、
    badFiles には掃除に必要な手がかり（どのフォルダの何という名前で、大きさはいくつか）を足す。 */
-function junkNote(stats, dirPath, name, dir, file){
+function junkNote(stats, dirPath, name, dir, file, why){
   stats.skipped++;
   (stats.skippedPaths = stats.skippedPaths || []).push(dirPath + name);
   (stats.badFiles = stats.badFiles || []).push({
     path: dirPath + name, name: name, dir: dir, dirPath: dirPath,
-    size: file ? file.size : -1, lastModified: file ? file.lastModified : 0
+    size: file ? file.size : -1, lastModified: file ? file.lastModified : 0,
+    /* なぜ読めなかったか。"unread"＝中身がまだこのPCへ届いていない（同期が止まっている疑い）。
+       これは 0KB に見えても「空」ではないので、掃除の候補に入れない。 */
+    why: why || ""
   });
 }
 /* 読み込みの進み具合を #list-status に出す。
@@ -15907,7 +15942,7 @@ async function scanDirRecursive(dirHandle, pathPrefix, rows, stats){
         const text = await file.text();
         let data;
         try { data = JSON.parse(text); }
-        catch(_){ junkNote(stats, pathPrefix, name, dirHandle, file); continue; }
+        catch(_){ junkNote(stats, pathPrefix, name, dirHandle, file, "broken"); continue; }
         /* 特別記録は「戸別ではないが、写真台帳では使う」。
            行には入れず、別の入れ物へ寄せておく。 */
         if(isSpecialRecord(data)){
@@ -15931,7 +15966,7 @@ async function scanDirRecursive(dirHandle, pathPrefix, rows, stats){
           row._dir = dirHandle; row._name = name; row._dirPath = pathPrefix; row._size = file.size;
           slimListRow(row, true); rows.push(row);
         }
-        else junkNote(stats, pathPrefix, name, dirHandle, file);
+        else junkNote(stats, pathPrefix, name, dirHandle, file, "notcase");
       } catch(err){
         /* ここへ来るのは「ファイルはあるのに中身が読めない」場合。
            Dropbox・OneDrive・Google ドライブが止まっていたり、
@@ -15940,7 +15975,8 @@ async function scanDirRecursive(dirHandle, pathPrefix, rows, stats){
            「現場で保存したのに反映されない」に見える。別枠で数えて知らせる。 */
         (stats.unread = stats.unread || []).push({ path: pathPrefix + name,
           why: (err && err.name) || "読み取り失敗" });
-        junkNote(stats, pathPrefix, name, dirHandle, file);
+        // 掃除には「同期待ち」として渡す。0KB に見えても消す側（empty）へは入れない。
+        junkNote(stats, pathPrefix, name, dirHandle, file, "unread");
       }
     }
   }
@@ -16030,6 +16066,7 @@ async function listReloadRemembered(ask){
   _listSelectedFolderName = nm;
   renderListTable();
   if(st) st.textContent = "📁 前回のフォルダ「" + nm + "」から " + rows.length + " 件を読み込みました（別のフォルダにするときは「📁 フォルダ」）";
+  listRememberUnread(stats);
   { const sn = syncStalledNote(stats);
     if(sn) _missLastNote = sn + (_missLastNote ? (" ／ " + _missLastNote) : ""); }
   missShowNote();
@@ -16391,7 +16428,15 @@ function junkNoFromName(name){
 function junkSizeLabel(n){
   if(n === 0) return "0 KB（空）";
   if(!(n > 0)) return "―";
+  if(n >= 1024 * 1024) return (Math.round(n / 1024 / 1024 * 10) / 10) + " MB";
   return (n < 1024) ? (n + " B") : (Math.round(n / 1024) + " KB");
+}
+/* 読めなかったファイル1件ぶんの「大きさ」の言い方。
+   同期が止まっていて中身がまだ届いていないもの（unread）は、0KB に見えても「空」ではないので
+   「0 KB（空）」とは言わない（そう言うと、エクスプローラで 0 バイトに見えるのを手で消してしまう）。 */
+function junkSizeText(x){
+  if(x && x.why === "unread") return "―（中身がまだ届いていません）";
+  return junkSizeLabel(x ? x.size : -1);
 }
 /* 読めなかったファイルを「空っぽ」「中身はあるが壊れている」に仕分ける。
    その管理番号のファイルが1つも読めていない戸別には印を付ける（作り直しが要るため）。 */
@@ -16406,7 +16451,9 @@ function junkClassify(badList, rows){
     const no = junkNoFromName(b.name);
     const it = Object.assign({}, b, { no: no, lost: !!no && !alive[no] });
     if(it.lost) lost[no] = true;
-    (b.size === 0 ? empty : broken).push(it);
+    /* 0KB でも、中身がまだ届いていない（同期が止まっている）と分かっているものは「空」ではない。
+       同期が終われば写真入りの中身が来るので、消す側には入れない。 */
+    ((b.size === 0 && b.why !== "unread") ? empty : broken).push(it);
   });
   return { empty: empty, broken: broken, lostNos: Object.keys(lost).sort() };
 }
@@ -16436,7 +16483,7 @@ function junkDialog(found){
     const tbl = (list, note) => '<table class="dup-tbl"><tr><th>ファイル</th><th>管理番号</th><th>大きさ</th><th>この管理番号</th></tr>'
       + list.map(x => '<tr><td>' + escapeHtml(x.dirPath || "") + "<b>" + escapeHtml(x.name) + "</b></td>"
         + "<td>" + escapeHtml(x.no || "―") + "</td>"
-        + "<td>" + escapeHtml(junkSizeLabel(x.size)) + "</td>"
+        + "<td>" + escapeHtml(junkSizeText(x)) + "</td>"
         + "<td>" + lostMark(x) + "</td></tr>").join("")
       + "</table>" + (note ? ('<div style="font-size:11px;color:#667482;margin-top:4px;">' + note + "</div>") : "");
     let html = '<div style="font-size:12px;margin-bottom:8px;">'
@@ -16447,8 +16494,13 @@ function junkDialog(found){
         + tbl(found.empty, "中身が無いので、消しても失うものはありません。") + "</div>";
     }
     if(found.broken.length){
+      const nUnread = found.broken.filter(x => x.why === "unread").length;
       html += '<div class="dup-grp"><div class="dup-grp-h">⚠ 中身はあるが読めないファイル ' + found.broken.length + " 件 — <b>消しません</b></div>"
-        + tbl(found.broken, "書きかけ等で中身が残っている可能性があるため、こちらは残します。中を確かめてから手で消してください。") + "</div>";
+        + tbl(found.broken, "書きかけ等で中身が残っている可能性があるため、こちらは残します。中を確かめてから手で消してください。"
+            /* 同期待ちのものが混じっているときは、手で消させない。エクスプローラでは 0 バイトに見えるため。 */
+            + (nUnread ? ("<br><b>ただし、大きさが「―（中身がまだ届いていません）」のもの（" + nUnread + " 件）は、"
+                + "中身がまだこのPCへ届いていないだけです。</b>同期ソフトが全部降りきってから読み直してください。"
+                + '<b style="color:#c62828;">手で消さないでください。</b>') : "")) + "</div>";
     }
     if(found.lostNos.length){
       html += '<div style="margin-top:8px;padding:8px 10px;border:1px solid #f5c6cb;background:#fdf3f4;border-radius:5px;font-size:12px;">'
@@ -16474,7 +16526,33 @@ function junkDialog(found){
     back.addEventListener("click", e => { if(e.target === back) done(false); });
   });
 }
-/* 空のファイルだけを消す。フォルダごとに1回だけ書き込み許可を求める。 */
+/* ★消す直前の確かめ直し★
+   「0KB」と見てから消すまでの間には、確認の窓を読む時間や書き込み許可のダイアログが挟まる。
+   その間に Dropbox などの同期で中身が届いたり、現場が同じ名前で保存し直したり、
+   重複の整理がその名前へ写真入りの中身を書いたりすると、見たときの「空」はもう当てにならない。
+   消してよいのは、取り直しても 0KB のまま・更新日時が見たときと同じ・中身が読める・
+   更新から5分たっている、の全部がそろったときだけ。確かめられなければ消さない（写真は戻せない）。
+   返り値: 消してよければ ""。消さないときは、その理由（利用者に見せる文）。 */
+const JUNK_FRESH_MS = 5 * 60 * 1000;
+async function junkRecheck(it){
+  let f = null;
+  try { f = await (await it.dir.getFileHandle(it.name)).getFile(); }
+  catch(_){ f = null; }
+  if(!f || typeof f.size !== "number") return "消す前にもう一度確かめられなかったので、消していません";
+  if(f.size !== 0) return "さっき見たあとに中身が入ったので、消していません（今は " + junkSizeLabel(f.size) + "）";
+  if(f.lastModified !== it.lastModified) return "さっき見たあとに更新されていたので、消していません";
+  // 0KB に見えても中身が読めない＝同期が止まっていて、中身がまだこのPCへ届いていないかもしれない
+  try { await f.text(); }
+  catch(_){ return "中身を読めなかった（同期の途中かもしれない）ので、消していません。同期ソフトが全部降りきってから、もう一度お試しください"; }
+  const age = Date.now() - f.lastModified;
+  /* 更新日時がこのPCの時計より先＝保存した端末の時計がずれている。同期の途中かどうか判断できないので触らない。
+     （「更新されたばかり」と言うと、待っても消えないのに待たせてしまう） */
+  if(age < 0) return "更新日時がこのPCの時計より先になっていて、同期の途中かどうか分からないので、今回は消していません（保存した端末の時計がずれているかもしれません）";
+  if(age < JUNK_FRESH_MS) return "更新されたばかりで同期の途中かもしれないので、今回は消していません（しばらくしてからもう一度お試しください）";
+  return "";
+}
+/* 空のファイルだけを消す。フォルダごとに1回だけ書き込み許可を求める。
+   消す直前に junkRecheck で取り直し、空のままと確かめられたものだけ消す。 */
 async function junkApply(list){
   let done = 0; const fails = [], removed = [];
   const asked = new Map();                       // フォルダ → 書き込んでよいか
@@ -16482,6 +16560,9 @@ async function junkApply(list){
     try {
       if(!asked.has(it.dir)) asked.set(it.dir, await dupEnsureWritable(it.dir));
       if(!asked.get(it.dir)){ fails.push(it.path + "：書き込みを許可されませんでした"); continue; }
+      // 許可のダイアログを待ったあと＝消す直前に、もう一度そのファイルを取り直して確かめる
+      const keepWhy = await junkRecheck(it);
+      if(keepWhy){ fails.push(it.path + "：" + keepWhy); continue; }
       await it.dir.removeEntry(it.name);
       removed.push(it.path); done++;
     } catch(err){
@@ -16559,15 +16640,18 @@ async function junkCleanupFlow(badList, rows, quietIfNone){
   // 窓の「消す」を押した直後に、ルートへ1回だけ許可を取る（上と同じ理由）
   await fsPrepRootWritable(rows && rows.length ? rows : _listRows);
   const res = await junkApply(found.empty);
+  const nUnread = found.broken.filter(x => x.why === "unread").length;
+  const nBroken = found.broken.length - nUnread;
   alert("🧹 掃除が終わりました。\n\n"
     + "消した空のファイル： " + res.done + " 件\n"
-    + (found.broken.length ? ("中身はあるが読めないファイル： " + found.broken.length + " 件（残してあります）\n") : "")
+    + (nBroken ? ("中身はあるが読めないファイル： " + nBroken + " 件（残してあります）\n") : "")
+    + (nUnread ? ("中身がまだ届いていないファイル： " + nUnread + " 件（残してあります。同期ソフトが全部降りきってから読み直してください）\n") : "")
     + (found.lostNos.length
         ? ("\n⚠ 次の管理番号は読めるファイルがありません（" + found.lostNos.length + " 件）。\n"
            + found.lostNos.join("・") + "\n"
            + "スマホの現場入力でその戸別を開き、「保存」し直してください。\n")
         : "")
-    + (res.fails.length ? ("\n⚠ できなかったもの:\n" + res.fails.join("\n")) : ""));
+    + (res.fails.length ? ("\n⚠ 消さなかったもの（理由つき）:\n" + res.fails.join("\n")) : ""));
   return res.removed || [];
 }
 async function junkCleanupButton(){
@@ -16581,6 +16665,9 @@ async function junkCleanupButton(){
   try { await junkScanEmpty(_listDirHandle, "", empties); }
   catch(err){ alert("フォルダを見に行けませんでした：\n" + (err && err.message ? err.message : err)); return; }
   finally { if(status) status.style.display = "none"; }
+  /* 📁 読込のときに「中身がまだ届いていない」と分かったファイルは、0KB に見えても空ではない。
+     見回りは中身を読まないので、読込のときの控えで印を付け、消す側から外す（junkClassify が why を見る）。 */
+  empties.forEach(e => { if(_listUnreadPaths.indexOf(e.path) >= 0) e.why = "unread"; });
   const gone = await junkCleanupFlow(empties, _listRows, false);
   if(gone && gone.length) await listReloadFolder(gone);
 }
@@ -16614,6 +16701,7 @@ async function listReloadFolder(expectedGone){
   _specialRows = stats.special || [];
   _listRows = await mergeRowsWithManual(rows, { source: "folder", stats,
     root: _listDirHandle.name || "", expectedGone: expectedGone || [] });
+  listRememberUnread(stats);
   { const sn = syncStalledNote(stats);
     if(sn) _missLastNote = sn + (_missLastNote ? (" ／ " + _missLastNote) : ""); }
   renderListTable();
@@ -17365,7 +17453,12 @@ async function listSelectFolder(){
         if(gone){
           expectedGone = gone;              // 整理で自分が消したファイルは「消えた」と数えない
           rows.length = 0;
-          stats.errDirs = []; stats.skippedPaths = []; stats.files = 0; stats.dirs = 0;
+          /* 読めなかったファイルの控え（badFiles・unread）と特別記録（special）も空にしてから読み直す。
+             残したままだと、整理が 0KB の 管理番号.json へ写真入りの中身を書いた直後でも
+             1回目の「その名前は 0KB」という古い控えが生き残り、次の 0KB 掃除が
+             書いたばかりのファイルを消してしまう。特別記録は写真台帳に2回出てしまう。 */
+          stats.errDirs = []; stats.skippedPaths = []; stats.badFiles = []; stats.unread = []; stats.special = [];
+          stats.files = 0; stats.dirs = 0;
           scanProgressStart(stats._label);
           await scanDirRecursive(dirHandle, "", rows, stats);
         }
@@ -17381,7 +17474,7 @@ async function listSelectFolder(){
       if(jf.lostNos.length){
         // どのファイルなのかが分からないと片付けられないので、ファイル名も並べる
         const lostFiles = jf.empty.concat(jf.broken).filter(x => x.lost)
-          .map(x => "・" + (x.dirPath || "") + x.name + "（" + junkSizeLabel(x.size) + "）");
+          .map(x => "・" + (x.dirPath || "") + x.name + "（" + junkSizeText(x) + "）");
         alert("⚠ 読み込めなかった戸別が " + jf.lostNos.length + " 件あります。\n\n"
           + jf.lostNos.slice(0, 20).join("・") + (jf.lostNos.length > 20 ? "　ほか" : "") + "\n\n"
           + "読めなかったファイル\n" + lostFiles.slice(0, 20).join("\n")
@@ -17396,7 +17489,7 @@ async function listSelectFolder(){
         if(gone && gone.length){
           expectedGone = expectedGone.concat(gone);   // 自分が消したぶんは「消えた」と数えない
           rows.length = 0;
-          stats.errDirs = []; stats.skippedPaths = []; stats.badFiles = [];
+          stats.errDirs = []; stats.skippedPaths = []; stats.badFiles = []; stats.unread = []; stats.special = [];
           stats.files = 0; stats.dirs = 0;
           scanProgressStart(stats._label);
           await scanDirRecursive(dirHandle, "", rows, stats);
@@ -17434,6 +17527,7 @@ async function listSelectFolder(){
     if(junkNote) _missLastNote = (_missLastNote ? (_missLastNote + " ／ ") : "") + junkNote;
     /* 中身が届いていないファイルは、原因が「保存の失敗」ではなく「同期の停止」。
        ここで言っておかないと、現場側を疑ってさがし回ることになる。 */
+    listRememberUnread(stats);
     { const sn = syncStalledNote(stats);
       if(sn){ _missLastNote = sn + (_missLastNote ? (" ／ " + _missLastNote) : "");
               alert(sn.replace(/。/g, "。\n")); } }
@@ -24882,6 +24976,12 @@ let _deletedCaseKeys = new Set(); // この端末が削除した戸別の caseId
 let _deletedAnnoKeys = new Set(); // この端末が削除した注釈の subCaseKey（マージで disk からも除外する）
 let _projSaving = false;          // projSaveNow 実行中ガード（保存の多重実行・書込交錯を防ぐ）
 let _projSaveQueued = false;      // 実行中に来た保存要求（完了後に1回だけ再実行）
+/* 利用者の操作で「自動保存を予約した」回数（論理時計）と、そのうち書き切った分。
+   編集の印（_editedCaseKeys 等）は物件を開いた時の突き合わせ（noteResolveRows→setLedger）でも付くので、
+   印の有無だけでは「この端末にまだ書けていない直しがあるか」を判定できない。
+   projTouch が実際に保存を予約した時だけ進め、captureMarks/subtractMarks で追いつかせる（_mapsEditSeq と同じ形）。 */
+let _projTouchSeq = 0;
+let _projTouchSeqSaved = 0;
 function ensureRowCaseId(r){ if(r && !r._caseId) r._caseId = projNewId(); return r ? r._caseId : null; }
 function markCaseEdited(row){
   if(!row) return;
@@ -24915,6 +25015,7 @@ function clearEditedMarks(){
   _editedCaseKeys = new Set(); _editedAnnoKeys = new Set(); _editedProjMeta = new Set();
   _deletedCaseKeys = new Set(); _deletedAnnoKeys = new Set();
   _mapsEditSeq = 0; _mapsEditSeqSaved = 0; // Phase2地図: 物件切替/切り離し＝地図の編集追跡もリセット
+  _projTouchSeq = 0; _projTouchSeqSaved = 0; // 保存の予約の追跡もリセット（開き直した時点が新しい基準）
   try { _listRows.forEach(r => { if(r) delete r._prevSubKey; }); } catch(_){}
 }
 /* 保存処理中に来た編集マークを失わないよう、スナップショット構築時点のマークを控える／成功後はその分だけ差し引く。 */
@@ -24923,7 +25024,8 @@ function captureMarks(){
            editedProjMeta: new Set(_editedProjMeta),
            deletedCases: new Set(_deletedCaseKeys), deletedAnno: new Set(_deletedAnnoKeys),
            editedMaps: (_mapsEditSeq > _mapsEditSeqSaved),   // このスナップショットに織り込むmerge判定用の確定boolean
-           editedMapsSeq: _mapsEditSeq };                    // subtractMarks消化用（保存中に来た新規編集は残す）
+           editedMapsSeq: _mapsEditSeq,                      // subtractMarks消化用（保存中に来た新規編集は残す）
+           touchSeq: _projTouchSeq };                        // この保存で書き切る「保存の予約」の分（保存中に来た分は残す）
 }
 function subtractMarks(cap){
   if(!cap) return;
@@ -24933,6 +25035,7 @@ function subtractMarks(cap){
   cap.deletedCases.forEach(k => _deletedCaseKeys.delete(k));
   cap.deletedAnno.forEach(k => _deletedAnnoKeys.delete(k));
   if(typeof cap.editedMapsSeq === "number" && cap.editedMapsSeq > _mapsEditSeqSaved) _mapsEditSeqSaved = cap.editedMapsSeq;
+  if(typeof cap.touchSeq === "number" && cap.touchSeq > _projTouchSeqSaved) _projTouchSeqSaved = cap.touchSeq;
   try { _listRows.forEach(r => { if(r && r._caseId && cap.editedCases.has(r._caseId)) delete r._prevSubKey; }); } catch(_){}
 }
 /* 戸別ラッパ(cases[i])から subCaseKey(row) 相当のキーを得る（突合用・subCaseKeyと一致させる）。 */
@@ -25115,6 +25218,7 @@ function projTouch(){
     if(_editingRow && _listRows.indexOf(_editingRow) >= 0) return;   // その戸別を開いている間だけ止める
     try { rtSetCaseReadOnlyUI(false); } catch(_){}                   // 開いていない＝もう閲覧のみではない
   }
+  _projTouchSeq++;   // 利用者の操作で保存を予約した＝書き切るまで「まだ共有ファイルに入っていない直し」がある
   if(_projSaveTimer) clearTimeout(_projSaveTimer);
   _projSaveTimer = setTimeout(() => { _projSaveTimer = null; projSaveNow(); }, 1500);
 }
@@ -25142,7 +25246,10 @@ async function projSaveNow(){
     // ただしユーザーが明示的に削除して0件になった場合（削除マークあり）は保存を通す
     // （ここで止めると最後の1件の削除がIndexedDB/共有ファイルに反映されず、ゴースト復活する）。
     if(_listRows.length === 0 && (base.cases || []).length > 0
-       && _deletedCaseKeys.size === 0 && _deletedAnnoKeys.size === 0) return;
+       && _deletedCaseKeys.size === 0 && _deletedAnnoKeys.size === 0){
+      _projTouchSeqSaved = _projTouchSeq;   // 書くものが無い（一覧が空）＝「まだ書けていない直し」も無い
+      return;
+    }
     // エディタで戸別を編集中なら、最新の図面・積算・写真を行へ取り込んでから保存（保存時に1回だけ）
     try { if(_editingRow && _listRows.indexOf(_editingRow) >= 0) syncEditorToRowData(); } catch(_){}
     // 写真サムネイルが未生成の行があれば静かに生成してから保存（元ファイルを読める行のみ・生成済みはスキップ）
@@ -25990,15 +26097,66 @@ function rtAutoPullBlockReason(){
   if(_projLoading)     return "読み込み中です";
   if(_projSaving)      return "保存中です";
   if(_projSaveTimer)   return "この端末に、まだ共有ファイルへ書けていない直しがあります";
+  /* ★書けなかった直しが残っている間も止める★
+     共有ファイルへの書き戻しが失敗（他端末と競合・書込権限・空き容量）すると、その直しは
+     編集の印と赤い警告だけを残して端末内に留まる。自動保存の待ちタイマーはもう無いので、上の条件だけでは
+     ここを通ってしまい、取り込み（＝共有ファイルの内容で丸ごと置き換え）で直しも印も警告も一緒に消えていた。
+     次に何か直して保存が通れば、その保存が他端末の分と合わせて書き（競合マージ）、印と警告は消える。それまで待つ。 */
+  if(_projWriteWarn || rtHasUnsavedMarks()) return "この端末で直した内容が、まだ共有ファイルに入っていません";
   if(_editingRow && _listRows.indexOf(_editingRow) >= 0) return "戸別を開いて編集中です";
+  /* 受付台帳の備考・打合せなどは、欄を離れた時に初めて確定する。
+     打っている途中に取り込むと表ごと作り直され、打ちかけの文字が消える。 */
+  if(rtIsTypingInField()) return "入力欄に文字を入れている途中です";
   return "";
+}
+/* まだ共有ファイルへ書けていない「利用者の直し」があるか。
+   編集の印（_editedCaseKeys 等）は物件を開いた時の突き合わせでも付くので、印だけを見ると
+   「開いただけで取り込みが止まったまま」になる。そこで projTouch が実際に保存を予約した回数と、
+   書き切った回数（subtractMarks）の差で見る。地図は取り返しがつかないので同じ形の時計を併せて見る。 */
+function rtHasUnsavedMarks(){
+  try { return (_projTouchSeq > _projTouchSeqSaved) || (_mapsEditSeq > _mapsEditSeqSaved); } catch(_){ return false; }
+}
+/* まだ共有ファイルに入っていない直しの数（戸別の数。同じ戸別は1件と数える）。取り込み前の確認の文に出す。 */
+function rtUnsavedCount(){
+  const set = new Set();
+  try {
+    _editedAnnoKeys.forEach(k => set.add(k));
+    _deletedAnnoKeys.forEach(k => set.add(k));
+    _editedCaseKeys.forEach(id => { const r = _listRows.find(x => x && x._caseId === id); set.add(r ? subCaseKey(r) : ("id:" + id)); });
+    _deletedCaseKeys.forEach(id => set.add("id:" + id));
+  } catch(_){}
+  return set.size;
+}
+/* 利用者が文字を入れる欄（入力欄・複数行欄）にいるか。
+   チェック・ボタン類は押した時点で確定するので数えない。
+   絞り込み・検索の欄も数えない（何かを保存する欄ではなく、カーソルを置いたまま一覧を眺めることが多い）。
+   その欄には data-rt-nopull の印を付けてある（文言を書き換えても挙動が変わらないように）。 */
+function rtIsTypingInField(){
+  try {
+    const a = document.activeElement;
+    if(!a || a === document.body || a === document.documentElement) return false;
+    if(a.disabled || a.readOnly) return false;
+    if(a.getAttribute && a.getAttribute("data-rt-nopull")) return false;
+    const tag = String(a.tagName || "").toUpperCase();
+    if(tag === "TEXTAREA") return true;
+    if(tag === "INPUT"){
+      const t = String(a.type || "text").toLowerCase();
+      if(["checkbox", "radio", "button", "submit", "reset", "file", "range", "color", "hidden", "image", "search"].indexOf(t) >= 0) return false;
+      if(/search/i.test(String(a.id || "")) || /絞り込み|検索/.test(String(a.placeholder || ""))) return false;
+      return true;
+    }
+    if(a.isContentEditable) return true;
+  } catch(_){}
+  return false;
 }
 /* 他の端末の更新を、安全なときだけ黙って取り込む。
    ★これが無いと「連携中」なのに、通知バナーを押すまで相手の直しが出てこない。
      受付台帳の打合せ予定などは戸別ファイルではなく共有ファイル側に入っているので、
      取り込まない限り、いつまでも古いままになる。 */
 async function rtMaybeAutoPull(b){
-  if(rtAutoPullBlockReason()) return false;       // 危ないときはバナーのまま（手で押してもらう）
+  if(!_rtRemoteBump) return false;                // ✕ で閉じた通知（＝いまは取り込まない、の意）では走らせない
+  const why = rtAutoPullBlockReason();
+  if(why){ try { rtBumpBannerNote(why); } catch(_){} return false; }   // 危ないときはバナーのまま（理由を添えて、手で押してもらう）
   if(_rtAutoPulling) return false;
   _rtAutoPulling = true;
   try {
@@ -26037,11 +26195,25 @@ async function rtPullLatest(opts){
     try { await projSaveNow(); } catch(_){}
   }
   /* ★取り込みは、この端末の内容を共有ファイルの内容で置き換える★
-     まだ書けていない直し（自動保存の待ち時間の中の分）が残っていると、
-     それが黙って消える。先に必ず書き切ってから取り込む。 */
-  if(_projSaveTimer){
-    clearTimeout(_projSaveTimer); _projSaveTimer = null;
+     まだ共有ファイルに入っていない直し（自動保存の待ち時間の中の分、前の保存が競合や書込権限で
+     中止された分）が残っていると、それが黙って消える。先に共有ファイルへ書いてから取り込む。
+     それでも入らなかった時は、消えることを断ってから進む（黙って消さない）。 */
+  if(_projSaveTimer || _projWriteWarn || rtHasUnsavedMarks()){
+    if(_projSaveTimer){ clearTimeout(_projSaveTimer); _projSaveTimer = null; }
     try { await projSaveNow(); } catch(e){ console.warn("[RT] 取り込み前の保存に失敗:", e); }
+    if(_projWriteWarn || rtHasUnsavedMarks()){
+      if(opts.auto) return;
+      const n = rtUnsavedCount();
+      if(!confirm("この端末で直した内容が、まだ共有ファイルに入っていません"
+        + (n ? "（" + n + "件）" : "") + "。\n\n"
+        + "このまま最新を取り込むと、この端末の直しは消えます。\n"
+        /* 消えるのは直しだけではない。取り込みは共有ファイルの内容で一覧を丸ごと入れ替えるので、
+           この端末にしか無い戸別は写真ごと、まだ共有ファイルに入っていない図面は下敷きごと消える。
+           取り返しがつかないので、何が消えるかを名指しで言う。 */
+        + "この端末にだけある戸別は、その写真ごと消えます。\n"
+        + "まだ共有ファイルに入っていない図面（下敷きの写真・地図・手描き）も消えます。\n"
+        + "よろしいですか？")) return;
+    }
   }
   try {
     const file = await _projFileHandle.getFile();
@@ -26156,10 +26328,25 @@ function rtShowBump(b){
   x.title = "通知を閉じる（取り込みは後でメニューからも可能）";
   x.style.cssText = "margin-left:8px;padding:3px 8px;border-radius:4px;border:1px solid #999;background:#fff;cursor:pointer;font-size:12px;";
   x.onclick = () => { rtHideBump(); };
-  el.appendChild(msg); el.appendChild(btn); el.appendChild(x);
+  const why = document.createElement("span");   // 自動で取り込まなかった理由（rtBumpBannerNote が入れる）
+  why.id = "rt-bump-why";
+  why.style.cssText = "flex-basis:100%;margin-top:4px;font-size:11px;opacity:.85;display:none;";
+  el.appendChild(msg); el.appendChild(btn); el.appendChild(x); el.appendChild(why);
+  el.style.flexWrap = "wrap";
   el.style.display = "";
 }
-function rtHideBump(){ const el = document.getElementById("rt-bump-banner"); if(el) el.style.display = "none"; }
+/* 通知バナーに「この知らせを自動では取り込まなかった理由」を添える（空なら消す）。
+   利用者が「なぜ出たままなのか」を分かるように。取り込みは「最新を取り込む」を押した時だけ走る。 */
+function rtBumpBannerNote(why){
+  const el = document.getElementById("rt-bump-why");
+  if(!el) return;
+  el.textContent = why ? ("※ 自動では取り込んでいません（" + why + "）。取り込むときは「最新を取り込む」を押してください。") : "";
+  el.style.display = why ? "" : "none";
+}
+function rtHideBump(){
+  _rtRemoteBump = null;   // ✕ で閉じた＝この知らせでは取り込まない（あとで押せるようメニューからの取り込みは残る）
+  const el = document.getElementById("rt-bump-banner"); if(el) el.style.display = "none";
+}
 
 /* ---- 設定ダイアログ（端末ごと・localStorage） ---- */
 function rtParseConfig(text){
@@ -28535,7 +28722,7 @@ function lgShowLedgerDiffDialog(payload, items){
     + '<label><input type="checkbox" id="lgimp-all-case" checked> 戸別の情報（名前・住所・電話・工事日・状態）を更新</label>'
     + '<label><input type="checkbox" id="lgimp-all-lg" checked> 台帳の項目（工事時刻・打合せ・ビラ・保留・同意書・完了書・備考・施工会社）を更新</label>'
     + '<span style="flex:1 1 auto;"></span>'
-    + '<input type="search" id="lgimp-q" placeholder="管理番号・項目で絞り込み" style="font-family:inherit;font-size:12px;padding:3px 7px;border:1px solid #cdd3da;border-radius:3px;width:190px;">'
+    + '<input type="search" id="lgimp-q" data-rt-nopull="1" placeholder="管理番号・項目で絞り込み" style="font-family:inherit;font-size:12px;padding:3px 7px;border:1px solid #cdd3da;border-radius:3px;width:190px;">'
     + "</div>"
     + '<div class="lgimp-scroll"><table class="lgimp-tbl"><thead><tr><th style="width:34px;"></th><th style="width:120px;">管理番号</th>'
     + '<th style="width:90px;">項目</th><th>いまの台帳</th><th>ファイル</th></tr></thead><tbody>' + rowsHtml + "</tbody></table></div>"
@@ -31932,8 +32119,17 @@ const EDITOR_KEEP_FIELDS = [
   "consent_received","consent_received_at",
   "compdoc_received","compdoc_received_at",
   "compdoc_waived","compdoc_waived_at","compdoc_waived_note",
+  "hold_flag",                       // 保留（受付台帳の○。画面に欄が無い）
   "_passthrough","_otherFile","_mergedFrom"
 ];
+/* 画面に欄が無い項目を、いま持っている値（一覧の行や元ファイル）から引き継ぐ。
+   s に既にあるキーは触らない（先に入れた方が勝つ）。
+   一覧の行へ書き戻す syncEditorToRowData と、元ファイルへの「💾 上書き保存」で共通。 */
+function editorKeepFields(s, prev){
+  if(!s || !prev || typeof prev !== "object") return s;
+  EDITOR_KEEP_FIELDS.forEach(k => { if((k in prev) && !(k in s)) s[k] = prev[k]; });
+  return s;
+}
 function syncEditorToRowData(force){
   if(!_editingRow || _listRows.indexOf(_editingRow) < 0) return;
   // 開いてから何も触っていなければ書き戻さない（見ただけで工事内容・金額が入るのを防ぐ）。
@@ -31943,8 +32139,7 @@ function syncEditorToRowData(force){
   try {
     const s = collectState();
     // 画面に無い欄は collectState が作らないので、いま行が持っているものを引き継ぐ
-    { const prev = _editingRow.data || {};
-      EDITOR_KEEP_FIELDS.forEach(k => { if((k in prev) && !(k in s)) s[k] = prev[k]; }); }
+    editorKeepFields(s, _editingRow.data || {});
     // 住所・電話の数字は半角へ統一（台帳での編集と揃える）
     if(s.chosho_cust_addr) s.chosho_cust_addr = toHalfWidthAn(s.chosho_cust_addr);
     if(s.chosho_cust_tel)  s.chosho_cust_tel  = toHalfWidthAn(s.chosho_cust_tel);
@@ -38932,7 +39127,7 @@ window.addEventListener("DOMContentLoaded", init);
     } else {
       host.innerHTML =
         '<div class="map-side-head" style="margin-top:6px;">管理番号でリンク</div>'
-        + '<input type="text" id="map-link-search" placeholder="管理番号 / 氏名 / 住所で検索" autocomplete="off">'
+        + '<input type="text" id="map-link-search" data-rt-nopull="1" placeholder="管理番号 / 氏名 / 住所で検索" autocomplete="off">'
         + '<div id="map-link-results" class="map-link-results"></div>';
       var inp = el("map-link-search");
       if(inp) inp.addEventListener("input", function(){ renderLinkResults(b, inp.value); });
