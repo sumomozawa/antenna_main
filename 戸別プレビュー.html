@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>戸別プレビュー</title>
+<style>
+  :root{ --accent:#00695c; --line:#e3e7ec; --sub:#68737d; --bg:#f5f7fa; --ok:#2e7d32; --warn:#e65100; --ng:#c62828; }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{ font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic UI",Meiryo,sans-serif;
+        background:var(--bg); color:#222; font-size:15px; line-height:1.6; }
+  header{ background:var(--accent); color:#fff; padding:calc(10px + env(safe-area-inset-top)) 12px 10px; }
+  header h1{ margin:0 0 2px; font-size:17px; }
+  header .note{ font-size:12px; opacity:.92; }
+  .bar{ display:flex; flex-wrap:wrap; gap:8px; align-items:center;
+        padding:10px 12px; background:#fff; border-bottom:1px solid var(--line); }
+  button{ font-family:inherit; font-size:14px; font-weight:700; border-radius:10px; border:1px solid #cdd3da;
+          background:#fff; color:#37474f; padding:10px 14px; min-height:44px; }
+  button.main{ background:var(--accent); border-color:var(--accent); color:#fff; }
+  button:active{ transform:scale(.96); }
+  .chk{ display:flex; align-items:center; gap:6px; font-size:13px; color:#37474f; }
+  .drop{ margin:12px; padding:20px 14px; border:2px dashed #b7c0c9; border-radius:14px; background:#fff;
+         text-align:center; color:var(--sub); font-size:14px; }
+  .drop.on{ border-color:var(--accent); background:#e8f4f2; color:var(--accent); font-weight:700; }
+  .wrap{ padding:0 12px 24px; }
+  .list{ background:#fff; border:1px solid var(--line); border-radius:12px; overflow:hidden; margin-top:12px; }
+  .list .row{ display:flex; align-items:center; gap:10px; padding:11px 12px; border-bottom:1px solid var(--line); }
+  .list .row:last-child{ border-bottom:0; }
+  .list .row:active{ background:#f2f6fb; }
+  .list .row.on{ background:#e8f4f2; }
+  .list .nm{ flex:1; min-width:0; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .list .sub{ font-size:12px; color:var(--sub); font-weight:400; }
+  .card{ background:#fff; border:1px solid var(--line); border-radius:12px; padding:14px; margin-top:12px; }
+  .card h2{ margin:0 0 8px; font-size:16px; }
+  .hd{ display:flex; flex-wrap:wrap; align-items:baseline; gap:8px; }
+  .hd .no{ font-size:22px; font-weight:800; }
+  .hd .nm{ font-size:17px; font-weight:700; }
+  .badge{ display:inline-block; font-size:12px; font-weight:700; border-radius:999px; padding:2px 9px;
+          background:#eceff1; color:#37474f; }
+  .badge.done{ background:#e8f5e9; color:var(--ok); }
+  .badge.prog{ background:#e3f2fd; color:#1565c0; }
+  .badge.prov{ background:#fff3e0; color:var(--warn); }
+  .badge.hold{ background:#fff3e0; color:var(--warn); }
+  .badge.apt{ background:#ede7f6; color:#6a1b9a; }
+  .badge.enc{ background:#fce4ec; color:#ad1457; }
+  table.kv{ width:100%; border-collapse:collapse; }
+  table.kv th{ text-align:left; vertical-align:top; width:38%; max-width:170px; font-weight:600; color:var(--sub);
+               padding:7px 8px 7px 0; border-bottom:1px solid var(--line); font-size:13px; }
+  table.kv td{ padding:7px 0; border-bottom:1px solid var(--line); word-break:break-word; white-space:pre-wrap; }
+  table.kv tr.sec th{ color:#222; font-size:13px; font-weight:800; padding-top:14px; border-bottom:0; }
+  table.kv tr.sec td{ border-bottom:0; }
+  .photos{ display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:10px; }
+  .ph{ border:1px solid var(--line); border-radius:10px; overflow:hidden; background:#fafbfc; }
+  .ph img{ display:block; width:100%; height:130px; object-fit:cover; background:#eceff1; }
+  .ph .cap{ padding:6px 8px; font-size:12px; color:var(--sub); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ph .cap b{ color:#222; }
+  .msg{ padding:10px 12px; border-radius:10px; font-size:13px; }
+  .msg.ng{ background:#ffebee; color:var(--ng); }
+  .msg.warn{ background:#fff8e1; color:#8d6e00; }
+  .msg.info{ background:#eef4fb; color:#37474f; }
+  .foot{ color:var(--sub); font-size:12px; padding-top:10px; }
+  .lb{ position:fixed; inset:0; background:rgba(0,0,0,.92); display:none; z-index:20;
+       align-items:center; justify-content:center; flex-direction:column; }
+  .lb.open{ display:flex; }
+  .lb img{ max-width:100%; max-height:82vh; object-fit:contain; }
+  .lb .cap{ color:#fff; padding:10px 14px; font-size:14px; text-align:center; }
+  .lb .cls{ position:absolute; top:calc(10px + env(safe-area-inset-top)); right:12px; }
+  .hide{ display:none !important; }
+  @media (max-width:420px){ .ph img{ height:110px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>戸別プレビュー</h1>
+  <div class="note">管理番号.json を、写真と文字で見るだけの画面です。<b>書き換えは一切しません。</b></div>
+</header>
+
+<div class="bar">
+  <button id="pick" class="main">📄 ファイルを選ぶ</button>
+  <button id="pickdir" class="hide">📁 フォルダを選ぶ</button>
+  <button id="clear">✕ 閉じる</button>
+  <label class="chk"><input type="checkbox" id="showempty"> 空の項目も出す</label>
+</div>
+<input type="file" id="file" accept=".json,.hyb,.enc,application/json,*/*" multiple style="display:none">
+
+<div class="drop" id="drop">ここに <b>管理番号.json</b> を落としても開けます（何件でも）</div>
+
+<div class="wrap">
+  <div id="list" class="list hide"></div>
+  <div id="view"></div>
+</div>
+
+<div class="lb" id="lb">
+  <button class="cls" id="lbclose">✕ 閉じる</button>
+  <img id="lbimg" alt="">
+  <div class="cap" id="lbcap"></div>
+</div>
+
+<script>
+/* ============================================================================
+   戸別プレビュー … 管理番号.json（戸別ファイル）を、写真と文字だけで見るための道具。
+   ・読むだけ。書く・消すはどこにも無い（写真を失う心配がない）。
+   ・インターネットへは何も送らない。開いた端末の中だけで表示する。
+   ・平文(.json)／ハイブリッド(.hyb)／全暗号化(.enc) を見分け、開ける範囲だけ出す。
+   ============================================================================ */
+
+/* 出す項目と日本語の名前。上から順に出す（メインや現場入力アプリと同じ呼び方）。
+   3つ目は出し方： bool=○／― 、 status=仮受付・受付済・完了 */
+var FIELDS = [
+  ["＿お客さま"],
+  ["chosho_mgmt_no",   "管理番号"],
+  ["chosho_cust_name", "氏名"],
+  ["chosho_cust_addr", "住所"],
+  ["chosho_cust_tel",  "電話"],
+  ["＿予定と状態"],
+  ["chosho_status",  "状態", "status"],
+  ["chosho_date",    "工事日程予定"],
+  ["chosho_time",    "工事時刻"],
+  ["chosho_meet_at", "打合せ予定"],
+  ["hold_flag",      "保留", "bool"],
+  ["chosho_note",    "備考"],
+  ["＿工程の印"],
+  ["survey_done",         "下見",     "bool"],
+  ["flyer_done",          "ビラ",     "bool"],
+  ["consent_received",    "同意書",   "bool"],
+  ["work_done",           "工事完了", "bool"],
+  ["compdoc_received",    "完了書",   "bool"],
+  ["compdoc_waived",      "完了書なしで完了"],
+  ["＿アパート"],
+  ["apt_name",  "アパート名"],
+  ["apt_room",  "部屋番号"],
+  ["apt_units", "世帯数"],
+  ["apt_idx",   "何世帯目"],
+  ["apt_common","共用部", "bool"],
+  ["apt_owner_name", "大家 氏名"],
+  ["apt_owner_tel",  "大家 電話"],
+  ["apt_agent_name", "不動産 会社名"],
+  ["＿そのほか"],
+  ["work_type",  "工事の種類"],
+  ["contractor", "施工会社"],
+  ["special_kind_name", "特別記録の種類"],
+  ["special_title",     "特別記録の見出し"],
+  ["special_note",      "特別記録の覚え書き"],
+  ["editedAt",   "最終更新", "when"]
+];
+var STATUS_NAME = { provisional:"仮受付", in_progress:"受付済", completed:"完了" };
+
+var _files = [];      // 開いたファイル { name, size, at, text, summary }
+var _cur = -1;
+
+function esc(s){
+  return String(s == null ? "" : s)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+function kb(n){
+  n = Number(n) || 0;
+  if(n < 1024) return n + " B";
+  if(n < 1024*1024) return (n/1024).toFixed(1) + " KB";
+  return (n/1024/1024).toFixed(1) + " MB";
+}
+/* 日時はこの端末の時刻で出す */
+function ymdhm(v){
+  if(!v) return "";
+  var t = (typeof v === "number") ? v : Date.parse(String(v));
+  if(!isFinite(t)) return String(v);
+  var d = new Date(t), p = function(x){ return ("0"+x).slice(-2); };
+  return d.getFullYear() + "/" + p(d.getMonth()+1) + "/" + p(d.getDate())
+       + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+}
+function kindOf(o){
+  if(!o || typeof o !== "object") return "broken";
+  if(o.format === "hybrid" && o.encrypted_fields) return "hybrid";
+  if(o.ct || o.ciphertext || o.format === "full") return "full";
+  return "plain";
+}
+function bodyOf(o, kind){
+  if(kind === "hybrid") return (o && o.plain && typeof o.plain === "object") ? o.plain : {};
+  if(kind === "full") return {};
+  return o || {};
+}
+function photosOf(d){
+  var a = d && d.chosho_photos;
+  return Array.isArray(a) ? a.filter(function(p){ return p && p.dataUri; }) : [];
+}
+function valText(d, key, type){
+  var v = d ? d[key] : undefined;
+  if(type === "bool")   return v ? "○" : (v === false ? "―" : "");
+  if(type === "status") return v ? (STATUS_NAME[v] || String(v)) : "";
+  if(type === "when")   return v ? ymdhm(v) : "";
+  if(v == null) return "";
+  if(typeof v === "object") return "";
+  return String(v);
+}
+function showEmpty(){ var c = document.getElementById("showempty"); return !!(c && c.checked); }
+function card(inner){ return '<div class="card">' + inner + '</div>'; }
+
+/* ---- 開いたファイルの一覧（2件以上のときだけ） ---- */
+function renderList(){
+  var host = document.getElementById("list");
+  if(_files.length < 2){ host.className = "list hide"; host.innerHTML = ""; return; }
+  host.className = "list";
+  host.innerHTML = _files.map(function(f, i){
+    return '<div class="row' + (i === _cur ? " on" : "") + '" data-i="' + i + '">'
+      + '<div class="nm">' + esc(f.name)
+      + '<div class="sub">' + kb(f.size) + (f.at ? "　" + esc(ymdhm(f.at)) : "")
+      + (f.summary ? "　" + esc(f.summary) : "") + '</div></div>'
+      + '<div class="sub">開く ›</div></div>';
+  }).join("");
+  Array.prototype.forEach.call(host.querySelectorAll(".row"), function(el){
+    el.addEventListener("click", function(){ show(parseInt(el.getAttribute("data-i"), 10)); });
+  });
+}
+
+/* ---- 1件を出す ---- */
+function show(i){
+  _cur = i;
+  var f = _files[i];
+  var view = document.getElementById("view");
+  if(!f){ view.innerHTML = ""; return; }
+
+  if(!f.text || !f.text.trim()){
+    f.summary = "中身が空";
+    view.innerHTML = card('<div class="msg ng">このファイルは<b>中身が空</b>です（' + kb(f.size) + '）。<br>'
+      + '同期が終わっていないか、0KB のまま作られたファイルです。</div>' + foot(f));
+    renderList(); return;
+  }
+  var obj = null, err = "";
+  try { obj = JSON.parse(f.text); } catch(e){ err = String((e && e.message) || e); }
+  if(err){
+    f.summary = "読めません";
+    view.innerHTML = card('<div class="msg ng">このファイルは<b>戸別ファイルとして読めません</b>。<br>'
+      + esc(err) + '</div>' + foot(f));
+    renderList(); return;
+  }
+
+  var kind = kindOf(obj), d = bodyOf(obj, kind), photos = photosOf(d);
+  f.summary = (kind === "full") ? "全暗号化" : (kind === "hybrid") ? "一部暗号化" : ("写真 " + photos.length + "枚");
+
+  var st = d.chosho_status || "";
+  var stCls = st === "completed" ? "done" : st === "in_progress" ? "prog" : st === "provisional" ? "prov" : "";
+  var head = '<div class="hd">'
+    + '<span class="no">' + esc(d.chosho_mgmt_no || String(f.name || "").replace(/\.(json|hyb|enc)$/i, "")) + '</span>'
+    + (d.chosho_cust_name ? '<span class="nm">' + esc(d.chosho_cust_name) + '</span>' : '')
+    + (st ? '<span class="badge ' + stCls + '">' + esc(STATUS_NAME[st] || st) + '</span>' : '')
+    + (d.hold_flag ? '<span class="badge hold">保留</span>' : '')
+    + ((d.apt_name || d.apt_room) ? '<span class="badge apt">🏢 ' + esc([d.apt_name, d.apt_room].filter(Boolean).join(" ")) + '</span>' : '')
+    + (kind !== "plain" ? '<span class="badge enc">' + (kind === "full" ? "全暗号化" : "一部暗号化") + '</span>' : '')
+    + '</div>';
+  if(kind === "full"){
+    head += '<div class="msg warn" style="margin-top:10px">このファイルは<b>まるごと暗号化</b>されています。'
+      + 'この画面では中身を開けません。<br>メインのアプリでパスワードを入れて開いてください。</div>';
+  } else if(kind === "hybrid"){
+    head += '<div class="msg warn" style="margin-top:10px"><b>氏名・電話・住所・写真は暗号のまま</b>です。'
+      + '出せるのは暗号にしていない部分だけです。</div>';
+  }
+  var html = card(head + foot(f));
+
+  if(kind !== "full"){
+    /* 写真 */
+    var pc = '<h2>写真（' + photos.length + '枚）</h2>';
+    if(!photos.length){
+      pc += '<div class="msg info">写真は入っていません'
+         + (Array.isArray(d.chosho_photos) ? '（写真の欄はありますが空です）'
+            : (("chosho_photos" in d) ? '（写真の欄が空っぽの形です）' : '（写真の欄そのものがありません）'))
+         + '。</div>';
+    } else {
+      pc += '<div class="photos">' + photos.map(function(p, k){
+        return '<div class="ph" data-p="' + k + '">'
+          + '<img loading="lazy" src="' + esc(p.dataUri) + '" alt="' + esc(p.label || ("写真" + (k+1))) + '">'
+          + '<div class="cap"><b>' + esc(p.label || ("写真" + (k+1))) + '</b>'
+          + (p.chosho ? "　調書" : "") + '</div></div>';
+      }).join("") + '</div>';
+    }
+    html += card(pc);
+
+    /* 文字（1つの表。「＿」で始まる行は小見出し） */
+    var rows = "", pend = "", any = false;
+    FIELDS.forEach(function(it){
+      if(String(it[0]).charAt(0) === "＿"){
+        if(pend && any) rows += pend;
+        pend = '<tr class="sec"><th colspan="2">' + esc(String(it[0]).slice(1)) + '</th></tr>';
+        any = false;
+        return;
+      }
+      var v = valText(d, it[0], it[2]);
+      if(v === "" && !showEmpty()) return;
+      if(pend){ rows += pend; pend = ""; }
+      any = true;
+      rows += '<tr><th>' + esc(it[1]) + '</th><td>' + esc(v === "" ? "―" : v) + '</td></tr>';
+    });
+    html += card('<h2>入力の内容</h2>'
+      + (rows ? '<table class="kv">' + rows + '</table>'
+              : '<div class="msg info">出せる項目がありません。</div>'));
+  }
+
+  view.innerHTML = html;
+  bindPhotos(photos);
+  renderList();
+  window.scrollTo(0, 0);
+}
+function foot(f){
+  return '<div class="foot">ファイル： ' + esc(f.name) + '　' + kb(f.size)
+       + (f.at ? '　最終更新 ' + esc(ymdhm(f.at)) : '') + '</div>';
+}
+
+/* 写真を大きく見る */
+function bindPhotos(photos){
+  Array.prototype.forEach.call(document.querySelectorAll(".ph"), function(el){
+    el.addEventListener("click", function(){
+      var p = photos[parseInt(el.getAttribute("data-p"), 10)];
+      if(!p) return;
+      document.getElementById("lbimg").src = p.dataUri;
+      document.getElementById("lbcap").textContent = p.label || "";
+      document.getElementById("lb").classList.add("open");
+    });
+  });
+}
+document.getElementById("lbclose").addEventListener("click", function(){
+  document.getElementById("lb").classList.remove("open");
+  document.getElementById("lbimg").src = "";
+});
+document.getElementById("lb").addEventListener("click", function(e){
+  if(e.target && e.target.id === "lb") document.getElementById("lbclose").click();
+});
+
+/* ---- ファイルを取り込む（読むだけ） ---- */
+function addFiles(list){
+  var arr = Array.prototype.slice.call(list || []);
+  arr = arr.filter(function(f){ return /\.(json|hyb|enc)$/i.test(f.name || ""); });
+  if(!arr.length){ alert("戸別ファイル（管理番号.json）が見つかりませんでした。"); return; }
+  var left = arr.length, added = [];
+  arr.forEach(function(f){
+    var r = new FileReader();
+    var done = function(text){
+      added.push({ name:f.name, size:f.size, at:f.lastModified, text:text });
+      if(--left === 0) afterAdd(added);
+    };
+    r.onload  = function(){ done(String(r.result || "")); };
+    r.onerror = function(){ done(""); };
+    r.readAsText(f);
+  });
+}
+function afterAdd(added){
+  added.sort(function(a, b){ return String(a.name).localeCompare(String(b.name), "ja", { numeric:true }); });
+  var first = added[0];
+  _files = _files.concat(added);
+  /* いま落としたファイルを出す（前に開いていた方へ戻らない） */
+  show(_files.indexOf(first));
+}
+document.getElementById("pick").addEventListener("click", function(){ document.getElementById("file").click(); });
+document.getElementById("file").addEventListener("change", function(e){ addFiles(e.target.files); e.target.value = ""; });
+document.getElementById("clear").addEventListener("click", function(){
+  _files = []; _cur = -1;
+  document.getElementById("view").innerHTML = "";
+  document.getElementById("list").className = "list hide";
+});
+document.getElementById("showempty").addEventListener("change", function(){ if(_cur >= 0) show(_cur); });
+
+/* ---- ドラッグ＆ドロップ（画面のどこへ落としても開く） ---- */
+var drop = document.getElementById("drop");
+function dragOn(on){ drop.classList[on ? "add" : "remove"]("on"); }
+["dragenter","dragover"].forEach(function(k){
+  document.addEventListener(k, function(e){
+    e.preventDefault();
+    if(e.dataTransfer) e.dataTransfer.dropEffect = "copy";   // 「開く」ではなく「取り込む」の見た目
+    dragOn(true);
+  });
+});
+document.addEventListener("dragleave", function(e){ if(!e.relatedTarget) dragOn(false); });
+document.addEventListener("drop", function(e){
+  e.preventDefault(); dragOn(false);
+  var dt = e.dataTransfer; if(!dt) return;
+  if(dt.files && dt.files.length){ addFiles(dt.files); return; }
+  /* フォルダごと落とされたとき（パソコンの Chrome / Edge） */
+  if(dt.items && dt.items.length && dt.items[0].webkitGetAsEntry){
+    var got = [], left = 1;
+    var fin = function(){ if(--left === 0){ if(got.length) addFiles(got); else alert("戸別ファイル（管理番号.json）が見つかりませんでした。"); } };
+    var walk = function(ent, depth){
+      if(!ent || depth > 3 || got.length >= 500) return;
+      if(ent.isFile){ left++; ent.file(function(f){ if(/\.(json|hyb|enc)$/i.test(f.name)) got.push(f); fin(); }, fin); }
+      else if(ent.isDirectory){ left++; ent.createReader().readEntries(function(list){ list.forEach(function(x){ walk(x, depth+1); }); fin(); }, fin); }
+    };
+    Array.prototype.forEach.call(dt.items, function(it){ var en = it.webkitGetAsEntry && it.webkitGetAsEntry(); if(en) walk(en, 0); });
+    fin();
+  }
+});
+
+/* フォルダごと開く（パソコンの Chrome / Edge だけ。読むだけで開く） */
+if(window.showDirectoryPicker){
+  var pd = document.getElementById("pickdir");
+  pd.classList.remove("hide");
+  pd.addEventListener("click", async function(){
+    var dir;
+    try { dir = await window.showDirectoryPicker({ mode:"read" }); } catch(e){ return; }
+    var got = [];
+    async function walk(d, depth){
+      if(got.length >= 500 || depth > 3) return;
+      for await (var ent of d.values()){
+        if(got.length >= 500) return;
+        if(ent.kind === "file" && /\.(json|hyb|enc)$/i.test(ent.name)){ try { got.push(await ent.getFile()); } catch(_){} }
+        else if(ent.kind === "directory"){ try { await walk(ent, depth + 1); } catch(_){} }
+      }
+    }
+    await walk(dir, 0);
+    if(!got.length){ alert("そのフォルダに戸別ファイル（管理番号.json）が見つかりませんでした。"); return; }
+    addFiles(got);
+  });
+}
+</script>
+</body>
+</html>
