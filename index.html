@@ -2048,8 +2048,10 @@
     /* 濃紺背景の要素は白文字を維持（別途 background も明示） */
     .folder-group-head, .folder-group-head *,
     tr.grand-total, tr.grand-total *,
-    .cost-detail-section tr.grand-total, .cost-detail-section tr.grand-total * {
-      color: #fff !important;
+    .cost-detail-section tr.grand-total, .cost-detail-section tr.grand-total *,
+    .asb-chosho-badge {
+      /* 文字色はバッジ自身のインライン指定（bestInkOn が選んだ白か黒）を使う */
+      color: inherit;
     }
     html, body {
       background: #fff !important;
@@ -2781,8 +2783,10 @@
     gap: 4mm;
     flex: 0 0 auto;
   }
+  /* タイトルと施工日を1行に並べて、見出しの高さを 3mm ほど節約する */
+  .chosho-title-block { display: flex; align-items: baseline; gap: 5mm; }
   .chosho-title-block h1 {
-    font-size: 15pt;
+    font-size: 13pt;
     margin: 0;
     color: #1e3a5f;
     letter-spacing: 0.3em;
@@ -2823,6 +2827,7 @@
     background: #eef2f6;
     padding: 0.5mm 2mm;
     font-size: 8pt;
+    line-height: 1.3;
     font-weight: 700;
     color: #1e3a5f;
     border-bottom: 1px solid #aaa;
@@ -2833,11 +2838,12 @@
   .chosho-kv {
     width: 100%;
     border-collapse: collapse;
-    font-size: 8.5pt;
+    font-size: 8pt;
+    line-height: 1.25;
   }
   .chosho-kv th {
     background: #f7f9fb;
-    padding: 0.6mm 2mm;
+    padding: 0.4mm 2mm;
     text-align: left;
     font-weight: 500;
     color: #555;
@@ -2849,16 +2855,20 @@
   .chosho-kv tr:last-child th,
   .chosho-kv tr:last-child td { border-bottom: none; }
   .chosho-kv td {
-    padding: 0.6mm 2mm;
+    padding: 0.4mm 2mm;
     border-bottom: 1px solid #eee;
   }
 
   .chosho-diagram-wrap {
     margin-bottom: 1.5mm;
-    flex: 5.75 1 0;   /* 系統図枠: 縦幅 5.75/12。残り 6.25/12 は下半分に配分 */
+    /* 高さは中身（図の縦横比 aspect-ratio）で決まる＝幅いっぱいに描ける高さ。
+       紙に入らないときは、ここが 70mm まで縮んで下半分（表・写真）に場所を譲る。
+       測定CHが多い戸別＋石綿の詳しい記載＋写真が多い、が重なると 84mm ほど必要になるため、
+       下限を高くすると写真の帯が紙からはみ出して切れる。 */
+    flex: 0 1 auto;
+    min-height: 70mm;
     display: flex;
     flex-direction: column;
-    min-height: 0;
   }
   .chosho-diagram-host {
     padding: 0.5mm 1mm 1mm;
@@ -2869,8 +2879,12 @@
     align-items: center;
     justify-content: center;
     min-height: 0;
+    /* aspect-ratio は renderChosho が図ごとに書く。縦長の図（16世帯以上）は 143mm で頭打ち */
+    max-height: 143mm;
   }
-  .chosho-diagram-host svg {
+  /* 「> svg」＝いちばん外側の系統図だけ。入れ子の svg（アンテナ取付ガイドの貼付図）に
+     width/height 100% が当たると膨らんで枠の外へ出てしまい、紙に写らなかった。 */
+  .chosho-diagram-host > svg {
     display: block;
     width: 100%;
     height: 100%;
@@ -2880,69 +2894,70 @@
     border: none !important;
   }
 
-  /* 下半分: 左(測定+写真2枚) / 右(使用材料拡大) — A4残り高を全吸収 */
+  /* 下半分: 表の段（左 78mm: 測定記録＋石綿対応判定 ／ 右: 使用材料を2列に均等割り）＋ 写真の帯（全幅）。
+     系統図が幅いっぱいに描ける高さを取ったあと、余った高さはすべて写真の帯へ渡す。
+     紙に入らないときは 写真の帯（36mm まで）→ 系統図（100mm まで）の順に縮み、表は切らない。 */
   .chosho-lower {
-    display: grid;
-    grid-template-columns: 78mm 1fr;
-    gap: 2mm;
-    margin-bottom: 0;
-    flex: 6.25 1 0;   /* 系統図 5.75/12 に対して下半分 6.25/12 */
-    min-height: 0;
-    overflow: hidden;
-  }
-  .chosho-lower-left {
     display: flex;
     flex-direction: column;
-    gap: 1.2mm;
-    overflow: hidden;
-    min-height: 0;
-    min-width: 0;
+    gap: 1.5mm;
+    margin-bottom: 0;
+    flex: 1 1 auto;
+    min-height: min-content;
   }
-  .chosho-lower-left > .chosho-meas-box { flex: 0 0 auto; }
-  .chosho-lower-left > .chosho-photos-row {
+  .chosho-lower-tables {
     display: grid;
-    /* 写真枚数に応じて自動で2列・行高分割（最大4枚まで2x2、5枚以上は3列） */
-    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-    grid-auto-rows: 1fr;
-    gap: 1.2mm;
-    flex: 1 1 0;
+    grid-template-columns: 78mm minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas: "meas mat" "asb mat";
+    gap: 2mm;
+    flex: 0 0 auto;
+    align-items: stretch;
     min-height: 0;
   }
+  /* 写真が1枚も無いときは、表の段が余った高さを使う */
+  .chosho-lower.no-photos > .chosho-lower-tables { flex: 1 1 auto; }
+  .chosho-lower-tables > .chosho-meas-box { grid-area: meas; align-self: start; }
+  .chosho-lower-tables > .chosho-asbestos-box {
+    grid-area: asb;
+    align-self: start;
+    display: flex;
+    flex-direction: column;
+  }
+  .chosho-lower-tables > .chosho-asbestos-box > div:not(.chosho-box-title) { flex: 0 0 auto; }
+  .chosho-lower-tables > .chosho-mat-box {
+    grid-area: mat;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    max-height: 100mm;
+    min-height: 0;
+  }
+  .chosho-lower-tables > .chosho-mat-box > div:not(.chosho-box-title) {
+    flex: 1 1 auto;
+    overflow: hidden;
+  }
+  /* 写真の帯：4:3 の写真が横に並ぶ。枚数の印（photos-N）は renderChosho が付ける */
+  .chosho-lower > .chosho-photos-row {
+    display: grid;
+    gap: 1.5mm;
+    flex: 1 1 0;
+    min-height: 36mm;
+    grid-auto-rows: 1fr;
+  }
+  .chosho-photos-row.photos-0 { min-height: 0; flex: 0 0 auto; }
+  /* 1〜2枚は写真を大きく（帯 45mm → 4:3 で約 53×40mm）。5枚以上は2段なので少し高く */
+  .chosho-photos-row.photos-1, .chosho-photos-row.photos-2 { min-height: 42mm; }
+  .chosho-photos-row.photos-5, .chosho-photos-row.photos-6, .chosho-photos-row.photos-7, .chosho-photos-row.photos-8,
+  .chosho-photos-row.photos-9, .chosho-photos-row.photos-10 { min-height: 44mm; }
   .chosho-photos-row.photos-1 { grid-template-columns: 1fr; }
   .chosho-photos-row.photos-2 { grid-template-columns: 1fr 1fr; }
-  .chosho-photos-row.photos-3, .chosho-photos-row.photos-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
-  .chosho-photos-row.photos-5, .chosho-photos-row.photos-6 { grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr; }
-  .chosho-photos-row.photos-7, .chosho-photos-row.photos-8, .chosho-photos-row.photos-9 { grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr 1fr; }
-  .chosho-photos-row > .chosho-photo-box { min-height: 0; }
-  .chosho-lower-right {
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    gap: 1.2mm;
-    min-width: 0;
-  }
-  .chosho-lower-right > .chosho-mat-box {
-    flex: 3 1 0;   /* 使用材料: 下半分右枠の 3/4 */
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    min-height: 0;
-  }
-  .chosho-lower-right > .chosho-mat-box > div:not(.chosho-box-title) {
-    flex: 1 1 auto;
-    overflow: hidden;
-  }
-  .chosho-lower-right > .chosho-asbestos-box {
-    flex: 1 1 0;   /* 石綿対応: 下半分右枠の 1/4 */
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    min-height: 0;
-  }
-  .chosho-lower-right > .chosho-asbestos-box > div:not(.chosho-box-title) {
-    flex: 1 1 auto;
-    overflow: hidden;
-  }
+  .chosho-photos-row.photos-3 { grid-template-columns: repeat(3, 1fr); }
+  .chosho-photos-row.photos-4 { grid-template-columns: repeat(4, 1fr); }
+  .chosho-photos-row.photos-5, .chosho-photos-row.photos-6 { grid-template-columns: repeat(3, 1fr); grid-template-rows: 1fr 1fr; }
+  .chosho-photos-row.photos-7, .chosho-photos-row.photos-8 { grid-template-columns: repeat(4, 1fr); grid-template-rows: 1fr 1fr; }
+  .chosho-photos-row.photos-9, .chosho-photos-row.photos-10 { grid-template-columns: repeat(5, 1fr); grid-template-rows: 1fr 1fr; }
+  .chosho-photos-row > .chosho-photo-box { min-height: 0; min-width: 0; }
   /* 石綿情報 本文レイアウト */
   #chosho-asbestos-view {
     padding: 1mm 1.5mm;
@@ -2969,16 +2984,16 @@
   #chosho-asbestos-view .asb-chosho-kv {
     width: 100%;
     border-collapse: collapse;
-    font-size: 6.5pt;
-    line-height: 1.25;
+    font-size: 6.3pt;
+    line-height: 1.2;
   }
   #chosho-asbestos-view .asb-chosho-kv th {
     background: #f7f9fb;
     color: #555;
     font-weight: 500;
     text-align: left;
-    padding: 0.2mm 1.2mm;
-    width: 14mm;
+    padding: 0.15mm 1mm;
+    width: 12mm;
     white-space: nowrap;
     border-bottom: 1px solid #eee;
     vertical-align: top;
@@ -2986,7 +3001,7 @@
     print-color-adjust: exact;
   }
   #chosho-asbestos-view .asb-chosho-kv td {
-    padding: 0.2mm 1.2mm;
+    padding: 0.15mm 1mm;
     border-bottom: 1px solid #eee;
     word-break: break-word;
   }
@@ -3063,7 +3078,7 @@
   /* 縦表示 測定記録 (CH=行、測定箇所×値種別=列) */
   .chosho-meas-v { font-size: 5.8pt; }
   .chosho-meas-v th,
-  .chosho-meas-v td { padding: 0.2mm 0.3mm; }
+  .chosho-meas-v td { padding: 0.2mm 0.3mm; white-space: nowrap; }
   .chosho-meas-v th.col-ch { width: 18%; }
   .chosho-meas-v th.loc-header {
     background: #eef2f6;
@@ -3073,7 +3088,9 @@
   .chosho-meas-v td.ch-name {
     background: #f7f9fb;
     font-weight: 600;
-    white-space: nowrap;
+    /* CH名は「27-13ch(NHK総合)」のように長いことがある。ここだけ折り返しを許す（切らない） */
+    white-space: normal;
+    word-break: break-all;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
@@ -3092,15 +3109,26 @@
     print-color-adjust: exact;
   }
   /* 使用材料: CSSマルチカラム（左列優先で埋め、溢れた分が右列へ） */
-  #chosho-mat-view { height: 100%; }
+  #chosho-mat-view { height: auto; }
   .chosho-mat-list {
-    height: 100%;
+    height: auto;
     column-count: 2;
     column-gap: 1.8mm;
-    column-fill: auto;
+    column-fill: balance;
     column-rule: 1px solid #e4e6ea;
     font-size: 6.5pt;
   }
+  /* 行数が多いとき（renderChosho が見込みの高さで付ける） */
+  .chosho-mat-list.mat-many { font-size: 6pt; }
+  .chosho-mat-list.mat-many .mat-cat-head { font-size: 5.8pt; }
+  .chosho-mat-list.mat-many .mat-note { font-size: 5.6pt; }
+  .chosho-mat-list.mat-more { font-size: 6pt; column-count: 3; }
+  .chosho-mat-list.mat-more .mat-cat-head { font-size: 5.8pt; }
+  .chosho-mat-list.mat-more .mat-note { font-size: 5.6pt; }
+  /* 3列でも入らない分は末尾を落とし、列の外に「…ほか n 点」を出す（列の中に書くと右へ流れて見えない） */
+  /* 「…ほか n 点」は見出しの行に出す（一覧の下に置くと、列から溢れて紙に出ない） */
+  .chosho-mat-box > .chosho-box-title { display: flex; align-items: baseline; gap: 2mm; flex-wrap: wrap; }
+  .chosho-mat-omitted { font-size: 6.5pt; font-weight: 700; }
   .chosho-mat-list .mat-cat-head {
     background: #f7f9fb;
     font-weight: 700;
@@ -3229,8 +3257,8 @@
     body.list-print-mode .list-table thead th,
     .cost-detail-section th,
     table.meas-editor th {
-      background: #c7d4e2 !important;  /* 旧 #eef2f6 よりかなり濃く */
-      color: #0f2848 !important;       /* 濃紺でコントラスト強化 */
+      background: #d4d4d4 !important;  /* 青みを消した灰（ネイビーがにじむ印刷機でも黒がくっきり出る） */
+      color: #000 !important;
     }
 
     /* #f7f9fb (極淡) → 中くらいの灰青 */
@@ -3241,15 +3269,15 @@
     .chosho-meas-v td.ch-name,
     table.parts-editor tr.parts-cat-head td,
     .cost-detail-section tr.sub-total td {
-      background: #dfe7f0 !important;
-      color: #1f2d44 !important;
+      background: #e6e6e6 !important;
+      color: #000 !important;
     }
 
     /* #fafcff (ほぼ白) → 淡めの青 */
     .diagram-print-meas table td.val,
     .chosho-meas-table td.val {
-      background: #e6eef8 !important;
-      color: #1a3a6b !important;  /* 値テキストも濃く */
+      background: #f2f2f2 !important;
+      color: #000 !important;
       font-weight: 700 !important;
     }
 
@@ -3286,15 +3314,16 @@
       color: #555 !important;
     }
 
-    /* 見出しのメインカラー(#1e3a5f) はさらに濃く */
+    /* 見出しのメインカラー(#1e3a5f) は紙では黒（ネイビーはにじむ印刷機がある） */
     h2, .section-head,
     .print-header h2,
     .chosho-title-block h1,
     .chosho-mgmt-no,
     .chosho-box-title,
     .estimate-panel h2 {
-      color: #0a1f3d !important;
+      color: #000 !important;
     }
+    .estimate-panel h2, .print-header { border-bottom-color: #000 !important; }
 
     /* --- 罫線: 薄い罫線を濃く --- */
     /* #eee / #f0f0f0 → #888 */
@@ -3324,7 +3353,7 @@
     /* --- 系統図の薄い色を強化 --- */
     /* 既存配線の黒はそのまま。ラベル#888, 境界線#888→濃く */
     .wire-label { fill: #222 !important; }
-    .boundary-line { stroke: #555 !important; }
+    rect.boundary { stroke: #444 !important; stroke-width: 1.4 !important; }
     .boundary-label { fill: #1a1a1a !important; }
     /* レーザー機での青文字にじみ対策: SVG内の青系 fill を黒へ */
     .area-label,
@@ -3347,9 +3376,40 @@
       border-color: #555 !important;
     }
 
+    /* --- 工事調書：文字は黒、罫線も濃く。赤い配線・赤い枠・石綿のバッジは意味のある色なので残す --- */
+    .chosho-title-block h1, .chosho-mgmt-no, .chosho-box-title, .chosho-kv th, .chosho-kv td,
+    .chosho-title-block .chosho-date,
+    .chosho-meas-v th.loc-header, .chosho-meas-table th, .chosho-meas-table td, .chosho-meas-table td.val, .chosho-meas-v td.ch-name,
+    .chosho-mat-list .mat-cat-head, .chosho-mat-list .mat-row, .chosho-mat-list .mat-row > .mat-note,
+    #chosho-asbestos-view, #chosho-asbestos-view .asb-chosho-kv th, #chosho-asbestos-view .asb-chosho-kv td, #chosho-asbestos-view .asb-chosho-note {
+      color: #000 !important;
+    }
+    .chosho-mgmt-no { border-color: #000 !important; }
+    .chosho-box { border-color: #000 !important; }
+    .chosho-box-title { border-bottom-color: #000 !important; background: #d4d4d4 !important; }
+    .chosho-meas-v th.loc-header, .chosho-meas-table th, .chosho-mat-table th { background: #d4d4d4 !important; }
+    .chosho-kv th, .chosho-meas-table td.loc, .chosho-meas-v td.ch-name, .chosho-mat-list .mat-cat-head,
+    #chosho-asbestos-view .asb-chosho-kv th { background: #e6e6e6 !important; }
+    .chosho-meas-table td.val { background: #f2f2f2 !important; }
+    .chosho-meas-table th, .chosho-meas-table td { border-color: #333 !important; }
+    .chosho-kv th, .chosho-kv td,
+    #chosho-asbestos-view .asb-chosho-kv th, #chosho-asbestos-view .asb-chosho-kv td { border-color: #666 !important; }
+    .chosho-mat-list { column-rule-color: #999 !important; }
+    /* 薄い区切り線（#eee）は「薄い線が飛ぶ」印刷機で消えるので少し濃く（黒にはしない＝毎行黒線はうるさい） */
+    .chosho-mat-list .mat-row { border-bottom-color: #999 !important; }
+    .chosho-mat-list .mat-cat-head { border-bottom-color: #333 !important; }
+    #chosho-asbestos-view .asb-chosho-col-right { border-left-color: #999 !important; }
+    #chosho-asbestos-view .asb-chosho-kv th { font-weight: 600 !important; }
+    /* --- 工事調書の系統図の写し：線を太く・濃く（文字の大きさと色は choshoDiagramForPrint が写しに書き込む） --- */
+    .chosho-diagram-host svg { text-rendering: geometricPrecision; }
+    .chosho-diagram-host svg .wire { stroke-width: 2.6 !important; }
+    .chosho-diagram-host svg .node rect { stroke-width: 2.6 !important; }
+    .chosho-diagram-host svg rect.boundary { stroke: #333 !important; stroke-width: 1.6 !important; stroke-dasharray: 8 5 !important; }
+    .chosho-diagram-host svg > line { stroke: #000 !important; stroke-width: 3 !important; }
+
     /* 工事調書の全体ボーダー */
     .chosho-panel .chosho-header {
-      border-bottom-color: #0a1f3d !important;
+      border-bottom-color: #000 !important;
       border-bottom-width: 2px !important;
     }
   }
@@ -5909,16 +5969,16 @@
   </div>
 
   <div class="chosho-lower">
-    <div class="chosho-lower-left">
+    <div class="chosho-lower-tables">
       <div class="chosho-box chosho-meas-box">
         <div class="chosho-box-title">測定記録</div>
         <div id="chosho-meas-view"></div>
       </div>
-      <div class="chosho-photos-row" id="chosho-photos-row"></div>
-    </div>
-    <div class="chosho-lower-right">
       <div class="chosho-box chosho-mat-box">
-        <div class="chosho-box-title">使用材料</div>
+        <div class="chosho-box-title">
+          <span>使用材料</span>
+          <span id="chosho-mat-omitted-slot"></span>
+        </div>
         <div id="chosho-mat-view"></div>
       </div>
       <div class="chosho-box chosho-asbestos-box">
@@ -5929,6 +5989,7 @@
         <div id="chosho-asbestos-view"></div>
       </div>
     </div>
+    <div class="chosho-photos-row photos-0" id="chosho-photos-row"></div>
   </div>
 </div>
 
@@ -6792,7 +6853,7 @@ async function lsRestoreFromIdb(){
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "150";
+const APP_VERSION = "151";
 /* ============================================================
    ★日時の表示は、必ずこの端末の時刻で★
    保存している日時は世界時のISO文字列（…T01:03:00.000Z）。これを文字のまま
@@ -23273,6 +23334,330 @@ function agShowInChosho(){
   try { return localStorage.getItem(AG_CHOSHO_KEY) !== "0"; } catch(_){ return true; }
 }
 
+/* ============================================================
+   工事調書の系統図（印刷用の写し）を紙で読める大きさにする
+   ------------------------------------------------------------
+   画面の系統図（1160×780 単位）を A4縦の枠（幅 約180mm）に収めると、
+   1単位 ≈ 0.14mm ＝ 機材名 11px が 4.3pt にしかならず読めない。
+   そこで印刷用の写しだけを次のように変える（画面の図は一切変えない）:
+     ① 枠（屋外／住宅内の点線）を中身に合わせて詰め、右と下の空きを消す
+     ② 文字を大きくする。ただし「大きくしてから当たりを見て、ぶつかるなら少しずつ戻す」
+        ので、機材・配線・ほかの文字に重ならない
+     ③ 文字はすべて黒（白い文字と、利用者が色を選んだ赤文字注記は除く）。
+        新規／既存の区別は機材の枠線と配線の赤／黒で残る
+     ④ 図の縦横比を枠に渡す（aspect-ratio）。紙のフォントに左右されず幅いっぱいに描ける
+   写しは表示されない場所に置かれるので、画面外の仮置き場で一度描いて測る。
+   受付台帳を開いたままの「全件印刷」でも画面の図は測れない（.app が非表示）ため、
+   必ず写しを仮置き場に入れてから測ること。
+   ============================================================ */
+const CHOSHO_DIAG = {
+  K_NODE: 1.4,    // 機材の本文（11px → 15.4px）
+  K_SUB:  1.4,    // 機材の上下のラベル（9px → 12.6px）
+  K_WIRE: 1.5,    // ケーブルの文字（9px → 13.5px）
+  K_BOUND: 1.3,   // 境界のタイトル・凡例（11px）
+  K_AREA: 1.25,   // エリア名（13px）
+  K_BOX:  1.35,   // 注記の箱（取付構成など）はグループごと拡大
+  PAD: 18         // 枠と中身のあいだ（単位）
+};
+/* 白い文字（赤い帯の上の「引込線 撤去」・緑丸の「P」）は大きさも色も変えない */
+function choshoIsWhite(el){
+  const f = getComputedStyle(el).fill;
+  return /^(#fff|#ffffff|white|rgb\(255,\s*255,\s*255\))$/i.test(f)
+      || String(el.getAttribute("fill") || "").toLowerCase() === "#fff";
+}
+/* getBBox は要素自身の transform を含まない。動かした分（translate）と大きくした分（scale）を四隅に当てて実寸を返す。 */
+function choshoBBox(el){
+  let b;
+  try { b = el.getBBox(); } catch(_){ return null; }
+  if(!b || (!b.width && !b.height)) return null;
+  let M = null;
+  try { const m = el.transform && el.transform.baseVal.consolidate(); if(m) M = m.matrix; } catch(_){}
+  if(!M) return { x: b.x, y: b.y, width: b.width, height: b.height };
+  const xs = [], ys = [];
+  [[b.x, b.y], [b.x + b.width, b.y], [b.x, b.y + b.height], [b.x + b.width, b.y + b.height]].forEach(pt => {
+    xs.push(M.a * pt[0] + M.c * pt[1] + M.e);
+    ys.push(M.b * pt[0] + M.d * pt[1] + M.f);
+  });
+  const x1 = Math.min.apply(null, xs), x2 = Math.max.apply(null, xs);
+  const y1 = Math.min.apply(null, ys), y2 = Math.max.apply(null, ys);
+  return { x: x1, y: y1, width: x2 - x1, height: y2 - y1 };
+}
+function choshoUnion(u, b){
+  if(!b) return u;
+  const x2 = b.x + b.width, y2 = b.y + b.height;
+  if(!u) return { x1: b.x, y1: b.y, x2, y2 };
+  u.x1 = Math.min(u.x1, b.x); u.y1 = Math.min(u.y1, b.y); u.x2 = Math.max(u.x2, x2); u.y2 = Math.max(u.y2, y2);
+  return u;
+}
+/* 枠の部品か（点線の枠・エリア名・境界の文字・壁の線・当たり判定用の透明な線） */
+function choshoIsFrame(el){
+  const c = el.getAttribute("class") || "";
+  if(/\bboundary\b|\bboundary-label\b|\barea-label\b|\bwire-hit\b|\bselection-ui\b/.test(c)) return true;
+  if(el.tagName === "line") return true;
+  return false;
+}
+/* 2つの箱が重なるか。tol は「重なってよい量」（単位）。0 なら触れるのは可、負なら隙間が要る */
+function choshoHit(a, b, tol){
+  tol = tol || 0;
+  return !(a.x + a.width <= b.x + tol || b.x + b.width <= a.x + tol
+        || a.y + a.height <= b.y + tol || b.y + b.height <= a.y + tol);
+}
+/* 写しの中で文字と枠を紙向けに直す。svg は仮置き場で描画済みであること。戻り値は viewBox の大きさ。 */
+function choshoDiagramEnlarge(svg, vb){
+  const C = CHOSHO_DIAG;
+  const fsOf = el => parseFloat(getComputedStyle(el).fontSize) || 11;
+  const num = (el, a) => parseFloat(el.getAttribute(a)) || 0;
+
+  /* ---- 当たりを見る相手を集める ---- */
+  const nodeRects = [];   // 機材の箱
+  svg.querySelectorAll("g.node").forEach(n => {
+    const r = n.querySelector("rect"); if(!r) return;
+    let dx = 0, dy = 0;
+    try { const m = n.transform && n.transform.baseVal.consolidate(); if(m){ dx = m.matrix.e; dy = m.matrix.f; } } catch(_){}
+    // x,y は図全体の座標（当たり判定用）。lx,ly はグループの中の座標（文字の y を書き直す用）。
+    // 利用者が機材をドラッグすると g.node に translate が付くので、この2つを混ぜると文字が箱から外れる。
+    nodeRects.push({ node: n, x: num(r, "x") + dx, y: num(r, "y") + dy,
+                     lx: num(r, "x"), ly: num(r, "y"), width: num(r, "width"), height: num(r, "height") });
+  });
+  const wallLines = Array.from(svg.children).filter(l => l.tagName === "line")
+    .map(l => ({ x: Math.min(num(l, "x1"), num(l, "x2")) - 2, y: Math.min(num(l, "y1"), num(l, "y2")),
+                 width: Math.abs(num(l, "x2") - num(l, "x1")) + 4, height: Math.abs(num(l, "y2") - num(l, "y1")) }));
+  const wirePts = [];     // 配線の通り道（6単位ごとの点）
+  svg.querySelectorAll("path.wire").forEach(p => {
+    let L = 0; try { L = p.getTotalLength(); } catch(_){ return; }
+    for(let d = 0; d <= L; d += 6){ try { const q = p.getPointAtLength(d); wirePts.push(q); } catch(_){} }
+  });
+  const placed = [];      // すでに置いた文字の箱（el = その文字。自分の古い箱は無視する）
+  const put = (el, bb) => { if(bb){ bb.el = el; placed.push(bb); } };
+  // 先に登録しておく相手（大きさを変えないもの）:
+  //   エリア名・境界の文字／利用者の赤文字注記／白い文字のバッジ（引込線 撤去）／注記の箱／貼付図
+  svg.querySelectorAll("text.area-label, text.boundary-label").forEach(t => put(t, choshoBBox(t)));
+  svg.querySelectorAll("g.diagram-text-anno").forEach(g => put(g, choshoBBox(g)));
+  svg.querySelectorAll("g.draggable-box, g.ag-pasted").forEach(g => put(g, choshoBBox(g)));
+  Array.from(svg.querySelectorAll("text")).filter(choshoIsWhite).forEach(t => {
+    const g = t.parentElement && t.parentElement.classList.contains("node") ? null : t.parentElement;
+    put(t, choshoBBox(g && g !== svg ? g : t));
+  });
+  const hitsAny = (box, opt) => {
+    if(opt.rects && nodeRects.some(r => r !== opt.ownRect && choshoHit(box, r, (opt.rectPad != null) ? opt.rectPad : 1))) return true;
+    if(opt.wall && wallLines.some(r => choshoHit(box, r, 0))) return true;
+    if(placed.some(r => r.el !== opt.self && choshoHit(box, r, 0.5))) return true;
+    if(opt.wires && wirePts.some(q => q.x > box.x && q.x < box.x + box.width && q.y > box.y && q.y < box.y + box.height)) return true;
+    return false;
+  };
+  /* 目標の倍率から 0.05 ずつ戻して、ぶつからない大きさを採る */
+  const fitText = (t, target, opt) => {
+    const base = fsOf(t);
+    opt = Object.assign({ self: t }, opt);
+    for(let i = placed.length - 1; i >= 0; i--) if(placed[i].el === t) placed.splice(i, 1);   // 自分の古い箱を外す
+    for(let k = target; k > 1.001; k -= 0.05){
+      t.style.fontSize = (base * k).toFixed(1) + "px";
+      const bb = choshoBBox(t);
+      if(bb && !hitsAny(bb, opt)){ put(t, bb); return base * k; }
+    }
+    t.style.fontSize = "";
+    put(t, choshoBBox(t));
+    return base;
+  };
+
+  /* ---- ① 機材の本文（箱の中）。箱の幅と高さが上限。当たりは見なくてよい（白地の箱の中） ---- */
+  nodeRects.forEach(nr => {
+    const texts = Array.from(nr.node.querySelectorAll("text")).filter(t => !choshoIsWhite(t));
+    const ry = nr.ly, rh = nr.height, rw = nr.width;   // 文字の y と同じ座標系（グループの中）で見る
+    const body = texts.filter(t => { const y = num(t, "y"); return y >= ry - 1 && y <= ry + rh + 1; });
+    if(!body.length) return;
+    const base = fsOf(body[0]);
+    let k = C.K_NODE;
+    body.forEach(t => { const len = t.getComputedTextLength() || 1; k = Math.min(k, Math.max(1, base * (rw - 4) / len / base)); });
+    k = Math.min(k, Math.max(1, ((rh - 2) / (1 + 1.1 * (body.length - 1))) / base));
+    const s = Math.round(base * k * 10) / 10;
+    const lh = s * 1.12;
+    body.sort((a, b) => num(a, "y") - num(b, "y"));
+    body.forEach((t, i) => { t.style.fontSize = s + "px"; t.setAttribute("y", (ry + rh / 2 - (body.length - 1) * lh / 2 + i * lh).toFixed(1)); });
+  });
+  /* ---- ② 機材の上下のラベル。積み直してから、ぶつからない大きさに ---- */
+  nodeRects.forEach(nr => {
+    const texts = Array.from(nr.node.querySelectorAll("text")).filter(t => !choshoIsWhite(t));
+    const ry = nr.ly, rh = nr.height;                  // 文字の y と同じ座標系（グループの中）で見る
+    const top = texts.filter(t => num(t, "y") < ry - 1);
+    const bot = texts.filter(t => num(t, "y") > ry + rh + 1);
+    const place = (arr, up) => {
+      if(!arr.length) return;
+      const base = fsOf(arr[0]);
+      arr.sort((a, b) => (up ? num(b, "y") - num(a, "y") : num(a, "y") - num(b, "y")));
+      for(let k = C.K_SUB; k > 1.001; k -= 0.05){
+        const s = base * k, lh = s * 1.12;
+        arr.forEach((t, i) => { t.style.fontSize = s.toFixed(1) + "px";
+          t.setAttribute("y", (up ? (ry - 2 - s * 0.55 - i * lh) : (ry + rh + 2 + s * 0.6 + i * lh)).toFixed(1)); });
+        const boxes = arr.map(t => ({ t, bb: choshoBBox(t) })).filter(x => x.bb);
+        if(boxes.every(x => !hitsAny(x.bb, { rects: true, wall: true, wires: true, ownRect: nr, self: x.t }))){ boxes.forEach(x => put(x.t, x.bb)); return; }
+      }
+      const s = base, lh = s * 1.12;
+      arr.forEach((t, i) => { t.style.fontSize = "";
+        t.setAttribute("y", (up ? (ry - 6 - i * 11) : (ry + rh + 12 + i * 11)).toFixed(1)); });
+      arr.forEach(t => put(t, choshoBBox(t)));
+    };
+    place(top, true); place(bot, false);
+  });
+  /* ---- ③ ケーブルの文字・エリア名・境界の文字 ---- */
+  svg.querySelectorAll("text.wire-label, text.wire-len-red").forEach(t => {
+    fitText(t, C.K_WIRE, { rects: true, rectPad: 3, wall: true, wires: false });   // 枠に 3 単位まで重なってよい
+    t.style.fontWeight = "600";
+  });
+  svg.querySelectorAll("text.area-label").forEach(t => fitText(t, C.K_AREA, { rects: true, wall: true, wires: false }));
+  svg.querySelectorAll("text.boundary-label").forEach(t => fitText(t, C.K_BOUND, { rects: true, wall: true, wires: false }));
+  /* ---- ④ 注記の箱はグループごと拡大（左上を固定。壁の線の手前で止める。利用者が動かした位置は保つ） ---- */
+  svg.querySelectorAll("g.draggable-box").forEach(g => {
+    const r = g.querySelector("rect"); const bb = choshoBBox(g);
+    if(!r || !bb) return;
+    const bx = num(r, "x"), by = num(r, "y"), bw = num(r, "width") || bb.width;
+    // 利用者が箱を動かしていると、rect の属性と実際の位置がずれる。図全体の座標で壁を見る
+    let gdx = 0;
+    try { const gm = g.transform && g.transform.baseVal.consolidate(); if(gm) gdx = gm.matrix.e; } catch(_){}
+    const ax = bx + gdx;
+    let K = C.K_BOX;
+    // 壁の手前で止める。利用者がすでに壁をまたぐ位置へ動かしている箱は、これ以上右へ出さない（K=1）
+    wallLines.forEach(w => { if(ax < w.x) K = Math.min(K, Math.max(1, (w.x - 8 - ax) / bw)); });
+    // 機材や、すでに置いた文字にぶつからない倍率まで下げる（画面で重なっていないものを重ねない）
+    const prev = g.getAttribute("transform") || "";
+    const setK = k => g.setAttribute("transform", (prev ? prev + " " : "")
+      + "translate(" + (bx * (1 - k)).toFixed(1) + " " + (by * (1 - k)).toFixed(1) + ") scale(" + k.toFixed(3) + ")");
+    let ok = false;
+    for(; K > 1.001; K -= 0.05){
+      setK(K);
+      const nb = choshoBBox(g);
+      if(nb && !hitsAny(nb, { rects: true, wall: true, wires: false, self: g })){ ok = true; break; }
+    }
+    if(!ok) g.setAttribute("transform", prev);
+    // 大きさが決まったので、これ以降の相手として登録し直す
+    for(let i = placed.length - 1; i >= 0; i--) if(placed[i].el === g) placed.splice(i, 1);
+    put(g, choshoBBox(g));
+  });
+  /* ---- ⑤ 文字は黒（白い文字と赤文字注記は除く）。印刷CSSの !important に勝つよう important で書く ---- */
+  svg.querySelectorAll("text").forEach(t => {
+    if(t.closest(".diagram-text-anno")) return;
+    if(!choshoIsWhite(t)) t.style.setProperty("fill", "#000", "important");
+  });
+
+  /* ---- ⑥ 枠を中身に合わせて詰める ---- */
+  let U = null;
+  Array.from(svg.children).forEach(k => { if(choshoIsFrame(k)) return; U = choshoUnion(U, choshoBBox(k)); });
+  const frames = Array.from(svg.querySelectorAll("rect.boundary"));
+  const legend = Array.from(svg.querySelectorAll("text.boundary-label")).find(t => /凡例/.test(t.textContent || ""));
+  const kabe = Array.from(svg.querySelectorAll("text.boundary-label")).find(t => (t.textContent || "").trim() === "壁");
+  // 文字は全部黒にしたので、凡例の「赤=新規 / 黒=既存」は枠と線の話だと分かる言い方にする（写しの中だけ）
+  if(legend && /赤=新規/.test(legend.textContent)) legend.textContent = legend.textContent.replace("赤=新規", "赤い枠・線=新規").replace("黒=既存", "黒い枠・線=既存");
+  const H0 = vb[1] + vb[3];                       // 元の図の下端
+  let x0 = vb[0], y0 = vb[1], x1 = vb[0] + vb[2], y1 = vb[1] + vb[3];
+  if(U && frames.length){
+    const outer = frames.filter(r => Math.abs(num(r, "y") + num(r, "height") - (H0 - 30)) < 1.5);   // 外枠だけ
+    const bottom = Math.max(U.y2 + C.PAD, 120);
+    const right = U.x2 + C.PAD;
+    let maxRight = -Infinity; outer.forEach(r => { const e = num(r, "x") + num(r, "width"); if(e > maxRight) maxRight = e; });
+    outer.forEach(r => {
+      const x = num(r, "x"), y = num(r, "y"), w = num(r, "width");
+      if(bottom < y + num(r, "height")) r.setAttribute("height", Math.max(40, bottom - y).toFixed(1));
+      if(x + w === maxRight && right < x + w) r.setAttribute("width", Math.max(40, right - x).toFixed(1));
+    });
+    // 共用部のボックスなど内側の枠は、外枠の下端より上に収める
+    frames.filter(r => outer.indexOf(r) < 0).forEach(r => {
+      const y = num(r, "y"), h = num(r, "height");
+      if(y + h > bottom - 24) r.setAttribute("height", Math.max(30, bottom - 24 - y).toFixed(1));
+    });
+    // 壁の線（直下・縦・元の高さのもの）だけ下端をそろえる。撤去の×印は直下ではないので触れない
+    Array.from(svg.children).filter(l => l.tagName === "line"
+      && Math.abs(num(l, "x1") - num(l, "x2")) < 1 && Math.abs(num(l, "y2") - (H0 - 30)) < 1.5)
+      .forEach(l => { if(bottom < num(l, "y2")) l.setAttribute("y2", bottom.toFixed(1)); });
+    if(kabe) kabe.setAttribute("y", (bottom - 10).toFixed(1));
+    if(legend) legend.setAttribute("y", (bottom + 22).toFixed(1));
+    let F = null;
+    frames.forEach(r => { F = choshoUnion(F, choshoBBox(r)); });
+    svg.querySelectorAll("text.area-label, text.boundary-label").forEach(t => { F = choshoUnion(F, choshoBBox(t)); });
+    F = choshoUnion(F, { x: U.x1, y: U.y1, width: U.x2 - U.x1, height: U.y2 - U.y1 });
+    x0 = Math.min(vb[0] + 12, F.x1 - 8); y0 = Math.min(vb[1] + 22, F.y1 - 8);
+    x1 = F.x2 + 8; y1 = F.y2 + 8;
+  } else if(U){
+    x0 = U.x1 - 12; y0 = U.y1 - 12; x1 = U.x2 + 12; y1 = U.y2 + 12;
+  }
+  svg.setAttribute("viewBox", [x0, y0, x1 - x0, y1 - y0].map(v => Math.round(v * 10) / 10).join(" "));
+  return { w: x1 - x0, h: y1 - y0 };
+}
+/* 画面の系統図から印刷用の写しを作る。戻り値 { svg, w, h }。 */
+function choshoDiagramForPrint(src){
+  const clone = src.cloneNode(true);
+  clone.removeAttribute("id");
+  clone.style.width = ""; clone.style.height = "";
+  clone.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  clone.querySelectorAll(".meas-table, .selection-ui").forEach(el => el.remove());
+  if(!agShowInChosho()) clone.querySelectorAll(".ag-pasted").forEach(el => el.remove());
+  const vb = (clone.getAttribute("viewBox") || "0 0 1160 780").split(/\s+/).map(Number);
+  /* 画面外の仮置き場で 1単位=1px で描き、寸法を測ってから直す。
+     受付台帳を開いたままの全件印刷では画面の図（.app の中）が非表示で測れないため、必ずここで測る。 */
+  const tmp = document.createElement("div");
+  tmp.style.cssText = "position:fixed;left:-30000px;top:0;width:" + vb[2] + "px;height:" + vb[3]
+    + "px;overflow:hidden;visibility:hidden;pointer-events:none;";
+  clone.setAttribute("width", vb[2]); clone.setAttribute("height", vb[3]);
+  tmp.appendChild(clone); document.body.appendChild(tmp);
+  let size = { w: vb[2], h: vb[3] };
+  try { size = choshoDiagramEnlarge(clone, vb); }
+  catch(e){ console.warn("工事調書の系統図の拡大に失敗（元のまま載せます）", e); }
+  tmp.remove();
+  clone.removeAttribute("width"); clone.removeAttribute("height");
+  return { svg: clone, w: Math.max(1, size.w), h: Math.max(1, size.h) };
+}
+
+/* ============================================================
+   使用材料を、紙の枠にちょうど収まるところまで詰める
+   ------------------------------------------------------------
+   行数からの「見込み」だと、品目名の長さ・備考の折り返しでずれて、
+   枠から溢れた分が黙って消える。ここでは画面外の仮置き場に本物と同じ幅で
+   並べて実際の高さを測り、
+     ① 2列 6.5pt → ② 2列 6pt → ③ 3列 6pt の順に試し、
+     ④ それでも入らなければ末尾を落として「…ほか n 点」を列の外に出す
+   ようにしている。列の中に書くと次の列へ流れて見えなくなるため、必ず外に置く。
+   ============================================================ */
+const CHOSHO_MAT = {
+  W_MM: 101.5,   // 使用材料の枠の中身の幅（紙 182mm − 左の 78mm − 隙間 2mm − 枠線）
+  H_MM: 94       // 同じく高さ（枠 100mm − 見出しの行）
+};
+function choshoMatFit(units){
+  const C = CHOSHO_MAT;
+  const mm = v => (v * 96 / 25.4);
+  const box = document.createElement("div");
+  box.style.cssText = "position:fixed;left:-30000px;top:0;width:" + C.W_MM + "mm;visibility:hidden;pointer-events:none;";
+  const list = document.createElement("div");
+  box.appendChild(list); document.body.appendChild(box);
+  const fits = (cls, n) => {
+    list.className = "chosho-mat-list" + (cls ? " " + cls : "");
+    list.innerHTML = units.slice(0, n).join("");
+    return list.scrollHeight <= mm(C.H_MM) + 1;
+  };
+  let cls = "", n = units.length, omitted = 0;
+  try {
+    if(fits("", n)) cls = "";
+    else if(fits("mat-many", n)) cls = "mat-many";
+    else if(fits("mat-more", n)) cls = "mat-more";
+    else {
+      // 3列 6pt でも入らない → 入るところまで二分探索で減らす
+      cls = "mat-more";
+      let lo = 0, hi = units.length;
+      while(lo < hi){
+        const mid = Math.ceil((lo + hi) / 2);
+        if(fits(cls, mid)) lo = mid; else hi = mid - 1;
+      }
+      n = lo; omitted = units.length - n;
+      list.innerHTML = units.slice(0, n).join("");
+    }
+  } catch(e){
+    console.warn("使用材料の高さを測れませんでした（そのまま載せます）", e);
+    cls = "mat-more"; n = units.length; omitted = 0;
+  }
+  box.remove();
+  const slot = document.getElementById("chosho-mat-omitted-slot");
+  if(slot) slot.innerHTML = omitted ? '<span class="chosho-mat-omitted">…ほか ' + omitted + ' 点（積算書を参照）</span>' : '';
+  return '<div class="chosho-mat-list' + (cls ? " " + cls : "") + '">' + units.slice(0, n).join("") + '</div>';
+}
+
 /* 工事調書に載せる写真。「調書」を1枚でも選んでいればそれだけ、
    1枚も選んでいなければ登録した写真を全部（従来どおり）。 */
 function choshoPhotosForPrint(){
@@ -23321,23 +23706,16 @@ function renderChosho(){
     inp.high_work ? "必要（高所作業車）" : "不要";
   document.getElementById("chosho-power-pos-view").textContent = powerPosFull;
 
-  // 系統図クローン（工事調書では測定表は別欄に記載するためSVG内の測定表を削除）
+  // 系統図の写し（印刷用）。紙で読める大きさに直してから載せる（画面の図は変えない）。
+  // 測定表は別欄に出すので写しからは外す。箱の高さは図の縦横比から決め、幅いっぱいに描く。
   const src = document.getElementById("diagram");
   const host = document.getElementById("chosho-diagram-host");
   host.innerHTML = "";
   if(src){
-    const clone = src.cloneNode(true);
-    clone.removeAttribute("id");
-    clone.removeAttribute("width");
-    clone.removeAttribute("height");
-    clone.style.width = "";
-    clone.style.height = "";
-    clone.setAttribute("preserveAspectRatio", "xMidYMid meet");
-    // 測定表(g.meas-table)を除去
-    clone.querySelectorAll(".meas-table").forEach(el => el.remove());
-    // アンテナ取付ガイドの貼付図(g.ag-pasted)：ツールバーの「工事調書にも載せる」設定で掲載可否を切替（既定=載せる）
-    if(!agShowInChosho()) clone.querySelectorAll(".ag-pasted").forEach(el => el.remove());
-    host.appendChild(clone);
+    const r = choshoDiagramForPrint(src);
+    host.appendChild(r.svg);
+    // 図の縦横比を枠に渡す → 幅いっぱいに描ける高さが自動で決まる（.chosho-diagram-host の CSS を参照）
+    host.style.aspectRatio = r.w + " / " + r.h;
   }
 
   // 測定記録（縦表示: CH=行、アンテナ/増幅器/宅内末端 × dB/MER/BER = 9列）
@@ -23349,7 +23727,10 @@ function renderChosho(){
     { label:"増幅器",   key:"amplifier" },
     { label:"宅内末端", key:"terminal"  }
   ];
-  let mh = '<table class="chosho-meas-table chosho-meas-v"><thead>'
+  // 列幅：BER「0.00E+00」が折り返さないよう、BER の列だけ広く取る（table-layout:fixed は colgroup を見る）
+  const measCols = '<col style="width:7.3%"><col style="width:7.3%"><col style="width:13.4%">';
+  let mh = '<table class="chosho-meas-table chosho-meas-v">'
+    + '<colgroup><col style="width:16%">' + measCols + measCols + measCols + '</colgroup><thead>'
     + '<tr>'
     + '<th rowspan="2" class="col-ch">CH</th>';
   locDefs.forEach(loc => {
@@ -23381,27 +23762,26 @@ function renderChosho(){
     if(!grouped[it.category]) grouped[it.category] = [];
     grouped[it.category].push(it);
   });
-  let mat = '';
-  let matCount = 0;
+  // 品目を1つずつの「かたまり」にする（分類の見出しは、その分類の最初の品目にくっつける）
+  const matUnits = [];
   catOrder.forEach(cat => {
     if(!grouped[cat]) return;
-    mat += '<div class="mat-cat-head">■ ' + escapeHtml(CATEGORY_LABEL[cat]) + '</div>';
+    let headDone = false;
     grouped[cat].forEach(it => {
+      const head = headDone ? '' : '<div class="mat-cat-head">■ ' + escapeHtml(CATEGORY_LABEL[cat]) + '</div>';
+      headDone = true;
       const noteHtml = it.note ? '<div class="mat-note">※ ' + escapeHtml(it.note) + '</div>' : '';
-      mat += '<div class="mat-row">'
+      matUnits.push(head + '<div class="mat-row">'
         + '<div class="mat-name">' + escapeHtml(it.name) + '</div>'
         + '<div class="mat-model">' + escapeHtml(it.model) + '</div>'
         + '<div class="mat-qty">' + it.qty + ' ' + escapeHtml(it.unit) + '</div>'
         + noteHtml
-        + '</div>';
-      matCount++;
+        + '</div>');
     });
   });
-  if(matCount === 0){
-    mat = '<div style="padding:2mm;color:#999;font-size:7pt;">使用材料なし</div>';
-  } else {
-    mat = '<div class="chosho-mat-list">' + mat + '</div>';
-  }
+  { const _slot = document.getElementById("chosho-mat-omitted-slot"); if(_slot) _slot.innerHTML = ""; }
+  const mat = matUnits.length ? choshoMatFit(matUnits)
+    : '<div style="padding:2mm;color:#999;font-size:7pt;">使用材料なし</div>';
   document.getElementById("chosho-mat-view").innerHTML = mat;
 
   // 写真（複数枚動的描画）
@@ -23420,12 +23800,29 @@ function renderChosho(){
         + '</div>';
     });
     photosRow.innerHTML = ph;
+    // 枚数で列の数と段数を決める。印が無いと何枚でも横一列になってしまう。
+    // 11枚以上は 6列にして、3段になるときは帯を高くする（小さくしすぎない）。
+    const _pn = photos.length;
+    const _cols = _pn <= 4 ? _pn : (_pn <= 6 ? 3 : (_pn <= 8 ? 4 : (_pn <= 10 ? 5 : 6)));
+    const _rows = _cols ? Math.ceil(_pn / _cols) : 0;
+    photosRow.className = "chosho-photos-row photos-" + Math.min(_pn, 10);
+    photosRow.style.gridTemplateColumns = _cols ? "repeat(" + _cols + ", minmax(0, 1fr))" : "";
+    photosRow.style.gridTemplateRows = "";
+    photosRow.style.minHeight = _pn === 0 ? "" : (_rows >= 3 ? "58mm" : (_rows === 2 ? "44mm" : "42mm"));
+    const lowerEl = photosRow.closest(".chosho-lower");
+    if(lowerEl) lowerEl.classList.toggle("no-photos", photos.length === 0);
   }
 
   // 石綿対応（みなし判定）情報の描画
   renderChoshoAsbestos();
 }
 
+/* 石綿の判定バッジ。背景色に対して読める文字色（白か黒）を bestInkOn が選ぶので、
+   色を変えても紙で読めなくならない。印刷では body * の「全部黒」に負けないよう important を付ける。 */
+function asbBadgeHtml(bg, text){
+  return '<span class="asb-chosho-badge" style="background:' + bg + ';color:' + bestInkOn(bg) + ' !important;">'
+    + escapeHtml(text) + '</span>';
+}
 /* 工事調書 右下1/4: 石綿対応情報を描画 */
 function renderChoshoAsbestos(){
   const view = document.getElementById("chosho-asbestos-view");
@@ -23449,7 +23846,7 @@ function renderChoshoAsbestos(){
   let basis = "";
   let badge = "";
   if(applied === null){
-    badge = '<span class="asb-chosho-badge" style="background:#b0b8c0;">⚪ 石綿情報 未入力</span>';
+    badge = asbBadgeHtml("#b0b8c0", "⚪ 石綿情報 未入力");
     if(badgeSlot) badgeSlot.innerHTML = badge;
     view.innerHTML = '<div class="asb-chosho-note">着工日・登記年月日のいずれかを入力してください。</div>';
     return;
@@ -23469,16 +23866,16 @@ function renderChoshoAsbestos(){
     basis = "登記年月日 −2年 = " + derived + "（" + (derived < ASBESTOS_CUTOFF ? "2006/9/1 以前" : "2006/9/1 以降") + "）";
   }
   if(!applied){
-    badge = '<span class="asb-chosho-badge" style="background:#43a047;">🟢 石綿対応 不要</span>';
+    badge = asbBadgeHtml("#43a047", "🟢 石綿対応 不要");
   } else if(a.level === "level1" || a.level === "level2"){
     const lvl = a.level === "level1" ? "LV1" : "LV2";
-    badge = '<span class="asb-chosho-badge" style="background:#c62828;">⚠ 要専門業者（' + lvl + '）</span>';
+    badge = asbBadgeHtml("#c62828", "⚠ 要専門業者（" + lvl + "）");
   } else if(a.no_dust_method){
-    badge = '<span class="asb-chosho-badge" style="background:#b8860b;">🟡 みなし該当（非発じん工法で施工）</span>';
+    badge = asbBadgeHtml("#b8860b", "🟡 みなし該当（非発じん工法で施工）");
   } else if(a.date_unknown){
-    badge = '<span class="asb-chosho-badge" style="background:#fb8c00;">🟠 みなし適用（着工日不明）</span>';
+    badge = asbBadgeHtml("#fb8c00", "🟠 みなし適用（着工日不明）");
   } else {
-    badge = '<span class="asb-chosho-badge" style="background:#fb8c00;">🟠 みなし適用（LV3）</span>';
+    badge = asbBadgeHtml("#fb8c00", "🟠 みなし適用（LV3）");
   }
   // 左側: みなし判定 KV
   const leftRows = [];
