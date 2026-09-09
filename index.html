@@ -6853,7 +6853,7 @@ async function lsRestoreFromIdb(){
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "151";
+const APP_VERSION = "152";
 /* ============================================================
    ★日時の表示は、必ずこの端末の時刻で★
    保存している日時は世界時のISO文字列（…T01:03:00.000Z）。これを文字のまま
@@ -23754,11 +23754,22 @@ function renderChosho(){
   mh += '</tbody></table>';
   document.getElementById("chosho-meas-view").innerHTML = mh;
 
-  // 使用材料（qty>0のBOM項目のみ・カテゴリ順・CSSマルチカラムで左優先埋め）
+  /* 使用材料。ここに載せるのは「物として使ったもの」だけ。
+     ------------------------------------------------------------
+     ★労務は載せない★（利用者の指定・2026-09-09）
+     宅内調整・高所作業車損料・雑工事・保安器撤去・引込線撤去・CATV柱・協力会社諸経費・
+     石綿みなし対応 諸経費 は、物ではなく手間（労務）なので工事調書には出さない。
+     分類（その他労務・撤去工事）ごと落とすと、同じ分類に入っているアッテネーター・雪止横葺・
+     FA（中継）という本物の部材まで消えてしまうので、**材料費が付いているかどうか**で分ける。
+     単価マスターでは、労務だけの品目は材料費が 0 円で登録されている。
+     金額そのものは調書に出さない（数量だけ）。積算・全体費用・協力会社請求内訳には今までどおり全部入る。 */
   const catOrder = ["antenna","mast","mount","support","cable","filter","booster","amplifier","splitter","mixer","terminal","connector","indoor","misc","removal"];
+  /* 「その他労務」は労務を外したあとは部材だけが残るので、調書では「その他」と書く。 */
+  const CHOSHO_CAT_LABEL = { misc: "その他" };
   const grouped = {};
   (STATE.bom || []).forEach(it => {
     if(!it.qty || it.qty <= 0) return;
+    if(!(Number(it.material_cost) > 0)) return;   // 材料費が付いていない＝労務。調書には出さない
     if(!grouped[it.category]) grouped[it.category] = [];
     grouped[it.category].push(it);
   });
@@ -23768,7 +23779,7 @@ function renderChosho(){
     if(!grouped[cat]) return;
     let headDone = false;
     grouped[cat].forEach(it => {
-      const head = headDone ? '' : '<div class="mat-cat-head">■ ' + escapeHtml(CATEGORY_LABEL[cat]) + '</div>';
+      const head = headDone ? '' : '<div class="mat-cat-head">■ ' + escapeHtml(CHOSHO_CAT_LABEL[cat] || CATEGORY_LABEL[cat]) + '</div>';
       headDone = true;
       const noteHtml = it.note ? '<div class="mat-note">※ ' + escapeHtml(it.note) + '</div>' : '';
       matUnits.push(head + '<div class="mat-row">'
