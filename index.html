@@ -3890,6 +3890,49 @@
   #aptmg-ov .amg-foot { padding: 8px 14px; display: flex; align-items: center; gap: 10px; border-top: 1px solid #e6e1ea; }
   #aptmg-ov .amg-foot span { margin-right: auto; font-size: 11px; color: #5c6670; }
   #aptmg-ov .amg-foot button { font-size: 13px; padding: 5px 16px; border-radius: 4px; cursor: pointer; font-family: inherit; border: 1px solid #6a1b9a; background: #6a1b9a; color: #fff; }
+  /* ✅ 完了した戸別の工事調書をPDFにする（完了チェックリスト）。作りは 🏢マンション管理（#aptmg-ov）に合わせる */
+  #cdl-ov { position: fixed; inset: 0; background: rgba(20,30,45,.55); z-index: 9000; display: flex; align-items: center; justify-content: center; }
+  #cdl-ov .cdl-box { background: #fff; border-radius: 8px; width: min(1180px, 96vw); max-height: 92vh; display: flex; flex-direction: column; box-shadow: 0 8px 30px rgba(0,0,0,.3); }
+  #cdl-ov .cdl-head { background: #7a4e1e; color: #fff; font-weight: 700; padding: 9px 14px; border-radius: 8px 8px 0 0; display: flex; align-items: center; gap: 12px; }
+  #cdl-ov .cdl-head .cdl-proj { font-weight: normal; font-size: 12px; opacity: .92; }
+  #cdl-ov .cdl-head button { margin-left: auto; background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.6); border-radius: 3px; cursor: pointer; font-size: 13px; padding: 1px 8px; }
+  #cdl-ov .cdl-bar { padding: 7px 14px; font-size: 12px; color: #33414f; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  #cdl-ov .cdl-nums { background: #faf6f1; border-bottom: 1px solid #e6ddd2; }
+  #cdl-ov .cdl-nums b { font-size: 16px; color: #5e3c16; margin: 0 2px; }
+  #cdl-ov .cdl-note { background: #fff; border: 1px solid #d9cec1; border-radius: 3px; padding: 1px 7px; font-size: 11px; }
+  #cdl-ov .cdl-mine { flex: 1 1 100%; font-size: 11px; color: #667482; margin-top: 2px; }
+  #cdl-ov .cdl-cond { border-bottom: 1px solid #e0e5ea; }
+  #cdl-ov .cdl-cond label { display: inline-flex; align-items: center; gap: 5px; }
+  #cdl-ov .cdl-cond select { font-size: 12px; padding: 2px 5px; border: 1px solid #cdd3da; border-radius: 3px; font-family: inherit; }
+  #cdl-ov .cdl-cond .cdl-sp { margin-left: auto; }
+  #cdl-ov .cdl-cond button { font-size: 12px; padding: 2px 10px; border: 1px solid #b08a55; color: #7a4e1e; background: #fff; border-radius: 3px; cursor: pointer; font-family: inherit; }
+  #cdl-ov .cdl-scroll { overflow: auto; border-bottom: 1px solid #e0e5ea; }
+  #cdl-ov table.cdl-tbl { border-collapse: collapse; width: 100%; font-size: 12px; }
+  #cdl-ov table.cdl-tbl th { position: sticky; top: 0; background: #f3ece4; color: #5e3c16; text-align: left; padding: 5px 6px; border-bottom: 1px solid #d9cec1; white-space: nowrap; z-index: 1; }
+  #cdl-ov table.cdl-tbl td { padding: 3px 6px; border-top: 1px solid #eef1f4; vertical-align: top; }
+  #cdl-ov tr.cdl-na { background: #f2f4f6; color: #8a949e; }
+  #cdl-ov tr.cdl-band td { background: #f3e5f5; color: #4a148c; font-weight: 700; }
+  #cdl-ov .cdl-mg { white-space: nowrap; font-family: monospace; }
+  #cdl-ov .cdl-addr { max-width: 260px; }
+  #cdl-ov .cdl-why { white-space: nowrap; font-size: 11px; }
+  #cdl-ov .cdl-warn { color: #e65100; font-weight: 700; }
+  #cdl-ov .cdl-lock { color: #8a949e; }
+  #cdl-ov .cdl-dup { background: #c62828; color: #fff; border-radius: 2px; font-size: 10px; padding: 0 3px; margin-left: 3px; }
+  #cdl-ov .cdl-dupn { background: #ffebee; border-color: #ef9a9a; color: #b71c1c; }
+  #cdl-ov .cdl-rep { background: #6a1b9a; color: #fff; border-radius: 2px; font-size: 10px; padding: 0 3px; margin-left: 3px; }
+  #cdl-ov .cdl-det { background: #eceff1; color: #546e7a; border: 1px solid #cfd8dc; border-radius: 2px; font-size: 10px; padding: 0 3px; margin-left: 3px; }
+  #cdl-ov .cdl-unit { color: #6a1b9a; font-size: 11px; margin-left: 4px; }
+  #cdl-ov .cdl-heavy { color: #b71c1c; font-size: 11px; }
+  #cdl-ov .cdl-empty { padding: 34px 20px; text-align: center; color: #4a5560; font-size: 13px; line-height: 1.9; }
+  #cdl-ov .cdl-none-row { padding: 20px; text-align: center; color: #8a949e; }
+  #cdl-ov .cdl-foot { padding: 8px 14px; display: flex; align-items: center; gap: 10px; border-top: 1px solid #e6ddd2; }
+  #cdl-ov .cdl-foot span { margin-right: auto; font-size: 11px; color: #5c6670; line-height: 1.6; }
+  #cdl-ov .cdl-foot button { font-size: 13px; padding: 5px 14px; border-radius: 4px; cursor: pointer; font-family: inherit; border: 1px solid #b08a55; background: #fff; color: #7a4e1e; white-space: nowrap; flex: 0 0 auto; }
+  #cdl-ov .cdl-foot button.cdl-go { border-color: #5e3c16; background: #7a4e1e; color: #fff; }
+  #cdl-ov .cdl-foot button[disabled] { opacity: .5; cursor: not-allowed; }
+  /* 紙には出さない（body 直付けの覆いなので、.modal-backdrop の消し込みが届かない） */
+  @media print { #cdl-ov { display: none !important; } }
+
   #lgimp-ov { position: fixed; inset: 0; background: rgba(20,30,45,.55); z-index: 9000; display: flex; align-items: center; justify-content: center; }
   #lgimp-ov .lgimp-box { background: #fff; border-radius: 8px; width: min(1040px, 94vw); max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 8px 30px rgba(0,0,0,.3); }
   #lgimp-ov .lgimp-head { background: #00695c; color: #fff; font-weight: 700; padding: 10px 16px; border-radius: 8px 8px 0 0; }
@@ -4197,6 +4240,9 @@
   .menu-summary .ms-prov { border-color: #e0c200; background: #fff8d6; color: #5d4037; }
   .menu-summary .ms-prov:hover { background: #fff3b0; }
   .menu-summary .ms-today b { color: #1e3a5f; }
+  .menu-summary .ms-done { border-color: #81c784; background: #e8f5e9; color: #1b5e20; }
+  .menu-summary .ms-done:hover { background: #c8e6c9; }
+  .menu-summary .ms-done[disabled] { opacity: .5; cursor: not-allowed; }
 
   /* ============ 🗺️ 地図（トレース）機能：map-view（既存非干渉・map-名前空間で加算） ============ */
   .map-view { display: none; }
@@ -4914,6 +4960,7 @@
               <button id="btn-print" title="系統図・測定記録・工事写真・積算書・アンテナ取付図をA4縦で印刷 / PDF（1枚に1つずつ）">📐 図面・積算</button>
               <div class="uc-menu-cap">まとめて</div>
               <button id="btn-print-chosho-all" title="読み込んだ全戸別（一覧／物件）の工事調書を1戸1ページで連続印刷">📚 工事調書 全件</button>
+              <button id="btn-print-chosho-done" title="工事が終わった戸別だけを一覧に並べ、チェックで選んで、1戸1ページの工事調書をまとめてPDFにします">☑ 工事調書 完了分</button>
             </div>
           </details>
         </span>
@@ -6853,7 +6900,7 @@ async function lsRestoreFromIdb(){
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "152";
+const APP_VERSION = "153";
 /* ============================================================
    ★日時の表示は、必ずこの端末の時刻で★
    保存している日時は世界時のISO文字列（…T01:03:00.000Z）。これを文字のまま
@@ -24096,7 +24143,7 @@ async function printAllChosho(){
     alert("印刷できる戸別がありません。\n先に 📋一覧 でフォルダ／物件を読み込んでください（全暗号化の未復号は対象外）。");
     return;
   }
-  if(!confirm(printable.length + " 件の工事調書を 1戸1ページ で連続印刷します。\n件数が多いと準備に時間がかかります。よろしいですか？")) return;
+  if(!confirm(printable.length + " 件の工事調書を 1戸1ページ で連続印刷します。\n件数が多いと準備に時間がかかります。\n印刷の画面で「PDFに保存」を選ぶと、PDFファイルになります。\nよろしいですか？")) return;
   await buildAndPrintChoshoBatch(printable, "工事調書_全件_");
 }
 
@@ -24108,8 +24155,353 @@ async function printSelectedChosho(){
     alert("印刷する戸別にチェックを入れてください。\n受付台帳の左端のチェックボックスで選びます（全暗号化の未復号は対象外）。");
     return;
   }
-  if(!confirm(printable.length + " 件の工事調書を 1戸1ページ で連続印刷します。\n件数が多いと準備に時間がかかります。よろしいですか？")) return;
+  if(!confirm(printable.length + " 件の工事調書を 1戸1ページ で連続印刷します。\n件数が多いと準備に時間がかかります。\n印刷の画面で「PDFに保存」を選ぶと、PDFファイルになります。\nよろしいですか？")) return;
   await buildAndPrintChoshoBatch(printable, "工事調書_選択_");
+}
+
+/* ============================================================
+   ✅ 完了した戸別の工事調書をまとめてPDFにする（完了チェックリスト）
+   ------------------------------------------------------------
+   工事が終わった戸別だけを一覧に並べ、チェックで選んで、既存の
+   buildAndPrintChoshoBatch へ渡すだけ。印刷・写真の処理は一切変えない。
+
+   ★完了かどうかは caseWorkDone だけで決める★
+     受付台帳の「完了」チェック、または現場入力の工事完了。
+     金額が計上されているかどうかは絶対に見ない（図面を描いた時点で
+     材料費・労務費は積み上がるため、金額で数えると実態より多く出る）。
+
+   ★写真は読むだけ★ chosho_photos には一切書かない。枚数も配列も変えない。
+
+   ★選び方はこの窓だけのもの★ 受付台帳の左端のチェック（_ledgerPrintSel）には
+     読みも書きもしない。台帳で手作業で選んでいる途中に窓を開いても消えない。
+   ============================================================ */
+/* この窓の状態。ファイルにも端末にも保存しない（データ項目は増やさない）。
+   user の鍵は「行そのもの」。管理番号ではないので、同じ管理番号が重なっていても
+   片方だけ外せる。_listRows が別の配列に置き換わったら（物件を開く・フォルダを読む）忘れる。 */
+let _cdl = { rows: null, user: new Map(), sort: "mgmt", company: "all", ym: "all", shown: {} };
+
+/* 印刷できるか。getPrintableChoshoRows（全件印刷が使う条件）と同じ。 */
+function cdlPrintable(r){ return !!(r && r.data) && !(r.fileType === "full" && !r.unlocked); }
+/* ハイブリッド暗号の未復号。印刷はできるが、名前が ★★★★★ で写真が入っていない。 */
+function cdlHybridLocked(r){ return !!r && r.fileType === "hybrid" && !r.unlocked; }
+/* 工事日（施工日）の年月。台帳で完了にしても完了日は残らないので、月は工事日で切る。 */
+function cdlYm(r){ const m = /^(\d{4})-(\d{2})/.exec(String(((r && r.data) || {}).chosho_date || "")); return m ? (m[1] + "-" + m[2]) : ""; }
+function cdlYmLabel(ym){ const m = /^(\d{4})-(\d{2})$/.exec(ym || ""); return m ? (m[1] + "年" + parseInt(m[2], 10) + "月") : "日付なし"; }
+/* 完了の印がどちらから付いたか。現場入力だけで完了にした戸別は状態が「受付済」のままなので、
+   なぜここに出ているのかが分かるように出す。 */
+function cdlDoneWhy(d){
+  const a = (d || {}).chosho_status === "completed", b = (d || {}).work_done === true;
+  return (a && b) ? "台帳＋現場" : (a ? "台帳" : "現場");
+}
+function cdlDateText(d){
+  const s = String(((d || {}).chosho_date) || "").trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  return m ? (m[1] + "/" + parseInt(m[2], 10) + "/" + parseInt(m[3], 10)) : "";
+}
+/* 完了した戸別の土台。_listRows が入れ替わっていたら覚え（チェックと絞り込み）を捨てる。 */
+function cdlBase(){
+  if(_cdl.rows !== _listRows){
+    _cdl.rows = _listRows; _cdl.user = new Map();
+    _cdl.company = "all"; _cdl.ym = "all";   // 別のフォルダ・物件に絞り込みを持ち越さない
+  }
+  const done = (_listRows || []).filter(caseWorkDone);
+  // 同じ管理番号の重なりは「完了の行だけ」で数える（未完了の相手はこの窓に出ないので選べない）
+  const dup = done.length ? lgDupCounts(done) : {};
+  return done.map(r => ({
+    row: r,
+    printable: cdlPrintable(r),
+    locked: cdlHybridLocked(r),
+    dwg: caseHasDrawingData(r),
+    company: rowContractor(r) || "",
+    ym: cdlYm(r),
+    dupN: dup[toHalfWidthAn((r.data && r.data.chosho_mgmt_no) || "").trim()] || 0
+  }));
+}
+/* 既定でチェックを入れるか。白紙に近い調書・名前が伏字の調書・同じ番号が重なっている組は
+   既定で混ぜない（入れれば出せる）。 */
+function cdlDefaultOn(e){ return e.printable && e.dwg && !e.locked && !(e.dupN > 1); }
+function cdlChecked(e){
+  if(!e.printable) return false;
+  return _cdl.user.has(e.row) ? !!_cdl.user.get(e.row) : cdlDefaultOn(e);
+}
+/* いま表に出ている行（会社・月で絞り、並べ替え、アパートは建物ごとに寄せる）。 */
+function cdlShown(){
+  let list = cdlBase();
+  // いまの一覧に無い会社・月で絞ったままだと、行き止まり（0件）になるので「全部」に戻す
+  if(_cdl.company !== "all" && _cdl.company !== "__none__" && !list.some(e => e.company === _cdl.company)) _cdl.company = "all";
+  if(_cdl.ym !== "all" && _cdl.ym !== "__none__" && !list.some(e => e.ym === _cdl.ym)) _cdl.ym = "all";
+  if(_cdl.company === "__none__" && !list.some(e => !e.company)) _cdl.company = "all";
+  if(_cdl.ym === "__none__" && !list.some(e => !e.ym)) _cdl.ym = "all";
+  if(_cdl.company !== "all") list = list.filter(e => (_cdl.company === "__none__") ? !e.company : (e.company === _cdl.company));
+  if(_cdl.ym !== "all") list = list.filter(e => (_cdl.ym === "__none__") ? !e.ym : (e.ym === _cdl.ym));
+  const mg = e => toHalfWidthAn((e.row.data && e.row.data.chosho_mgmt_no) || "").trim();
+  const cmpM = (a, b) => mg(a).localeCompare(mg(b), "ja", { numeric: true });
+  list.sort(_cdl.sort === "date"
+    ? (a, b) => (String((a.row.data && a.row.data.chosho_date) || "9999").localeCompare(String((b.row.data && b.row.data.chosho_date) || "9999")) || cmpM(a, b))
+    : cmpM);
+  const by = new Map(list.map(e => [e.row, e]));
+  return aptRegroup(list.map(e => e.row)).map(r => by.get(r)).filter(Boolean);
+}
+/* 写真の欄。数えるだけで、写真そのものには触らない。 */
+function cdlPhotoText(e){
+  const d = (e.row && e.row.data) || {};
+  if(!e.printable || e.locked) return { t: "―", warn: false, tip: "開くまで分かりません" };
+  const n = lgPhotoCountOf(d, e.row);
+  if(n < 0) return { t: "―", warn: false, tip: "開くまで分かりません" };   // 枚数がまだ分からない行
+  if(!n) return { t: "なし", warn: false, tip: "" };
+  if(d.chosho_photos_thumb) return { t: n + "枚（小さい写真）", warn: true, tip: "物件に保存するとき縮めた写真です。はっきり出すには 📁 フォルダ から戸別を読み込んでください" };
+  // 写真が行に無いとき、元のファイルから戻せるのは「ふつうの戸別ファイル」だけ（暗号の戸別は戻せない）
+  if(!Array.isArray(d.chosho_photos) && (e.row.fileType !== "plain" || (!e.row.fileHandle && !e.row.srcFile)))
+    return { t: n + "枚（紙には出ません）", warn: true, tip: "写真の元が手元にありません。暗号をかけた戸別は、この窓からの印刷では写真が出ません" };
+  return { t: n + "枚", warn: false, tip: "" };
+}
+function cdlPhotoSum(list){
+  let p = 0;
+  list.forEach(e => {
+    const d = (e.row && e.row.data) || {};
+    if(!e.printable || e.locked) return;
+    const n = lgPhotoCountOf(d, e.row) || 0;
+    if(n > 0) p += n;   // まだ分からない行（-1）は数えない
+  });
+  return p;
+}
+function cdlSelectedRows(){ return cdlShown().filter(e => e.printable && cdlChecked(e)).map(e => e.row); }
+
+function cdlClose(){
+  const ov = document.getElementById("cdl-ov");
+  if(ov && ov.parentNode) ov.parentNode.removeChild(ov);
+  _cdl.rows = null; _cdl.user = new Map(); _cdl.shown = {};   // 前の一覧の行を掴んだままにしない
+  _cdl.company = "all"; _cdl.ym = "all";
+}
+
+function cdlOpen(){
+  if(!((_listRows || []).length)){
+    alert("印刷できる戸別がありません。\n先に 📋一覧 でフォルダ／物件を読み込んでください。");
+    return;
+  }
+  let ov = document.getElementById("cdl-ov");
+  if(!ov){
+    ov = document.createElement("div");
+    ov.id = "cdl-ov";
+    document.body.appendChild(ov);
+    ov.addEventListener("click", ev => {
+      if(ev.target === ov || ev.target.closest("#cdl-x") || ev.target.closest("#cdl-close")){ cdlClose(); return; }
+      if(ev.target.closest("#cdl-all")){ cdlShown().forEach(e => { if(e.printable) _cdl.user.set(e.row, true); }); cdlRender(); return; }
+      if(ev.target.closest("#cdl-none")){ cdlShown().forEach(e => { if(e.printable) _cdl.user.set(e.row, false); }); cdlRender(); return; }
+      if(ev.target.closest("#cdl-print")){ cdlPrint(); return; }
+      if(ev.target.closest("#cdl-ledger")){ cdlToLedger(); return; }
+    });
+    ov.addEventListener("change", ev => {
+      const t = ev.target;
+      if(t.id === "cdl-sort"){ _cdl.sort = t.value; cdlRender(); return; }
+      if(t.id === "cdl-company"){ _cdl.company = t.value; cdlRender(); return; }
+      if(t.id === "cdl-ym"){ _cdl.ym = t.value; cdlRender(); return; }
+      if(t.dataset.cdlband){
+        const shown = cdlShown();   // 一覧が入れ替わっていたら、ここで覚えを捨てさせる
+        shown.forEach(e => { if(e.printable && aptBldgKeyOfRow(e.row) === t.dataset.cdlband) _cdl.user.set(e.row, t.checked); });
+        cdlRender(); return;
+      }
+      if(t.dataset.cdl){
+        const uid = t.dataset.cdl, row = _cdl.shown[uid];
+        cdlBase();   // 一覧が入れ替わっていたら、覚えを捨てるのを先に済ませる
+        if(row){ _cdl.user.set(row, t.checked); cdlRender(uid); }
+      }
+    });
+    ov.addEventListener("keydown", ev => { if(ev.key === "Escape"){ ev.preventDefault(); cdlClose(); } });
+  }
+  cdlRender();
+  const go = document.getElementById("cdl-print");
+  if(go) { try { go.focus({ preventScroll: true }); } catch(_){} }
+}
+
+function cdlRender(keepUid){
+  const ov = document.getElementById("cdl-ov");
+  if(!ov) return;
+  // 書き直しても、見ていた場所とキーボードの位置を保つ
+  const _sc = ov.querySelector(".cdl-scroll");
+  const _top = _sc ? _sc.scrollTop : 0;
+  if(!keepUid){
+    const a = document.activeElement;
+    if(a && a.dataset && a.dataset.cdl) keepUid = a.dataset.cdl;
+  }
+  const base = cdlBase(), list = cdlShown();
+  _cdl.shown = {};
+  const projName = (typeof _currentProject !== "undefined" && _currentProject)
+    ? ("物件「" + (_currentProject.name || "") + "」")
+    : ("読み込んだ一覧（" + (_listRows || []).length + " 件）");
+  // 数え上げ（土台ぜんぶ。絞り込みで隠れている分も理由として出す）
+  const lockedFull = base.filter(e => !e.printable).length;
+  const lockedHy = base.filter(e => e.printable && e.locked).length;
+  const noDwg = base.filter(e => e.printable && !e.locked && !e.dwg).length;
+  const dupGroups = new Set();
+  base.forEach(e => { if(e.dupN > 1) dupGroups.add(toHalfWidthAn((e.row.data && e.row.data.chosho_mgmt_no) || "").trim()); });
+  const sel = list.filter(e => e.printable && cdlChecked(e));
+  const photoP = cdlPhotoSum(sel);
+  const thumbN = sel.filter(e => ((e.row.data || {}).chosho_photos_thumb)).length;
+
+  const companies = Array.from(new Set(base.map(e => e.company).filter(Boolean))).sort((a, b) => a.localeCompare(b, "ja"));
+  const yms = Array.from(new Set(base.map(e => e.ym))).sort();
+  const hasNoCompany = base.some(e => !e.company);
+  const hasNoYm = base.some(e => !e.ym);
+
+  const esc = escapeHtml;
+  let h = '<div class="cdl-box">'
+    + '<div class="cdl-head"><span>✅ 完了した戸別の工事調書をPDFにする</span>'
+    +   '<span class="cdl-proj">' + esc(projName) + '</span>'
+    +   '<button type="button" id="cdl-x" title="閉じる">✕</button></div>';
+
+  if(!base.length){
+    h += '<div class="cdl-empty">工事が終わった戸別はまだありません。<br>'
+      + '受付台帳の「完了」チェック、または現場入力の工事完了で印が付きます。</div>'
+      + '<div class="cdl-foot"><span></span>'
+      + '<button type="button" id="cdl-close">閉じる</button>'
+      + '<button type="button" id="cdl-print" class="cdl-go" disabled>🖨 PDFにする</button></div></div>';
+    ov.innerHTML = h;
+    return;
+  }
+
+  // 数の帯
+  h += '<div class="cdl-bar cdl-nums">'
+    + '完了 <b>' + base.length + '</b> 件 ・ いま <b>' + sel.length + '</b> 件にチェック'
+    + '（' + sel.length + 'ページ・写真 合計 ' + photoP + ' 枚）'
+    + (lockedFull ? '<span class="cdl-note">🔒 開くまで印刷できない ' + lockedFull + ' 件</span>' : '')
+    + (lockedHy ? '<span class="cdl-note cdl-warn">🔓 まだ開いていない ' + lockedHy + ' 件（外しています）</span>' : '')
+    + (noDwg ? '<span class="cdl-note cdl-warn">図面なし ' + noDwg + ' 件（外しています）</span>' : '')
+    + (dupGroups.size ? '<span class="cdl-note cdl-dupn">同じ管理番号が重なっている ' + dupGroups.size + ' 組 — どちらを出すか選んでください（既定では外しています）</span>' : '')
+    + '<div class="cdl-mine">ここでの選び方は、この窓だけのものです（受付台帳の左端のチェックとは別です）</div>'
+    + '</div>';
+
+  // 条件の帯
+  h += '<div class="cdl-bar cdl-cond">'
+    + '<label>並び <select id="cdl-sort">'
+    +   '<option value="mgmt"' + (_cdl.sort === "mgmt" ? " selected" : "") + '>管理番号順</option>'
+    +   '<option value="date"' + (_cdl.sort === "date" ? " selected" : "") + '>工事日順</option>'
+    + '</select></label>'
+    + ((companies.length || hasNoCompany)
+        ? ('<label>会社 <select id="cdl-company"><option value="all"' + (_cdl.company === "all" ? " selected" : "") + '>全部</option>'
+           + companies.map(c => '<option value="' + esc(c) + '"' + (_cdl.company === c ? " selected" : "") + '>' + esc(c) + '</option>').join("")
+           + (hasNoCompany ? '<option value="__none__"' + (_cdl.company === "__none__" ? " selected" : "") + '>会社の割り当てなし</option>' : '')
+           + '</select></label>')
+        : '')
+    + '<label>工事日の月 <select id="cdl-ym"><option value="all"' + (_cdl.ym === "all" ? " selected" : "") + '>全部</option>'
+    +   yms.filter(Boolean).map(y => '<option value="' + esc(y) + '"' + (_cdl.ym === y ? " selected" : "") + '>' + esc(cdlYmLabel(y)) + '</option>').join("")
+    +   (hasNoYm ? '<option value="__none__"' + (_cdl.ym === "__none__" ? " selected" : "") + '>日付なし</option>' : '')
+    + '</select></label>'
+    + '<span class="cdl-sp"></span>'
+    + '<button type="button" id="cdl-all">すべて選ぶ</button>'
+    + '<button type="button" id="cdl-none">すべて外す</button>'
+    + '</div>';
+
+  // 表
+  h += '<div class="cdl-scroll"><table class="cdl-tbl"><thead><tr>'
+    + '<th style="width:30px;"></th><th>管理番号</th><th>名前</th><th>住所</th><th style="width:78px;">工事日</th>'
+    + '<th style="width:74px;">完了の印</th><th style="width:96px;">写真</th><th style="width:64px;">図面</th><th style="width:96px;">施工会社</th><th></th>'
+    + '</tr></thead><tbody>';
+  if(!list.length){
+    h += '<tr><td colspan="10" class="cdl-none-row">この絞り込みに当てはまる戸別がありません。</td></tr>';
+  }
+  let lastBldg = "";
+  list.forEach((e, i) => {
+    const row = e.row, d = row.data || {};
+    const uid = "cdl" + i;
+    _cdl.shown[uid] = row;
+    const bk = aptBldgKeyOfRow(row);
+    if(bk && bk !== lastBldg){
+      lastBldg = bk;
+      const all = aptGroupRows(_listRows || [], bk);
+      const doneAll = all.filter(caseWorkDone).length;
+      const units = aptUnits(d) || all.length;
+      const rep = all.find(m => aptIsRep(m.data));
+      const repDone = rep ? caseWorkDone(rep) : false;
+      // 共用部の材料は代表（1世帯目）のページにだけ載る。そのページが今回のPDFに入るかを見る
+      const repIn = !!(rep && list.some(x => x.row === rep && x.printable && cdlChecked(x)));
+      const mine = list.filter(x => aptBldgKeyOfRow(x.row) === bk && x.printable);
+      const onN = mine.filter(cdlChecked).length;
+      h += '<tr class="cdl-band"><td><input type="checkbox" data-cdlband="' + esc(bk) + '"'
+        + (mine.length && onN === mine.length ? " checked" : "") + (mine.length ? "" : " disabled") + '></td>'
+        + '<td colspan="9">🏢 ' + esc(String(d.apt_name || "").trim() || "アパート")
+        + '　完了 ' + doneAll + ' ／ ' + units + '世帯'
+        + (!repDone
+            ? '<span class="cdl-warn">　⚠ 代表（1世帯目）はまだ完了ではありません。共用部の分（ボックス一式・石綿の諸経費など）はどのページにも出ません</span>'
+            : (repIn ? '' : '<span class="cdl-warn">　⚠ 代表（1世帯目）が今回に入っていません。共用部の分（ボックス一式・石綿の諸経費など）はどのページにも出ません</span>'))
+        + '</td></tr>';
+    } else if(!bk){ lastBldg = ""; }
+    const ph = cdlPhotoText(e);
+    const on = cdlChecked(e);
+    h += '<tr class="cdl-row' + (e.printable ? "" : " cdl-na") + '">'
+      + '<td><input type="checkbox" data-cdl="' + uid + '"' + (on ? " checked" : "") + (e.printable ? "" : " disabled") + '></td>'
+      + '<td class="cdl-mg">' + esc(String(d.chosho_mgmt_no || ""))
+      +   (e.dupN > 1 ? '<span class="cdl-dup">同じ番号 ' + e.dupN + '件</span>' : '')
+      +   (isApartmentRow(row) && aptIsRep(d) ? '<span class="cdl-rep">代表</span>' : '')
+      +   (row._detached ? '<span class="cdl-det">ファイル無</span>' : '')
+      + '</td>'
+      + '<td>' + esc(String(d.chosho_cust_name || ""))
+      +   (isApartmentRow(row) ? ('<span class="cdl-unit">' + esc(aptUnitLabel(d)) + '</span>') : '')
+      + '</td>'
+      + '<td class="cdl-addr">' + esc(String(d.chosho_cust_addr || "")) + '</td>'
+      + '<td>' + esc(cdlDateText(d)) + '</td>'
+      + '<td>' + esc(cdlDoneWhy(d)) + '</td>'
+      + '<td' + (ph.warn ? ' class="cdl-warn"' : '') + (ph.tip ? ' title="' + esc(ph.tip) + '"' : '') + '>' + esc(ph.t) + '</td>'
+      + '<td>' + (!e.printable || e.locked ? '―'
+          : (e.dwg ? "○" : '<span class="cdl-warn">図面なし</span>')) + '</td>'
+      + '<td>' + esc(e.company) + '</td>'
+      + '<td class="cdl-why">'
+      +   (!e.printable ? '<span class="cdl-lock">🔒 開くまで印刷できません（戸別一覧の 🔓 一括復号）</span>'
+          : (e.locked ? '<span class="cdl-warn">🔓 まだ開いていません（名前と写真が出ません）</span>' : ''))
+      + '</td></tr>';
+  });
+  h += '</tbody></table></div>';
+
+  // 足
+  h += '<div class="cdl-foot"><span>'
+    + '出てくる印刷の画面で「PDFに保存」を選ぶと、1つのPDFファイルになります（1戸1ページ・A4たて）。'
+    + (thumbN ? '<br>物件から出した調書の写真は小さいもの（縮小した写真）になります。はっきりした写真で出すときは 📁 フォルダ から戸別を読み込んでください。' : '')
+    + (sel.length > 100 ? '<br><span class="cdl-heavy">件数が多いと準備に時間がかかります（100件でおよそ10秒）。PDFも大きくなるので、会社や月で分けると軽くなります。</span>' : '')
+    + '</span>'
+    + '<button type="button" id="cdl-ledger" title="受付台帳を「完了だけ」に絞って開きます">📒 受付台帳で見る（完了だけ）</button>'
+    + '<button type="button" id="cdl-close">閉じる</button>'
+    + '<button type="button" id="cdl-print" class="cdl-go"' + (sel.length ? "" : " disabled") + '>🖨 PDFにする（' + sel.length + '件）</button>'
+    + '</div></div>';
+  ov.innerHTML = h;
+  const _sc2 = ov.querySelector(".cdl-scroll");
+  if(_sc2) _sc2.scrollTop = _top;
+  if(keepUid){
+    const el = ov.querySelector('input[data-cdl="' + keepUid + '"]');
+    if(el && !el.disabled){ try { el.focus({ preventScroll: true }); } catch(_){ el.focus(); } }
+  }
+}
+
+async function cdlPrint(){
+  // 選んでいる間にほかの端末の保存を取り込むと、一覧が入れ替わって選びが消える
+  if(_cdl.rows !== _listRows){
+    cdlRender();
+    alert("ほかの端末の保存を取り込んだので、一覧が入れ替わりました。\nもう一度選んでください。");
+    return;
+  }
+  const rows = cdlSelectedRows();
+  if(!rows.length){
+    alert("選んだ戸別がありません。\n出したい戸別のチェックを入れてください。");
+    return;
+  }
+  if(!confirm(rows.length + " 件の工事調書を 1戸1ページ で続けて印刷します。\n"
+    + "件数が多いと、印刷の画面が出るまで少し待ちます。\n"
+    + "印刷の画面で「PDFに保存」を選ぶと、PDFファイルになります。\nよろしいですか？")) return;
+  let prefix = "工事調書_完了";
+  if(_cdl.ym !== "all") prefix += "_" + (_cdl.ym === "__none__" ? "日付なし" : _cdl.ym);
+  if(_cdl.company !== "all") prefix += "_" + (_cdl.company === "__none__" ? "会社なし" : String(_cdl.company).replace(/\s+/g, "_").slice(0, 20));
+  await buildAndPrintChoshoBatch(rows, prefix + "_");
+}
+
+/* 受付台帳を「完了だけ」で開く。ほかの絞り込みが残っていると 0 件の画面に着くので全部戻す。 */
+function cdlToLedger(){
+  _ledgerOnlyDone = true;
+  _ledgerOnlyPending = false; _ledgerOnlyProv = false; _ledgerOnlyNoFlyer = false;
+  _ledgerOnlyNoDwg = false; _ledgerOnlyHold = false; _ledgerOnlyUnsched = false; _ledgerOnlyApt = false;
+  // 絞り込み検索と「重複を隠す」も戻す（残っていると台帳が 0 件・片方だけの画面になる）
+  const sb = document.getElementById("list-search"); if(sb) sb.value = "";
+  _hideDuplicates = false;
+  const hd = document.getElementById("list-hide-dup"); if(hd) hd.checked = false;
+  cdlClose(); closeMenuView(); openListView(); setListMode("ledger");
 }
 
 /* ============================================================
@@ -27623,9 +28015,10 @@ async function renderMenuView(){
   const sumEl = document.getElementById("menu-summary");
   if(sumEl){
     const todayS = lgDateStrToday(0);
-    let prov = 0, todayN = 0, todayDone = 0, unschedN = 0;
+    let prov = 0, todayN = 0, todayDone = 0, unschedN = 0, doneN = 0;
     _listRows.forEach(r => {
       const d = (r && r.data) || {};
+      if(caseWorkDone(r)) doneN++;   // 完了は caseWorkDone だけ（金額は見ない）
       if(d.chosho_status === "provisional") prov++;
       if(lgIsUnscheduled(r)) unschedN++;
       if(d.chosho_date === todayS && lgLedgerEnabled(r)){
@@ -27641,7 +28034,14 @@ async function renderMenuView(){
          出てこないので、ここに件数を出しておかないと忘れられる。 */
       + (unschedN > 0
          ? '<button type="button" class="ms-item ms-unsched" id="ms-unsched" title="受付台帳を「日程未定のみ」で開く（いつでも良いと言われたまま日付が決まっていない戸別）">📅 日程未定 <b>' + unschedN + '</b>件</button>'
-         : '');
+         : '')
+      /* 工事が終わった戸別だけを選んで、工事調書をまとめてPDFにする入口。
+         カードではなくこの帯に置くのは、帯は開くたびに書き直されるので件数が常に最新になるため。 */
+      + '<button type="button" class="ms-item ms-done" id="ms-done"' + (doneN ? '' : ' disabled')
+      + ' title="' + (doneN
+          ? '工事が終わった戸別だけを一覧に並べ、チェックで選んで、1戸1ページの工事調書をまとめてPDFにします（この画面はそのまま、上に窓が開きます）'
+          : '完了した戸別がまだありません（受付台帳の「完了」か、現場入力の工事完了で印が付きます）') + '">'
+      + '🖨 完了した戸別の工事調書 <b>' + doneN + '</b>件</button>';
     if(!sumEl._bound){
       sumEl._bound = true;
       sumEl.addEventListener("click", e => {
@@ -27651,6 +28051,8 @@ async function renderMenuView(){
         } else if(e.target.closest("#ms-unsched")){
           _ledgerOnlyUnsched = true;
           closeMenuView(); openListView(); setListMode("ledger");
+        } else if(e.target.closest("#ms-done")){
+          cdlOpen();   // ホームは閉じない（上に窓が乗る）
         } else if(e.target.closest("#ms-today")){
           const t = new Date();
           _calY = t.getFullYear(); _calM = t.getMonth();
@@ -27886,6 +28288,7 @@ let _ledgerOnlyProv = false;     // 仮受付のみ（電話後の清書作業�
 let _ledgerOnlyNoDwg = false;    // 図面未作成のみ
 let _ledgerOnlyHold = false;     // 保留のみ
 let _ledgerOnlyUnsched = false;
+let _ledgerOnlyDone = false;     // 完了（工事が終わった戸別）だけ。判定は caseWorkDone のみ（金額は見ない）
 let _ledgerOnlyApt = false;      // 🏢 アパートの世帯だけを出す  // 「いつでも可」なのに日付が決まっていないものだけ
 let _ledgerHighlightKey = null;
 let _ledgerShown = {};   // uid → row
@@ -28293,6 +28696,9 @@ function renderListLedgerMode(rows, container){
   const shown = sorted.filter(r => {
     if(_ledgerOnlyProv && !(r.data && r.data.chosho_status === "provisional")) return false;
     if(_ledgerOnlyPending && r.data && r.data.chosho_status === "completed") return false;
+    /* 完了だけ。台帳の「完了」チェックと現場入力の工事完了の両方を見る（caseWorkDone）。
+       上の「未完了」は状態だけを見るので、現場入力だけで完了にした戸別は両方に出る。 */
+    if(_ledgerOnlyDone && !caseWorkDone(r)) return false;
     if(_ledgerOnlyNoFlyer && getLedger(subCaseKey(r)).flyer) return false;
     if(_ledgerOnlyNoDwg && lgHasDrawing(r)) return false;
     if(_ledgerOnlyHold && !getLedger(subCaseKey(r)).hold) return false;
@@ -28329,9 +28735,10 @@ function renderListLedgerMode(rows, container){
     aptMapReg.set(k, hit);
   });
   const dupN = lgDupCounts(rows);   // 同じ管理番号が重なっている戸別に印を出すため
-  let done = 0, flyered = 0, prov = 0, held = 0, unsched = 0, aptN = 0;
+  let done = 0, flyered = 0, prov = 0, held = 0, unsched = 0, aptN = 0, doneW = 0;
   rows.forEach(r => {
     if(r.data && r.data.chosho_status === "completed") done++;
+    if(caseWorkDone(r)) doneW++;   // チップ用。台帳の完了＋現場入力の工事完了
     if(r.data && r.data.chosho_status === "provisional") prov++;
     const lgc = getLedger(subCaseKey(r));
     if(lgc.flyer) flyered++;
@@ -28351,7 +28758,7 @@ function renderListLedgerMode(rows, container){
   // 探さずに済むよう、それぞれに小見出しを付けて枠で囲う。
   const nFilters = (_ledgerOnlyProv ? 1 : 0) + (_ledgerOnlyPending ? 1 : 0) + (_ledgerOnlyNoFlyer ? 1 : 0)
     + (_ledgerOnlyNoDwg ? 1 : 0) + (_ledgerOnlyHold ? 1 : 0)
-    + (_ledgerOnlyUnsched ? 1 : 0) + (_ledgerOnlyApt ? 1 : 0);   // 日程未定は今まで数え漏れていた
+    + (_ledgerOnlyUnsched ? 1 : 0) + (_ledgerOnlyApt ? 1 : 0) + (_ledgerOnlyDone ? 1 : 0);   // 日程未定は今まで数え漏れていた
   html += '<div class="ledger-controls cost-detail-section">'
     // ① 行を足す
     + '<div class="lgc-grp"><span class="lgc-ttl">追加</span>'
@@ -28363,6 +28770,12 @@ function renderListLedgerMode(rows, container){
     + '<div class="lgc-grp"><span class="lgc-ttl">絞り込み' + (nFilters ? '（' + nFilters + '）' : '') + '</span>'
     +   '<label' + (prov > 0 ? ' style="background:#fff8d6;border-radius:3px;padding:2px 6px;"' : '') + ' title="まだ清書していない、電話受付だけの戸別"><input type="checkbox" id="lg-only-prov"' + (_ledgerOnlyProv ? " checked" : "") + '> 仮受付' + (prov > 0 ? '（' + prov + '）' : '') + '</label>'
     +   '<label title="完了になっていない戸別"><input type="checkbox" id="lg-only-pending"' + (_ledgerOnlyPending ? " checked" : "") + '> 未完了</label>'
+    +   '<label' + (doneW > 0 ? ' style="background:#e8f5e9;border-radius:3px;padding:2px 6px;"' : '')
+        + ' title="工事が終わった戸別だけを出します（受付台帳の「完了」、または現場入力の工事完了）。'
+        + '※現場入力で完了にしただけの戸別は、状態が「受付済」のままでもここに出ます（左の「未完了」にも出ます）。">'
+        + '<input type="checkbox" id="lg-only-done"' + (_ledgerOnlyDone ? " checked" : "") + '> 工事完了'
+        + (doneW > 0 ? '（' + doneW + '）' : '') + '</label>'
+    +   '<button id="lg-done-pick" title="工事が終わった戸別だけを一覧に並べ、チェックで選んで、1戸1ページの工事調書をまとめてPDFにします。" style="background:#fff;color:#7a4e1e;border:1px solid #b08a55;padding:2px 8px;border-radius:3px;cursor:pointer;font-size:11px;">☑ 完了分をえらんでPDF</button>'
     +   '<label title="ビラをまだ配っていない戸別"><input type="checkbox" id="lg-only-noflyer"' + (_ledgerOnlyNoFlyer ? " checked" : "") + '> ビラ未配布</label>'
     +   '<label title="図面（積算）がまだ入っていない戸別"><input type="checkbox" id="lg-only-nodwg"' + (_ledgerOnlyNoDwg ? " checked" : "") + '> 図面未作成</label>'
     +   '<label' + (held > 0 ? ' style="background:#ffe8cc;border-radius:3px;padding:2px 6px;"' : '') + ' title="着工を止めている戸別"><input type="checkbox" id="lg-only-hold"' + (_ledgerOnlyHold ? " checked" : "") + '> 保留' + (held > 0 ? '（' + held + '）' : '') + '</label>'
@@ -28624,7 +29037,7 @@ function refreshLedgerPrintSelUI(container){
     btn.disabled = !selCount;
     btn.style.cursor = selCount ? "pointer" : "not-allowed";
     btn.style.opacity = selCount ? "1" : ".5";
-    btn.textContent = "🖨 選択印刷" + (selCount ? "（" + selCount + "件）" : "");
+    btn.textContent = "🖨 工事調書" + (selCount ? "（" + selCount + "件）" : "");
     // 選択解除ボタンは選択がある時だけ表示（btn の直後に置く）
     let clearBtn = container.querySelector("#lg-print-clear");
     if(selCount && !clearBtn){
@@ -30133,6 +30546,7 @@ function bindLedgerHandlers(container){
       return;
     }
     if(e.target.closest("#lg-print-sel")){ printSelectedChosho(); return; }
+    if(e.target.closest("#lg-done-pick")){ cdlOpen(); return; }
     // 完了確認書をもらえないまま期限で切り替えた世帯の印
     {
       const wb = e.target.closest("button[data-f=\"waive\"]");
@@ -30294,7 +30708,8 @@ function bindLedgerHandlers(container){
     if(_listMode !== "ledger") return;
     const t = e.target;
     if(t.id === "lg-only-prov"){ _ledgerOnlyProv = t.checked; renderListTable(); return; }
-    if(t.id === "lg-only-pending"){ _ledgerOnlyPending = t.checked; renderListTable(); return; }
+    if(t.id === "lg-only-pending"){ _ledgerOnlyPending = t.checked; if(t.checked) _ledgerOnlyDone = false; renderListTable(); return; }
+    if(t.id === "lg-only-done"){ _ledgerOnlyDone = t.checked; if(t.checked) _ledgerOnlyPending = false; renderListTable(); return; }
     if(t.id === "lg-only-noflyer"){ _ledgerOnlyNoFlyer = t.checked; renderListTable(); return; }
     if(t.id === "lg-only-nodwg"){ _ledgerOnlyNoDwg = t.checked; renderListTable(); return; }
     if(t.id === "lg-only-hold"){ _ledgerOnlyHold = t.checked; renderListTable(); return; }
@@ -34479,6 +34894,7 @@ function init(){
   };
   document.getElementById("btn-print-chosho").onclick = printChosho;
   { const _ba = document.getElementById("btn-print-chosho-all"); if(_ba) _ba.onclick = printAllChosho; }
+  { const _bd = document.getElementById("btn-print-chosho-done"); if(_bd) _bd.onclick = cdlOpen; }
 
   // モバイル縦画面レイアウト切替
   const mobileBtn = document.getElementById("btn-mobile-toggle");
