@@ -55,7 +55,11 @@ CASES = [
    "smoke_v157_genba.js", "genba"),
 
   # ---- ⑧ 特別記録 ----
-  ("★特別記録で、書いたあと読み返して確かめない", u'''      const bad = await saveVerify(fh, state);''', u'''      const bad = "";''',
+  ("★特別記録で、書いたあと読み返して確かめない",
+   u'''         特別記録の写真は、この端末の下書きと、このファイルの2か所にしか無い。 */
+      const bad = await saveVerify(fh, state);''',
+   u'''         特別記録の写真は、この端末の下書きと、このファイルの2か所にしか無い。 */
+      const bad = "";''',
    "smoke_v157_genba.js", "genba"),
   ("★特別記録の写真を、確かめずに消せるようにする", u'''    if(!(await uiConfirm("この写真を消します。\\n\\n"''',
    u'''    if(!(true || await uiConfirm("この写真を消します。\\n\\n"''', "smoke_v157_genba.js", "genba"),
