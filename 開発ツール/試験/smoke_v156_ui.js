@@ -15,6 +15,12 @@ const ROOT = path.resolve(__dirname, '..', '..', '..');
 const FILE = n => 'file://' + path.join(ROOT, n, 'index.html');
 const HTML = process.argv[2] || FILE('antenna_genba');
 const fails = []; const ok = (c, m) => { if(!c) fails.push(m); };
+/* 版番号は上げるたびに試験を直さなくてよいように、読み込むファイルから拾う */
+const WANT_VER = (function(){ try{
+  const f = decodeURIComponent(String(HTML).replace(/^file:\/\//, ''));
+  const m = fs.readFileSync(f, 'utf8').match(/const APP_VERSION = "(\d+)"/);
+  return m ? m[1] : '';
+}catch(_){ return ''; } })();
 
 (async () => {
   const b = await chromium.launch({ executablePath: EXE, args: ['--no-sandbox'] });
@@ -46,7 +52,8 @@ const fails = []; const ok = (c, m) => { if(!c) fails.push(m); };
     return { n: secs.length, names, open, fields, ver: APP_VERSION };
   });
   console.log('①画面', JSON.stringify({ 節: r1.n, 開いた: r1.open, 欄: r1.fields, 版: r1.ver }));
-  ok(r1.ver === '156', '★版番号が156でない → ' + r1.ver);
+  ok(!!WANT_VER && r1.ver === WANT_VER,
+     '★画面の版番号がファイルの APP_VERSION と違う → 画面 ' + r1.ver + ' ／ ファイル ' + WANT_VER);
   ok(r1.n >= 5 && r1.open === r1.n, '★節が開かない（画面が壊れている） → ' + JSON.stringify(r1));
   ok(r1.fields > 40, '★入力の欄が出ていない → ' + r1.fields);
 

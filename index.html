@@ -5916,7 +5916,7 @@
       <span class="tb-grp">
         <button id="btn-list-select-folder" title="フォルダの中を、下のフォルダまで全部読み込みます (Chrome/Edge)。一度選ぶとそのフォルダを覚えるので、次からは一覧を開いたときに自動で読み込みます（別のフォルダにしたいときだけ押してください）。">📁 フォルダ</button>
         <button id="btn-list-select-files" title="ファイル（.json / .hyb / .enc / .json.txt）を1つずつ／まとめて選んで読み込みます。フォルダ選択に対応していない端末（iPad など）はこちらから。">📄 ファイル</button>
-        <button id="btn-genba-import" title="スマホ現場入力が書き出した「管理番号.json」を、開いている物件の同じ管理番号の戸別へ取り込みます。顧客情報は台帳を優先し、アンテナ・部材・測定・写真・配線は現場を採用。料金・石綿・図面レイアウトはPCを保持。取込前に中身を確かめられます。" style="background:#1565c0;">📥 現場取込</button>
+        <button id="btn-genba-import" title="スマホ現場入力が書き出した「管理番号.json」を、開いている物件の同じ管理番号の戸別へ取り込みます。顧客情報は台帳を優先し、アンテナ・部材・測定・写真・配線は現場を採用。料金・石綿・図面レイアウトはPCを保持。取込前に中身を確かめられます。※このボタンを押すと「ファイルを選ぶ画面」が開きます。フォルダを指定する画面ではありません（選ぶ画面でフォルダを開いて、中のファイルをまとめて選んでください）。" style="background:#1565c0;">📥 現場取込</button>
       </span>
       <span class="tb-div" aria-hidden="true"></span>
       <!-- 物件のはじめ／終わりにだけ使うもの -->
@@ -6554,7 +6554,7 @@
         <summary class="map-side-head" title="保留・下見完了・工事完了などの印"><span class="uc-t">印</span></summary>
         <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="受付台帳で「保留」にした戸別に付きます"><input type="checkbox" id="map-mark-hold"> <b style="color:#e65100;">保</b> 保留</label>
         <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="スマホ現場入力で「下見完了」にした戸別に付きます"><input type="checkbox" id="map-mark-surv"> <b style="color:#00838f;">下</b> 下見済み</label>
-        <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="受付台帳の「ビラ」に○が付いた戸別、またはスマホ現場入力で「ビラ配り」を押した戸別に付きます。フォルダを読み込んでいなくても、受付台帳のぶんは出ます。"><input type="checkbox" id="map-mark-flyer"> <b style="color:#7b1fa2;">ビ</b> ビラ配布済み</label>
+        <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="受付台帳の「ビラ済」に○が付いた戸別、またはスマホ現場入力で「ビラ配り」を押した戸別に付きます。フォルダを読み込んでいなくても、受付台帳のぶんは出ます。"><input type="checkbox" id="map-mark-flyer"> <b style="color:#7b1fa2;">ビ</b> ビラ配布済み</label>
         <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="工事状態が「工事完了」の戸別に付きます"><input type="checkbox" id="map-mark-done"> <b style="color:#2e7d32;">完</b> 工事完了</label>
         <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="工事状態が「未完了」の戸別に付きます。着工前（仮受付）には付きません。数が多くなるので既定は表示なしです。"><input type="checkbox" id="map-mark-undone"> <b style="color:#1565c0;">未</b> 未完了</label>
         <details class="uc-hint"><summary>くわしく</summary><div>管理番号の右肩に出ます（番号が無い建物は中心）。<b>入れれば印刷にも出ます／外せば印刷にも出ません</b>。この設定はこの端末だけに保存されます。</div></details>
@@ -6902,7 +6902,7 @@ async function lsRestoreFromIdb(){
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "156";
+const APP_VERSION = "157";
 /* ============================================================
    ★日時の表示は、必ずこの端末の時刻で★
    保存している日時は世界時のISO文字列（…T01:03:00.000Z）。これを文字のまま
@@ -17221,7 +17221,7 @@ const LGWB_FIELDS = [
   { k:"chosho_status",     label:"状態" },
   { k:"chosho_note",       label:"備考" },
   { k:"hold_flag",         label:"保留",   bool:true, lg:"hold" },
-  { k:"flyer_done",        label:"ビラ",   bool:true, lg:"flyer" },
+  { k:"flyer_done",        label:"ビラ済", bool:true, lg:"flyer" },
   { k:"consent_received",  label:"同意書", bool:true, lg:"consent" },
   { k:"compdoc_received",  label:"完了書", bool:true, lg:"compdoc" },
   /* アパート（集合住宅）。受付台帳と「🏢 マンション管理」でしか直せない欄なので、
@@ -17676,7 +17676,23 @@ async function lgwbEnsureRoot(){
     }
   }
   // フォルダを選ぶ画面が使えない端末だけ、いま持っているハンドルに許可を聞く
-  if(dh){ try { if(await dupEnsureWritable(dh)) return { dir: dh, picked: false }; } catch(_){} }
+  let askRefused = false;
+  if(dh){ try { if(await dupEnsureWritable(dh)) return { dir: dh, picked: false }; askRefused = true; }
+          catch(_){ askRefused = true; } }
+  /* ここまで来たら、書き込めるフォルダを掴めなかった。
+     自分で閉じたときは上で返しているので、ここは「開けなかった／許されなかった」だけ。
+     黙って終わると「押しても何も起きない」ように見えるので、断られた理由に合う言い方で伝える。 */
+  const tail = "\n\n台帳の内容はそのままです。何も書き換えていません。";
+  alert(askRefused
+    ? ("フォルダへの書き込みが許可されませんでした。\n\n"
+       + "もう一度「💾 戸別ファイルへ反映」を押して、フォルダを選び直してください。\n"
+       + "（選ぶ画面で工事フォルダを選ぶと、その場で書き込みまで許可されます）" + tail)
+    : window.showDirectoryPicker
+    ? ("フォルダを選べませんでした。\n\n"
+       + "もう一度「💾 戸別ファイルへ反映」を押してください。\n"
+       + "（それでも開かないときは Chrome / Edge でお試しください）" + tail)
+    : ("この端末では、フォルダを選ぶ操作に対応していません。\n\n"
+       + "台帳の内容を戸別ファイルへ書き戻すには、パソコンの Chrome / Edge でお試しください。" + tail));
   return null;
 }
 /* 行に付いているフォルダが本当に書けるか確かめる（聞き直さない。確かめるだけ）。
@@ -20022,12 +20038,26 @@ function aptNoteHtml(units){
          + "屋内用分配器・安全ブレーカー 2P2E20A・コンセント WK1512K を収めます"
          + "（電源部がボックスの中にあるので、分配器は全通電でなく普通のもので足ります）。");
     L.push("分配器は <b>" + escapeHtml(aptSplitterPlanText(plan)) + "</b>"
-         + (plan.cascade ? "（6分配までしか無いので、元の分配器から枝の分配器へつなぎます）" : "") + "。");
+         + (plan.cascade ? "（6分配までしか無いので、元の分配器から枝の分配器へつなぎます）" : "")
+         + (plan.ports > units ? ("　空き " + (plan.ports - units) + " 口") : "") + "。");
+    /* ★ボックス本体は「電源部の位置＝外部」のときだけ積算に入る★
+       中身（分配器・安全ブレーカー・コンセント）は位置を見ずに入るので、
+       位置が外部になっていないと、図にはボックスが出るのに金額に入らない。 */
+    if(rep && v("power_pos") !== "outside"){
+      L.push('<b style="color:#c62828">※ 電源部の位置が「外部（屋外コンセント・ボックス内）」になっていません。'
+           + 'このままだと、ボックスに収めるもの（分配器・安全ブレーカー・コンセント）は金額に入るのに、'
+           + '<u>ボックス本体が金額に入りません</u>。'
+           + '上の「電源部位置」を「外部（屋外コンセント・ボックス内）」にしてください。</b>');
+    }
     L.push(rep ? "このボックス一式は<b>代表のこの世帯にだけ</b>計上します。"
                : "ボックス一式は代表（1世帯目）に計上するので、この世帯には計上しません。");
   } else {
     L.push("共用部なし：この世帯に <b>電源部 BPS6W</b>・<b>小型漏電遮断機 2ZA2030</b>・"
          + "<b>コンセント WK1512K</b> を計上します（世帯ごとに必要）。");
+    /* 共用部なしのときは、増幅器から各世帯へ分ける分配器を自動では入れていない
+       （どこで分けるかが建物ごとに違う）。入っていないことを隠さずに書く。 */
+    L.push("増幅器から各世帯へ分ける分配器は、自動では入れていません"
+         + "（どこで分けるかが建物ごとに違うため）。必要なときは積算表で足してください。");
   }
   L.push("宅内調整は世帯ごとに計上します"
        + (isCatv ? (rep ? "。CATV住宅の代表は、保安器撤去・引込線撤去を含む一式 ¥11,000 になります。"
@@ -28647,7 +28677,7 @@ const LG_PRINT_COLS = [
   { key: "tel",     label: "電話番号", def: 8 },
   { key: "date",    label: "工事日程", def: 7 },
   { key: "meet",    label: "打合せ",   def: 7 },
-  { key: "flyer",   label: "ビラ",     def: 3 },
+  { key: "flyer",   label: "ビラ済",   def: 3 },
   { key: "done",    label: "完了",     def: 3 },
   { key: "hold",    label: "保留",     def: 3 },
   { key: "consent", label: "同意書",   def: 3 },
@@ -28953,7 +28983,7 @@ function renderListLedgerMode(rows, container){
         + '<input type="checkbox" id="lg-only-done"' + (_ledgerOnlyDone ? " checked" : "") + '> 工事完了'
         + (doneW > 0 ? '（' + doneW + '）' : '') + '</label>'
     +   '<button id="lg-done-pick" title="工事が終わった戸別だけを一覧に並べ、チェックで選んで、1戸1ページの工事調書をまとめてPDFにします。" style="background:#fff;color:#7a4e1e;border:1px solid #b08a55;padding:2px 8px;border-radius:3px;cursor:pointer;font-size:11px;">☑ 完了分をえらんでPDF</button>'
-    +   '<label title="ビラをまだ配っていない戸別"><input type="checkbox" id="lg-only-noflyer"' + (_ledgerOnlyNoFlyer ? " checked" : "") + '> ビラ未配布</label>'
+    +   '<label title="ビラをまだ配っていない戸別（配らなくてよい戸別も、空欄なのでここに出ます）"><input type="checkbox" id="lg-only-noflyer"' + (_ledgerOnlyNoFlyer ? " checked" : "") + '> ビラ未配布</label>'
     +   '<label title="図面（積算）がまだ入っていない戸別"><input type="checkbox" id="lg-only-nodwg"' + (_ledgerOnlyNoDwg ? " checked" : "") + '> 図面未作成</label>'
     +   '<label' + (held > 0 ? ' style="background:#ffe8cc;border-radius:3px;padding:2px 6px;"' : '') + ' title="着工を止めている戸別"><input type="checkbox" id="lg-only-hold"' + (_ledgerOnlyHold ? " checked" : "") + '> 保留' + (held > 0 ? '（' + held + '）' : '') + '</label>'
     +   '<label' + (unsched > 0 ? ' style="background:#e7f1fb;border-radius:3px;padding:2px 6px;"' : '') + ' title="「いつでも良い」と言われていて、まだ日付が決まっていない戸別"><input type="checkbox" id="lg-only-unsched"' + (_ledgerOnlyUnsched ? " checked" : "") + '> 日程未定' + (unsched > 0 ? '（' + unsched + '）' : '') + '</label>'
@@ -29005,7 +29035,7 @@ function renderListLedgerMode(rows, container){
     + '<th data-col="tel" style="width:112px;">電話番号</th>'
     + '<th data-col="date" data-sort="date" style="width:162px;">工事日程予定 ' + arrow("date") + '</th>'
     + '<th data-col="meet" data-sort="meet" style="width:172px;">打合せ予定 ' + arrow("meet") + '</th>'
-    + '<th data-col="flyer" data-sort="flyer" style="width:42px;" title="ビラ配布済み">ビラ ' + arrow("flyer") + '</th>'
+    + '<th data-col="flyer" data-sort="flyer" style="width:42px;" title="ビラ（工事のお知らせ）を配り終えた戸別に○を付けます。&#10;これから配る戸別・配らなくてよい戸別は、どちらも空欄です。&#10;アパートは入居者へ配ります（大家・不動産へは配りません）。">ビラ済 ' + arrow("flyer") + '</th>'
     + '<th data-col="done" data-sort="done" style="width:42px;" title="工事完了">完了 ' + arrow("done") + '</th>'
     + '<th data-col="hold" data-sort="hold" style="width:42px;" title="保留（着工を止めている戸別）。地図では管理番号の右肩に橙色の「保」マークが付きます">保留 ' + arrow("hold") + '</th>'
     + '<th data-col="consent" style="width:42px;" title="同意書（工事の承諾）。戸建ては住民から1通。&#10;アパートは大家から1通で建物ぜんぶ分になります（世帯ごとには要りません）。">同意書</th>'
@@ -29505,7 +29535,7 @@ const LG_XLSX_COLS = [
   { label:"電話番号",     w:16.7, align:"l" },
   { label:"工事日程予定", w:16,   align:"c" },
   { label:"打合せ予定",   w:14.7, align:"c" },
-  { label:"ビラ",         w:7.3,  align:"c" },
+  { label:"ビラ済",       w:7.3,  align:"c" },
   { label:"完了",         w:7.3,  align:"c" },
   { label:"保留",         w:7.3,  align:"c" },
   { label:"同意書",       w:9.3,  align:"c" },
@@ -29940,7 +29970,7 @@ const LGIMP_FIELDS = [
   { f: "status",  label: "状態",     kind: "case", key: "chosho_status", edit: "done", pick: "status" },
   { f: "time",    label: "工事時刻", kind: "lg",   key: "time" },
   { f: "meet",    label: "打合せ",   kind: "lg",   key: "meetAt" },
-  { f: "flyer",   label: "ビラ",     kind: "lg",   key: "flyer",   bool: true },
+  { f: "flyer",   label: "ビラ済",   kind: "lg",   key: "flyer",   bool: true },
   { f: "hold",    label: "保留",     kind: "lg",   key: "hold",    bool: true },
   { f: "consent", label: "同意書",   kind: "lg",   key: "consent", bool: true },
   { f: "compdoc", label: "完了書",   kind: "lg",   key: "compdoc", bool: true },
@@ -30348,7 +30378,7 @@ const LGX_ALIAS = {
   date:["工事日程予定","工事日","工事日程","施工日"],
   time:["工事時刻","工事時間","受付時刻","受付時間"],
   meet:["打合せ予定","打合せ","打ち合わせ予定","打ち合わせ"],
-  flyer:["ビラ","ビラ配布","チラシ"],
+  flyer:["ビラ済","ビラ","ビラ配布","チラシ"],   // 以前の書き出しは「ビラ」だった。両方読む
   done:["完了","完了済"],
   hold:["保留"],
   consent:["同意書","承諾書","承諾"],
