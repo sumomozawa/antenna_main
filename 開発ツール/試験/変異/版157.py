@@ -31,8 +31,13 @@ CASES = [
    u'''      const h = await window.showSaveFilePicker({ suggestedName: fname,''', "smoke_v157_genba.js", "genba"),
 
   # ---- ④ 許可が切れていたことを知らせない ----
-  ("★フォルダの許可が切れたことを知らせない", u'''  if(dir && !(await saveDirOk(dir, false))){ dir = null; dirLapsed = true; }''',
-   u'''  if(dir && !(await saveDirOk(dir, false))){ dir = null; }''', "smoke_v157_genba.js", "genba"),
+  ("★フォルダの許可が切れたことを知らせない",
+   u'''     ただし黙って別の道へ行くと「いつもと違う画面が出た」理由が分からないので、あとで伝える。 */
+  let dirLapsed = false;
+  if(dir && !(await saveDirOk(dir, false))){ dir = null; dirLapsed = true; }''',
+   u'''     ただし黙って別の道へ行くと「いつもと違う画面が出た」理由が分からないので、あとで伝える。 */
+  let dirLapsed = false;
+  if(dir && !(await saveDirOk(dir, false))){ dir = null; }''', "smoke_v157_genba.js", "genba"),
 
   # ---- ⑤ 共有で渡した .json.txt を読まない ----
   ("共有で渡したファイル（.json.txt）を印の引き継ぎで読まない",
@@ -41,11 +46,13 @@ CASES = [
 
   # ---- ⑥ まとめて保存：フォルダの窓が開けないのに先へ進む ----
   ("★フォルダの窓が開けないのに共有・ダウンロードへ落ちる",
-   u'''        await uiAlert("保存先のフォルダを選べませんでした。\\n\\nもう一度「まとめて保存」を押してください。");
+   u'''          + "共有やダウンロードで渡せます。");
       }
       return; }''',
-   u'''      }
-      dir = null; }''', "smoke_v157_genba.js", "genba"),
+   u'''          + "共有やダウンロードで渡せます。");
+      }
+      dir = null; }''',
+   "smoke_v157_genba.js", "genba"),
 
   # ---- ⑦ まとめて保存：共有・ダウンロードの知らせ ----
   ("★まとめて保存の知らせをトーストだけに戻す", u'''    if(okNos.length){
