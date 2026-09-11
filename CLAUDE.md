@@ -24,7 +24,10 @@
 ## 作業の作法
 - パッチは Python で。`io.open(p, encoding="utf-8", newline="")` で読み、改行は CRLF（`x.replace("\n","\r\n")`）。置換は件数を assert してから書く（失敗時はファイル無傷）。`grep` は `grep -a`。
 - 構文チェック: `python3 <scratchpad>/syn.py index.html`
-- 試験: scratchpad の `smoke_*.js`（playwright-core、`/opt/pw-browsers/chromium-*/chrome-linux/chrome`）。全件は `./runall.sh` → `runall.out`。
+- 試験: **`antenna_main/開発ツール/試験/`**（git で残る。2026-09-11 から。作業場だけに置くとコンテナが消えると一緒に失う）。
+  用意は1回だけ `cd 開発ツール/試験 && npm install playwright-core`。全件は `./全件.sh` → `全件.out`。
+  変異試験は `python3 変異/版156.py`（名前の一部を引数に渡すと絞れる）。くわしくは同じ場所の `README.md`。
+  ※ アプリ本体（`index.html`）は今までどおり ビルド無し・npm無し・外部CDN無し。npm が入るのは試験の置き場所だけ。
 - 直したら**変異試験**で「壊すと赤くなる」ことを確かめる（1箇所ずつ壊す → 試験 → 復元）。
 - 全件試験は編集を終えてから取り直す。緑になってからマージ。
 - マージ: 3リポジトリとも `momo/…` ブランチに push → draft PR。

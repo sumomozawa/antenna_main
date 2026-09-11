@@ -6902,7 +6902,7 @@ async function lsRestoreFromIdb(){
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "154";
+const APP_VERSION = "156";
 /* ============================================================
    ★日時の表示は、必ずこの端末の時刻で★
    保存している日時は世界時のISO文字列（…T01:03:00.000Z）。これを文字のまま
@@ -29636,6 +29636,13 @@ function buildReceptionLedgerPayload(){
       time:    lg.time            || "",
       meet:    lg.meetAt          || "",
       status:  d.chosho_status    || "",
+      work_done: d.work_done === true,   // 現場入力で付けた工事完了。status と合わせて「工事完了」を決める
+      /* ★PCにこの戸別の中身がどれだけ入っているか★
+         現場入力は、これを見て「保存するとPCの写真が消える」と気づける。
+         photos は -1 のことがある（＝PCでも開くまで分からない。暗号の戸別など）。
+         has_dwg は「図面・積算が入っているか」の目印。工事完了の判定には使わない。 */
+      photos:  (typeof lgPhotoCountOf === "function") ? lgPhotoCountOf(d, r) : 0,
+      has_dwg: (typeof caseHasDrawingData === "function") ? !!caseHasDrawingData(r) : false,
       contractor: ctr,
       survey:  !!d.survey_done,    // 下見済み（現場で押した印。戸別ファイルから来る）
       survey_at: String(d.survey_done_at || ""),
@@ -29670,8 +29677,10 @@ function buildReceptionLedgerPayload(){
   const projName = (typeof _currentProject !== "undefined" && _currentProject && _currentProject.name) ? String(_currentProject.name) : "";
   /* version 3 で「下見済み(survey / survey_at)」を足した。
      version 4 でアパート（apt_*）を足した。
+     version 5 で「PCにどれだけ中身が入っているか」（photos・has_dwg・work_done）を足した。
+       現場入力が、PCで作った写真や図面を上書きで消してしまう前に気づくためのもの。
      古い現場入力アプリは知らない欄として読み飛ばすだけなので、そのまま渡してよい。 */
-  return { type: "antenna_reception_ledger", version: 4, appVersion: APP_VERSION,
+  return { type: "antenna_reception_ledger", version: 5, appVersion: APP_VERSION,
            exportedAt: new Date().toISOString(), project: projName, count: rows.length, rows };
 }
 async function exportReceptionLedgerForGenba(){
