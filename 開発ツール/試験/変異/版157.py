@@ -64,6 +64,23 @@ CASES = [
   ("★特別記録の写真を、確かめずに消せるようにする", u'''    if(!(await uiConfirm("この写真を消します。\\n\\n"''',
    u'''    if(!(true || await uiConfirm("この写真を消します。\\n\\n"''', "smoke_v157_genba.js", "genba"),
 
+  # ---- 検証で足した分（特別記録の控え・許可切れ・止めたときの案内）----
+  ("★特別記録：読み返しで合わなかったときに名前を控えない（別名のファイルが増える）",
+   u'''        try{ await spPersist(rec, false); }catch(_){}''', u'''        void 0;''',
+   "smoke_v157_genba.js", "genba"),
+  ("特別記録で、覚えているフォルダの許可切れを知らせない",
+   u'''  /* 戸別の「保存」と同じ。許可が切れているときは聞き直さずに落として、あとで伝える。 */
+  let dirLapsed = false;
+  if(dir && !(await saveDirOk(dir, false))){ dir = null; dirLapsed = true; }''',
+   u'''  let dirLapsed = false;
+  if(dir && !(await saveDirOk(dir, false))){ dir = null; }''',
+   "smoke_v157_genba.js", "genba"),
+  ("まとめて保存の逃げ道（1件ずつ保存）を書かない",
+   u'''          + "それでも開かないときは、戸別を1件ずつ開いて「保存」を押すと、\\n"
+          + "共有やダウンロードで渡せます。"''',
+   u'''          + ""''',
+   "smoke_v157_genba.js", "genba"),
+
   # ---- ⑨ メイン：アパートの気づき ----
   ("★共用部ボックスが金額に入らないことを知らせない", u'''    if(rep && v("power_pos") !== "outside"){''', u'''    if(false){''',
    "smoke_v157_main.js", "main"),
@@ -82,6 +99,16 @@ CASES = [
    "smoke_v157_main.js", "main"),
   ("Excelを読むときに「ビラ」を拾わなくする", u'''  flyer:["ビラ済","ビラ","ビラ配布","チラシ"],''', u'''  flyer:["ビラ済"],''',
    "smoke_v157_main.js", "main"),
+  ("★書き込みを断られたのに「対応していません」と言う（理由と合わない）",
+   u'''  alert(askRefused''', u'''  alert(false''', "smoke_v157_main.js", "main"),
+  ("★フォルダを掴めないときに黙って終わる",
+   u'''  alert(askRefused''', u'''  if(0) alert(askRefused''', "smoke_v157_main.js", "main"),
+  ("「戸別ファイルへ反映」の差分の言い方が「ビラ」のまま",
+   u'''  { k:"flyer_done",        label:"ビラ済", bool:true, lg:"flyer" },''',
+   u'''  { k:"flyer_done",        label:"ビラ",   bool:true, lg:"flyer" },''', "smoke_v157_main.js", "main"),
+  ("地図の説明の言い方が「ビラ」のまま",
+   u'''title="受付台帳の「ビラ済」に○が付いた戸別''',
+   u'''title="受付台帳の「ビラ」に○が付いた戸別''', "smoke_v157_main.js", "main"),
   ("印刷の列名を「ビラ」に戻す", u'''  { key: "flyer",   label: "ビラ済",   def: 3 },''',
    u'''  { key: "flyer",   label: "ビラ",     def: 3 },''', "smoke_v157_main.js", "main"),
 ]

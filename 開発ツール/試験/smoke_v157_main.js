@@ -244,6 +244,46 @@ const fails = []; const ok = (c, m) => { if(!c) fails.push(m); };
      '★Excel へ書き出す見出しが「ビラ済」になっていない（読み戻しと食い違う） → '
      + JSON.stringify(r6.Excel書き出し));
 
+  // ---- ⑦ 「ビラ」の言い方が画面ごとに揺れていない ----
+  const r7 = await page.evaluate(() => {
+    const w = (LGWB_FIELDS || []).find(f => f.k === 'flyer_done');
+    const g = (typeof LGIMP_FIELDS !== 'undefined' ? LGIMP_FIELDS : []).find(f => f.f === 'flyer');
+    const lab = document.querySelector('label.map-layer-extra[title*="ビラ"]');
+    return { 反映: w ? w.label : '(無し)', 取込: g ? g.label : '(無し)',
+             地図: lab ? (lab.getAttribute('title') || '').slice(0, 40) : '(無し)' };
+  });
+  console.log('⑦言い方の揺れ', JSON.stringify(r7));
+  ok(r7.反映 === 'ビラ済', '★「戸別ファイルへ反映」の差分で「ビラ」のままになっている → ' + r7.反映);
+  ok(r7.取込 === 'ビラ済' || r7.取込 === '(無し)',
+     '★受付台帳の取込の差分で「ビラ」のままになっている → ' + r7.取込);
+  ok(/ビラ済/.test(r7.地図), '★地図の説明が「受付台帳の「ビラ」」のままになっている → ' + r7.地図);
+
+  // ---- ⑧ 💾 戸別ファイルへ反映：フォルダを掴めなかったときに黙って終わらない ----
+  const r8 = await page.evaluate(async () => {
+    const out = {}; const oa = window.alert, odp = window.showDirectoryPicker, odr = window.listDirRestore;
+    const said = []; window.alert = m => { said.push(String(m)); };
+    try{
+      // (a) 手元のフォルダに許可を聞いて断られた（窓は使えない端末）
+      try{ delete window.showDirectoryPicker; }catch(_){ window.showDirectoryPicker = undefined; }
+      window.listDirRestore = async () => ({ name:'リスト',
+        queryPermission: async()=>'prompt', requestPermission: async()=>'denied' });
+      said.length = 0;
+      out.refused = { root: await lgwbEnsureRoot(), said: said.join('\n') };
+      // (b) 窓も無く、手元のフォルダも無い端末
+      window.listDirRestore = async () => null;
+      said.length = 0;
+      out.none = { root: await lgwbEnsureRoot(), said: said.join('\n') };
+    } finally {
+      window.alert = oa; if(odp) window.showDirectoryPicker = odp; window.listDirRestore = odr;
+    }
+    return out;
+  });
+  console.log('⑧フォルダを掴めないとき', JSON.stringify(r8));
+  ok(r8.refused.root === null && /許可されませんでした/.test(r8.refused.said),
+     '★書き込みを断られたのに、その理由と合う知らせが出ていない → ' + JSON.stringify(r8.refused));
+  ok(r8.none.root === null && /対応していません/.test(r8.none.said),
+     '★フォルダを選べない端末で、黙って終わっている（押しても何も起きない） → ' + JSON.stringify(r8.none));
+
   await b.close();
   ok(errs.length === 0, '★画面のエラー: ' + errs.slice(0,4).join(' / '));
   if(fails.length){ console.log('FAIL\n- ' + fails.join('\n- ')); process.exit(1); }

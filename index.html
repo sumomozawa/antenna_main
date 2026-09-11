@@ -6554,7 +6554,7 @@
         <summary class="map-side-head" title="保留・下見完了・工事完了などの印"><span class="uc-t">印</span></summary>
         <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="受付台帳で「保留」にした戸別に付きます"><input type="checkbox" id="map-mark-hold"> <b style="color:#e65100;">保</b> 保留</label>
         <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="スマホ現場入力で「下見完了」にした戸別に付きます"><input type="checkbox" id="map-mark-surv"> <b style="color:#00838f;">下</b> 下見済み</label>
-        <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="受付台帳の「ビラ」に○が付いた戸別、またはスマホ現場入力で「ビラ配り」を押した戸別に付きます。フォルダを読み込んでいなくても、受付台帳のぶんは出ます。"><input type="checkbox" id="map-mark-flyer"> <b style="color:#7b1fa2;">ビ</b> ビラ配布済み</label>
+        <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="受付台帳の「ビラ済」に○が付いた戸別、またはスマホ現場入力で「ビラ配り」を押した戸別に付きます。フォルダを読み込んでいなくても、受付台帳のぶんは出ます。"><input type="checkbox" id="map-mark-flyer"> <b style="color:#7b1fa2;">ビ</b> ビラ配布済み</label>
         <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="工事状態が「工事完了」の戸別に付きます"><input type="checkbox" id="map-mark-done"> <b style="color:#2e7d32;">完</b> 工事完了</label>
         <label class="map-layer-extra" style="display:flex;gap:5px;align-items:center;" title="工事状態が「未完了」の戸別に付きます。着工前（仮受付）には付きません。数が多くなるので既定は表示なしです。"><input type="checkbox" id="map-mark-undone"> <b style="color:#1565c0;">未</b> 未完了</label>
         <details class="uc-hint"><summary>くわしく</summary><div>管理番号の右肩に出ます（番号が無い建物は中心）。<b>入れれば印刷にも出ます／外せば印刷にも出ません</b>。この設定はこの端末だけに保存されます。</div></details>
@@ -17221,7 +17221,7 @@ const LGWB_FIELDS = [
   { k:"chosho_status",     label:"状態" },
   { k:"chosho_note",       label:"備考" },
   { k:"hold_flag",         label:"保留",   bool:true, lg:"hold" },
-  { k:"flyer_done",        label:"ビラ",   bool:true, lg:"flyer" },
+  { k:"flyer_done",        label:"ビラ済", bool:true, lg:"flyer" },
   { k:"consent_received",  label:"同意書", bool:true, lg:"consent" },
   { k:"compdoc_received",  label:"完了書", bool:true, lg:"compdoc" },
   /* アパート（集合住宅）。受付台帳と「🏢 マンション管理」でしか直せない欄なので、
@@ -17676,18 +17676,23 @@ async function lgwbEnsureRoot(){
     }
   }
   // フォルダを選ぶ画面が使えない端末だけ、いま持っているハンドルに許可を聞く
-  if(dh){ try { if(await dupEnsureWritable(dh)) return { dir: dh, picked: false }; } catch(_){} }
+  let askRefused = false;
+  if(dh){ try { if(await dupEnsureWritable(dh)) return { dir: dh, picked: false }; askRefused = true; }
+          catch(_){ askRefused = true; } }
   /* ここまで来たら、書き込めるフォルダを掴めなかった。
      自分で閉じたときは上で返しているので、ここは「開けなかった／許されなかった」だけ。
-     黙って終わると「押しても何も起きない」ように見えるので、どうすればよいかを伝える。 */
-  alert(window.showDirectoryPicker
+     黙って終わると「押しても何も起きない」ように見えるので、断られた理由に合う言い方で伝える。 */
+  const tail = "\n\n台帳の内容はそのままです。何も書き換えていません。";
+  alert(askRefused
+    ? ("フォルダへの書き込みが許可されませんでした。\n\n"
+       + "もう一度「💾 戸別ファイルへ反映」を押して、フォルダを選び直してください。\n"
+       + "（選ぶ画面で工事フォルダを選ぶと、その場で書き込みまで許可されます）" + tail)
+    : window.showDirectoryPicker
     ? ("フォルダを選べませんでした。\n\n"
        + "もう一度「💾 戸別ファイルへ反映」を押してください。\n"
-       + "（それでも開かないときは Chrome / Edge でお試しください）\n\n"
-       + "台帳の内容はそのままです。何も書き換えていません。")
+       + "（それでも開かないときは Chrome / Edge でお試しください）" + tail)
     : ("この端末では、フォルダを選ぶ操作に対応していません。\n\n"
-       + "台帳の内容を戸別ファイルへ書き戻すには、パソコンの Chrome / Edge でお試しください。\n\n"
-       + "台帳の内容はそのままです。何も書き換えていません。"));
+       + "台帳の内容を戸別ファイルへ書き戻すには、パソコンの Chrome / Edge でお試しください。" + tail));
   return null;
 }
 /* 行に付いているフォルダが本当に書けるか確かめる（聞き直さない。確かめるだけ）。
@@ -29965,7 +29970,7 @@ const LGIMP_FIELDS = [
   { f: "status",  label: "状態",     kind: "case", key: "chosho_status", edit: "done", pick: "status" },
   { f: "time",    label: "工事時刻", kind: "lg",   key: "time" },
   { f: "meet",    label: "打合せ",   kind: "lg",   key: "meetAt" },
-  { f: "flyer",   label: "ビラ",     kind: "lg",   key: "flyer",   bool: true },
+  { f: "flyer",   label: "ビラ済",   kind: "lg",   key: "flyer",   bool: true },
   { f: "hold",    label: "保留",     kind: "lg",   key: "hold",    bool: true },
   { f: "consent", label: "同意書",   kind: "lg",   key: "consent", bool: true },
   { f: "compdoc", label: "完了書",   kind: "lg",   key: "compdoc", bool: true },

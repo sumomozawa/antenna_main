@@ -227,14 +227,14 @@ const fails = []; const ok = (c, m) => { if(!c) fails.push(m); };
   });
   console.log('④許可切れの知らせ', JSON.stringify({
     pick:r4.pick.title, share:r4.share.title, dl:r4.dl.title, n:r4.dl.n, intoDir:r4.intoDir,
-    msgs:[r4.pick.msg, r4.share.msg, r4.dl.msg].map(m => /許可が切れていました/.test(m) && /📁 変更/.test(m)) }));
+    msgs:[r4.pick.msg, r4.share.msg, r4.dl.msg].map(m => /許可が切れていました/.test(m) && /📁 のボタン/.test(m)) }));
   ok(r4.intoDir.length === 0, '★許可が切れているフォルダへ書いている → ' + JSON.stringify(r4.intoDir));
   ok(r4.dl.n === 1, 'ダウンロードの道に入っていない → ' + r4.dl.n);
   [['窓', r4.pick], ['共有', r4.share], ['ダウンロード', r4.dl]].forEach(([nm, x]) => {
     ok(/許可が切れていました/.test(x.msg),
        '★' + nm + 'の道で「覚えているフォルダの許可が切れていた」と言っていない → ' + JSON.stringify(x));
-    ok(/📁 変更/.test(x.msg),
-       '★' + nm + 'の道で「📁 変更」で選び直せると言っていない → ' + JSON.stringify(x));
+    ok(/📁 のボタン/.test(x.msg) && /選び直す/.test(x.msg),
+       '★' + nm + 'の道で、保存バーのフォルダのボタンで選び直せると言っていない → ' + JSON.stringify(x));
   });
 
   // ---- ⑤ 共有で渡した 管理番号.json.txt も、フォルダから読めるようになった ----
@@ -296,6 +296,9 @@ const fails = []; const ok = (c, m) => { if(!c) fails.push(m); };
      '★フォルダの窓が開けないのに、共有やダウンロードへ落ちている → ' + JSON.stringify(r6.err));
   ok(/保存先のフォルダを選べませんでした/.test(r6.err.alerts),
      '★フォルダを選べなかったことを知らせていない → ' + JSON.stringify(r6.err.alerts));
+  ok(/1件ずつ/.test(r6.err.alerts),
+     '★フォルダの窓がいつも開かない端末の逃げ道（1件ずつ開いて保存）を書いていない → '
+     + JSON.stringify(r6.err.alerts));
   ok(r6.err.saved === 0, '★書いていないのに💾を付けている → ' + r6.err.saved);
   ok(r6.abort.share === 0 && r6.abort.dl === 0,
      '★自分で閉じたのに、共有やダウンロードへ落ちている → ' + JSON.stringify(r6.abort));
@@ -423,6 +426,44 @@ const fails = []; const ok = (c, m) => { if(!c) fails.push(m); };
   ok(r8.no.n === 2, '★「いいえ」なのに写真が減った → ' + JSON.stringify(r8.no));
   ok(r8.yes.n === 1 && r8.yes.left === '荷姿・全体',
      '★「はい」でも写真が消えない／違う写真が消えた → ' + JSON.stringify(r8.yes));
+
+  // ---- ⑨ 特別記録：読み返しで合わなかったときも、名前を控える／許可切れも知らせる ----
+  const r9 = await page.evaluate(async () => {
+    const out = {};
+    const og = saveDirGet, oo = saveDirOk, op = window.showSaveFilePicker, osh = window.shareFilesSmart;
+    // (a) 書けたのに読み返しで合わない → ✏️ は残るが、ファイル名は控えてある
+    {
+      const dir = __mkDir('リスト', { rot: t => { const o = JSON.parse(t); o.chosho_photos = []; return JSON.stringify(o); } });
+      saveDirGet = async () => dir; saveDirOk = async () => true;
+      const rec = { key:'sp-v157-a', id:'v157a', kind:'検収', title:'資材検収', date:'2026-09-11',
+                    note:'', photos:[{ label:'納品書', dataUri:__png('#3a3') }], rev:1, fileRev:0, fileSavedAt:0 };
+      const res = await spSaveFile(rec);
+      const kept = await idbGet('sp-v157-a');
+      out.a = { ok:res.ok, warn:res.warn, name:rec.fileName, keptName:(kept && kept.fileName) || '',
+                keptSaved:(kept && kept.fileSavedAt) | 0, files:Object.keys(dir._files) };
+    }
+    // (b) 覚えているフォルダの許可が切れていたら、窓の道の知らせに書く
+    {
+      const lapsed = __mkDir('リスト');
+      saveDirGet = async () => lapsed; saveDirOk = async () => false;
+      const box = { txt:'', wrote:0 };
+      window.showSaveFilePicker = async () => __mkFile('特別記録.json', box);
+      const rec = { key:'sp-v157-b', id:'v157b', kind:'検収', title:'資材検収2', date:'2026-09-11',
+                    note:'', photos:[{ label:'納品書', dataUri:__png('#33a') }], rev:1, fileRev:0, fileSavedAt:0 };
+      const res = await spSaveFile(rec);
+      out.b = { ok:res.ok, msg:res.msg || '', intoDir:Object.keys(lapsed._files) };
+    }
+    saveDirGet = og; saveDirOk = oo; if(op) window.showSaveFilePicker = op; window.shareFilesSmart = osh;
+    return out;
+  });
+  console.log('⑨特別記録の控えと許可切れ', JSON.stringify(r9));
+  ok(r9.a.ok === false && r9.a.warn === true, '読み返しで合わないのに ok になっている → ' + JSON.stringify(r9.a));
+  ok(!!r9.a.keptName && r9.a.keptName === r9.a.name,
+     '★読み返しで合わなかったとき、ファイルの名前を控えていない（次の保存で別の名前のファイルが増える） → ' + JSON.stringify(r9.a));
+  ok(r9.a.keptSaved === 0, '★書けていないのに「保存済」を控えている → ' + JSON.stringify(r9.a));
+  ok(r9.b.ok === true && /許可が切れていました/.test(r9.b.msg),
+     '★特別記録で、覚えているフォルダの許可が切れていたことを知らせていない → ' + JSON.stringify(r9.b));
+  ok(r9.b.intoDir.length === 0, '★許可が切れているフォルダへ書いている → ' + JSON.stringify(r9.b));
 
   await page.evaluate(() => { toast = window.__ot; });
   await b.close();
