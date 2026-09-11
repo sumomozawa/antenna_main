@@ -3,7 +3,14 @@
 import sys, io, re, os, subprocess, tempfile
 p = sys.argv[1]
 s = io.open(p, encoding="utf-8", newline="").read()
-blocks = re.findall(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", s, re.S)
+# JavaScript の <script> だけを見る。
+# type="text/plain"（埋め込みテンプレート）や src= の読み込みは中身が無いので外す。
+def _is_js(tag):
+    m = re.search(r'\btype\s*=\s*["\']([^"\']*)["\']', tag, re.I)
+    if not m: return True                      # type なし＝JavaScript
+    t = m.group(1).strip().lower()
+    return t in ("", "module", "text/javascript", "application/javascript")
+blocks = [b for tag, b in re.findall(r"(<script(?![^>]*\bsrc=)[^>]*>)(.*?)</script>", s, re.S) if _is_js(tag)]
 print("%s : <script> %d 個を検査" % (p, len(blocks)))
 bad = 0
 for i, b in enumerate(blocks):
