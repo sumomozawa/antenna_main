@@ -159,6 +159,8 @@ const fails = []; const ok = (c, m) => { if(!c) fails.push(m); };
     const mkS = (no, editedAt, date, st) => { const r = mk(no, editedAt, date, 'in_progress'); if(st) r.data.chosho_status = st; else delete r.data.chosho_status; return r; };
     const same = calBuildEvents([ mkS('2611SIK078', '2026-09-01T09:00:00', '2026-10-10', ''), mkS('2611SIK078', '2026-09-02T09:00:00', '2026-10-11', 'in_progress') ]).filter(e => e.type === 'work');
     const same2 = calBuildEvents([ mkS('2611SIK079', '2026-09-01T09:00:00', '2026-10-10', 'in_progress'), mkS('2611SIK079', '2026-09-02T09:00:00', '2026-10-11', '') ]).filter(e => e.type === 'work');   // 並びが逆でも
+    // 空（＝未完了）と 完了 は本当に違うので、こちらは注意が出る
+    const diff = calBuildEvents([ mkS('2611SIK080', '2026-09-01T09:00:00', '2026-10-10', 'completed'), mkS('2611SIK080', '2026-09-02T09:00:00', '2026-10-11', '') ]).filter(e => e.type === 'work');
     // 工事と打合せは同じ行から出す（打合せは台帳の控え）
     const oldMeet = getLedger('m:2611SIK075').meetAt;
     setLedger('m:2611SIK075', { meetAt: '2026-10-03T13:00' });
@@ -167,7 +169,7 @@ const fails = []; const ok = (c, m) => { if(!c) fails.push(m); };
     const w = both.find(e => e.type === 'work'), m = both.find(e => e.type === 'meet');
     return { n: evs.length, date: evs[0] && evs[0].date, flag: evs[0] && evs[0].newestNoDate, mixed: evs[0] && evs[0].mixed, dupN: evs[0] && evs[0].dupN,
              title: t, kN: kev.length, kDates: kev.map(e => e.date).sort(), eN: eev.length, eDate: eev[0] && eev[0].date, eDup: eev[0] && eev[0].dupN,
-             sameMixed: same[0] && same[0].mixed, sameMixed2: same2[0] && same2[0].mixed, bothN: both.length, sameRow: !!(w && m && w.row === m.row), meetProv: m && m.prov };
+             sameMixed: same[0] && same[0].mixed, sameMixed2: same2[0] && same2[0].mixed, diffMixed: diff[0] && diff[0].mixed, bothN: both.length, sameRow: !!(w && m && w.row === m.row), meetProv: m && m.prov };
   });
   console.log('⑥新しい方に工事日が無い', JSON.stringify(r6));
   ok(r6.n === 1 && r6.date === '2026-10-05', '★いちばん新しいファイルに工事日が無いと、その戸別の工事予定が消える → ' + JSON.stringify(r6));
@@ -177,6 +179,7 @@ const fails = []; const ok = (c, m) => { if(!c) fails.push(m); };
   ok(r6.kN === 2 && r6.kDates.join(',') === '2026-10-06,2026-10-07', '★管理番号も道のりも無い別々の行が1件に潰れる → ' + JSON.stringify(r6));
   ok(r6.eN === 1 && r6.eDate === '2026-10-08' && r6.eDup === 1, '★全暗号化(未復号)の行を予定や重なった数に入れている → ' + JSON.stringify(r6));
   ok(r6.sameMixed === false && r6.sameMixed2 === false, '★状態が空の古いファイルを「状態が違う」と言っている → ' + JSON.stringify([r6.sameMixed, r6.sameMixed2]));
+  ok(r6.diffMixed === true, '★片方だけ完了（もう片方は状態が空）なのに「状態が違う」と言わない → ' + JSON.stringify(r6.diffMixed));
   ok(r6.bothN === 2 && r6.sameRow === true && r6.meetProv === false,
      '★同じ戸別の工事と打合せが別のファイルの中身（名前・住所・仮・完了）で出る → ' + JSON.stringify({ bothN:r6.bothN, sameRow:r6.sameRow, meetProv:r6.meetProv }));
 

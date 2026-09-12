@@ -32607,7 +32607,9 @@ function calCtrBadge(name){
 function calPickRows(rows){
   const best = new Map();
   const hasDate = r => !!(((r && r.data) || {}).chosho_date);
-  const stOf = r => String(((r && r.data) || {}).chosho_status || "");
+  /* 状態が空（古いファイル）は、一覧と同じく「進行中」と見なす。空だからと数えないと、
+     「片方だけ完了」のいちばん知りたい組で注意が出なくなる。 */
+  const stOf = r => String(((r && r.data) || {}).chosho_status || "") || "in_progress";
   (rows || []).forEach(r => {
     if(!r || !lgLedgerEnabled(r)) return;           // 全暗号化(未復号)は対象外
     let k = ""; try { k = subCaseKey(r); } catch(_){ k = ""; }
@@ -32615,9 +32617,9 @@ function calPickRows(rows){
        行そのものを鍵にして1件ずつ出す。 */
     const key = (!k || k === "f:") ? r : k;
     const cur = best.get(key);
-    if(!cur){ best.set(key, { row: r, dated: hasDate(r) ? r : null, n: 1, sts: new Set(stOf(r) ? [stOf(r)] : []) }); return; }
+    if(!cur){ best.set(key, { row: r, dated: hasDate(r) ? r : null, n: 1, sts: new Set([stOf(r)]) }); return; }
     cur.n++;
-    if(stOf(r)) cur.sts.add(stOf(r));               // 状態が空（古いファイル）は「違う」に数えない
+    cur.sts.add(stOf(r));
     if(lgRowWhenMs(r) > lgRowWhenMs(cur.row)) cur.row = r;
     /* ★工事予定は「工事日の入っている、いちばん新しい行」から出す★
        いちばん新しいファイルが、保存に失敗した薄いもの（工事日が空）のことがある（🧹 の決め方のコメントと同じ理由）。

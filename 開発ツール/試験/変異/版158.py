@@ -35,7 +35,6 @@ CASES = [
    u'''  void picked;''', "smoke_v158_main.js", "main"),
   ("控えフォルダの名前を完全一致だけで見る", u'''  if(s.indexOf(DUP_BACKUP_DIR) === 0) return true;''',
    u'''  if(s === DUP_BACKUP_DIR) return true;''', "smoke_v158_main.js", "main"),
-  ("紙に「×N 重複」が出る", u'''    body.list-print-mode .cu-dup { display: none !important; }''', u'''''', "smoke_v158_main.js", "main"),
   ("月のマスに ×N を出さない", u'''          + (ev.dupN > 1 ? '<b class="cal-dup-n">×' + ev.dupN + '</b>' : '')
           + (ev.prov ? '<b class="cal-prov-mark">仮</b>' : '')''',
    u'''          + (ev.prov ? '<b class="cal-prov-mark">仮</b>' : '')''', "smoke_v158_main.js", "main"),
@@ -71,8 +70,8 @@ CASES = [
   ("月のマスの ×N が紙に出る", u'''    body.list-print-mode .cu-dup,
     body.list-print-mode .cal-dup-n { display: none !important; }''',
    u'''    body.list-print-mode .cu-dup { display: none !important; }''', "smoke_v158_main.js", "main"),
-  ("状態が空の古いファイルを「違う」に数える", u'''    if(stOf(r)) cur.sts.add(stOf(r));''', u'''    cur.sts.add(stOf(r));''',
-   "smoke_v158_main.js", "main"),
+  ("状態が空の古いファイルを「違う」に数える", u'''  const stOf = r => String(((r && r.data) || {}).chosho_status || "") || "in_progress";''',
+   u'''  const stOf = r => String(((r && r.data) || {}).chosho_status || "");''', "smoke_v158_main.js", "main"),
   ("控えを飛ばしたことを知らせない", u'''        if(String(name).trim().indexOf(DUP_BACKUP_DIR) === 0) _bakSkipped = true;   // 読み込み後の知らせに載せる''',
    u'''''', "smoke_v158_main.js", "main"),
   ("★予定を動かす相手が先頭の行のまま",
