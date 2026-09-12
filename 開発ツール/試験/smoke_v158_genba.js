@@ -41,13 +41,27 @@ const fails = []; const ok = (c, m) => { if(!c) fails.push(m); };
     const c = mk([JSON.stringify(Object.assign({}, st, { chosho_time:'08:30' }))]); const rc = await saveVerify(c, st); const tc = Date.now() - t1;
     // (d) 1回目が途中までの中身（同期ソフトが書きかけを見せた）→ 読み直して合えば何も言わない
     const d = mk(['{"chosho_mgmt_no":"S158A","chosho_da', good]); const rd = await saveVerify(d, st);
-    return { a:{ r:ra, calls:a.calls(), ms:ta }, b:{ r:rb, calls:bb.calls() }, c:{ r:rc, calls:c.calls(), ms:tc }, d:{ r:rd, calls:d.calls() } };
+    // (e) 1回目は読めない、2回目は中身が違う → 違いを知らせる（読めた内容の持ち越しなし）
+    const e = mk(['throw', JSON.stringify(Object.assign({}, st, { chosho_cust_name:'い様' }))]); const re = await saveVerify(e, st);
+    // (f) 読めたが中身の形が違う（写真が配列でない）→ saveVerify は投げずに文章で返す
+    let rf = null, threw = false;
+    try{ rf = await saveVerify(mk([JSON.stringify(Object.assign({}, st, { chosho_photos:{} }))]), st); }catch(_){ threw = true; }
+    return { a:{ r:ra, calls:a.calls(), ms:ta }, b:{ r:rb, calls:bb.calls() }, c:{ r:rc, calls:c.calls(), ms:tc }, d:{ r:rd, calls:d.calls() },
+             e:{ r:re, calls:e.calls() }, f:{ r:rf, threw }, headB: saveVerifyHead(rb), headC: saveVerifyHead(rc) };
   });
   console.log('①読み直し', JSON.stringify(r));
   ok(r.a.r === '' && r.a.calls === 2, '★一瞬読めなかっただけで「保存できていないかも」と言う → ' + JSON.stringify(r.a));
   ok(r.a.ms >= 500, '読み直す前に待っていない（同期ソフトが掴んでいる間に読んでしまう） → ' + r.a.ms + 'ms');
-  ok(/読み返せませんでした/.test(r.b.r) && /もう一度「保存」/.test(r.b.r) && r.b.calls === 2,
+  ok(/読み返せませんでした/.test(r.b.r) && r.b.calls === 2,
      '★2回読めなかったのに知らせない／読み直しが1回で止まらない → ' + JSON.stringify(r.b));
+  ok(/読めませんでした/.test(r.headB) && /押し直す/.test(r.headB) && !/合いませんでした/.test(r.headB),
+     '★読めなかったのに「中身が合いません」と言う見出しになる → ' + JSON.stringify(r.headB));
+  ok(/合いませんでした/.test(r.headC) && !/読めませんでした/.test(r.headC),
+     '★中身が合わないのに「読めませんでした」の見出しになる → ' + JSON.stringify(r.headC));
+  ok(/顧客名/.test(r.e.r) && /い様/.test(r.e.r) && r.e.calls === 2,
+     '★1回目が読めず2回目が中身違いのとき、違いを知らせない → ' + JSON.stringify(r.e));
+  ok(r.f.threw === false && /読み返せませんでした/.test(r.f.r || ''),
+     '★中身の形が違うと saveVerify が投げる（呼び出し側が別の道へ落ちて💾が付く） → ' + JSON.stringify(r.f));
   ok(/工事の時刻/.test(r.c.r) && /08:30/.test(r.c.r) && r.c.calls === 1 && r.c.ms < 400,
      '★中身が合わないのに知らせない／合わないのに待って読み直している → ' + JSON.stringify(r.c));
   ok(r.d.r === '' && r.d.calls === 2, '★書きかけを読んだだけで知らせている → ' + JSON.stringify(r.d));

@@ -1747,6 +1747,8 @@
     /* 予定を足す欄・行末の直し／削除ボタンは、紙には要らない */
     body.list-print-mode .cu-add,
     body.list-print-mode .cu-free-ops { display: none !important; }
+    /* 「×N 重複」は社内の気づき。元請・お客様へ渡す紙には出さない */
+    body.list-print-mode .cu-dup { display: none !important; }
 
     /* ⑤「今後の予定（先の工程）」レポート印刷：schedule-only 時は月グリッド等を隠し、レポートのみをA4縦で出力 */
     body.list-print-mode.schedule-only .cost-detail-section,
@@ -4001,7 +4003,7 @@
   .cal-ev .cal-prov-mark { color: #b05a00; margin-right: 2px; font-weight: 700; }
   .cal-ev.cal-done { opacity: .5; text-decoration: line-through; }
   .cal-ev.cal-hl { outline: 2px solid #e65100; }
-  .cal-ev .cal-dup-n { color: #c62828; font-weight: 700; margin-left: 3px; }
+  .cal-ev .cal-dup-n { color: #c62828; font-weight: 700; margin-right: 3px; }
   .cal-upcoming .cu-dup { color: #c62828; font-weight: 700; font-size: 11px; }
   .cal-ev.cal-drag { opacity: .4; }
   td.cal-dragover { background: #dcedc8 !important; }
@@ -16148,7 +16150,7 @@ function scanSkipDirName(name){
   /* 🧹 重複ファイルの整理が「消す前の原文」を写しておくフォルダ。
      ここを読むと、まとめたはずの戸別がまた「重複」として何件も並ぶ
      （整理した直後の読み直しで、同じ予定がカレンダーに5つ出た）。控えは戸別として読まない。 */
-  if(s === DUP_BACKUP_DIR) return true;
+  if(s.indexOf(DUP_BACKUP_DIR) === 0) return true;      // 「_整理前の控え (1)」なども（同期ソフトが名前を足すことがある）
   // 工事写真まわり。「写真」「画像」を含む名前と、カメラ・端末が作る定番の名前
   if(/(写真|画像|フォト|サムネ)/.test(s)) return true;
   if(/^(DCIM|photos?|images?|img|pic(ture)?s?|thumbnails?|thumbs)$/i.test(s)) return true;
@@ -18058,6 +18060,17 @@ async function listSelectFolder(){
                            : "\n\n⚠ この物件は現在「端末内保存のみ」です。他の端末でも最新にするには、メニューの「🔗 共有ファイルに連動」でドライブ上の共有ファイルへ書き出してください。"));
     }
     console.log(`[一覧] 再帰スキャン完了: ${stats.dirs} サブフォルダ / ${stats.files} ファイル / 採用 ${rows.length} 件`);
+    /* 🧩 の控えフォルダを飛ばしたときは、そのことを状態行に一言添える
+       （別の日・別のPCで読んだ人にも、控えがあること・読んでいないことが分かるように） */
+    try{
+      const skippedBak = (stats.skipDirs || []).some(d => String(d).split("/").filter(Boolean).pop().indexOf(DUP_BACKUP_DIR) === 0);
+      const st = document.getElementById("list-status");
+      if(skippedBak && st){
+        const note = "🧩 の控えフォルダ「" + DUP_BACKUP_DIR + "」は一覧に読み込んでいません（消す前の原文の控えです。いらなくなったら、フォルダごと消してかまいません）";
+        st.style.display = "";
+        st.textContent = (st.textContent || "").trim() ? (st.textContent.trim() + "　" + note) : note;
+      }
+    }catch(_){}
 
     // 暗号化ファイル(.hyb / .enc)があれば自動的に一括復号を提案
     const encCount = rows.filter(r => r.fileType === "hybrid" || r.fileType === "full").length;
@@ -32520,15 +32533,18 @@ let _calHighlightKey = null;
 let _calDrag = null;                  // D&D中 {tk, type}
 
 function calRowByTk(tk){
-  /* 同じ管理番号の行が複数あるときは、カレンダーに出している「いちばん新しい1件」を返す
-     （先頭の行を返すと、見ている予定と違うファイルの日付を動かしてしまう）。 */
-  let best = null;
+  /* カレンダーに出した行をそのまま返す（絞り込みや「重複を隠す」で、描いた集合と _listRows が違っても
+     見えている予定と同じファイルに書く）。控えが無ければ、同じ決め方（工事日のある いちばん新しい行）で選ぶ。 */
+  const picked = _calRowPick.get(tk);
+  if(picked && (_listRows || []).indexOf(picked) >= 0) return picked;
+  let best = null, dated = null;
   (_listRows || []).forEach(r => {
     let k = ""; try { k = subCaseKey(r); } catch(_){ k = ""; }
     if(k !== tk) return;
     if(!best || lgRowWhenMs(r) > lgRowWhenMs(best)) best = r;
+    if((r.data || {}).chosho_date && (!dated || lgRowWhenMs(r) > lgRowWhenMs(dated))) dated = r;
   });
-  return best;
+  return dated || best;
 }
 /* 全読込行から日別の予定を構築（検索絞り込みの影響を受けない物理枠の判定用は allRows） */
 /* ============================================================
@@ -32590,35 +32606,58 @@ function calCtrBadge(name){
    戻り値: Map(管理番号キー → { row, n })。n はその管理番号の行の数。 */
 function calPickRows(rows){
   const best = new Map();
+  const hasDate = r => !!(((r && r.data) || {}).chosho_date);
+  const stOf = r => String(((r && r.data) || {}).chosho_status || "");
   (rows || []).forEach(r => {
     if(!r || !lgLedgerEnabled(r)) return;           // 全暗号化(未復号)は対象外
     let k = ""; try { k = subCaseKey(r); } catch(_){ k = ""; }
-    if(!k) k = "f:" + Math.random();                // 鍵が作れない行は、そのまま1件として出す
-    const cur = best.get(k);
-    if(!cur){ best.set(k, { row: r, n: 1 }); return; }
+    /* 管理番号も道のりも無い行は鍵が "f:" だけになる。そのまま鍵にすると別々の戸別が1件に潰れるので、
+       行そのものを鍵にして1件ずつ出す。 */
+    const key = (!k || k === "f:") ? r : k;
+    const cur = best.get(key);
+    if(!cur){ best.set(key, { row: r, dated: hasDate(r) ? r : null, n: 1, sts: new Set([stOf(r)]) }); return; }
     cur.n++;
+    cur.sts.add(stOf(r));
     if(lgRowWhenMs(r) > lgRowWhenMs(cur.row)) cur.row = r;
+    /* ★工事予定は「工事日の入っている、いちばん新しい行」から出す★
+       いちばん新しいファイルが、保存に失敗した薄いもの（工事日が空）のことがある（🧹 の決め方のコメントと同じ理由）。
+       新しさだけで代表を決めると、その戸別の工事予定が黙って消える。 */
+    if(hasDate(r) && (!cur.dated || lgRowWhenMs(r) > lgRowWhenMs(cur.dated))) cur.dated = r;
   });
   return best;
 }
+/* カレンダーに「出した行」（管理番号キー → 行）。予定を動かすときは、見えている予定と同じ行に書く。 */
+let _calRowPick = new Map();
 function calBuildEvents(rows){
   const evs = [];
   /* ★1ファイル＝1予定にしない★ 同じ管理番号のファイルが5つあると、同じ工事が5件並んで見える
      （整理のあとに実際に起きた）。管理番号ごとに1件にまとめ、いくつ重なっているかを dupN に持つ。 */
+  /* 重なっている数は、絞り込み（🔍・「重複を隠す」）で行が減っていても本当の数を出す */
+  const dupAll = lgDupCounts(_listRows || []);
+  const picks = new Map();
   calPickRows(rows).forEach(pick => {
     const r = pick.row;
-    const d = r.data || {};
     const tk = subCaseKey(r);
     const lg = getLedger(tk);
-    const done = d.chosho_status === "completed";
-    const prov = d.chosho_status === "provisional";
-    const dupN = pick.n;
-    if(d.chosho_date) evs.push({ type: "work", date: d.chosho_date, time: lg.time || "", tk, row: r, done, prov, dupN });
+    const no = toHalfWidthAn(((r.data || {}).chosho_mgmt_no) || "").trim();
+    const dupN = Math.max(pick.n, (no && dupAll[no]) || 1);
+    const mixed = pick.sts.size > 1;                // ファイルごとに状態（仮・進行中・完了）が違う
+    const wr = pick.dated;                          // 工事予定を出す行（工事日の入っている、いちばん新しい行）
+    if(wr){
+      const d = wr.data || {};
+      evs.push({ type: "work", date: d.chosho_date, time: lg.time || "", tk, row: wr,
+                 done: d.chosho_status === "completed", prov: d.chosho_status === "provisional",
+                 dupN, mixed, newestNoDate: wr !== r });
+    }
     if(lg.meetAt){
       const p = lg.meetAt.split("T");
-      evs.push({ type: "meet", date: p[0], time: (p[1] || "").slice(0, 5), tk, row: r, done: false, prov, dupN });
+      const d = r.data || {};
+      evs.push({ type: "meet", date: p[0], time: (p[1] || "").slice(0, 5), tk, row: r, done: false,
+                 prov: d.chosho_status === "provisional", dupN, mixed });
     }
+    if(tk && tk !== "f:") picks.set(tk, wr || r);
   });
+  _calRowPick = picks;
   // 戸別に紐づかない予定（元請との打合せ・社内会議など）
   getCalFreeEvents().forEach(fe => {
     if(!fe || !fe.date) return;
@@ -32659,7 +32698,9 @@ function calEvTitle(ev){
        + "（" + aptUnits(d) + "世帯の" + aptIdx(d) + "世帯目）")
     : "";
   const dLine = (ev.dupN > 1)
-    ? ("\n⚠ 同じ管理番号のファイルが " + ev.dupN + " 個あります（いちばん新しい1件を出しています。🧹 重複の整理 で1つにできます）")
+    ? ("\n⚠ 同じ管理番号のファイルが " + ev.dupN + " 個あります（1件にまとめて出しています。「🧩 重複をまとめる」で1つにできます）"
+       + (ev.newestNoDate ? "\n　いちばん新しいファイルには工事日が入っていないので、工事日の入っているファイルの予定を出しています" : "")
+       + (ev.mixed ? "\n　ファイルごとに状態（仮受付・進行中・完了）が違います。受付台帳で確かめてください" : ""))
     : "";
   if(ev.prov) return "仮受付（電話メモ・台帳で清書待ち）\n" + (d.chosho_mgmt_no || "―") + aLine + cLine + dLine;
   return (ev.type === "work" ? "工事予定" : "打合せ") + (ev.done ? "（完了）" : "")
@@ -32785,7 +32826,7 @@ function renderUpcomingSchedule(rows){
       + '<td style="width:60px;"><span class="cu-type ' + (ev.type === "work" ? "t-work" : "t-meet") + '">' + (ev.type === "work" ? "工事" : "打合せ") + '</span></td>'
       + '<td class="cu-time" style="width:48px;">' + escapeHtml(ev.time || "―") + '</td>'
       + '<td>' + (ev.prov ? '<span class="cu-prov">仮 </span>' : '') + escapeHtml((no || "―") + (nm ? ("　" + nm) : "")) + (ev.done ? ' <span style="color:#2e7d32;">✔完了</span>' : '')
-      +   (ev.dupN > 1 ? ' <span class="cu-dup" title="同じ管理番号のファイルが ' + ev.dupN + ' 個あります。🧹 重複の整理 で1つにできます">×' + ev.dupN + ' 重複</span>' : '') + '</td>'
+      +   (ev.dupN > 1 ? ' <span class="cu-dup" title="同じ管理番号のファイルが ' + ev.dupN + ' 個あります。「🧩 重複をまとめる」で1つにできます">×' + ev.dupN + ' 重複</span>' : '') + '</td>'
       + '<td class="cu-ctr" style="width:130px;">' + (cc
           ? '<span class="cal-ctr-tag" style="border-left:4px solid ' + calContractorColor(cc) + ';">' + escapeHtml(cc) + '</span>'
           : '') + '</td>'
@@ -32922,8 +32963,8 @@ function renderListCalendarMode(rows, container){
         const stripe = cc ? ' style="border-left:4px solid ' + cc + ';padding-left:4px;"' : '';
         html += '<span class="' + cls.join(" ") + '"' + stripe + ' draggable="true" data-tk="' + escapeHtml(ev.tk) + '" data-evtype="' + ev.type + '" title="' + escapeHtml(calEvTitle(ev)) + '">'
           + calCtrBadge(ctr)
-          + (ev.prov ? '<b class="cal-prov-mark">仮</b>' : '') + escapeHtml(calEvLabel(ev))
-          + (ev.dupN > 1 ? '<b class="cal-dup-n">×' + ev.dupN + '</b>' : '') + '</span>';
+          + (ev.dupN > 1 ? '<b class="cal-dup-n">×' + ev.dupN + '</b>' : '')
+          + (ev.prov ? '<b class="cal-prov-mark">仮</b>' : '') + escapeHtml(calEvLabel(ev)) + '</span>';
       });
       html += '</div></td>';
     }
