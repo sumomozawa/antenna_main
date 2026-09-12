@@ -1748,7 +1748,8 @@
     body.list-print-mode .cu-add,
     body.list-print-mode .cu-free-ops { display: none !important; }
     /* 「×N 重複」は社内の気づき。元請・お客様へ渡す紙には出さない */
-    body.list-print-mode .cu-dup { display: none !important; }
+    body.list-print-mode .cu-dup,
+    body.list-print-mode .cal-dup-n { display: none !important; }
 
     /* ⑤「今後の予定（先の工程）」レポート印刷：schedule-only 時は月グリッド等を隠し、レポートのみをA4縦で出力 */
     body.list-print-mode.schedule-only .cost-detail-section,
@@ -16134,6 +16135,7 @@ function scanProgressShow(stats, label, force){
     + '<span class="scan-sub">そのままお待ちください。件数が多いと少し時間がかかります。</span>';
 }
 function scanProgressStart(label){
+  _bakSkipped = false;                                      // 読み込みのたびに数え直す
   _scanUiAt = 0;
   scanProgressShow({ files: 0, dirs: 0 }, label, true);
 }
@@ -16166,6 +16168,7 @@ async function scanDirRecursive(dirHandle, pathPrefix, rows, stats){
     if(handle.kind === "directory"){
       if(scanSkipDirName(name)){
         (stats.skipDirs = stats.skipDirs || []).push(pathPrefix + name + "/");
+        if(String(name).trim().indexOf(DUP_BACKUP_DIR) === 0) _bakSkipped = true;   // 読み込み後の知らせに載せる
         continue;                                            // 開かずに飛ばす
       }
       stats.dirs++;
@@ -18060,17 +18063,7 @@ async function listSelectFolder(){
                            : "\n\n⚠ この物件は現在「端末内保存のみ」です。他の端末でも最新にするには、メニューの「🔗 共有ファイルに連動」でドライブ上の共有ファイルへ書き出してください。"));
     }
     console.log(`[一覧] 再帰スキャン完了: ${stats.dirs} サブフォルダ / ${stats.files} ファイル / 採用 ${rows.length} 件`);
-    /* 🧩 の控えフォルダを飛ばしたときは、そのことを状態行に一言添える
-       （別の日・別のPCで読んだ人にも、控えがあること・読んでいないことが分かるように） */
-    try{
-      const skippedBak = (stats.skipDirs || []).some(d => String(d).split("/").filter(Boolean).pop().indexOf(DUP_BACKUP_DIR) === 0);
-      const st = document.getElementById("list-status");
-      if(skippedBak && st){
-        const note = "🧩 の控えフォルダ「" + DUP_BACKUP_DIR + "」は一覧に読み込んでいません（消す前の原文の控えです。いらなくなったら、フォルダごと消してかまいません）";
-        st.style.display = "";
-        st.textContent = (st.textContent || "").trim() ? (st.textContent.trim() + "　" + note) : note;
-      }
-    }catch(_){}
+
 
     // 暗号化ファイル(.hyb / .enc)があれば自動的に一括復号を提案
     const encCount = rows.filter(r => r.fileType === "hybrid" || r.fileType === "full").length;
@@ -18650,7 +18643,14 @@ function isMapRegistered(mgmt){
 }
 
 let _missLastNote = "";     // 直前の読み込みで伝えること（一覧の描き直しで消えないよう最後に出す）
+let _bakSkipped = false;    // 直前の読み込みで 🧩 の控えフォルダを飛ばしたか
 function missShowNote(){
+  if(_bakSkipped){
+    /* 別の日・別のPCで読んだ人にも、控えがあること・読んでいないことが分かるように */
+    const note = "🧩 の控えフォルダ「" + DUP_BACKUP_DIR + "」は一覧に読み込んでいません（消す前の原文の控えです。いらなくなったら、フォルダごと消してかまいません）";
+    _missLastNote = _missLastNote ? (_missLastNote + " ／ " + note) : note;
+    _bakSkipped = false;
+  }
   if(!_missLastNote) return;
   const st = document.getElementById("list-status");
   if(st){ st.style.display = ""; st.textContent = _missLastNote; }
@@ -32615,9 +32615,9 @@ function calPickRows(rows){
        行そのものを鍵にして1件ずつ出す。 */
     const key = (!k || k === "f:") ? r : k;
     const cur = best.get(key);
-    if(!cur){ best.set(key, { row: r, dated: hasDate(r) ? r : null, n: 1, sts: new Set([stOf(r)]) }); return; }
+    if(!cur){ best.set(key, { row: r, dated: hasDate(r) ? r : null, n: 1, sts: new Set(stOf(r) ? [stOf(r)] : []) }); return; }
     cur.n++;
-    cur.sts.add(stOf(r));
+    if(stOf(r)) cur.sts.add(stOf(r));               // 状態が空（古いファイル）は「違う」に数えない
     if(lgRowWhenMs(r) > lgRowWhenMs(cur.row)) cur.row = r;
     /* ★工事予定は「工事日の入っている、いちばん新しい行」から出す★
        いちばん新しいファイルが、保存に失敗した薄いもの（工事日が空）のことがある（🧹 の決め方のコメントと同じ理由）。
@@ -32643,6 +32643,9 @@ function calBuildEvents(rows){
     const dupN = Math.max(pick.n, (no && dupAll[no]) || 1);
     const mixed = pick.sts.size > 1;                // ファイルごとに状態（仮・進行中・完了）が違う
     const wr = pick.dated;                          // 工事予定を出す行（工事日の入っている、いちばん新しい行）
+    /* 名前・住所・電話・完了・仮 は、工事と打合せで必ず同じ行から出す。
+       別の行から出すと、紙に同じ管理番号が2つの中身（違う住所・片方だけ✔完了）で並ぶ。 */
+    const disp = wr || r;
     if(wr){
       const d = wr.data || {};
       evs.push({ type: "work", date: d.chosho_date, time: lg.time || "", tk, row: wr,
@@ -32651,11 +32654,11 @@ function calBuildEvents(rows){
     }
     if(lg.meetAt){
       const p = lg.meetAt.split("T");
-      const d = r.data || {};
-      evs.push({ type: "meet", date: p[0], time: (p[1] || "").slice(0, 5), tk, row: r, done: false,
+      const d = disp.data || {};
+      evs.push({ type: "meet", date: p[0], time: (p[1] || "").slice(0, 5), tk, row: disp, done: false,
                  prov: d.chosho_status === "provisional", dupN, mixed });
     }
-    if(tk && tk !== "f:") picks.set(tk, wr || r);
+    if(tk && tk !== "f:") picks.set(tk, disp);
   });
   _calRowPick = picks;
   // 戸別に紐づかない予定（元請との打合せ・社内会議など）
@@ -33404,7 +33407,11 @@ function icsStampUTC(){
     + P(d.getUTCHours()) + P(d.getUTCMinutes()) + P(d.getUTCSeconds()) + "Z";
 }
 function calBuildICS(rows){
+  /* 書き出しは全行で予定を作り直すが、カレンダーに「出した行」の控え（_calRowPick）は
+     描いたときのまま残す。ここで作り直すと、絞り込み中に予定を動かす相手が別の行に変わる。 */
+  const keepPick = _calRowPick;
   const evs = calBuildEvents(rows);
+  _calRowPick = keepPick;
   const stamp = icsStampUTC();
   const P = n => String(n).padStart(2, "0");
   const fmtLocal = dt => dt.getFullYear() + P(dt.getMonth() + 1) + P(dt.getDate()) + "T"

@@ -39,9 +39,15 @@ const fails = []; const ok = (c, m) => { if(!c) fails.push(m); };
       mkDir('2026年', [ mkFile('2611SIK076.json', j('2611SIK076')) ]),     // ふつうのサブフォルダは今までどおり読む
       mkDir('.dropbox.cache', [ mkFile('2611SIK075.json', j('2611SIK075')) ]) ]);
     const rows = [], stats = { files:0, dirs:0 };
+    scanProgressStart('試験');
     await scanDirRecursive(root, '', rows, stats);
+    const st = document.getElementById('list-status'); const keep = st ? st.textContent : '';
+    _missLastNote = ''; missShowNote();
+    const note = st ? st.textContent : '';
+    const again = _bakSkipped;                       // 一度出したら消える
+    if(st) st.textContent = keep;
     return { rows: rows.map(r => (r._dirPath || '') + r._name).sort(), skip: (stats.skipDirs || []).sort(),
-             fn: scanSkipDirName(DUP_BACKUP_DIR), name: DUP_BACKUP_DIR };
+             fn: scanSkipDirName(DUP_BACKUP_DIR), name: DUP_BACKUP_DIR, note, again };
   });
   console.log('①控えフォルダ', JSON.stringify(r1));
   ok(r1.fn === true, '★scanSkipDirName が「' + r1.name + '」を飛ばさない');
@@ -49,6 +55,9 @@ const fails = []; const ok = (c, m) => { if(!c) fails.push(m); };
      '★読み込んだ行が違う（控えを拾っている／ふつうのサブフォルダを読んでいない） → ' + JSON.stringify(r1.rows));
   ok(r1.skip.indexOf(r1.name + '/') >= 0, '飛ばしたフォルダに控えが入っていない → ' + JSON.stringify(r1.skip));
   ok(r1.skip.indexOf(r1.name + ' (1)/') >= 0, '★名前の後ろに何か付いた控えフォルダ（同期ソフトの競合コピー）を読んでいる → ' + JSON.stringify(r1.skip));
+  ok(/読み込んでいません/.test(r1.note) && new RegExp(r1.name).test(r1.note) && !/お待ちください/.test(r1.note),
+     '★控えを飛ばしたことが、読み込み後の知らせに出ない（または「お待ちください」が残る） → ' + JSON.stringify(r1.note));
+  ok(r1.again === false, '一度出した知らせが次も残る → ' + r1.again);
 
   // ---- ② 同じ管理番号の行が5つあっても、カレンダーの予定は1件・×5 ----
   const r2 = await page.evaluate(() => {
@@ -145,8 +154,17 @@ const fails = []; const ok = (c, m) => { if(!c) fails.push(m); };
     const enc = [ mk('2611SIK077', '2026-09-01T09:00:00', '2026-10-08'),
                   Object.assign(mk('2611SIK077', '2026-09-02T09:00:00', '2026-10-09'), { fileType:'full', unlocked:false }) ];
     const eev = calBuildEvents(enc).filter(e => e.type === 'work');
+    // 状態が空（古いファイル）と進行中は、どちらも「未完了」なので「違う」に数えない
+    const same = calBuildEvents([ mk('2611SIK078', '2026-09-01T09:00:00', '2026-10-10', ''), mk('2611SIK078', '2026-09-02T09:00:00', '2026-10-11', 'in_progress') ]).filter(e => e.type === 'work');
+    // 工事と打合せは同じ行から出す（打合せは台帳の控え）
+    const oldMeet = getLedger('m:2611SIK075').meetAt;
+    setLedger('m:2611SIK075', { meetAt: '2026-10-03T13:00' });
+    const both = calBuildEvents(rows).filter(e => e.tk === 'm:2611SIK075');
+    setLedger('m:2611SIK075', { meetAt: oldMeet || '' });
+    const w = both.find(e => e.type === 'work'), m = both.find(e => e.type === 'meet');
     return { n: evs.length, date: evs[0] && evs[0].date, flag: evs[0] && evs[0].newestNoDate, mixed: evs[0] && evs[0].mixed, dupN: evs[0] && evs[0].dupN,
-             title: t, kN: kev.length, kDates: kev.map(e => e.date).sort(), eN: eev.length, eDate: eev[0] && eev[0].date, eDup: eev[0] && eev[0].dupN };
+             title: t, kN: kev.length, kDates: kev.map(e => e.date).sort(), eN: eev.length, eDate: eev[0] && eev[0].date, eDup: eev[0] && eev[0].dupN,
+             sameMixed: same[0] && same[0].mixed, bothN: both.length, sameRow: !!(w && m && w.row === m.row), meetProv: m && m.prov };
   });
   console.log('⑥新しい方に工事日が無い', JSON.stringify(r6));
   ok(r6.n === 1 && r6.date === '2026-10-05', '★いちばん新しいファイルに工事日が無いと、その戸別の工事予定が消える → ' + JSON.stringify(r6));
@@ -155,6 +173,9 @@ const fails = []; const ok = (c, m) => { if(!c) fails.push(m); };
   ok(/🧩 重複をまとめる/.test(r6.title) && !/🧹/.test(r6.title), '★説明が無いボタン（🧹）を案内している → ' + JSON.stringify(r6.title));
   ok(r6.kN === 2 && r6.kDates.join(',') === '2026-10-06,2026-10-07', '★管理番号も道のりも無い別々の行が1件に潰れる → ' + JSON.stringify(r6));
   ok(r6.eN === 1 && r6.eDate === '2026-10-08' && r6.eDup === 1, '★全暗号化(未復号)の行を予定や重なった数に入れている → ' + JSON.stringify(r6));
+  ok(r6.sameMixed === false, '★状態が空の古いファイルを「状態が違う」と言っている → ' + JSON.stringify(r6.sameMixed));
+  ok(r6.bothN === 2 && r6.sameRow === true && r6.meetProv === false,
+     '★同じ戸別の工事と打合せが別のファイルの中身（名前・住所・仮・完了）で出る → ' + JSON.stringify({ bothN:r6.bothN, sameRow:r6.sameRow, meetProv:r6.meetProv }));
 
   // ---- ⑦ 絞り込み中でも、出している予定と書く相手が同じ／重なった数は全体で数える ----
   const r7 = await page.evaluate(() => {
@@ -166,27 +187,34 @@ const fails = []; const ok = (c, m) => { if(!c) fails.push(m); };
     try{
       const evs = calBuildEvents([all[0]]).filter(e => e.type === 'work');   // 🔍 で古い1行だけが残った状態
       const target = calRowByTk('m:2611SIK075');
-      out = { n: evs.length, shown: evs[0] && evs[0].row.data.editedAt, dupN: evs[0] && evs[0].dupN, target: target && target.data.editedAt };
+      calBuildICS(all);                                                       // 📅 .ics 書き出しは全行で予定を作り直す
+      const after = calRowByTk('m:2611SIK075');
+      out = { n: evs.length, shown: evs[0] && evs[0].row.data.editedAt, dupN: evs[0] && evs[0].dupN, target: target && target.data.editedAt,
+              afterIcs: after && after.data.editedAt };
     } finally { _listRows = saveRows; }
     return out;
   });
   console.log('⑦絞り込み中', JSON.stringify(r7));
   ok(r7.n === 1 && r7.shown === r7.target, '★絞り込み中に、出している予定と違うファイルの日付を動かす → ' + JSON.stringify(r7));
   ok(r7.dupN === 3, '★絞り込みで行が減ると、重なった数（×N）が消える → ' + JSON.stringify(r7));
+  ok(r7.afterIcs === r7.shown, '★.ics を書き出したあと、予定を動かす相手が別の行に変わる → ' + JSON.stringify(r7));
 
   // ---- ⑧ 紙（今後の予定の印刷）には「×N 重複」を出さない ----
   await page.emulateMedia({ media: 'print' });          // 印刷用の見た目（@media print）で確かめる
   const r8 = await page.evaluate(() => {
     const sp = document.createElement('span'); sp.className = 'cu-dup'; sp.textContent = '×2 重複';
     const wrap = document.createElement('div'); wrap.className = 'cal-upcoming'; wrap.appendChild(sp); document.body.appendChild(wrap);
+    const chip = document.createElement('span'); chip.className = 'cal-ev cal-work';
+    const bn = document.createElement('b'); bn.className = 'cal-dup-n'; bn.textContent = '×2'; chip.appendChild(bn); document.body.appendChild(chip);
     document.body.classList.add('list-print-mode');
-    const shown = getComputedStyle(sp).display;
-    document.body.classList.remove('list-print-mode'); wrap.remove();
-    return { shown };
+    const shown = getComputedStyle(sp).display, shownChip = getComputedStyle(bn).display;
+    document.body.classList.remove('list-print-mode'); wrap.remove(); chip.remove();
+    return { shown, shownChip };
   });
   await page.emulateMedia({ media: 'screen' });
   console.log('⑧印刷', JSON.stringify(r8));
   ok(r8.shown === 'none', '★元請・お客様へ渡す紙に「×N 重複」が出る → ' + JSON.stringify(r8));
+  ok(r8.shownChip === 'none', '★月のマスの印刷に赤い ×N が出る → ' + JSON.stringify(r8));
 
   // ---- ⑨ 版 ----
   const ver = await page.evaluate(() => APP_VERSION);

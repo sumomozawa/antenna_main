@@ -64,6 +64,17 @@ CASES = [
   ("読めなかったときの見出しを「中身が合いません」のままにする",
    u'''  return /^・読み返せませんでした/.test(String(bad || ""))''', u'''  return false && /^・読み返せませんでした/.test(String(bad || ""))''',
    "smoke_v158_genba.js", "genba"),
+  ("★工事と打合せを別の行から出す（紙に同じ番号で違う住所が並ぶ）", u'''    const disp = wr || r;''', u'''    const disp = r;''',
+   "smoke_v158_main.js", "main"),
+  ("★.ics の書き出しで「出した行」の控えを壊す", u'''  const evs = calBuildEvents(rows);
+  _calRowPick = keepPick;''', u'''  const evs = calBuildEvents(rows);''', "smoke_v158_main.js", "main"),
+  ("月のマスの ×N が紙に出る", u'''    body.list-print-mode .cu-dup,
+    body.list-print-mode .cal-dup-n { display: none !important; }''',
+   u'''    body.list-print-mode .cu-dup { display: none !important; }''', "smoke_v158_main.js", "main"),
+  ("状態が空の古いファイルを「違う」に数える", u'''    if(stOf(r)) cur.sts.add(stOf(r));''', u'''    cur.sts.add(stOf(r));''',
+   "smoke_v158_main.js", "main"),
+  ("控えを飛ばしたことを知らせない", u'''        if(String(name).trim().indexOf(DUP_BACKUP_DIR) === 0) _bakSkipped = true;   // 読み込み後の知らせに載せる''',
+   u'''''', "smoke_v158_main.js", "main"),
   ("★予定を動かす相手が先頭の行のまま",
    u'''  return dated || best;
 }''',
