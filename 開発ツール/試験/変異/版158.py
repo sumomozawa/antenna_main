@@ -11,7 +11,7 @@ OUTG = os.path.join(HERE, "mut_genba.html")
 CR = lambda x: x.replace("\r\n", "\n").replace("\n", "\r\n")
 
 CASES = [
-  ("★🧹 の控えフォルダを戸別として読んでしまう", u'''  if(s === DUP_BACKUP_DIR) return true;''', u'''  if(false) return true;''',
+  ("★🧹 の控えフォルダを戸別として読んでしまう", u'''  if(s.indexOf(DUP_BACKUP_DIR) === 0) return true;''', u'''  if(false) return true;''',
    "smoke_v158_main.js", "main"),
   ("★同じ管理番号の行を1つにまとめない（1ファイル＝1予定に戻る）",
    u'''    const cur = best.get(key);''',
@@ -57,11 +57,10 @@ CASES = [
       if(attempt === 0) throw new Error("もう一度");
       return ng.join("\\n");
     }catch(e){ lastErr = e; }''', "smoke_v158_genba.js", "genba"),
-  ("★比べるところを try の外に出す（形が違うと saveVerify が投げる）",
-   u'''      const o = JSON.parse(await f.text());
-      const ng = [];''',
-   u'''      const o = JSON.parse(await f.text()); if(o && o.chosho_photos && !Array.isArray(o.chosho_photos)) { lastErr = null; setTimeout(() => {}, 0); throw Object.assign(new Error("x"), { __out: true }); }
-      const ng = [];''', "smoke_v158_genba.js", "genba"),
+  ("★中身の形が違うと saveVerify が投げる（呼び出し側が別の道へ落ちて💾が付く）",
+   u'''    }catch(e){ lastErr = e; }          // 読めなかった／中身の形が違った → 少し待ってもう一度''',
+   u'''    }catch(e){ if(/is not a function/.test(String(e && e.message))) throw e; lastErr = e; }''',
+   "smoke_v158_genba.js", "genba"),
   ("読めなかったときの見出しを「中身が合いません」のままにする",
    u'''  return /^・読み返せませんでした/.test(String(bad || ""))''', u'''  return false && /^・読み返せませんでした/.test(String(bad || ""))''',
    "smoke_v158_genba.js", "genba"),
