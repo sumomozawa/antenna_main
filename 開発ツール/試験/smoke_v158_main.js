@@ -13,6 +13,13 @@ const ROOT = path.resolve(__dirname, '..', '..', '..');
 const FILE = n => 'file://' + path.join(ROOT, n, 'index.html');
 const MAIN = process.argv[2] || FILE('antenna_main');
 const fails = []; const ok = (c, m) => { if(!c) fails.push(m); };
+/* 版番号は上げるたびに試験を直さなくてよいように、読み込むファイルから拾う */
+const WANT_VER = (function(){ try{
+  const f = decodeURIComponent(String(MAIN).replace(/^file:\/\//, ''));
+  const m = fs.readFileSync(f, 'utf8').match(/const APP_VERSION = "(\d+)"/);
+  return m ? m[1] : '';
+}catch(_){ return ''; } })();
+
 
 (async () => {
   const b = await chromium.launch({ executablePath: EXE, args: ['--no-sandbox'] });
@@ -224,7 +231,8 @@ const fails = []; const ok = (c, m) => { if(!c) fails.push(m); };
 
   // ---- ⑨ 版 ----
   const ver = await page.evaluate(() => APP_VERSION);
-  ok(ver === '158', '★版番号が158でない → ' + ver);
+  ok(!!WANT_VER && ver === WANT_VER,
+     '★画面の版番号がファイルの APP_VERSION と違う → 画面 ' + ver + ' ／ ファイル ' + WANT_VER);
 
   await b.close();
   ok(errs.length === 0, '★画面のエラー: ' + errs.slice(0,4).join(' / '));
