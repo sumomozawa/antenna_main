@@ -180,12 +180,25 @@ const WANT_VER = (function(){ try{
     const bigThumb = { fileType:'plain', _fromProject:true,
       data:{ chosho_photos:[ __ph('pc1','PC',3000) ], chosho_photos_thumb:true } };
     const s1 = await buildIndividualContent(bigThumb, __fh(small));
+    // PCで一度消した枠（名前と写真IDだけ残る）があっても、現場から入れ直せる
+    const delSlot = JSON.stringify({ chosho_photos:[ { label:'玄関前', dataUri:null, id:'g1' }, __ph('pc1','PC',5000) ] });
+    const back = { fileType:'plain', _fromProject:true,
+      data:{ chosho_photos:[ __ph('g1','現場',9000) ], chosho_photos_thumb:true } };
+    const d1 = await buildIndividualContent(back, __fh(delSlot));
+    // ファイル側の写真に写真IDが無い（古いファイル）ときも、同じ写真を2枚にしない
+    const noIdFile = JSON.stringify({ chosho_photos:[ { label:'PC', dataUri:'data:image/jpeg;base64,' + 'A'.repeat(5000) } ] });
+    const sameThumb = { fileType:'plain', _fromProject:true,
+      data:{ chosho_photos:[ { label:'PC', dataUri:'data:image/jpeg;base64,' + 'A'.repeat(120),
+                               id: photoContentId('data:image/jpeg;base64,' + 'A'.repeat(5000)) } ], chosho_photos_thumb:true } };
+    const d2 = await buildIndividualContent(sameThumb, __fh(noIdFile));
     const a = await buildIndividualContent(proj, __fh(file));
     const c = await buildIndividualContent(noId, __fh(file));
     const big = (o, id) => (((o.chosho_photos||[]).filter(p => p.id === id)[0]||{}).dataUri||'').length;
     return { ids: __ids(a.chosho_photos), pc1: big(a,'pc1'), g1: big(a,'g1'),
              cN: (c.chosho_photos||[]).length, cIds: __ids(c.chosho_photos),
-             sN: (s1.chosho_photos||[]).length, sLen: big(s1,'pc1') };
+             sN: (s1.chosho_photos||[]).length, sLen: big(s1,'pc1'),
+             dBack: big(d1,'g1'), dN: (d1.chosho_photos||[]).length,
+             d2N: (d2.chosho_photos||[]).length, d2Len: ((d2.chosho_photos||[])[0]||{}).dataUri.length };
   });
   console.log('⑧-3 物件から開いた行', JSON.stringify(r83));
   ok(r83.ids === 'pc1,g1', '★物件だけを開いて取り込むと、現場の写真が戸別ファイルへ入らない → ' + JSON.stringify(r83));
@@ -195,6 +208,10 @@ const WANT_VER = (function(){ try{
      '★写真IDを持たない古いサムネを足して、同じ写真が2枚になる → ' + JSON.stringify(r83));
   ok(r83.sN === 1 && r83.sLen === 123,
      '★ファイルの写真（小さいPNGなど）が、物件のサムネで置き換わる → ' + JSON.stringify(r83));
+  ok(r83.dBack > 8000, '★PCで一度消した写真を、現場から入れ直せない → ' + JSON.stringify(r83));
+  ok(r83.dN === 2, '★写真が戻ってきたのに、空の枠がそのまま残る → ' + JSON.stringify(r83));
+  ok(r83.d2N === 1 && r83.d2Len > 4000,
+     '★写真IDの無い古いファイルで、同じ写真が2枚になる／サムネで置き換わる → ' + JSON.stringify(r83));
 
   // ---- ⑧-4 名前だけ付けた空の枠は消さない ----
   const r84 = await page.evaluate(async () => {
@@ -229,15 +246,20 @@ const WANT_VER = (function(){ try{
     } finally { window.ensureProjDirHandle = oe; _currentProject = op; _listRows = ol; _editingRow = oed; }
     // 物件は開いているが工事フォルダを掴めていない（選ぶ画面をやめた等）→ 1件も書けていない
     const oe2 = window.ensureProjDirHandle, op2 = _currentProject, ol2 = _listRows, oed2 = _editingRow;
-    let nolink = '(呼ばれず)';
+    let nolink = '(呼ばれず)', nolink2 = '', quiet = '', asked = 0, asked2 = 0;
     try{
       const row2 = { fileType:'plain', data:{ chosho_mgmt_no:'K009B' } };
       _currentProject = { id:'p1', name:'試験' }; _listRows = [row2];
-      window.ensureProjDirHandle = async () => null;
+      window.ensureProjDirHandle = async () => { asked++; return null; };
+      _genbaNoDir = false;
       nolink = await _genbaWriteRowIndividual(row2);
+      nolink2 = await _genbaWriteRowIndividual(row2);     // 2件目は聞き直さない
+      asked2 = asked;                                     // ここまでで何回フォルダを聞いたか
+      _editingRow = row2; quiet = await writeCurrentCaseToIndividualFile();   // 普段の保存は静かなまま
+      _genbaNoDir = false;
     } finally { window.ensureProjDirHandle = oe2; _currentProject = op2; _listRows = ol2; _editingRow = oed2; }
     const src = String(genbaImportFlow);
-    return { note: String(note), nolink: String(nolink),
+    return { note: String(note), nolink: String(nolink), nolink2: String(nolink2), quiet: String(quiet), asked: asked2,
              surfaced: /if\(wnote[\s\S]{0,80}notes\.push/.test(src),
              counted: /ngWrite/.test(src), noProj: /物件を開いていない/.test(src) };
   });
@@ -245,7 +267,12 @@ const WANT_VER = (function(){ try{
   ok(/⚠/.test(r9.note) && /書き戻し/.test(r9.note),
      '★戸別ファイルへ書き戻せなかったのに、取り込みは何も言わない → ' + JSON.stringify(r9.note));
   ok(r9.surfaced === true, '★書き戻しの失敗が、取り込みのまとめの知らせに出ない → ' + JSON.stringify(r9.surfaced));
-  ok(/⚠/.test(r9.nolink), '★工事フォルダを掴めていないのに、1件も書けていないことを知らせない → ' + JSON.stringify(r9.nolink));
+  ok(/⚠/.test(r9.nolink) && /工事フォルダ/.test(r9.nolink),
+     '★工事フォルダを掴めていないのに、1件も書けていないことを知らせない → ' + JSON.stringify(r9.nolink));
+  ok(r9.nolink2 === r9.nolink && r9.asked === 1,
+     '★工事フォルダを掴めなかったのに、戸別ごとに何度も選ぶ画面を出す → ' + JSON.stringify({ n2:r9.nolink2, asked:r9.asked }));
+  ok(/工事フォルダ未リンク/.test(r9.quiet) && !/⚠/.test(r9.quiet),
+     '★普段の保存（物件へ保存）でも ⚠ が出るようになっている → ' + JSON.stringify(r9.quiet));
   ok(r9.counted === true && r9.noProj === true,
      '★取り込みのまとめに「書けていない件数」「物件を開いていない」の知らせが無い → ' + JSON.stringify(r9));
 

@@ -14798,22 +14798,22 @@ async function buildIndividualContent(row, existingFh){
     if(!baseRead) return null;
     const rowPhotos = Array.isArray(data.chosho_photos)
       ? data.chosho_photos.filter(x => x && x.dataUri) : null;
-    /* サムネの行（物件から開いた行）は、写真IDを持つものだけ足す。
-       サムネは元の写真IDを引き継ぐので、同じ写真なら元のファイルの原寸に吸収される
-       （高画質の方が残る）。IDを持たない古いサムネは足さない＝同じ写真が2枚にならない。
-       物件だけを開いて 📥 現場取込 をしたときも、現場の写真はこの道で入る。 */
-    /* 写真の見分け方は和集合と同じ（写真ID。無ければ中身から作る）。 */
-    const keyOf = x => (x && x.id) || ((x && x.dataUri) ? photoContentId(x.dataUri) : "");
-    const baseKeys = new Set((Array.isArray(basePhotos) ? basePhotos : []).map(keyOf).filter(Boolean));
-    /* サムネの行（物件から開いた行）は、元のファイルに**無い**写真だけ足す。
-       同じ写真なら足さない＝サムネが原寸を置き換えることが決して無い（見た目の大きさで
-       勝ち負けを決めるので、小さいPNGがサムネのJPEGに負けることがある）。
-       物件にしか無い写真は、足さないと永久に入らないので足す。 */
-    /* サムネは「元の写真の写真ID」を引き継いでいるものだけ足せる（引き継いでいないサムネは
-       元のファイルの写真と突き合わせられない＝同じ写真が2枚になるので足さない）。 */
-    const addable = rowPhotos
-      ? (thumbish ? rowPhotos.filter(x => x && x.id && !baseKeys.has(x.id)) : rowPhotos)
-      : null;
+    /* 物件から開いた行（写真がサムネ）は、足せるものを選ぶ。
+       ・元の写真IDを引き継いでいるものだけ（引き継いでいないサムネは元のファイルの写真と
+         突き合わせられない＝同じ写真が2枚になる）
+       ・元のファイルにまだ入っていない写真だけ（同じ写真なら足さない＝サムネが原寸を
+         置き換えることが決して無い。見た目の大きさで勝ち負けを決めるため、
+         小さいPNGがサムネのJPEGに負けることがある）
+       ・物件にしか無い写真は、足さないと永久に入らないので足す
+       ★突き合わせるのは「写真が入っているもの」だけ★ 写真を消した枠（名前と写真IDだけ残る）
+       まで数えると、その写真を現場から入れ直せなくなる。
+       この計算はサムネの行でしか要らないので、この枝の中でだけ行う。 */
+    const addable = rowPhotos ? (thumbish ? (function(){
+      const keyOf = x => (x && x.id) || ((x && x.dataUri) ? photoContentId(x.dataUri) : "");
+      const baseKeys = new Set((Array.isArray(basePhotos) ? basePhotos : [])
+        .filter(x => x && x.dataUri).map(keyOf).filter(Boolean));
+      return rowPhotos.filter(x => x && x.id && !baseKeys.has(x.id));
+    })() : rowPhotos) : null;
     if(!addable || !addable.length){
       // 足せるものが無い → 元のファイルの写真をそのまま残す
       if(basePhotos !== undefined) data.chosho_photos = basePhotos; else delete data.chosho_photos;
@@ -14826,8 +14826,10 @@ async function buildIndividualContent(row, existingFh){
          写真そのものではないが、利用者が付けた名前を消さない。 */
       /* 和集合が「元のファイルの配列そのもの」を返すことがある（足すものが1枚も無かったとき）。
          そのまま足すと、書き戻すたびに空の枠が倍に増えるので、入っていないものだけ拾う。 */
+      const mergedIds = new Set(merged.map(x => (x && x.id) || "").filter(Boolean));
       const slots = (Array.isArray(basePhotos) ? basePhotos : [])
-        .filter(x => x && !x.dataUri && merged.indexOf(x) < 0);
+        .filter(x => x && !x.dataUri && merged.indexOf(x) < 0
+                     && !(x.id && mergedIds.has(x.id)));   // 写真が戻ってきた枠は、枠のまま残さない
       data.chosho_photos = slots.length ? merged.concat(slots) : merged;
     }
   }
@@ -14882,7 +14884,7 @@ async function writeCurrentCaseToIndividualFile(){
   if(!row || _listRows.indexOf(row) < 0) return "";
   if(row.fileType === "full") return "\n（全暗号化戸別のため個別JSONは更新しません）";
   const dir = await ensureProjDirHandle();
-  if(!dir) return "\n\u26a0 戸別の個別JSONは更新していません（工事フォルダを掴めていません）。";
+  if(!dir) return "\n（戸別の個別JSONは更新していません：工事フォルダ未リンク）";
   // 書き込み先の相対パス。
   // 戸別プレーンJSONは「管理番号.json」に統一（旧 .antenna.json 等の別名も正規化）。
   // ハイブリッド暗号は既存名(.hyb)を踏襲（無ければ管理番号.hyb）。
@@ -34200,11 +34202,18 @@ async function openGenbaImportPreview(ctx){
 }
 
 // 開いていない行の個別JSON書戻し（_editingRow を一時的に差し替えて既存の書戻し機構を流用）。
+let _genbaNoDir = false;     // この取り込みで、工事フォルダを掴めなかった（毎回聞き直さない）
 async function _genbaWriteRowIndividual(row){
   if(!_currentProject || !row || row.fileType==="full") return "";
   if(_listRows.indexOf(row)<0) return "";
+  const noDirNote = "\n\u26a0 戸別ファイルへ書き戻していません（工事フォルダを掴めていません）";
+  if(_genbaNoDir) return noDirNote;          // 1件目で掴めなかった＝残りも同じ。何度も窓を出さない
   const prev=_editingRow;
-  try { _editingRow=row; return await writeCurrentCaseToIndividualFile(); }
+  try { _editingRow=row;
+        const note = await writeCurrentCaseToIndividualFile();
+        /* 普段の保存では静かな知らせだが、取り込みでは「1件も書けていない」ので必ず伝える。 */
+        if(note && /工事フォルダ未リンク/.test(note)){ _genbaNoDir = true; return noDirNote; }
+        return note; }
   catch(err){ console.warn("[現場取込] 個別JSON書戻し失敗:", err);
     return "\n\u26a0 戸別ファイルへの書き戻しに失敗しました（" + ((err && err.message) || err) + "）"; }
   finally { _editingRow=prev; }
@@ -34258,6 +34267,7 @@ function genbaImportFlow(){
   pickFile({ accept:".json,application/json,text/plain", multiple:true }, async files => {
     const arr = Array.isArray(files) ? files : (files?[files]:[]);
     if(!arr.length) return;
+    _genbaNoDir = false;      // 取り込みごとに数え直す（前回フォルダを掴めなくても、今回は試す）
     let applyAllDefault=false;
     let done=0, skipped=0, failed=0; const notes=[];
     for(const f of arr){
