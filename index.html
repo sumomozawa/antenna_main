@@ -14827,9 +14827,16 @@ async function buildIndividualContent(row, existingFh){
       /* 和集合が「元のファイルの配列そのもの」を返すことがある（足すものが1枚も無かったとき）。
          そのまま足すと、書き戻すたびに空の枠が倍に増えるので、入っていないものだけ拾う。 */
       const mergedIds = new Set(merged.map(x => (x && x.id) || "").filter(Boolean));
+      /* 写真が戻ってきた枠は、枠のまま残さない。ただし枠に付けていた名前は、
+         戻ってきた写真に名前が無いときだけ引き継ぐ（利用者が付けた名前を捨てない）。 */
+      (Array.isArray(basePhotos) ? basePhotos : []).forEach(x => {
+        if(!x || x.dataUri || !x.id || !x.label) return;
+        const back = merged.filter(y => y && y.id === x.id)[0];
+        if(back && !String(back.label || "").trim()) back.label = x.label;
+      });
       const slots = (Array.isArray(basePhotos) ? basePhotos : [])
         .filter(x => x && !x.dataUri && merged.indexOf(x) < 0
-                     && !(x.id && mergedIds.has(x.id)));   // 写真が戻ってきた枠は、枠のまま残さない
+                     && !(x.id && mergedIds.has(x.id)));
       data.chosho_photos = slots.length ? merged.concat(slots) : merged;
     }
   }
@@ -34202,17 +34209,19 @@ async function openGenbaImportPreview(ctx){
 }
 
 // 開いていない行の個別JSON書戻し（_editingRow を一時的に差し替えて既存の書戻し機構を流用）。
-let _genbaNoDir = false;     // この取り込みで、工事フォルダを掴めなかった（毎回聞き直さない）
-async function _genbaWriteRowIndividual(row){
+let _genbaNoDir = false;     // いまの取り込みで、工事フォルダを掴めなかった（毎回聞き直さない）
+/* inImport＝📥 現場取込 の中から呼ばれたとき。ほかの機能（協力会社諸経費のそろえ直しなど）から
+   呼ばれたときは、前の取り込みの印を引きずらない（引きずると、掴めているのに全件素通りする）。 */
+async function _genbaWriteRowIndividual(row, inImport){
   if(!_currentProject || !row || row.fileType==="full") return "";
   if(_listRows.indexOf(row)<0) return "";
   const noDirNote = "\n\u26a0 戸別ファイルへ書き戻していません（工事フォルダを掴めていません）";
-  if(_genbaNoDir) return noDirNote;          // 1件目で掴めなかった＝残りも同じ。何度も窓を出さない
+  if(inImport && _genbaNoDir) return noDirNote;   // 1件目で掴めなかった＝残りも同じ。何度も窓を出さない
   const prev=_editingRow;
   try { _editingRow=row;
         const note = await writeCurrentCaseToIndividualFile();
         /* 普段の保存では静かな知らせだが、取り込みでは「1件も書けていない」ので必ず伝える。 */
-        if(note && /工事フォルダ未リンク/.test(note)){ _genbaNoDir = true; return noDirNote; }
+        if(inImport && note && /工事フォルダ未リンク/.test(note)){ _genbaNoDir = true; return noDirNote; }
         return note; }
   catch(err){ console.warn("[現場取込] 個別JSON書戻し失敗:", err);
     return "\n\u26a0 戸別ファイルへの書き戻しに失敗しました（" + ((err && err.message) || err) + "）"; }
@@ -34253,7 +34262,7 @@ async function applyGenbaMergeToRow(row, genbaData, opts){
   } catch(_){}
   // 工程（ビラ配り・同意書・工事完了書）を受付台帳の「ビラ・同意書・完了書」へ入れる
   try { flowAdoptRow(row, genbaData); } catch(_){}
-  const note = await _genbaWriteRowIndividual(row);  // 原寸写真は温存して個別JSONへ書戻し
+  const note = await _genbaWriteRowIndividual(row, !!opts.importRun);  // 原寸写真は温存して個別JSONへ書戻し
   try { projTouch(); } catch(_){}
   if(wasEditing){ try { applyStateData(row.data); _editingRow=row; try{ rtClaimLock(row); }catch(_){} } catch(_){} }
   return note;
@@ -34296,7 +34305,7 @@ function genbaImportFlow(){
         if(choice.applyAll) applyAllDefault=true;
       }
       if(choice.action==="skip"){ skipped++; if(createdRow){ const i=_listRows.indexOf(createdRow); if(i>=0) _listRows.splice(i,1); } continue; }
-      try { const wnote = await applyGenbaMergeToRow(row, data, choice.opts||{}); done++;
+      try { const wnote = await applyGenbaMergeToRow(row, data, Object.assign({ importRun:true }, choice.opts||{})); done++;
             /* 取り込みはできたが、戸別ファイルへ書き戻せなかった（読めない・容量不足など）ときは
                まとめの知らせに必ず出す。黙っていると「取り込んだ」と思ったまま画面を閉じてしまう。 */
             if(wnote && /\u26a0/.test(String(wnote))) notes.push("\u30fb管理番号 " + mg + "：" + String(wnote).replace(/\s*\n\s*/g, " ").trim()); }

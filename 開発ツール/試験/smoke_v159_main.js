@@ -185,6 +185,10 @@ const WANT_VER = (function(){ try{
     const back = { fileType:'plain', _fromProject:true,
       data:{ chosho_photos:[ __ph('g1','現場',9000) ], chosho_photos_thumb:true } };
     const d1 = await buildIndividualContent(back, __fh(delSlot));
+    // 戻ってきた写真に名前が無いときは、枠に付けていた名前を引き継ぐ
+    const backNoName = { fileType:'plain', _fromProject:true,
+      data:{ chosho_photos:[ { label:'', dataUri:'data:image/jpeg;base64,' + 'A'.repeat(9000), id:'g1' } ], chosho_photos_thumb:true } };
+    const d3 = await buildIndividualContent(backNoName, __fh(delSlot));
     // ファイル側の写真に写真IDが無い（古いファイル）ときも、同じ写真を2枚にしない
     const noIdFile = JSON.stringify({ chosho_photos:[ { label:'PC', dataUri:'data:image/jpeg;base64,' + 'A'.repeat(5000) } ] });
     const sameThumb = { fileType:'plain', _fromProject:true,
@@ -198,6 +202,7 @@ const WANT_VER = (function(){ try{
              cN: (c.chosho_photos||[]).length, cIds: __ids(c.chosho_photos),
              sN: (s1.chosho_photos||[]).length, sLen: big(s1,'pc1'),
              dBack: big(d1,'g1'), dN: (d1.chosho_photos||[]).length,
+             d3Label: (((d3.chosho_photos||[]).filter(p => p.id === 'g1')[0])||{}).label,
              d2N: (d2.chosho_photos||[]).length, d2Len: ((d2.chosho_photos||[])[0]||{}).dataUri.length };
   });
   console.log('⑧-3 物件から開いた行', JSON.stringify(r83));
@@ -210,6 +215,7 @@ const WANT_VER = (function(){ try{
      '★ファイルの写真（小さいPNGなど）が、物件のサムネで置き換わる → ' + JSON.stringify(r83));
   ok(r83.dBack > 8000, '★PCで一度消した写真を、現場から入れ直せない → ' + JSON.stringify(r83));
   ok(r83.dN === 2, '★写真が戻ってきたのに、空の枠がそのまま残る → ' + JSON.stringify(r83));
+  ok(r83.d3Label === '玄関前', '★枠に付けていた名前が、写真が戻ったときに消える → ' + JSON.stringify(r83));
   ok(r83.d2N === 1 && r83.d2Len > 4000,
      '★写真IDの無い古いファイルで、同じ写真が2枚になる／サムネで置き換わる → ' + JSON.stringify(r83));
 
@@ -246,20 +252,26 @@ const WANT_VER = (function(){ try{
     } finally { window.ensureProjDirHandle = oe; _currentProject = op; _listRows = ol; _editingRow = oed; }
     // 物件は開いているが工事フォルダを掴めていない（選ぶ画面をやめた等）→ 1件も書けていない
     const oe2 = window.ensureProjDirHandle, op2 = _currentProject, ol2 = _listRows, oed2 = _editingRow;
-    let nolink = '(呼ばれず)', nolink2 = '', quiet = '', asked = 0, asked2 = 0;
+    let nolink = '(呼ばれず)', nolink2 = '', quiet = '', asked = 0, asked2 = 0, other = false, resetOk = false;
     try{
       const row2 = { fileType:'plain', data:{ chosho_mgmt_no:'K009B' } };
       _currentProject = { id:'p1', name:'試験' }; _listRows = [row2];
       window.ensureProjDirHandle = async () => { asked++; return null; };
       _genbaNoDir = false;
-      nolink = await _genbaWriteRowIndividual(row2);
-      nolink2 = await _genbaWriteRowIndividual(row2);     // 2件目は聞き直さない
+      nolink = await _genbaWriteRowIndividual(row2, true);
+      nolink2 = await _genbaWriteRowIndividual(row2, true);     // 同じ取り込みの2件目は聞き直さない
       asked2 = asked;                                     // ここまでで何回フォルダを聞いたか
+      // 取り込み以外（協力会社諸経費のそろえ直しなど）は、前の取り込みの印を引きずらない
+      const askedBefore = asked;
+      await _genbaWriteRowIndividual(row2);
+      other = (asked > askedBefore);
+      // 次の取り込みでは、もう一度フォルダを試す（genbaImportFlow が印を戻す）
+      resetOk = /_genbaNoDir\s*=\s*false/.test(String(genbaImportFlow));
       _editingRow = row2; quiet = await writeCurrentCaseToIndividualFile();   // 普段の保存は静かなまま
       _genbaNoDir = false;
     } finally { window.ensureProjDirHandle = oe2; _currentProject = op2; _listRows = ol2; _editingRow = oed2; }
     const src = String(genbaImportFlow);
-    return { note: String(note), nolink: String(nolink), nolink2: String(nolink2), quiet: String(quiet), asked: asked2,
+    return { note: String(note), nolink: String(nolink), nolink2: String(nolink2), quiet: String(quiet), asked: asked2, other, resetOk,
              surfaced: /if\(wnote[\s\S]{0,80}notes\.push/.test(src),
              counted: /ngWrite/.test(src), noProj: /物件を開いていない/.test(src) };
   });
@@ -273,6 +285,9 @@ const WANT_VER = (function(){ try{
      '★工事フォルダを掴めなかったのに、戸別ごとに何度も選ぶ画面を出す → ' + JSON.stringify({ n2:r9.nolink2, asked:r9.asked }));
   ok(/工事フォルダ未リンク/.test(r9.quiet) && !/⚠/.test(r9.quiet),
      '★普段の保存（物件へ保存）でも ⚠ が出るようになっている → ' + JSON.stringify(r9.quiet));
+  ok(r9.other === true,
+     '★取り込み以外の書き戻しまで、前の取り込みの「掴めなかった」印で素通りする → ' + JSON.stringify(r9.other));
+  ok(r9.resetOk === true, '★次の取り込みでも、フォルダを掴みに行かない（印を戻していない） → ' + JSON.stringify(r9.resetOk));
   ok(r9.counted === true && r9.noProj === true,
      '★取り込みのまとめに「書けていない件数」「物件を開いていない」の知らせが無い → ' + JSON.stringify(r9));
 
