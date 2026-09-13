@@ -44,11 +44,29 @@ CASES = [
    u'''        const j = JSON.parse(await (await existingFh.getFile()).text()); basePhotos = j.chosho_photos; baseRead = true;''',
    "smoke_v159_main.js", "main"),
   ("★物件から開いた行（サムネ）で、取り込んだ現場の写真を捨てる",
-   u'''    const addable = rowPhotos ? (thumbish ? rowPhotos.filter(x => x && x.id) : rowPhotos) : null;''',
-   u'''    const addable = (rowPhotos && !thumbish) ? rowPhotos : null;''', "smoke_v159_main.js", "main"),
+   u'''      ? (thumbish ? rowPhotos.filter(x => x && x.id && !baseKeys.has(x.id)) : rowPhotos)''',
+   u'''      ? (thumbish ? [] : rowPhotos)''', "smoke_v159_main.js", "main"),
   ("★サムネの行で、写真IDを持たないものまで足す（同じ写真が2枚になる）",
-   u'''    const addable = rowPhotos ? (thumbish ? rowPhotos.filter(x => x && x.id) : rowPhotos) : null;''',
-   u'''    const addable = rowPhotos;''', "smoke_v159_main.js", "main"),
+   u'''      ? (thumbish ? rowPhotos.filter(x => x && x.id && !baseKeys.has(x.id)) : rowPhotos)''',
+   u'''      ? rowPhotos''', "smoke_v159_main.js", "main"),
+  ("★サムネが、元のファイルの写真を置き換える（小さいPNGなど）",
+   u'''      ? (thumbish ? rowPhotos.filter(x => x && x.id && !baseKeys.has(x.id)) : rowPhotos)''',
+   u'''      ? (thumbish ? rowPhotos.filter(x => x && x.id) : rowPhotos)''', "smoke_v159_main.js", "main"),
+  ("★足せる写真が無かったとき、空の枠が書き戻すたびに倍に増える",
+   u'''        .filter(x => x && !x.dataUri && merged.indexOf(x) < 0);''',
+   u'''        .filter(x => x && !x.dataUri);''', "smoke_v159_main.js", "main"),
+  ("★工事フォルダを掴めていないのに、書けていないことを知らせない",
+   u'''  if(!dir) return "\\n\\u26a0 戸別の個別JSONは更新していません（工事フォルダを掴めていません）。";''',
+   u'''  if(!dir) return "\\n（戸別の個別JSONは更新していません：工事フォルダ未リンク）";''', "smoke_v159_main.js", "main"),
+  ("取り込みのまとめに、書けていない件数・物件を開いていない知らせを出さない",
+   u'''    const ngWrite = notes.filter(t => /\\u26a0/.test(String(t))).length;   // ⚠ が付くのは書き戻せなかった知らせだけ
+    alert("📥 現場データ取込 完了\\n\\n取込: "+done+" 件"
+      + (ngWrite ? ("（うち " + ngWrite + " 件は戸別ファイルへ書けていません）") : "")
+      + " ／ スキップ: "+skipped+" 件"+(failed?(" ／ 失敗: "+failed+" 件"):"")
+      + (!_currentProject ? "\\n\\n※ 物件を開いていないので、戸別ファイルへは書き戻していません（この一覧の中だけの取り込みです）。\\n　 受付台帳の「💾 戸別ファイルへ反映」か、戸別を開いて「保存」で書けます。" : "")
+      + (notes.length?("\\n\\n"+notes.join("\\n")):""));''',
+   u'''    alert("📥 現場データ取込 完了\\n\\n取込: "+done+" 件 ／ スキップ: "+skipped+" 件"+(failed?(" ／ 失敗: "+failed+" 件"):"")+(notes.length?("\\n\\n"+notes.join("\\n")):""));''',
+   "smoke_v159_main.js", "main"),
   ("名前だけ付けた空の枠を消す",
    u'''      data.chosho_photos = slots.length ? merged.concat(slots) : merged;''',
    u'''      data.chosho_photos = merged;''', "smoke_v159_main.js", "main"),

@@ -14802,7 +14802,18 @@ async function buildIndividualContent(row, existingFh){
        サムネは元の写真IDを引き継ぐので、同じ写真なら元のファイルの原寸に吸収される
        （高画質の方が残る）。IDを持たない古いサムネは足さない＝同じ写真が2枚にならない。
        物件だけを開いて 📥 現場取込 をしたときも、現場の写真はこの道で入る。 */
-    const addable = rowPhotos ? (thumbish ? rowPhotos.filter(x => x && x.id) : rowPhotos) : null;
+    /* 写真の見分け方は和集合と同じ（写真ID。無ければ中身から作る）。 */
+    const keyOf = x => (x && x.id) || ((x && x.dataUri) ? photoContentId(x.dataUri) : "");
+    const baseKeys = new Set((Array.isArray(basePhotos) ? basePhotos : []).map(keyOf).filter(Boolean));
+    /* サムネの行（物件から開いた行）は、元のファイルに**無い**写真だけ足す。
+       同じ写真なら足さない＝サムネが原寸を置き換えることが決して無い（見た目の大きさで
+       勝ち負けを決めるので、小さいPNGがサムネのJPEGに負けることがある）。
+       物件にしか無い写真は、足さないと永久に入らないので足す。 */
+    /* サムネは「元の写真の写真ID」を引き継いでいるものだけ足せる（引き継いでいないサムネは
+       元のファイルの写真と突き合わせられない＝同じ写真が2枚になるので足さない）。 */
+    const addable = rowPhotos
+      ? (thumbish ? rowPhotos.filter(x => x && x.id && !baseKeys.has(x.id)) : rowPhotos)
+      : null;
     if(!addable || !addable.length){
       // 足せるものが無い → 元のファイルの写真をそのまま残す
       if(basePhotos !== undefined) data.chosho_photos = basePhotos; else delete data.chosho_photos;
@@ -14813,7 +14824,10 @@ async function buildIndividualContent(row, existingFh){
       const merged = mergeGenbaPhotos(basePhotos, addable, {}, null);
       /* 名前だけ付けた空の枠（写真をまだ入れていない枠）は和集合から外れるので、拾い直す。
          写真そのものではないが、利用者が付けた名前を消さない。 */
-      const slots = (Array.isArray(basePhotos) ? basePhotos : []).filter(x => x && !x.dataUri);
+      /* 和集合が「元のファイルの配列そのもの」を返すことがある（足すものが1枚も無かったとき）。
+         そのまま足すと、書き戻すたびに空の枠が倍に増えるので、入っていないものだけ拾う。 */
+      const slots = (Array.isArray(basePhotos) ? basePhotos : [])
+        .filter(x => x && !x.dataUri && merged.indexOf(x) < 0);
       data.chosho_photos = slots.length ? merged.concat(slots) : merged;
     }
   }
@@ -14868,7 +14882,7 @@ async function writeCurrentCaseToIndividualFile(){
   if(!row || _listRows.indexOf(row) < 0) return "";
   if(row.fileType === "full") return "\n（全暗号化戸別のため個別JSONは更新しません）";
   const dir = await ensureProjDirHandle();
-  if(!dir) return "\n（戸別の個別JSONは更新していません：工事フォルダ未リンク）";
+  if(!dir) return "\n\u26a0 戸別の個別JSONは更新していません（工事フォルダを掴めていません）。";
   // 書き込み先の相対パス。
   // 戸別プレーンJSONは「管理番号.json」に統一（旧 .antenna.json 等の別名も正規化）。
   // ハイブリッド暗号は既存名(.hyb)を踏襲（無ければ管理番号.hyb）。

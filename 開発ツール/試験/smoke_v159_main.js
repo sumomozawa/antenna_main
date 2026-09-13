@@ -175,11 +175,17 @@ const WANT_VER = (function(){ try{
     const noId = { fileType:'plain', _fromProject:true,
       data:{ chosho_photos:[ { label:'PC', dataUri:'data:image/jpeg;base64,' + 'A'.repeat(120) }, __ph('g1','現場',9000) ],
              chosho_photos_thumb:true } };
+    // 元のファイルの写真が小さい（512px以下のPNGなど）と、サムネの方が長いことがある
+    const small = JSON.stringify({ chosho_photos:[ __ph('pc1','PC',100) ] });
+    const bigThumb = { fileType:'plain', _fromProject:true,
+      data:{ chosho_photos:[ __ph('pc1','PC',3000) ], chosho_photos_thumb:true } };
+    const s1 = await buildIndividualContent(bigThumb, __fh(small));
     const a = await buildIndividualContent(proj, __fh(file));
     const c = await buildIndividualContent(noId, __fh(file));
     const big = (o, id) => (((o.chosho_photos||[]).filter(p => p.id === id)[0]||{}).dataUri||'').length;
     return { ids: __ids(a.chosho_photos), pc1: big(a,'pc1'), g1: big(a,'g1'),
-             cN: (c.chosho_photos||[]).length, cIds: __ids(c.chosho_photos) };
+             cN: (c.chosho_photos||[]).length, cIds: __ids(c.chosho_photos),
+             sN: (s1.chosho_photos||[]).length, sLen: big(s1,'pc1') };
   });
   console.log('⑧-3 物件から開いた行', JSON.stringify(r83));
   ok(r83.ids === 'pc1,g1', '★物件だけを開いて取り込むと、現場の写真が戸別ファイルへ入らない → ' + JSON.stringify(r83));
@@ -187,6 +193,8 @@ const WANT_VER = (function(){ try{
   ok(r83.g1 > 8000, '現場の写真が縮んで書かれている → ' + JSON.stringify(r83));
   ok(r83.cN === 2 && r83.cIds === 'pc1,g1',
      '★写真IDを持たない古いサムネを足して、同じ写真が2枚になる → ' + JSON.stringify(r83));
+  ok(r83.sN === 1 && r83.sLen === 123,
+     '★ファイルの写真（小さいPNGなど）が、物件のサムネで置き換わる → ' + JSON.stringify(r83));
 
   // ---- ⑧-4 名前だけ付けた空の枠は消さない ----
   const r84 = await page.evaluate(async () => {
@@ -195,12 +203,19 @@ const WANT_VER = (function(){ try{
     const out = await buildIndividualContent(row, __fh(file));
     // 2回目の書き戻し（1回目の結果がファイルになった状態）でも増えない
     const out2 = await buildIndividualContent(row, __fh(JSON.stringify(out)));
+    /* 足せる写真が1枚も無かったとき（中身が写真の形をしていない）も増えない */
+    const odd = { fileType:'plain', data:{ chosho_photos:[ { label:'変なもの', dataUri:'blob:xyz' } ] } };
+    const o1 = await buildIndividualContent(odd, __fh(file));
+    const o2 = await buildIndividualContent(odd, __fh(JSON.stringify(o1)));
+    const o3 = await buildIndividualContent(odd, __fh(JSON.stringify(o2)));
     return { labels: (out.chosho_photos||[]).map(p => p.label).join('|'),
-             labels2: (out2.chosho_photos||[]).map(p => p.label).join('|') };
+             labels2: (out2.chosho_photos||[]).map(p => p.label).join('|'),
+             odd1: (o1.chosho_photos||[]).length, odd3: (o3.chosho_photos||[]).length };
   });
   console.log('⑧-4 空の枠', JSON.stringify(r84));
   ok(/玄関前/.test(r84.labels), '★名前だけ付けた写真の枠（玄関前）が消える → ' + JSON.stringify(r84));
   ok(r84.labels2 === r84.labels, '★書き戻すたびに空の枠が増えていく → ' + JSON.stringify(r84));
+  ok(r84.odd1 === r84.odd3, '★足せる写真が無かったとき、書き戻すたびに空の枠が倍に増えていく → ' + JSON.stringify(r84));
 
   // ---- ⑨ 書き戻しに失敗したら、取り込みのまとめで必ず知らせる ----
   const r9 = await page.evaluate(async () => {
@@ -212,13 +227,27 @@ const WANT_VER = (function(){ try{
       window.ensureProjDirHandle = async () => { throw new Error('フォルダを掴めない'); };
       note = await _genbaWriteRowIndividual(row);
     } finally { window.ensureProjDirHandle = oe; _currentProject = op; _listRows = ol; _editingRow = oed; }
+    // 物件は開いているが工事フォルダを掴めていない（選ぶ画面をやめた等）→ 1件も書けていない
+    const oe2 = window.ensureProjDirHandle, op2 = _currentProject, ol2 = _listRows, oed2 = _editingRow;
+    let nolink = '(呼ばれず)';
+    try{
+      const row2 = { fileType:'plain', data:{ chosho_mgmt_no:'K009B' } };
+      _currentProject = { id:'p1', name:'試験' }; _listRows = [row2];
+      window.ensureProjDirHandle = async () => null;
+      nolink = await _genbaWriteRowIndividual(row2);
+    } finally { window.ensureProjDirHandle = oe2; _currentProject = op2; _listRows = ol2; _editingRow = oed2; }
     const src = String(genbaImportFlow);
-    return { note: String(note), surfaced: /if\(wnote[\s\S]{0,80}notes\.push/.test(src) };
+    return { note: String(note), nolink: String(nolink),
+             surfaced: /if\(wnote[\s\S]{0,80}notes\.push/.test(src),
+             counted: /ngWrite/.test(src), noProj: /物件を開いていない/.test(src) };
   });
   console.log('⑨書き戻しの失敗', JSON.stringify(r9));
   ok(/⚠/.test(r9.note) && /書き戻し/.test(r9.note),
      '★戸別ファイルへ書き戻せなかったのに、取り込みは何も言わない → ' + JSON.stringify(r9.note));
   ok(r9.surfaced === true, '★書き戻しの失敗が、取り込みのまとめの知らせに出ない → ' + JSON.stringify(r9.surfaced));
+  ok(/⚠/.test(r9.nolink), '★工事フォルダを掴めていないのに、1件も書けていないことを知らせない → ' + JSON.stringify(r9.nolink));
+  ok(r9.counted === true && r9.noProj === true,
+     '★取り込みのまとめに「書けていない件数」「物件を開いていない」の知らせが無い → ' + JSON.stringify(r9));
 
   // ---- ⑩ 読めないファイルは、書かずに理由を伝える（通しで） ----
   const r10 = await page.evaluate(async () => {
