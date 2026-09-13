@@ -150,6 +150,58 @@ const WANT_VER = (function(){ try{
   ok(r8.good === '', '正しく書けたのに「合わない」と言う → ' + JSON.stringify(r8.good));
   ok(/写真の枚数/.test(r8.bad), '★写真が入りきらなかったのに気づけない → ' + JSON.stringify(r8.bad));
 
+  // ---- ⑧-2 0バイト・BOM付き・壊れたファイル ----
+  const r82 = await page.evaluate(async () => {
+    const row = () => ({ fileType:'plain', data:{ chosho_mgmt_no:'K082', chosho_photos:[ __ph('g1','現場',800) ] } });
+    const slim = () => ({ fileType:'plain', _slim:true, data:{ chosho_mgmt_no:'K082', chosho_photos:null } });
+    const zero = await buildIndividualContent(row(), __fh(''));                       // 0バイト（前の保存が切れた残り）
+    const zeroSlim = await buildIndividualContent(slim(), __fh('   '));
+    const bom = await buildIndividualContent(row(), __fh('\uFEFF' + JSON.stringify({ chosho_photos:[ __ph('pc1','PC',900) ] })));
+    const broken = await buildIndividualContent(row(), __fh('{壊れている'));
+    return { zero: zero && (zero.chosho_photos||[]).length, zeroSlim: zeroSlim && ('chosho_photos' in zeroSlim),
+             bom: bom && __ids(bom.chosho_photos), broken: broken === null };
+  });
+  console.log('⑧-2 0バイト・BOM・壊れ', JSON.stringify(r82));
+  ok(r82.zero === 1, '★0バイトのファイルがあると、その戸別が二度と書けなくなる → ' + JSON.stringify(r82));
+  ok(r82.zeroSlim === false, '0バイトのファイルに、空の写真欄を書いている → ' + JSON.stringify(r82));
+  ok(r82.bom === 'pc1,g1', '★先頭に目印（BOM）が付いたファイルだと書けなくなる → ' + JSON.stringify(r82));
+  ok(r82.broken === true, '★中身のある壊れたファイルを上書きしている（中の写真を失う） → ' + JSON.stringify(r82));
+
+  // ---- ⑧-3 物件から開いた行（サムネ）でも、取り込んだ現場の写真は入る ----
+  const r83 = await page.evaluate(async () => {
+    const file = JSON.stringify({ chosho_photos:[ __ph('pc1','PC',5000) ] });
+    const proj = { fileType:'plain', _fromProject:true,
+      data:{ chosho_photos:[ __ph('pc1','PC',120), __ph('g1','現場',9000) ], chosho_photos_thumb:true } };
+    const noId = { fileType:'plain', _fromProject:true,
+      data:{ chosho_photos:[ { label:'PC', dataUri:'data:image/jpeg;base64,' + 'A'.repeat(120) }, __ph('g1','現場',9000) ],
+             chosho_photos_thumb:true } };
+    const a = await buildIndividualContent(proj, __fh(file));
+    const c = await buildIndividualContent(noId, __fh(file));
+    const big = (o, id) => (((o.chosho_photos||[]).filter(p => p.id === id)[0]||{}).dataUri||'').length;
+    return { ids: __ids(a.chosho_photos), pc1: big(a,'pc1'), g1: big(a,'g1'),
+             cN: (c.chosho_photos||[]).length, cIds: __ids(c.chosho_photos) };
+  });
+  console.log('⑧-3 物件から開いた行', JSON.stringify(r83));
+  ok(r83.ids === 'pc1,g1', '★物件だけを開いて取り込むと、現場の写真が戸別ファイルへ入らない → ' + JSON.stringify(r83));
+  ok(r83.pc1 > 4000, '★サムネがファイルの原寸を上書きしている → ' + JSON.stringify(r83));
+  ok(r83.g1 > 8000, '現場の写真が縮んで書かれている → ' + JSON.stringify(r83));
+  ok(r83.cN === 2 && r83.cIds === 'pc1,g1',
+     '★写真IDを持たない古いサムネを足して、同じ写真が2枚になる → ' + JSON.stringify(r83));
+
+  // ---- ⑧-4 名前だけ付けた空の枠は消さない ----
+  const r84 = await page.evaluate(async () => {
+    const file = JSON.stringify({ chosho_photos:[ { label:'玄関前', dataUri:null }, __ph('pc1','PC',900) ] });
+    const row = { fileType:'plain', data:{ chosho_photos:[ __ph('g1','現場',800) ] } };
+    const out = await buildIndividualContent(row, __fh(file));
+    // 2回目の書き戻し（1回目の結果がファイルになった状態）でも増えない
+    const out2 = await buildIndividualContent(row, __fh(JSON.stringify(out)));
+    return { labels: (out.chosho_photos||[]).map(p => p.label).join('|'),
+             labels2: (out2.chosho_photos||[]).map(p => p.label).join('|') };
+  });
+  console.log('⑧-4 空の枠', JSON.stringify(r84));
+  ok(/玄関前/.test(r84.labels), '★名前だけ付けた写真の枠（玄関前）が消える → ' + JSON.stringify(r84));
+  ok(r84.labels2 === r84.labels, '★書き戻すたびに空の枠が増えていく → ' + JSON.stringify(r84));
+
   // ---- ⑨ 書き戻しに失敗したら、取り込みのまとめで必ず知らせる ----
   const r9 = await page.evaluate(async () => {
     const oe = window.ensureProjDirHandle, op = _currentProject, ol = _listRows, oed = _editingRow;
@@ -193,7 +245,35 @@ const WANT_VER = (function(){ try{
   ok(/⚠/.test(r10.msg) && /読めません/.test(r10.msg),
      '★読めなかったのに、書き替えていないことを伝えていない → ' + JSON.stringify(r10.msg));
 
-  // ---- ⑪ 版 ----
+  // ---- ⑪ 書き戻し先のファイルに入っている写真を、通しで守る ----
+  const r11 = await page.evaluate(async () => {
+    const oe = window.ensureProjDirHandle, orr = window.resolveFileHandleInDir,
+          op = _currentProject, ol = _listRows, oed = _editingRow;
+    let written = null;
+    try{
+      // 旧名を持たない行（取込で新しく作った行など）＋ 書き込み先には既に写真入りのファイルがある
+      const row = { fileType:'plain', file:'manual:abc',
+        data:{ chosho_mgmt_no:'K011', chosho_photos:[ __ph('g1','現場',800) ] } };
+      _currentProject = { id:'p1', name:'試験' }; _listRows = [row]; _editingRow = row;
+      let body = JSON.stringify({ chosho_mgmt_no:'K011', chosho_photos:[ __ph('pc1','PC',5000) ] });
+      window.ensureProjDirHandle = async () => ({ name:'工事フォルダ' });
+      window.resolveFileHandleInDir = async () => ({
+        queryPermission: async () => 'granted', requestPermission: async () => 'granted',
+        getFile: async () => ({ text: async () => body }),
+        createWritable: async () => ({ write: async (txt) => { body = String(txt); written = body; }, close: async () => {} }) });
+      await writeCurrentCaseToIndividualFile();
+    } finally {
+      window.ensureProjDirHandle = oe; window.resolveFileHandleInDir = orr;
+      _currentProject = op; _listRows = ol; _editingRow = oed;
+    }
+    let ids = '(書いていない)';
+    try{ ids = __ids(JSON.parse(written).chosho_photos); }catch(_){}
+    return { ids };
+  });
+  console.log('⑪書き込み先の写真', JSON.stringify(r11));
+  ok(r11.ids === 'pc1,g1', '★書き込み先のファイルに入っていた写真が、書き戻しで消える → ' + JSON.stringify(r11));
+
+  // ---- ⑫ 版 ----
   const ver = await page.evaluate(() => APP_VERSION);
   ok(!!WANT_VER && ver === WANT_VER,
      '★画面の版番号がファイルの APP_VERSION と違う → 画面 ' + ver + ' ／ ファイル ' + WANT_VER);

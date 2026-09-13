@@ -14,12 +14,12 @@ CR = lambda x: x.replace("\r\n", "\n").replace("\n", "\r\n")
 CASES = [
   # ---- メイン：戸別ファイルへの書き戻しと写真 ----
   ("★取り込んだ現場の写真をファイルへ書かない（元のファイルの写真だけにする）",
-   u'''      data.chosho_photos = mergeGenbaPhotos(basePhotos, rowPhotos, {}, null);''',
-   u'''      if(basePhotos !== undefined) data.chosho_photos = basePhotos; else delete data.chosho_photos;''',
+   u'''      const merged = mergeGenbaPhotos(basePhotos, addable, {}, null);''',
+   u'''      const merged = Array.isArray(basePhotos) ? basePhotos : [];''',
    "smoke_v159_main.js", "main"),
   ("★和集合ではなく、行の写真でファイルを上書きする（ファイルの写真が消える）",
-   u'''      data.chosho_photos = mergeGenbaPhotos(basePhotos, rowPhotos, {}, null);''',
-   u'''      data.chosho_photos = rowPhotos;''', "smoke_v159_main.js", "main"),
+   u'''      const merged = mergeGenbaPhotos(basePhotos, addable, {}, null);''',
+   u'''      const merged = addable;''', "smoke_v159_main.js", "main"),
   ("★元のファイルを読めなくても上書きする（写真を丸ごと失う）",
    u'''    if(!baseRead) return null;''', u'''    if(false) return null;''', "smoke_v159_main.js", "main"),
   ("★サムネの行でも和集合にする（写真IDの無いサムネが足されて2枚になる）",
@@ -37,11 +37,28 @@ CASES = [
   ("読めなかったときに、書かずに理由を伝えるのをやめる",
    u'''  if(!contentObj){''', u'''  if(false && !contentObj){''', "smoke_v159_main.js", "main"),
 
+  ("★0バイト・BOM付きのファイルがあると、その戸別が二度と書けない",
+   u'''        const t = String(await (await existingFh.getFile()).text()).replace(/^\\uFEFF/, "").trim();
+        if(!t){ basePhotos = undefined; baseRead = true; }        // 空＝失うものが無い
+        else { const j = JSON.parse(t); basePhotos = j && j.chosho_photos; baseRead = true; }''',
+   u'''        const j = JSON.parse(await (await existingFh.getFile()).text()); basePhotos = j.chosho_photos; baseRead = true;''',
+   "smoke_v159_main.js", "main"),
+  ("★物件から開いた行（サムネ）で、取り込んだ現場の写真を捨てる",
+   u'''    const addable = rowPhotos ? (thumbish ? rowPhotos.filter(x => x && x.id) : rowPhotos) : null;''',
+   u'''    const addable = (rowPhotos && !thumbish) ? rowPhotos : null;''', "smoke_v159_main.js", "main"),
+  ("★サムネの行で、写真IDを持たないものまで足す（同じ写真が2枚になる）",
+   u'''    const addable = rowPhotos ? (thumbish ? rowPhotos.filter(x => x && x.id) : rowPhotos) : null;''',
+   u'''    const addable = rowPhotos;''', "smoke_v159_main.js", "main"),
+  ("名前だけ付けた空の枠を消す",
+   u'''      data.chosho_photos = slots.length ? merged.concat(slots) : merged;''',
+   u'''      data.chosho_photos = merged;''', "smoke_v159_main.js", "main"),
+  ("★書き込み先のファイルの写真を土台にしない（書き戻しで消える）",
+   u'''  if(!photoSrcFh && fh) photoSrcFh = fh;''', u'''  void 0;''', "smoke_v159_main.js", "main"),
+
   # ---- 現場入力：控え ----
   ("★写真の控えが失敗しても黙っている",
-   u'''    if(!persistModel._warned){ persistModel._warned=true;
-      toast("⚠ 写真の控えに失敗（空き容量不足かも）。「保存」でファイルに残してください"); }''',
-   u'''    void 0;''', "smoke_v159_genba.js", "genba"),
+   u'''    if(!persistModel._warned){ persistModel._warned=true;''',
+   u'''    if(false){ persistModel._warned=true;''', "smoke_v159_genba.js", "genba"),
   ("いまの戸別の控えが失敗しても、保存バーを赤くしない",
    u'''    if(m === M) saveStateFailed();''', u'''    void 0;''', "smoke_v159_genba.js", "genba"),
   ("別の戸別の失敗で、いまの戸別の保存バーまで赤くする",
@@ -52,6 +69,13 @@ CASES = [
     console.warn("persistModel failed",e);''',
    u'''  }catch(e){
     console.warn("persistModel failed",e);''', "smoke_v159_genba.js", "genba"),
+  ("★起動で、申し出の返事を待ってしまう（前回の下書きが読み込まれない）",
+   u'''  try{ askPersistentStorage(); }catch(_){}
+})();''',
+   u'''  try{ await askPersistentStorage(); }catch(_){}
+})();''', "smoke_v159_genba.js", "genba"),
+  ("別の戸別の控えが失敗したときに、どの戸別かを言わない",
+   u'''      toast(no && m !== M''', u'''      toast(false''', "smoke_v159_genba.js", "genba"),
   ("★下書きを消されにくくする申し出をしない",
    u'''    return !!(await st.persist());''', u'''    return false;''', "smoke_v159_genba.js", "genba"),
   ("申し出済みでも毎回申し出る",

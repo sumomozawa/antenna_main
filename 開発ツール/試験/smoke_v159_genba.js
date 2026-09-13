@@ -69,7 +69,8 @@ const WANT_VER = (function(){ try{
   ok(/控えに失敗/.test(r1.a.toast) && /保存/.test(r1.a.toast),
      '★写真の控えが失敗しても黙っている（画面の中にしかない写真が消える） → ' + JSON.stringify(r1.a));
   ok(r1.a.failed === true, '★いまの戸別の控えが失敗したのに、保存バーが赤くならない → ' + JSON.stringify(r1.a));
-  ok(/控えに失敗/.test(r1.b.toast), '★別の戸別の控えが失敗したときに知らせない → ' + JSON.stringify(r1.b));
+  ok(/控えに失敗/.test(r1.b.toast) && /V159B/.test(r1.b.toast),
+     '★別の戸別の控えが失敗したときに、どの戸別かを言わない（「保存」を押しても直らない） → ' + JSON.stringify(r1.b));
   ok(r1.b.failed === false, '別の戸別の失敗で、いまの戸別の保存バーまで赤くしている → ' + JSON.stringify(r1.b));
   ok(r1.warnedAfterOk === false && /控えに失敗/.test(r1.c.toast),
      '★一度うまくいったあと、次に失敗しても知らせない → ' + JSON.stringify({ w:r1.warnedAfterOk, c:r1.c }));
@@ -104,6 +105,19 @@ const WANT_VER = (function(){ try{
   ok(r2.a.asked === 1 && r2.a.ret === true, '★下書きを消されにくくする申し出をしていない → ' + JSON.stringify(r2.a));
   ok(r2.b.asked === 0 && r2.b.ret === true, '申し出済みなのに毎回申し出ている → ' + JSON.stringify(r2.b));
   ok(r2.c.ret === false && r2.d.ret === false, '★対応していない／断られた端末で落ちる → ' + JSON.stringify(r2));
+
+  // ---- ②-2 起動は、申し出の返事を待たない（待つと前回の下書きが読み込まれない） ----
+  const src = fs.readFileSync(decodeURIComponent(String(HTML).replace(/^file:\/\//, '')), 'utf8');
+  const boot = src.slice(src.lastIndexOf('(async function boot()'));
+  const r22 = { awaited: /await\s+askPersistentStorage/.test(boot),
+                called: /askPersistentStorage\(\)/.test(boot),
+                beforeDraft: boot.indexOf('askPersistentStorage()') >= 0 &&
+                             boot.indexOf('askPersistentStorage()') < boot.indexOf('LS_LAST') };
+  console.log('②-2 起動の順番', JSON.stringify(r22));
+  ok(r22.called === true, '★起動で「消さないでほしい」と申し出ていない → ' + JSON.stringify(r22));
+  ok(r22.awaited === false,
+     '★申し出の返事を待っている（答えるまで前回の下書きが読み込まれず、打った内容が消えたように見える） → ' + JSON.stringify(r22));
+  ok(r22.beforeDraft === false, '★前回の下書きを読む前に申し出ている → ' + JSON.stringify(r22));
 
   // ---- ③ 保存は、同じ中身の控えを二重に作らない ----
   const r3 = await page.evaluate(() => {

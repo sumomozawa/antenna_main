@@ -14783,8 +14783,14 @@ async function buildIndividualContent(row, existingFh){
   if(!photosKnown){
     let basePhotos, baseRead = !existingFh;      // 相手がいない（新しいファイル）＝確かめるものが無い
     if(existingFh){
-      try { const j = JSON.parse(await (await existingFh.getFile()).text()); basePhotos = j.chosho_photos; baseRead = true; }
-      catch(_){ baseRead = false; }
+      try {
+        /* 0バイト（前の保存が途中で切れた残り）と、メモ帳などが付ける先頭の目印（BOM）は
+           読めたものとして扱う。ここを「読めない」にすると、その戸別が二度と書けなくなる。
+           中身があるのに読めない（壊れている）ときだけ、書かずに止める。 */
+        const t = String(await (await existingFh.getFile()).text()).replace(/^\uFEFF/, "").trim();
+        if(!t){ basePhotos = undefined; baseRead = true; }        // 空＝失うものが無い
+        else { const j = JSON.parse(t); basePhotos = j && j.chosho_photos; baseRead = true; }
+      } catch(_){ baseRead = false; }
     }
     /* ★元のファイルを読めなかったときは書かない★
        中に何が入っているか確かめられないまま上書きすると、その戸別の写真を丸ごと失う。
@@ -14792,15 +14798,23 @@ async function buildIndividualContent(row, existingFh){
     if(!baseRead) return null;
     const rowPhotos = Array.isArray(data.chosho_photos)
       ? data.chosho_photos.filter(x => x && x.dataUri) : null;
-    if(thumbish || !rowPhotos || !rowPhotos.length){
-      // 行の写真は当てにならない／持っていない → 元のファイルの写真をそのまま残す
+    /* サムネの行（物件から開いた行）は、写真IDを持つものだけ足す。
+       サムネは元の写真IDを引き継ぐので、同じ写真なら元のファイルの原寸に吸収される
+       （高画質の方が残る）。IDを持たない古いサムネは足さない＝同じ写真が2枚にならない。
+       物件だけを開いて 📥 現場取込 をしたときも、現場の写真はこの道で入る。 */
+    const addable = rowPhotos ? (thumbish ? rowPhotos.filter(x => x && x.id) : rowPhotos) : null;
+    if(!addable || !addable.length){
+      // 足せるものが無い → 元のファイルの写真をそのまま残す
       if(basePhotos !== undefined) data.chosho_photos = basePhotos; else delete data.chosho_photos;
     } else {
-      /* ★行が原寸の写真を持っているときは、元のファイルと和集合にする★
-         同じ写真（写真IDが同じ）は高画質の1枚にまとまる。
+      /* ★元のファイルと和集合にする★ 同じ写真（写真IDが同じ）は高画質の1枚にまとまる。
          ここを「元のファイルの写真をそのまま」にしていたため、
          📥 現場取込 で統合した現場の写真が、画面には出るのにファイルへ入らなかった。 */
-      data.chosho_photos = mergeGenbaPhotos(basePhotos, rowPhotos, {}, null);
+      const merged = mergeGenbaPhotos(basePhotos, addable, {}, null);
+      /* 名前だけ付けた空の枠（写真をまだ入れていない枠）は和集合から外れるので、拾い直す。
+         写真そのものではないが、利用者が付けた名前を消さない。 */
+      const slots = (Array.isArray(basePhotos) ? basePhotos : []).filter(x => x && !x.dataUri);
+      data.chosho_photos = slots.length ? merged.concat(slots) : merged;
     }
   }
   delete data.chosho_photos_thumb; delete data.chosho_photo_count; // 物件専用メタは個別ファイルに残さない
@@ -34266,7 +34280,12 @@ function genbaImportFlow(){
     }
     try { renderListTable(); } catch(_){}
     if(_currentProject){ try { await prepareProjectThumbs(); } catch(_){} try { await projSaveNow(); } catch(_){} }
-    alert("📥 現場データ取込 完了\n\n取込: "+done+" 件 ／ スキップ: "+skipped+" 件"+(failed?(" ／ 失敗: "+failed+" 件"):"")+(notes.length?("\n\n"+notes.join("\n")):""));
+    const ngWrite = notes.filter(t => /\u26a0/.test(String(t))).length;   // ⚠ が付くのは書き戻せなかった知らせだけ
+    alert("📥 現場データ取込 完了\n\n取込: "+done+" 件"
+      + (ngWrite ? ("（うち " + ngWrite + " 件は戸別ファイルへ書けていません）") : "")
+      + " ／ スキップ: "+skipped+" 件"+(failed?(" ／ 失敗: "+failed+" 件"):"")
+      + (!_currentProject ? "\n\n※ 物件を開いていないので、戸別ファイルへは書き戻していません（この一覧の中だけの取り込みです）。\n　 受付台帳の「💾 戸別ファイルへ反映」か、戸別を開いて「保存」で書けます。" : "")
+      + (notes.length?("\n\n"+notes.join("\n")):""));
   });
 }
 
