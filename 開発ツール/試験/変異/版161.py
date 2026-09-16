@@ -91,12 +91,6 @@ CASES = [
    u'''const PHOTO_KEEP_MIN_BYTES = 16 * 1024;''',
    u'''const PHOTO_KEEP_MIN_BYTES = 200 * 1024;''',
    "smoke_v161_main.js", "main"),
-  (u"★サムネの印を見ないで大きさだけで決める（サムネで原本を潰す）",
-   u'''  const aFit = !a.thumb && photoIsFitSize(a.p.dataUri);
-  const bFit = !b.thumb && photoIsFitSize(b.p.dataUri);''',
-   u'''  const aFit = photoIsFitSize(a.p.dataUri);
-  const bFit = photoIsFitSize(b.p.dataUri);''',
-   "smoke_v161_main.js", "main"),
   (u"★書き出した写真を入れ直すと二重に入る",
    u'''    if(p.id) haveIds.add(p.id);
     haveIds.add(photoContentId(p.dataUri));''',

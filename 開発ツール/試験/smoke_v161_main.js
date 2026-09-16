@@ -295,7 +295,17 @@ const WANT_VER = (function(){ try{
     const fit2 = inRange[0] || '';                   // 目安の内でいちばん大きい
     const fit  = inRange[inRange.length - 1] || '';  // 目安の内でいちばん小さい
     const thumb = shrink(512, 384, 0.72);            // 物件に埋めるサムネイル
-    const pano  = await photoFitForStorage(shrink(5000, 1200, 0.92));  // 横に長い写真（小さく収まる）
+    // 横に長い、のっぺりした写真（ちゃんと縮めても 200KB を下回る）
+    const flatWide = (() => {
+      const cv = document.createElement('canvas'); cv.width = 5000; cv.height = 1100;
+      const c = cv.getContext('2d');
+      const g = c.createLinearGradient(0, 0, 0, 1100);
+      g.addColorStop(0, '#cfe3f7'); g.addColorStop(1, '#5a6b52');
+      c.fillStyle = g; c.fillRect(0, 0, 5000, 1100);
+      c.fillStyle = '#3b4a35'; c.fillRect(0, 900, 5000, 200);
+      return cv.toDataURL('image/jpeg', 0.95);
+    })();
+    const pano  = await photoFitForStorage(flatWide);   // 横に長い写真（小さく収まる）
     const over  = shrink(2048, 1536, 0.98);          // 長辺は十分だが目安を超えている
     const kb = u => Math.round(photoBytesOf(u)/1024);
     const edge = u => photoLongEdgeOf(u);
@@ -305,7 +315,9 @@ const WANT_VER = (function(){ try{
       smallFitVsBig: one(pano, big),
       fitVsFit:      one(fit, fit2),
       overVsFit:     one(over, fit),
-      thumbVsFit:    one(thumb, fit)
+      thumbVsFit:    one(thumb, fit),
+      // 中身が読めずピクセル数が分からないサムネ（印だけが頼り）
+      blindThumbVsBig: one('data:image/jpeg;base64,' + 'T'.repeat(90 * 1024), big, { mainThumb: true })
     };
     return {
       kb: { big: kb(big), fit: kb(fit), fit2: kb(fit2), thumb: kb(thumb), pano: kb(pano), over: kb(over) },
@@ -316,6 +328,7 @@ const WANT_VER = (function(){ try{
       fitVsFit:      R.fitVsFit.got === fit2,
       overVsFit:     R.overVsFit.got === fit,
       thumbVsFit:    R.thumbVsFit.got === fit,
+      blindThumbVsBig: R.blindThumbVsBig.got === big,
       n: R.bigVsFit.n, id: R.bigVsFit.id
     };
   });
@@ -332,6 +345,10 @@ const WANT_VER = (function(){ try{
        'どちらも目安の内なら、きれいなほうを残すはず → ' + JSON.stringify(r9));
     ok(r9.overVsFit === true, '★目安を超えたほうを残している → ' + JSON.stringify(r9));
     ok(r9.thumbVsFit === true, '★サムネイルが、目安に収めた写真を潰している → ' + JSON.stringify(r9));
+    ok(r9.blindThumbVsBig === true,
+       '★中身を読み取れないサムネが、原本を潰している（印を見ていない） → ' + JSON.stringify(r9));
+    ok(r9.kb.pano < 200,
+       '試験の前提: 横に長い写真が 200KB を下回っていない → ' + JSON.stringify(r9.kb));
     ok(r9.n === 1 && r9.id === 'p11112222_5697155',
        '★同じ写真が2枚に増えている／写真IDが消えている → ' + JSON.stringify(r9));
     ok(r9.edge.thumb > 0 && r9.edge.fit > 0,
