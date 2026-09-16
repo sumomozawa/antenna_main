@@ -157,6 +157,43 @@ const WANT_VER = (function(){ try{
   console.log('⑥古い戸別', JSON.stringify(r6));
   ok(r6.v === 'no', '★古い戸別を開いたのに、前の戸別の「あり」が残る（黙って金額が乗る） → ' + JSON.stringify(r6));
 
+  // ---- ⑥の2 版159以前に作ったユーザープリセットを当てても、前の戸別の値が残らない ----
+  const r6b = await page.evaluate(() => {
+    __set('ch46','yes'); __set('line_booster_46','yes'); rebuild();
+    const old = collectStateForPreset(); delete old.line_booster_46;   // 版159 以前のユーザープリセット
+    applyPresetData(old);
+    const afterUser = document.getElementById('line_booster_46').value;
+    __set('line_booster_46','yes'); rebuild();
+    applyPreset('standard');                                           // 組み込みプリセット
+    const afterBuiltin = document.getElementById('line_booster_46').value;
+    return { afterUser, afterBuiltin };
+  });
+  console.log('⑥の2プリセット', JSON.stringify(r6b));
+  ok(r6b.afterUser === 'no',
+     '★前に作ったプリセットを押すと、前の戸別の「あり」が残る（黙って金額が乗る） → ' + JSON.stringify(r6b));
+  ok(r6b.afterBuiltin === 'no', '組み込みプリセットで「なし」に戻らない → ' + JSON.stringify(r6b));
+
+  // ---- ⑥の3 現場取込の差分に、身に覚えのない項目を並べない ----
+  const r6c = await page.evaluate(() => {
+    if(typeof genbaMergeCaseData !== 'function') return { skip: true };
+    const mainOld = { chosho_mgmt_no:'V160', amplifier:'amp_3u43', ch46:'yes', line_booster:'yes' };
+    const g1 = Object.assign({}, mainOld, { line_booster_46:'no' });   // 現場は触っていない
+    const g2 = Object.assign({}, mainOld, { line_booster_46:'yes' });  // 現場で「あり」にした
+    const r1 = genbaMergeCaseData(mainOld, g1, {});
+    const r2 = genbaMergeCaseData(mainOld, g2, {});
+    return { quiet: (r1.report.technical || []).indexOf('line_booster_46') < 0,
+             loud: (r2.report.technical || []).indexOf('line_booster_46') >= 0,
+             v1: r1.merged.line_booster_46, v2: r2.merged.line_booster_46 };
+  });
+  console.log('⑥の3現場取込の差分', JSON.stringify(r6c));
+  if(!r6c.skip){
+    ok(r6c.quiet === true,
+       '★古い戸別を取り込むたびに、触っていない項目が「変わった」と並ぶ → ' + JSON.stringify(r6c));
+    ok(r6c.loud === true,
+       '★現場で「あり」にしたのに、変わった項目として出ない → ' + JSON.stringify(r6c));
+    ok(r6c.v1 === 'no' && r6c.v2 === 'yes', '取り込んだ中身が違う → ' + JSON.stringify(r6c));
+  }
+
   // ---- ⑦ 図面：46CHの縦線の上に箱が出て、線が箱で割れる ----
   const r7 = await page.evaluate(() => {
     __set('ch46','yes'); __set('line_booster','yes'); __set('line_booster_46','yes'); rebuild();
@@ -183,12 +220,36 @@ const WANT_VER = (function(){ try{
 
   // ---- ⑧ 図面の箱から選び直せる（入力欄とつながっている） ----
   const r8 = await page.evaluate(() => {
-    __set('line_booster_46','yes'); rebuild();
-    const g = __d('lb46');
-    return { txt: g ? (g.textContent || '').replace(/\s+/g, ' ').trim() : '' };
+    __set('line_booster','yes'); __set('line_booster_46','yes'); rebuild();
+    const g = __d('lb46'), m = __d('lb');
+    const wide = g ? Array.from(g.querySelectorAll('text,tspan'))
+      .some(t => { try{ return t.getComputedTextLength() > 78; }catch(_){ return false; } }) : false;
+    return { txt: g ? (g.textContent || '').replace(/\s+/g, ' ').trim() : '',
+             main: m ? (m.textContent || '').replace(/\s+/g, ' ').trim() : '', wide };
   });
   console.log('⑧図面の箱', JSON.stringify(r8));
   ok(/LB/.test(r8.txt) && /UB18L/.test(r8.txt), '★図面の箱の字がおかしい → ' + JSON.stringify(r8));
+  ok(r8.txt !== r8.main,
+     '★図面に同じ字の箱が2つ並び、どちらが46CH系統か紙で分からない → ' + JSON.stringify(r8));
+  ok(r8.wide === false, '★46CHの箱の字が枠からはみ出す → ' + JSON.stringify(r8));
+
+  // ---- ⑨ 持出材料・協力会社の内訳で、UB18L の2行が見分けられる ----
+  const r9 = await page.evaluate(() => {
+    if(typeof computeSubRow !== 'function' || typeof collectState !== 'function') return { skip: true };
+    __set('ch46','yes'); __set('line_booster','yes'); __set('line_booster_46','yes'); rebuild();
+    const row = { file: 'v160.json', fileType: 'plain', data: collectState() };
+    const sr = computeSubRow(row, 0);
+    const lb = (sr && sr.materials ? sr.materials : []).filter(m => /UB18L|ラインブースター/.test(m.name));
+    return { n: lb.length, disp: lb.map(m => m.disp || m.name), keys: lb.map(m => m.lineKey) };
+  });
+  console.log('⑨持出材料', JSON.stringify(r9));
+  if(!r9.skip){
+    ok(r9.n === 2, '★持出材料にラインブースターが2行出ない → ' + JSON.stringify(r9));
+    ok(r9.disp.length === 2 && r9.disp[0] !== r9.disp[1],
+       '★持出材料・協力会社の内訳で、UB18L が同じ名前の2行になり見分けが付かない → ' + JSON.stringify(r9));
+    ok(r9.keys.length === 2 && r9.keys[0] !== r9.keys[1],
+       '★持出のチェックが主系統と46CHで混ざる（同じ鍵） → ' + JSON.stringify(r9));
+  }
 
   await b.close();
   ok(errs.length === 0, '★画面のエラー: ' + errs.slice(0,4).join(' / '));

@@ -8350,7 +8350,7 @@ function renderBukkenCasePrint(sr){
   const checked = sr.materials.filter(m => m.checked);
   if(checked.length){
     checked.forEach(m => {
-      html += '<tr><td>' + esc(m.name) + '</td><td class="right">' + fmtSubQty(m.qty) + ' ' + esc(m.unit) + '</td>'
+      html += '<tr><td>' + esc(m.disp || m.name) + '</td><td class="right">' + fmtSubQty(m.qty) + ' ' + esc(m.unit) + '</td>'
         + '<td class="right">' + yen(m.unitMat) + '</td><td class="right">' + yen(m.mat) + '</td></tr>';
     });
     html += '<tr><td colspan="3" class="right"><b>持出材料 計</b></td><td class="right"><b>' + yen(sr.takeout) + '</b></td></tr>';
@@ -9851,7 +9851,7 @@ function renderDiagram(input){
   if(input.line_booster){
     lbNode = mkNode(svg, antMainCx - 40, curY, 80, 32, "LB\nUB18L",
       { id:"booster_ub18l", existing:false,
-        inputId:"line_booster", editTitle:"ラインブースター（有/無）",
+        inputId:"line_booster", editTitle:"ラインブースター（主系統）",
         nodeKey:"lb" });
     curY += 32 + 14;
   }
@@ -9859,7 +9859,7 @@ function renderDiagram(input){
      主系統の縦位置（curY）は使わない・進めない（進めると分配器と増幅器の位置がずれる）。 */
   let lb46Node = null;
   if(ant46 && input.line_booster_46){
-    lb46Node = mkNode(svg, ant46Cx - 40, ant46.bottom.y + 26, 80, 32, "LB\nUB18L",
+    lb46Node = mkNode(svg, ant46Cx - 40, ant46.bottom.y + 26, 80, 32, "LB(46ch)\nUB18L",
       { id:"booster_ub18l", existing:false,
         inputId:"line_booster_46", editTitle:"ラインブースター（46CH系統）",
         nodeKey:"lb46", axisLock:"y" });
@@ -13322,10 +13322,25 @@ function fixLegacyTvRooms(s){
 }
 
 // プリセットデータをフォームに反映する共通関数
+/* 版を上げたときに足した欄。これより前に保存した戸別・プリセットにはこの鍵が無いので、
+   何もしないと「直前に開いていた戸別の値」が画面に残り、黙って金額が乗ってしまう。
+   鍵が無いときだけ既定へ戻す（渡された中身そのものには足さない＝行のデータに鍵を増やさない）。
+   欄を足した版では、ここに1行足すこと。 */
+const LATER_ADDED_FIELDS = {
+  line_booster_46: "no"   // 版160: 46CH(三沢局)系統のラインブースター
+};
+function resetLaterAddedFields(src){
+  for(const k in LATER_ADDED_FIELDS){
+    if(src && (k in src)) continue;
+    const el = document.getElementById(k);
+    if(el) el.value = LATER_ADDED_FIELDS[k];
+  }
+}
 function applyPresetData(p){
   clearGuideFieldMarks(); // プリセット/新規適用でガイド欄が上書きされるため自動入力マークを解除（読込時は直後にreflectで付け直す）
   // 旧マスト/サイドベース/OFMU構成を新ペア構成へ変換してから反映
   Object.assign(p, migrateMountFields(p));
+  resetLaterAddedFields(p);   // 版160より前に作ったユーザープリセット対策
   for(const k in p){
     if(k === "tv_rooms" || k === "tax_mode" || k === "misc_fee"
        || k === "outsource_fee_on" || k === "outsource_fee_amount") continue;
@@ -15122,13 +15137,7 @@ function applyStateData(s){
   if(typeof clearViewOnlyMaskFromForm === "function") clearViewOnlyMaskFromForm();
   // 旧マスト/サイドベース/OFMU構成を新ペア構成へ変換してから反映
   Object.assign(s, migrateMountFields(s));
-  /* 版160 で足した欄。これより前に保存した戸別にはこの鍵が無いので、
-     下のループでは触られず、直前に開いていた戸別の値が残ってしまう。「なし」へ戻す
-     （s そのものには足さない＝行のデータに鍵を増やさない）。 */
-  if(!("line_booster_46" in s)){
-    const el46lb = document.getElementById("line_booster_46");
-    if(el46lb) el46lb.value = "no";
-  }
+  resetLaterAddedFields(s);   // 版160より前に保存した戸別対策
   for(const k in s){
     if(k === "tv_rooms" || k === "tax_mode" || k === "misc_fee"
        || k === "outsource_fee_on" || k === "outsource_fee_amount") continue;
@@ -21305,10 +21314,19 @@ function computeSubRow(row, idx){
       flags[lineKey] = flags[oldKey]; delete flags[oldKey]; migratedTakeout = true;
     }
     materials.push({
-      lineKey, name: it.name, unit: it.unit || "",
+      lineKey, name: it.name, note: it.note || "", unit: it.unit || "",
       qty: it.qty, unitMat: it.unitMat, mat: it.mat
     });
   });
+  /* 同じ品名が2行以上あるとき（46CH系統のラインブースターなど）は、摘要を後ろに付けて
+     どちらがどちらか分かるようにする。1行しか無い品名はこれまでどおりの見た目のまま。 */
+  {
+    const nameCount = {};
+    materials.forEach(m => { nameCount[m.name] = (nameCount[m.name] || 0) + 1; });
+    materials.forEach(m => {
+      m.disp = (nameCount[m.name] > 1 && m.note) ? (m.name + "（" + m.note + "）") : m.name;
+    });
+  }
   if(migratedTakeout){ try { saveTakeoutMap(); } catch(_){} }
   let takeout = 0;
   materials.forEach(m => { m.checked = !!flags[m.lineKey]; if(m.checked) takeout += m.mat; });
@@ -21533,7 +21551,7 @@ function renderListSubcontractorMode(rows, container){
         + '<table class="sub-mat-table"><tbody>';
       sr.materials.forEach(m => {
         html += '<tr>'
-          + '<td><label><input type="checkbox" class="sub-takeout-cb" data-line-key="' + escapeHtml(m.lineKey) + '" data-mat="' + m.mat + '"' + (m.checked ? ' checked' : '') + '> ' + escapeHtml(m.name) + '</label></td>'
+          + '<td><label><input type="checkbox" class="sub-takeout-cb" data-line-key="' + escapeHtml(m.lineKey) + '" data-mat="' + m.mat + '"' + (m.checked ? ' checked' : '') + '> ' + escapeHtml(m.disp || m.name) + '</label></td>'
           + '<td class="num">' + fmtSubQty(m.qty) + ' ' + escapeHtml(m.unit) + '</td>'
           + '<td class="num">@' + yen(m.unitMat) + '</td>'
           + '<td class="num">' + yen(m.mat) + '</td>'
@@ -33972,7 +33990,12 @@ function genbaMergeCaseData(mainData, genbaData, opts){
   // A. 現場権威フィールド → 上書き
   GENBA_AUTHORITATIVE_FIELDS.forEach(k=>{
     if(!(k in g)) return;
-    if(JSON.stringify(base[k]) !== JSON.stringify(g[k])) report.technical.push(k);
+    /* 版を上げて足した欄は、それより前に保存したPCの戸別にまだ鍵が無い。現場が既定のまま
+       （＝何も触っていない）なら「変わった項目」に数えない。数えると、古い戸別を取り込むたびに
+       身に覚えのない項目が並んで、本当に変わった所が埋もれる。中身は既定を入れておく。 */
+    const untouchedNew = (k in LATER_ADDED_FIELDS) && !(k in base)
+      && String(g[k]) === String(LATER_ADDED_FIELDS[k]);
+    if(!untouchedNew && JSON.stringify(base[k]) !== JSON.stringify(g[k])) report.technical.push(k);
     base[k]=_genbaClone(g[k]);
   });
   // B. 顧客 merge-nonempty（main優先。空欄のみ genba で埋める。非空衝突は既定main・opts.customerで現場採用可）
@@ -34112,7 +34135,7 @@ const GENBA_TECH_LABELS = {
   bs_cs:"BS/CS",bs_antenna_state:"BSアンテナ",bsmix_type:"BS混合方式",bsmix_state:"BS混合器",
   mount_type:"取付方式",side_base_1:"サイドベース",side_base_2:"サイドベース2",side_base_3:"サイドベース3",
   mast:"マスト",mast_2:"マスト2",mast_3:"マスト3",connector_type:"接続金具",connector_qty:"接続金具数",turnbuckle_qty:"ターンバックル",
-  amplifier:"増幅器",line_booster:"ラインブースター",line_booster_46:"ラインブースター(46CH)",hpf:"HPF",outer_splitter:"屋外分配",indoor_split:"宅内分配",split_all_pass:"全端子通電",
+  amplifier:"増幅器",line_booster:"ラインブースター(主系統)",line_booster_46:"ラインブースター(46CH系統)",hpf:"HPF",outer_splitter:"屋外分配",indoor_split:"宅内分配",split_all_pass:"全端子通電",
   power_pos:"電源位置",indoor_wire:"宅内配線",outer_wire:"屋外配線",tv_count:"TV台数",
   remove_safety:"保安器撤去",remove_drop:"引込撤去",cable_drop_len:"引込長",dummy_attached:"ダミー",use_fa:"FA",fa_splitter:"FA接続部の分配",fa_splitter_pos:"分配器の位置",
   att_main:"減衰(主)",att_46:"減衰(46)",att_50:"減衰(50)",box_consent:"BOXコンセント",ofmu_qty:"OFMU数",wire_sus16_len:"SUS16長",ext_power_conn:"外部電源"
