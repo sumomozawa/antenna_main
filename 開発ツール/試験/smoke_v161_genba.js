@@ -157,6 +157,56 @@ const WANT_VER = (function(){ try{
     ok(r4.idOk === true, '★特別記録の写真IDが中身と合わない → ' + JSON.stringify(r4));
   }
 
+  // ---- ⑤ 読み込み中に同じ戸別を開き直しても、写真が消えない ----
+  const r5 = await page.evaluate(async () => {
+    if(typeof photoKeepInto !== 'function') return { skip: true };
+    M = freshModel(); ensureModelShape(M); M.chosho_mgmt_no = 'RACE1';
+    const model = M;
+    const a = __photo(1200, 900, 20), bb = __photo(1100, 800, 20);
+    model.chosho_photos.push({ label:'施工前', dataUri: a, id: photoContentId(a) });
+    // 読んでいる途中で、同じ戸別を控えから開き直した（M が別のものに入れ替わる）
+    const reopened = freshModel(); ensureModelShape(reopened);
+    reopened.chosho_mgmt_no = 'RACE1';
+    reopened._lastDraftKey = 'no:RACE1';
+    M = reopened;
+    // 残りの写真が読み終わった
+    model.chosho_photos.push({ label:'施工完了', dataUri: bb, id: photoContentId(bb) });
+    await photoKeepInto(model);
+    const onScreen = (M.chosho_photos || []).filter(p => p && p.dataUri);
+    // そのあと画面から保存する（ここで消えていた）
+    await saveDraft();
+    const kept = (M.chosho_photos || []).filter(p => p && p.dataUri);
+    return { onScreen: onScreen.length, kept: kept.length,
+             ids: kept.map(p => p.id).sort().join('/'),
+             want: [photoContentId(a), photoContentId(bb)].sort().join('/') };
+  });
+  console.log('⑤開き直し', JSON.stringify(r5));
+  if(!r5.skip){
+    ok(r5.onScreen === 2,
+       '★読み込み中に同じ戸別を開き直すと、入れたはずの写真が画面に入らない → ' + JSON.stringify(r5));
+    ok(r5.kept === 2 && r5.ids === r5.want,
+       '★そのあと保存すると、読み込んだ写真が消える → ' + JSON.stringify(r5));
+  }
+
+  // ---- ⑥ 別の戸別へ移ったときは、読込元のほうへ確定保存する（混ざらない） ----
+  const r6 = await page.evaluate(async () => {
+    if(typeof photoKeepInto !== 'function') return { skip: true };
+    M = freshModel(); ensureModelShape(M); M.chosho_mgmt_no = 'RACE2';
+    const model = M;
+    const a = __photo(1000, 800, 20);
+    model.chosho_photos.push({ label:'施工前', dataUri: a, id: photoContentId(a) });
+    const other = freshModel(); ensureModelShape(other); other.chosho_mgmt_no = 'RACE3';
+    M = other;
+    await photoKeepInto(model);
+    return { other: (M.chosho_photos || []).filter(p => p && p.dataUri).length,
+              src: (model.chosho_photos || []).filter(p => p && p.dataUri).length };
+  });
+  console.log('⑥別の戸別へ移った', JSON.stringify(r6));
+  if(!r6.skip){
+    ok(r6.other === 0, '★別の戸別に写真が混ざった → ' + JSON.stringify(r6));
+    ok(r6.src === 1, '読込元から写真が消えた → ' + JSON.stringify(r6));
+  }
+
   await b.close();
   ok(errs.length === 0, '★画面のエラー: ' + errs.slice(0,4).join(' / '));
   if(fails.length){ console.log('FAIL\n- ' + fails.join('\n- ')); process.exit(1); }

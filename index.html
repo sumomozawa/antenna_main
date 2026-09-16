@@ -6914,7 +6914,7 @@ async function lsRestoreFromIdb(){
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "161";
+const APP_VERSION = "162";
 /* ============================================================
    ★日時の表示は、必ずこの端末の時刻で★
    保存している日時は世界時のISO文字列（…T01:03:00.000Z）。これを文字のまま
@@ -23687,6 +23687,337 @@ async function compressCurrentCasePhotos(){
   uiToast("写真を軽量化しました（約 " + bMB(beforeBytes) + "→" + bMB(afterBytes) + "MB）");
 }
 
+/* ============================================================
+   📉 写真をまとめて軽くする（受付台帳）
+   ------------------------------------------------------------
+   これまでに撮った写真を、あとからまとめて軽くする。縮め方は「写真を入れるとき」と
+   まったく同じ photoFitForStorage（1枚 約1MB まで・長辺2048px）を使う。別の大きさに
+   すると、入れるときに収めた写真を押すたびにもう一段落とすことになる。
+
+   ★写真は1枚も減らさない★
+   ・1件ずつ「読む → 縮める → 突き合わせる → 書く → 読み返す → 確かめる」。
+   ・確かめられなければ元に戻す。戻せなければ元の中身を控えへ写す。
+   ・小さい写真しか持っていない戸別・暗号化した戸別・元ファイルを掴んでいない戸別・
+     いま開いている戸別・同じ管理番号が重なっている戸別には触らない。
+   ============================================================ */
+let _photoSlimBusy = false;
+const PHOTO_SLIM_SEP1 = String.fromCharCode(1);
+const PHOTO_SLIM_SEP2 = String.fromCharCode(2);
+/* この戸別に触れない理由（空文字＝触ってよい）。ファイルは読まない。 */
+function photoSlimWhy(row, dupSet){
+  if(!row) return "元ファイルなし";
+  if(row._detached) return "元ファイルなし";
+  if(row.fileType !== "plain") return "暗号化";
+  if(row._fromProject || (row.data && row.data.chosho_photos_thumb)) return "小さい写真しか無い";
+  if(!(row._dir && row._name && row.fileHandle)) return "元ファイルなし";
+  if(row === _editingRow) return "いま開いている";
+  const mg = ((row.data || {}).chosho_mgmt_no || "").trim();
+  if(dupSet && mg && dupSet.has(mg)) return "同じ管理番号が重なっている";
+  try { if(typeof rtRowLockedByOther === "function" && rtRowLockedByOther(row)) return "他の端末が開いている"; } catch(_){}
+  if(!(row._photoCount > 0)) return "写真なし";
+  return "";
+}
+/* 元ファイルを読む。同期ソフトが一瞬掴むことがあるので、駄目なら少し待って1回だけ読み直す。 */
+async function photoSlimReadText(fh){
+  const once = async () => {
+    const f = await Promise.race([
+      fh.getFile(),
+      new Promise((_, rj) => setTimeout(() => rj(new Error("ファイルを開くのに時間がかかりすぎました")), 20000))
+    ]);
+    const t = await Promise.race([
+      f.text(),
+      new Promise((_, rj) => setTimeout(() => rj(new Error("ファイルを読むのに時間がかかりすぎました")), 20000))
+    ]);
+    return { file: f, text: String(t) };
+  };
+  try { return await once(); }
+  catch(_){
+    await new Promise(r => setTimeout(r, 700));
+    return await once();
+  }
+}
+/* 写真の並びの「指紋」。枚数・見分け・名前・調書の印がそろっているかを見る。 */
+function photoSlimPrint(arr){
+  return (Array.isArray(arr) ? arr : []).map(p => [
+    (p && p.id) || "", (p && p.label) || "", (p && p.chosho) ? "1" : "", (p && p.dataUri) ? "1" : ""
+  ].join(PHOTO_SLIM_SEP1)).join(PHOTO_SLIM_SEP2);
+}
+/* 1戸別ぶん。戻り値 { kind, why, n, changed, before, after, noShrink } */
+async function photoSlimCase(row, onPhoto){
+  const mg = ((row.data || {}).chosho_mgmt_no || "").trim();
+  let fh;
+  try { fh = await row._dir.getFileHandle(row._name); }
+  catch(_){ return { kind:"skip", why:"元ファイルが見つかりません" }; }
+
+  let read0;
+  try { read0 = await photoSlimReadText(fh); }
+  catch(e){ return { kind:"skip", why:"元ファイルを読めませんでした（" + ((e && e.message) || e) + "）" }; }
+  const text0 = read0.text;
+  const t = text0.replace(/^\uFEFF/, "").trim();
+  if(!t) return { kind:"skip", why:"中身が空でした" };
+  let obj;
+  try { obj = JSON.parse(t); } catch(_){ return { kind:"skip", why:"中身を読み取れませんでした" }; }
+  if(!obj || typeof obj !== "object" || Array.isArray(obj)) return { kind:"skip", why:"戸別の形ではありません" };
+  if(obj.chosho_photos_thumb) return { kind:"skip", why:"小さい写真しか無い" };
+  if(obj.encrypted_fields || obj.ct || obj.type === "antenna_special_record") return { kind:"skip", why:"戸別の形ではありません" };
+  const fileMg = String(obj.chosho_mgmt_no || "").trim();
+  if(mg && fileMg && mg !== fileMg) return { kind:"skip", why:"別の戸別のファイルでした" };
+  const photos = Array.isArray(obj.chosho_photos) ? obj.chosho_photos : null;
+  if(!photos) return { kind:"skip", why:"写真なし" };
+  const real = photos.filter(p => p && p.dataUri);
+  if(!real.length) return { kind:"skip", why:"写真なし" };
+
+  const before = real.reduce((s, p) => s + photoBytesOf(p.dataUri), 0);
+  const idsBefore = real.map(p => p.id || photoContentId(p.dataUri));
+
+  /* 縮める。写真の入れ物（配列・1枚ずつのオブジェクト）はそのまま使い、dataUri だけ入れ替える。
+     並び・名前・調書の印・空の枠・古い形の枠が、どれも変わらない。 */
+  let changed = 0, noShrink = 0, k = 0;
+  for(const p of photos){
+    if(!p || !p.dataUri) continue;
+    k++;
+    if(typeof onPhoto === "function") onPhoto(k, real.length);
+    if(!p.id) p.id = photoContentId(p.dataUri);      // 縮める前に写真の見分けを確定させる
+    if(photoBytesOf(p.dataUri) <= PHOTO_FIT_MAX_BYTES) continue;   // もう軽い＝触らない
+    let out;
+    try { out = await photoFitForStorage(p.dataUri); }
+    catch(_){ out = p.dataUri; }
+    if(!out || out === p.dataUri || out.length >= p.dataUri.length || !/^data:image\//i.test(out)){ noShrink++; continue; }
+    if(!(await photoCheckDecodable(out))){ noShrink++; continue; }  // 開けないものは入れない
+    p.dataUri = out; changed++;
+    await new Promise(r => setTimeout(r, 0));        // 画面へ息継ぎ
+  }
+  const print1 = photoSlimPrint(photos);
+  const after = photos.filter(p => p && p.dataUri).reduce((s, p) => s + photoBytesOf(p.dataUri), 0);
+  if(!changed) return { kind:"same", n: real.length, before: before, after: before, noShrink: noShrink };
+
+  /* 書く前の突き合わせ。1つでも合わなければ、何も書かない。 */
+  const nowReal = photos.filter(p => p && p.dataUri);
+  if(nowReal.length !== real.length) return { kind:"fail", why:"写真の枚数が合いません（何も書いていません）" };
+  const idsAfter = nowReal.map(p => p.id || photoContentId(p.dataUri));
+  if(idsAfter.join(PHOTO_SLIM_SEP1) !== idsBefore.join(PHOTO_SLIM_SEP1)) return { kind:"fail", why:"写真の見分けが変わりました（何も書いていません）" };
+  if(print1 !== photoSlimPrint(photos)) return { kind:"fail", why:"写真の並びが変わりました（何も書いていません）" };
+  if(after >= before) return { kind:"fail", why:"軽くなりませんでした（何も書いていません）" };
+
+  /* 書く直前にもう一度読む。読んだときと1文字でも違えば書かない
+     （縮めている間に、現場入力や別の端末が同じファイルを保存したかもしれない）。 */
+  let read1;
+  try { read1 = await photoSlimReadText(fh); }
+  catch(_){ return { kind:"skip", why:"書く前の読み直しに失敗しました（何も書いていません）" }; }
+  if(read1.text !== text0) return { kind:"other", why:"書こうとしたら、ファイルが外から変わっていました（何も書いていません）" };
+
+  const outText = JSON.stringify(obj, null, 2);
+  try {
+    const w = await fh.createWritable();
+    await w.write(outText);
+    await w.close();
+  } catch(e){ return { kind:"fail", why:"書き込めませんでした（" + ((e && e.message) || e) + "）" }; }
+
+  /* 書いたら必ず読み返す。 */
+  let back = null;
+  try { back = await photoSlimReadText(fh); }
+  catch(_){ back = null; }
+  if(!back) return { kind:"unverified", n: real.length, why:"書いたあと読み返せませんでした（中身は確かめられていません）" };
+  if(back.text === outText){
+    return { kind:"ok", n: real.length, changed: changed, before: before, after: after,
+             noShrink: noShrink, obj: obj, size: outText.length };
+  }
+  /* 合わない。中身が読めて・同じ戸別で・写真が減っておらず・見分けもそろっていれば、
+     書いた直後に別の端末が保存したとみて、触らない（元に戻すと相手の保存が消える）。 */
+  let bj = null;
+  try { bj = JSON.parse(back.text.replace(/^\uFEFF/, "").trim()); } catch(_){ bj = null; }
+  const bPhotos = bj && Array.isArray(bj.chosho_photos) ? bj.chosho_photos.filter(p => p && p.dataUri) : null;
+  const bIds = bPhotos ? new Set(bPhotos.map(p => p.id || photoContentId(p.dataUri))) : null;
+  const sameCase = !!bj && String(bj.chosho_mgmt_no || "").trim() === fileMg;
+  const keptAll = !!bIds && idsBefore.every(id => bIds.has(id)) && bPhotos.length >= real.length;
+  if(sameCase && keptAll){
+    return { kind:"other", n: real.length, why:"書いたあと、別の端末がこのファイルを保存したようです（触っていません）" };
+  }
+  /* 壊れている・別の戸別・写真が減った → 元の中身へ戻す。 */
+  let restored = false;
+  try {
+    const w2 = await fh.createWritable();
+    await w2.write(text0);
+    await w2.close();
+    const chk = await photoSlimReadText(fh);
+    restored = (chk.text === text0);
+  } catch(_){ restored = false; }
+  if(restored) return { kind:"restored", n: real.length, why:"読み返しが合わなかったので、元に戻しました" };
+  /* 戻せない → 元の中身を控えへ写す（それも駄目ならダウンロード）。 */
+  let kept = "";
+  try {
+    const bdir = await dupBackupDir();
+    if(bdir){
+      const nm = (mg || "管理番号なし") + "_軽くする前.json";
+      const bfh = await bdir.getFileHandle(nm, { create: true });
+      const bw = await bfh.createWritable(); await bw.write(text0); await bw.close();
+      const bchk = await (await bfh.getFile()).text();
+      if(String(bchk) === text0) kept = DUP_BACKUP_DIR + " / " + nm;
+    }
+  } catch(_){}
+  if(!kept){
+    try {
+      const blob = new Blob([text0], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = (mg || "管理番号なし") + "_軽くする前.json";
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      kept = "ダウンロード";
+    } catch(_){}
+  }
+  return { kind:"lost", n: real.length, why:"元に戻せませんでした。軽くする前の中身を " + (kept || "残せませんでした") + " に置きました" };
+}
+/* 軽くしたぶんを、一覧の行にも映す（開き直さなくても見え方が合うように）。
+   ★行が持っている写真の配列は差し替えない★ 見分けが同じ写真の中身だけ入れ替える。
+   まだ保存していない写真を行に持っていることがあり、配列ごと入れ替えると消える。 */
+function photoSlimSyncRow(row, obj, newSize){
+  try {
+    const src = Array.isArray(obj && obj.chosho_photos) ? obj.chosho_photos : null;
+    if(!src) return;
+    const byId = new Map();
+    src.forEach(p => { if(p && p.dataUri && p.id) byId.set(p.id, p.dataUri); });
+    const arr = row && row.data && Array.isArray(row.data.chosho_photos) ? row.data.chosho_photos : null;
+    if(arr) arr.forEach(p => { if(p && p.dataUri && p.id && byId.has(p.id)) p.dataUri = byId.get(p.id); });
+    if(newSize > 0) row._size = newSize;
+  } catch(_){}
+}
+/* 全件を回す。 */
+async function photoSlimRun(targets, rowsRef){
+  const mb = n => (Math.round(n / 1024 / 1024 * 10) / 10).toLocaleString();
+  const t = { ok:0, photos:0, before:0, after:0, same:0, noShrink:0,
+              skip:{}, fail:[], restored:[], other:[], unverified:[], lost:[] };
+  const sub = () => "軽くした " + t.ok + " 件 ／ " + t.photos + " 枚 ／ 約 "
+    + mb(t.before) + "MB → 約 " + mb(t.after) + "MB";
+  let aborted = false, swapped = false;
+  bulkProgressOpen("📉 写真を軽くしています", targets.length);
+  try {
+    for(let i = 0; i < targets.length; i++){
+      if(bulkProgressAborted()){ aborted = true; break; }
+      if(_listRows !== rowsRef){ swapped = true; break; }
+      const row = targets[i];
+      const mg = ((row.data || {}).chosho_mgmt_no || "").trim() || "（管理番号なし）";
+      bulkProgressUpdate(i, "処理中: " + mg, sub());
+      await bulkProgressYield();
+      let r;
+      try { r = await photoSlimCase(row, (k, n) => bulkProgressUpdate(i, "処理中: " + mg + "（写真 " + k + " / " + n + " 枚目）")); }
+      catch(e){ r = { kind:"fail", why:(e && e.message) || String(e) }; }
+      if(r.kind === "ok"){
+        t.ok++; t.photos += r.changed; t.before += r.before; t.after += r.after;
+        t.noShrink += (r.noShrink || 0);
+        photoSlimSyncRow(row, r.obj, r.size);
+      }
+      else if(r.kind === "same"){ t.same++; t.noShrink += (r.noShrink || 0); }
+      else if(r.kind === "skip"){ (t.skip[r.why] = t.skip[r.why] || []).push(mg); }
+      else if(r.kind === "fail"){ t.fail.push(mg + "：" + r.why); }
+      else if(r.kind === "restored"){ t.restored.push(mg); }
+      else if(r.kind === "other"){ t.other.push(mg); }
+      else if(r.kind === "unverified"){ t.unverified.push(mg); }
+      else if(r.kind === "lost"){ t.lost.push(mg + "：" + r.why); }
+      bulkProgressUpdate(i + 1, null, sub());
+    }
+  } finally { bulkProgressClose(); }
+
+  const list = a => "　" + a.slice(0, 8).join(" / ") + (a.length > 8 ? (" ほか " + (a.length - 8) + " 件") : "");
+  let m = (aborted ? "📉 写真を軽くするのを中止しました。\n（済んだ戸別はそのまま残っています。もう一度押すと、続きから軽くなります）\n\n"
+        : swapped ? "📉 一覧が入れ替わったので止めました。\n（済んだ戸別はそのまま残っています）\n\n"
+        : "📉 写真を軽くしました。\n\n")
+    + "・軽くした戸別: " + t.ok + " 件\n"
+    + "・軽くした写真: " + t.photos + " 枚（約 " + mb(t.before) + "MB → 約 " + mb(t.after) + "MB）\n";
+  if(t.same)       m += "・すでに軽かった戸別: " + t.same + " 件（触っていません）\n";
+  if(t.noShrink)   m += "・軽くできなかった写真: " + t.noShrink + " 枚（元のまま入っています）\n";
+  Object.keys(t.skip).forEach(why => {
+    m += "・" + why + "ので飛ばした戸別: " + t.skip[why].length + " 件\n" + list(t.skip[why]) + "\n";
+  });
+  if(t.other.length)      m += "\n・書こうとしたら外から変わっていた戸別: " + t.other.length + " 件（触っていません）\n" + list(t.other) + "\n";
+  if(t.fail.length)       m += "\n・軽くできなかった戸別: " + t.fail.length + " 件（何も書いていません）\n" + list(t.fail) + "\n";
+  if(t.restored.length)   m += "\n⚠ 読み返しが合わず、元に戻した戸別: " + t.restored.length + " 件\n" + list(t.restored) + "\n";
+  if(t.unverified.length) m += "\n⚠ 書いたあと読み返せなかった戸別: " + t.unverified.length + " 件\n"
+                            + "　中身は確かめられていません。念のため開いて写真の枚数をご確認ください。\n" + list(t.unverified) + "\n";
+  if(t.lost.length)       m += "\n⚠⚠ 元に戻せなかった戸別: " + t.lost.length + " 件\n" + list(t.lost) + "\n";
+  m += "\n※ 一覧の枚数・大きさを合わせるには、もう一度 📁 フォルダ を読み込んでください。";
+  alert(m);
+  uiToast((aborted ? "中止：" : "") + "写真を軽くしました：" + t.ok + "件 / " + t.photos + "枚");
+}
+/* ボタンを押したとき。★確認より先に、書き込みの許可を取り切る★
+   （確認を先に出すと「押した直後」の扱いが切れて、フォルダの許可を求められなくなる） */
+async function photoSlimButton(){
+  if(_photoSlimBusy) return;
+  if(!window.showDirectoryPicker){
+    alert("この機能はパソコンの Chrome / Edge で使えます。");
+    return;
+  }
+  const shown = Object.values(_ledgerShown || {});
+  if(!shown.length){
+    alert("台帳に戸別が出ていません。\n「📁 フォルダ」で工事フォルダを読み込んでください。\n\n何も書き換えていません。");
+    return;
+  }
+  try {
+    if(typeof pjDirtyList === "function"){
+      const dirty = pjDirtyList();
+      if(dirty && dirty.length){
+        alert("写真台帳に、まだ戸別ファイルへ書き戻していない直しが " + dirty.length + " 件あります。\n\n"
+          + "先に「💾 戸別ファイルへ書き戻す」を押すか、「📷 写真を読み直す」で直しを消してから、\n"
+          + "もう一度お試しください。\n\n何も書き換えていません。");
+        return;
+      }
+    }
+  } catch(_){}
+
+  const dupSet = getDuplicateMgmtSet();
+  const targets = shown.filter(r => !photoSlimWhy(r, dupSet));
+  if(!targets.length){
+    alert("軽くできる戸別がありません。\n\n"
+      + "暗号化した戸別・元ファイルを掴んでいない戸別・写真の無い戸別・\n"
+      + "いま開いている戸別・同じ管理番号が重なっている戸別は対象外です。\n"
+      + "（「📁 フォルダ」で工事フォルダを読み込むと、元ファイルを掴めます）\n\n"
+      + "何も書き換えていません。");
+    return;
+  }
+  // ★確認より先に許可★
+  const okRoot = await fsPrepRootWritable(targets);
+  const ng = await lgwbCheckWritable(targets);
+  if(!okRoot || (ng && ng.length)){
+    alert("フォルダへの書き込みが許可されませんでした。\n\n"
+      + "「📁 フォルダ」で工事フォルダを読み込み直してから、もう一度お試しください。\n\n"
+      + "何も書き換えていません。");
+    return;
+  }
+
+  const reasons = {};
+  shown.forEach(r => { const w = photoSlimWhy(r, dupSet); if(w) reasons[w] = (reasons[w] || 0) + 1; });
+  const outN = Object.keys(reasons).reduce((s, k) => s + reasons[k], 0);
+  const totalMB = Math.round(targets.reduce((s, r) => s + (r._size || 0), 0) / 1024 / 1024);
+  const notDone = targets.filter(r => !caseWorkDone(r)).length;
+
+  let msg = "表示中の " + shown.length + " 件のうち、" + targets.length + " 件の戸別の写真を軽くします。\n\n"
+    + "・1枚が約1MBを超える写真だけを、写真を入れるときと同じ大きさ（1枚 約1MBまで）に縮めます\n"
+    + "　（見積書・工事調書・写真台帳の印刷には十分な大きさです）\n"
+    + "・写真は1枚も減りません。名前・並び順・工事調書に載せる印もそのままです\n"
+    + "・1MB以内の写真には触りません（何度押しても、それ以上は縮みません）\n"
+    + "・写真以外（氏名・住所・積算・図面・測定値・更新日時）には触りません\n"
+    + "・1件ずつ 書いて → 読み返して → 中身を確かめてから次へ進みます。合わなければ元に戻します\n"
+    + "・押した時点で戸別ファイル（管理番号.json）が書き替わります。💾 は要りません\n"
+    + "・途中で「中止」しても、済んだ戸別はそのまま残ります\n"
+    + (totalMB ? ("・いまの対象のファイル合計: 約 " + totalMB.toLocaleString() + " MB\n") : "");
+  if(outN){
+    msg += "\n対象外 " + outN + " 件：" + Object.keys(reasons).map(k => k + " " + reasons[k]).join(" ／ ") + "\n";
+  }
+  if(notDone){
+    msg += "\n※ 工事がまだ終わっていない戸別が " + notDone + " 件入っています。スマホの現場入力がまだ元の大きさの\n"
+         + "　写真を持っていると、次にスマホで保存したとき元の大きさに戻ることがあります（写真は減りません）。\n";
+  }
+  msg += "\n※ 一度縮めた写真は、元の大きさには戻せません。元の大きさで残したいときは、先に\n"
+       + "　「⋯ まとめて → 📸 写真をまとめて書き出し」で取り出してください。\n\n進めますか？";
+  if(!confirm(msg)) return;
+
+  _photoSlimBusy = true;
+  try { await photoSlimRun(targets, _listRows); }
+  finally {
+    _photoSlimBusy = false;
+    try { renderListTable(); } catch(_){}
+  }
+}
 /* 入力 UI を再構築 */
 function renderPhotoInputs(){
   const wrap = document.getElementById("photo-list");
@@ -29256,6 +29587,12 @@ function renderListLedgerMode(rows, container){
   // 工事調書「選択印刷」のチェック数（読み込み済かつ印刷可能な戸別のみ計上）
   let selCount = 0;
   rows.forEach(r => { if(lgLedgerEnabled(r) && _ledgerPrintSel.has(subCaseKey(r))) selCount++; });
+  // 📉 写真を軽くする：いま表に出ている行のうち、触ってよいものの件数
+  let slimN = 0;
+  try {
+    const _dupSet = getDuplicateMgmtSet();
+    slimN = shown.filter(r => !photoSlimWhy(r, _dupSet)).length;
+  } catch(_){ slimN = 0; }
   const arrow = k => (_ledgerSort.key === k ? '<span class="lg-arrow">' + (_ledgerSort.dir > 0 ? "▲" : "▼") + '</span>' : "");
   let html = renderSelectedFolderBanner();
   html += lgPrintWPanelHtml();
@@ -29320,6 +29657,11 @@ function renderListLedgerMode(rows, container){
     +   '<button id="lg-export-html" title="いまの受付台帳を、中身の入った1枚のHTMLにして書き出します。渡した先はブラウザで開くだけで台帳がそのまま出るので、受付台帳ソフトを別に渡さなくて済みます。向こうで直した分は「📤 台帳を書き出し」でファイルにしてもらい、左の「📥 受付台帳」で戻せます。台帳ソフトはこのメインの中に入っているので、ファイルを選ぶ必要はありません（Excel書き出しと同じで、押すだけです）。名前・住所・電話が入るので、渡す相手にご注意ください。" style="background:#00838f;color:#fff;border:1px solid #006064;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">🌐 HTML</button>'
     +   '<button id="lg-xlsx-export" title="いまの受付台帳を Excel（.xlsx）へ書き出します。Excelで直したあと、左の「📗 Excel」でそのまま読み戻せます。" style="background:#1b7a3d;color:#fff;border:1px solid #145c2e;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">📘 Excel</button>'
     +   '<button id="lg-writeback" title="この台帳で直した 名前・住所・電話・工事日程予定（日付・時刻）・打合せ予定・状態・備考・保留・ビラ・同意書・完了書 を、フォルダの戸別ファイルへまとめて書き込みます。台帳のセルで直しただけでは戸別ファイルは変わらないため、フォルダを読み直すと元に戻ってしまいます（工事予定日を消しても消えない等）。戸別を1件ずつ開いて保存しなくて済みます。写真・図面・積算・測定値には触りません。「打合せ予定・受付時刻」は戸別ファイルに置き場所が無いため対象外です（物件ファイルに保存されます）。押すと、まず工事フォルダ（ルート）を掴むところから始めます。すでに掴んでいれば何も聞きません。掴んでいないときだけフォルダを選ぶ画面が出ます。どちらの場合も台帳の内容は読み直さないので、打ち込んだ内容は消えません。" style="background:#00695c;color:#fff;border:1px solid #004d40;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;">💾 戸別ファイルへ反映</button>'
+    + '</div>'
+    + '<div class="lgc-grp"><span class="lgc-ttl">写真</span>'
+    +   '<button id="lg-photo-slim"' + (slimN ? '' : ' disabled')
+    +     ' title="いま台帳に表示している戸別の写真のうち、1枚が約1MBを超えるものだけを、写真を入れるときと同じ大きさ（1枚 約1MBまで・長辺2048px。見積書・工事調書・写真台帳の印刷に十分）に縮めて、戸別ファイルを軽くします。写真は1枚も減りません。名前・並び順・工事調書に載せる印もそのままです。1MB以内の写真には触らないので、何度押しても縮み続けることはありません。書いたあと読み返して中身を確かめ、合わなければ元に戻します。写真以外（氏名・住所・積算・図面・測定値・更新日時）には触りません。暗号化した戸別・元ファイルを掴んでいない戸別・いま開いている戸別・同じ管理番号が重なっている戸別には触りません。元の大きさで残したいときは、先に「⋯ まとめて → 📸 写真をまとめて書き出し」で取り出してください。"'
+    +     ' style="background:#ad6800;color:#fff;border:1px solid #8a5200;padding:4px 12px;border-radius:3px;cursor:' + (slimN ? 'pointer' : 'not-allowed') + ';font-size:12px;opacity:' + (slimN ? '1' : '.5') + ';">📉 写真を軽くする' + (slimN ? '（表示中 ' + slimN + ' 件）' : '') + '</button>'
     + '</div>'
     + '<span class="lg-count">全 ' + rows.length + ' 件（仮 ' + prov + ' ／ 完了 ' + done + ' ／ ビラ済 ' + flyered + (held ? ' ／ 保留 ' + held : '') + '）' + (shown.length !== rows.length ? ' → 表示 ' + shown.length + ' 件' : '') + '</span>'
     + '<div class="lgc-note">セルをクリックすると直接編集できます。工事日程・打合せ予定は 📅 予定カレンダーに、名前・住所などは図面にそのまま反映されます。</div>'
@@ -31104,6 +31446,7 @@ function bindLedgerHandlers(container){
     if(e.target.closest("#lg-xlsx-import")){ ledgerXlsxImportFlow(); return; }
     if(e.target.closest("#lg-xlsx-export")){ exportReceptionLedgerToXlsx(); return; }
     if(e.target.closest("#lg-writeback, #lgs-writeback")){ lgwbButton(); return; }
+    if(e.target.closest("#lg-photo-slim")){ photoSlimButton(); return; }
     if(e.target.closest("#lg-note-log")){ openNoteLog(); return; }
     if(e.target.closest("#lg-export-set")){ exportGenbaSet(); return; }
     if(e.target.closest("#lg-export-genba")){ exportReceptionLedgerForGenba(); return; }
