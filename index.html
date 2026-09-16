@@ -6914,7 +6914,7 @@ async function lsRestoreFromIdb(){
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "162";
+const APP_VERSION = "163";
 /* ============================================================
    ★日時の表示は、必ずこの端末の時刻で★
    保存している日時は世界時のISO文字列（…T01:03:00.000Z）。これを文字のまま
@@ -23083,6 +23083,107 @@ async function photoLooksLike(src, out){
   if(a.sd >= 6 && b.sd < a.sd * 0.35) return false;           // 模様が消えている（のっぺりした絵）
   return true;
 }
+/* ============================================================
+   撮った日時・場所（GPS）を、縮めたあとの写真にも引き継ぐ
+   ------------------------------------------------------------
+   写真を縮めるときは canvas に描き直すので、出来上がりからは
+   「いつ撮ったか・どこで撮ったか・どの機種で撮ったか」（Exif）が消える。
+   工事写真はいつ撮ったかが大事なので、元の写真の Exif の塊だけをそのまま移す。
+   ・向きの印だけは「そのまま（1）」に直す。焼き直した絵はもう回してあるので、
+     元の印を残すと二重に回って横倒しになる。
+   ・少しでもうまくいかなければ、Exif を付けずにそのまま返す（写真は失わない）。
+   ============================================================ */
+/* dataURI をぜんぶバイトにする（開けなければ null） */
+function photoAllBytes(dataUri){
+  const s = String(dataUri || "");
+  const c = s.indexOf(",");
+  if(c < 0) return null;
+  let bin;
+  try { bin = atob(s.slice(c + 1)); } catch(_){ return null; }
+  const out = new Uint8Array(bin.length);
+  for(let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+/* バイトを dataURI に戻す */
+function photoBytesToDataUri(bytes, mime){
+  let s = "";
+  const step = 0x8000;
+  for(let i = 0; i < bytes.length; i += step){
+    s += String.fromCharCode.apply(null, bytes.subarray(i, i + step));
+  }
+  return "data:" + (mime || "image/jpeg") + ";base64," + btoa(s);
+}
+/* JPEG の頭から Exif の塊（APP1）を切り出す。無ければ null */
+function photoExifSegment(bytes){
+  if(!bytes || bytes.length < 4) return null;
+  if(!(bytes[0] === 0xFF && bytes[1] === 0xD8)) return null;
+  let i = 2;
+  while(i + 4 < bytes.length){
+    if(bytes[i] !== 0xFF){ i++; continue; }
+    const m = bytes[i + 1];
+    if(m === 0xFF){ i++; continue; }
+    if(m === 0xD8 || m === 0x01 || (m >= 0xD0 && m <= 0xD7)){ i += 2; continue; }
+    if(m === 0xD9 || m === 0xDA) return null;      // 絵の中身に入った＝Exif は無かった
+    const len = (bytes[i + 2] << 8) | bytes[i + 3];
+    if(len < 2 || i + 2 + len > bytes.length) return null;
+    if(m === 0xE1 && len >= 8
+       && bytes[i + 4] === 0x45 && bytes[i + 5] === 0x78 && bytes[i + 6] === 0x69
+       && bytes[i + 7] === 0x66 && bytes[i + 8] === 0x00){
+      return bytes.slice(i, i + 2 + len);          // FFE1 + 長さ + 中身
+    }
+    i += 2 + len;
+  }
+  return null;
+}
+/* Exif の塊の中の「向きの印」を、そのまま（1）に書き替える。
+   焼き直した絵はもう回してあるので、元の印を残すと二重に回る。 */
+function photoExifClearOrientation(seg){
+  try {
+    // FFE1(2) + 長さ(2) + "Exif\0\0"(6) = 10 バイト目から TIFF が始まる
+    const t = 10;
+    if(seg.length < t + 8) return false;
+    const little = (seg[t] === 0x49 && seg[t + 1] === 0x49);
+    const big = (seg[t] === 0x4D && seg[t + 1] === 0x4D);
+    if(!little && !big) return false;
+    const u16 = o => little ? (seg[o] | (seg[o + 1] << 8)) : ((seg[o] << 8) | seg[o + 1]);
+    const u32 = o => little
+      ? (seg[o] | (seg[o + 1] << 8) | (seg[o + 2] << 16) | (seg[o + 3] << 24)) >>> 0
+      : ((seg[o] << 24) | (seg[o + 1] << 16) | (seg[o + 2] << 8) | seg[o + 3]) >>> 0;
+    if(u16(t + 2) !== 0x2A) return false;
+    const ifd0 = t + u32(t + 4);
+    if(ifd0 + 2 > seg.length) return false;
+    const n = u16(ifd0);
+    for(let k = 0; k < n; k++){
+      const e = ifd0 + 2 + k * 12;
+      if(e + 12 > seg.length) break;
+      if(u16(e) === 0x0112){                        // 向きの印
+        if(little){ seg[e + 8] = 1; seg[e + 9] = 0; }
+        else { seg[e + 8] = 0; seg[e + 9] = 1; }
+        return true;
+      }
+    }
+    return false;
+  } catch(_){ return false; }
+}
+/* 縮めた写真（out）へ、元の写真（src）の Exif を移す。
+   うまくいかなければ out をそのまま返す。 */
+function photoCarryExif(outDataUri, srcDataUri){
+  try {
+    if(!/^data:image\/jpeg/i.test(String(outDataUri || ""))) return outDataUri;
+    const head = photoHeadBytes(srcDataUri, 262144);      // Exif は写真の頭にある
+    const seg = photoExifSegment(head);
+    if(!seg || seg.length < 12 || seg.length > 128 * 1024) return outDataUri;
+    photoExifClearOrientation(seg);                        // 向きは「そのまま」に直す
+    const out = photoAllBytes(outDataUri);
+    if(!out || !(out[0] === 0xFF && out[1] === 0xD8)) return outDataUri;
+    if(photoExifSegment(out)) return outDataUri;           // もう入っている＝何もしない
+    const merged = new Uint8Array(out.length + seg.length);
+    merged.set(out.subarray(0, 2), 0);                     // SOI
+    merged.set(seg, 2);                                    // Exif の塊
+    merged.set(out.subarray(2), 2 + seg.length);
+    return photoBytesToDataUri(merged, "image/jpeg");
+  } catch(_){ return outDataUri; }
+}
 /* 入れる前に1枚を目安の大きさへ収める。収められなければ元のまま返す（写真は捨てない）。
    JPEGの大きさは画素数にほぼ比例するので、1回試したら「あとどれだけ縮めればよいか」を
    見積もって一気に寄せる。総当たりより速く、目安のぎりぎり手前＝いちばんきれいな所に収まる。 */
@@ -23117,7 +23218,7 @@ async function photoFitForStorage(dataUri){
     : tries.reduce((a, t) => (t.b < a.b ? t : a));
   if(!best || best.out.length >= dataUri.length) return dataUri;     // 小さくならないなら元のまま
   if(!(await photoLooksLike(dataUri, best.out))) return dataUri;    // 絵が変わっていたら元のまま
-  return best.out;
+  return photoCarryExif(best.out, dataUri);   // 撮った日時・場所を引き継ぐ（できなければそのまま）
 }
 /* 名前をいくつか並べる（多いときは「ほか」でまとめる） */
 function photoNameList(arr){
