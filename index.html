@@ -6914,7 +6914,7 @@ async function lsRestoreFromIdb(){
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "160";
+const APP_VERSION = "161";
 /* ============================================================
    ★日時の表示は、必ずこの端末の時刻で★
    保存している日時は世界時のISO文字列（…T01:03:00.000Z）。これを文字のまま
@@ -22978,6 +22978,87 @@ function photoCheckDecodable(dataUri){
     im.src = dataUri;
   });
 }
+/* ============================================================
+   写真を入れるときに、大きすぎるものだけ自動で軽くする
+   ------------------------------------------------------------
+   工事写真は、見積書・工事調書・写真台帳・印刷で使うぶんには長辺2000pxで十分読める。
+   いまのスマホの写真は1枚3〜5MBあり、そのまま戸別ファイルへ入れると保存先がすぐ一杯になる。
+   ・1枚の目安（約1MB）を超えたものだけ縮める。もともと小さい写真には触らない
+     （触ると、保存のたびに少しずつ画質が落ちていく）
+   ・縮めた結果が元より大きい／画像として開けない ときは、元のまま入れる
+   ・枚数は絶対に変えない。ここは1枚を軽くするだけで、増やしも減らしもしない
+   ============================================================ */
+const PHOTO_FIT_MAX_BYTES = 1024 * 1024;   // 1枚がこれを超えたら縮める（約1MB）
+/* 長辺2048px・画質0.85 は、利用者が手で縮めているのと同じ大きさ。
+   実物の戸別ファイル（写真15枚）で測ると 1枚 372〜1014KB・平均549KB になり、
+   ちょうど「1枚500KB〜1MB」に収まる。まずこれで試す。 */
+const PHOTO_FIT_MAX_EDGE = 2048;
+const PHOTO_FIT_QUALITY = 0.85;
+const PHOTO_FIT_MIN_EDGE = 1400;           // これより小さくはしない（工事調書で粗くなる）
+/* dataURI のおおよそのバイト数（base64 は4文字で3バイト） */
+function photoBytesOf(dataUri){
+  const s = String(dataUri || "");
+  const i = s.indexOf(",");
+  return i < 0 ? 0 : Math.round((s.length - i - 1) * 0.75);
+}
+/* 長辺 maxEdge に収まるよう縮めて JPEG にする。開けなければ空文字 */
+function photoRenderSmaller(dataUri, maxEdge, quality){
+  return new Promise(resolve => {
+    let done = false;
+    const fin = v => { if(!done){ done = true; resolve(v); } };
+    const img = new Image();
+    img.onload = () => {
+      try{
+        const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+        if(!w || !h){ fin(""); return; }
+        const scale = Math.min(1, maxEdge / Math.max(w, h));   // 大きくはしない
+        const nw = Math.max(1, Math.round(w * scale)), nh = Math.max(1, Math.round(h * scale));
+        const cv = document.createElement("canvas");
+        cv.width = nw; cv.height = nh;
+        const ctx = cv.getContext("2d");
+        ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, nw, nh);    // JPEGは透過を持てない＝白地で塗る
+        ctx.drawImage(img, 0, 0, nw, nh);
+        fin(cv.toDataURL("image/jpeg", quality));
+      }catch(err){ console.warn("写真を縮められませんでした", err); fin(""); }
+    };
+    img.onerror = () => fin("");
+    setTimeout(() => fin(""), 15000);   // 固まらせない
+    img.src = dataUri;
+  });
+}
+/* 入れる前に1枚を目安の大きさへ収める。収められなければ元のまま返す（写真は捨てない）。
+   JPEGの大きさは画素数にほぼ比例するので、1回試したら「あとどれだけ縮めればよいか」を
+   見積もって一気に寄せる。総当たりより速く、目安のぎりぎり手前＝いちばんきれいな所に収まる。 */
+async function photoFitForStorage(dataUri){
+  if(!dataUri || typeof dataUri !== "string") return dataUri;
+  if(photoBytesOf(dataUri) <= PHOTO_FIT_MAX_BYTES) return dataUri;   // もともと目安の内＝触らない
+  const tries = [];
+  let edge = PHOTO_FIT_MAX_EDGE, q = PHOTO_FIT_QUALITY;
+  for(let i = 0; i < 4; i++){
+    const out = await photoRenderSmaller(dataUri, edge, q);
+    if(!out) break;                                                  // 画像として開けない → 元のまま
+    const b = photoBytesOf(out);
+    tries.push({ out: out, b: b });
+    if(b <= PHOTO_FIT_MAX_BYTES) break;                              // 収まった
+    /* まだ大きい。まず画質を少し落として同じ大きさで試す（長辺2048pxを保つほうが紙で読みやすい）。
+       それでも入らなければ、JPEGの大きさは画素数にほぼ比例するので、必要な縮小率を見積もって寄せる。 */
+    if(q > 0.74){ q = 0.74; }
+    else {
+      const next = Math.max(PHOTO_FIT_MIN_EDGE, Math.round(edge * Math.sqrt(PHOTO_FIT_MAX_BYTES / b) * 0.95));
+      if(next >= edge) q = Math.max(0.6, q - 0.07);                  // もう縮められない → 画質を落とす
+      else edge = next;
+    }
+  }
+  if(!tries.length) return dataUri;
+  const inside = tries.filter(t => t.b <= PHOTO_FIT_MAX_BYTES);
+  // 目安に収まったもののうち いちばん大きい＝いちばんきれいなもの。
+  // 1つも収まらなければ、いちばん小さいもの（それでも元より軽い）。
+  const best = inside.length
+    ? inside.reduce((a, t) => (t.b > a.b ? t : a))
+    : tries.reduce((a, t) => (t.b < a.b ? t : a));
+  if(!best || best.out.length >= dataUri.length) return dataUri;     // 小さくならないなら元のまま
+  return best.out;
+}
 /* 名前をいくつか並べる（多いときは「ほか」でまとめる） */
 function photoNameList(arr){
   return "　" + arr.slice(0, 5).join(" / ") + (arr.length > 5 ? (" ほか " + (arr.length - 5) + " 件") : "");
@@ -22990,7 +23071,7 @@ async function bulkImportPhotoFiles(fileList){
 
   if(files.length > PHOTO_BULK_MANY){
     if(!confirm(files.length + " 枚を取り込みます。\n"
-      + "枚数が多いとファイルが重くなります（あとで 📉 写真を軽量化 で軽くできます）。\n"
+      + "大きい写真は入れるときに自動で軽くします（1枚 約1MBまで）。\n"
       + "よろしいですか？")) return;
   }
 
@@ -23009,6 +23090,7 @@ async function bulkImportPhotoFiles(fileList){
   STATE.photos.forEach(p => { if(p && p.dataUri) haveIds.add(p.id || photoContentId(p.dataUri)); });
 
   const added = [], tooBig = [], notImage = [], dup = [];
+  let shrunk = 0, shrunkBefore = 0, shrunkAfter = 0;
   for(let i = 0; i < files.length; i++){
     const f = files[i];
     if(btn){ btn.disabled = true; btn.textContent = "取り込み中… " + (i + 1) + " / " + files.length; }
@@ -23016,10 +23098,13 @@ async function bulkImportPhotoFiles(fileList){
     const uri = await photoReadFileAsDataUri(f);
     if(!uri || !/^data:image\//i.test(uri)){ notImage.push(f.name); continue; }
     if(!(await photoCheckDecodable(uri))){ notImage.push(f.name); continue; }
-    const id = photoContentId(uri);
+    // 大きすぎる写真はここで軽くしてから入れる（軽くできなければ元のまま入る）
+    const fit = await photoFitForStorage(uri);
+    if(photoBytesOf(fit) < photoBytesOf(uri)){ shrunkBefore += photoBytesOf(uri); shrunkAfter += photoBytesOf(fit); shrunk++; }
+    const id = photoContentId(fit);
     if(haveIds.has(id)){ dup.push(f.name); continue; }
     haveIds.add(id);
-    added.push({ label: photoLabelFromFileName(f.name), dataUri: uri, id: id });
+    added.push({ label: photoLabelFromFileName(f.name), dataUri: fit, id: id });
   }
   if(btn){ btn.disabled = false; btn.textContent = btnText0; }
 
@@ -23071,6 +23156,11 @@ async function bulkImportPhotoFiles(fileList){
 
   let msg = "📷 写真を " + added.length + " 枚 取り込みました（" + before + " 枚 → " + after + " 枚）。\n"
           + "ファイル名の順に並べ、ファイル名をそのままラベルにしました。\n";
+  if(shrunk){
+    const mb = n => Math.round(n / 1024 / 1024 * 10) / 10;
+    msg += "\n・大きい写真 " + shrunk + " 枚は、入れるときに軽くしました（約 "
+         + mb(shrunkBefore) + "MB → 約 " + mb(shrunkAfter) + "MB）\n";
+  }
   if(dup.length)      msg += "\n・すでに同じ写真が入っていたので飛ばしました: " + dup.length + " 件\n" + photoNameList(dup) + "\n";
   if(tooBig.length)   msg += "\n・大きすぎて入れられませんでした（1枚 " + PHOTO_BULK_MAX_MB + "MB まで）: " + tooBig.length + " 件\n" + photoNameList(tooBig) + "\n";
   if(notImage.length) msg += "\n・画像として開けませんでした（入れていません）: " + notImage.length + " 件\n" + photoNameList(notImage)
@@ -23697,13 +23787,21 @@ function readPhotoFileToEntry(inp, idx){
     return;
   }
   const r = new FileReader();
-  r.onload = ev => {
+  r.onload = async ev => {
     if(!STATE.photos[idx]){
       STATE.photos[idx] = { label: "写真" + (idx + 1), dataUri: null };
     }
-    STATE.photos[idx].dataUri = ev.target.result;
-    STATE.photos[idx].id = photoContentId(ev.target.result); // 撮影/追加時に安定IDを付与
+    const raw = String((ev.target && ev.target.result) || "");
+    // 大きすぎる写真はここで軽くしてから入れる（軽くできなければ元のまま）
+    const uri = await photoFitForStorage(raw);
+    STATE.photos[idx].dataUri = uri;
+    STATE.photos[idx].id = photoContentId(uri); // 撮影/追加時に安定IDを付与
     renderPhotoInputs();
+    if(photoBytesOf(uri) < photoBytesOf(raw)){
+      uiToast("写真が大きかったので、軽くして入れました（約 "
+        + Math.round(photoBytesOf(raw) / 1024 / 1024 * 10) / 10 + "MB → 約 "
+        + Math.round(photoBytesOf(uri) / 1024 / 1024 * 10) / 10 + "MB）");
+    }
     if(typeof projAutoSaveEdit === "function") projAutoSaveEdit(); // 写真追加/差替を物件へ自動保存
   };
   r.onerror = () => {
