@@ -269,46 +269,73 @@ const WANT_VER = (function(){ try{
   ok(r8.kb * 1024 <= ready.cap, '向きのある写真が目安に収まらない → ' + JSON.stringify(r8));
 
   // ---- ⑨ 同じ写真が2つあるとき、すでに軽いほうを残す（サムネで原本を潰さない） ----
-  const r9 = await page.evaluate(() => {
+  const r9 = await page.evaluate(async () => {
     if(typeof mergeGenbaPhotos !== 'function') return { skip: true };
-    const uri = (ch, bytes) => 'data:image/jpeg;base64,' + ch.repeat(Math.round(bytes / 0.75));
     const ID = 'p11112222_5697155';                 // 同じ写真＝IDは縮めても変えない決まり
     const one = (pc, genba, opt) => {
       const r = mergeGenbaPhotos([{ label:'施工前', dataUri: pc, id: ID }],
                                  [{ label:'施工前', dataUri: genba, id: ID }], opt || {}, {});
-      return { n: r.length, ch: r[0] && r[0].dataUri.charAt(23), id: r[0] && r[0].id };
+      return { n: r.length, got: r[0] && r[0].dataUri, id: r[0] && r[0].id };
     };
-    const big   = uri('B', 5700 * 1024);            // 撮りっぱなし
-    const fit   = uri('F', 700 * 1024);             // 目安に収めたもの
-    const fit2  = uri('G', 900 * 1024);             // 目安に収めたもの（少し大きい）
-    const thumb = uri('T', 60 * 1024);              // 物件に埋めるサムネイル
-    const over  = uri('O', 1500 * 1024);            // 目安を超えている
+    const shrink = (w, h, q) => {                   // 本物の写真を作る（頭に大きさが書いてある）
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+      const ctx = cv.getContext('2d'), img = ctx.createImageData(w, h);
+      let s2 = 91; const rnd = () => (s2 = (s2 * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+      for(let i = 0; i < w * h; i++){ const j2 = i * 4, v = 90 + rnd() * 120;
+        img.data[j2] = v; img.data[j2+1] = v; img.data[j2+2] = v; img.data[j2+3] = 255; }
+      ctx.putImageData(img, 0, 0); return cv.toDataURL('image/jpeg', q);
+    };
+    const big   = shrink(4032, 3024, 0.92);          // 撮りっぱなし（1MB超）
+    // 目安の内に収まる 2048px の写真を2つ（fit ＜ fit2 ≦ 目安）
+    const inRange = [];
+    for(const q of [0.85, 0.8, 0.75, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2]){
+      const u = shrink(2048, 1536, q);
+      if(photoBytesOf(u) <= PHOTO_FIT_MAX_BYTES) inRange.push(u);
+    }
+    const fit2 = inRange[0] || '';                   // 目安の内でいちばん大きい
+    const fit  = inRange[inRange.length - 1] || '';  // 目安の内でいちばん小さい
+    const thumb = shrink(512, 384, 0.72);            // 物件に埋めるサムネイル
+    const pano  = await photoFitForStorage(shrink(5000, 1200, 0.92));  // 横に長い写真（小さく収まる）
+    const over  = shrink(2048, 1536, 0.98);          // 長辺は十分だが目安を超えている
+    const kb = u => Math.round(photoBytesOf(u)/1024);
+    const edge = u => photoLongEdgeOf(u);
+    const R = {
+      bigVsFit:      one(fit, big),
+      thumbVsBig:    one(thumb, big),
+      smallFitVsBig: one(pano, big),
+      fitVsFit:      one(fit, fit2),
+      overVsFit:     one(over, fit),
+      thumbVsFit:    one(thumb, fit)
+    };
     return {
-      bigVsFit:   one(fit, big),                    // 縮めたほう(F)が残るべき
-      thumbVsBig: one(thumb, big, { mainThumb: true }),   // 原本(B)が残るべき（サムネで潰さない）
-      smallFitVsBig: one(uri('P', 90 * 1024), big),      // ちゃんと縮めた小さい写真(P)が残るべき
-      fitVsFit:   one(fit, fit2),                   // どちらも目安の内 → 大きいほう(G)
-      overVsFit:  one(over, fit),                   // 目安の内(F)が残るべき
-      thumbVsFit: one(thumb, fit, { mainThumb: true })   // 縮めたほう(F)が残るべき
+      kb: { big: kb(big), fit: kb(fit), fit2: kb(fit2), thumb: kb(thumb), pano: kb(pano), over: kb(over) },
+      edge: { big: edge(big), fit: edge(fit), thumb: edge(thumb), pano: edge(pano), over: edge(over) },
+      bigVsFit:      R.bigVsFit.got === fit,
+      thumbVsBig:    R.thumbVsBig.got === big,
+      smallFitVsBig: R.smallFitVsBig.got === pano,
+      fitVsFit:      R.fitVsFit.got === fit2,
+      overVsFit:     R.overVsFit.got === fit,
+      thumbVsFit:    R.thumbVsFit.got === fit,
+      n: R.bigVsFit.n, id: R.bigVsFit.id
     };
   });
   console.log('⑨同じ写真の残し方', JSON.stringify(r9));
   if(!r9.skip){
-    ok(r9.bigVsFit.ch === 'F',
-       '★外部で縮めた写真が、現場に残っている撮りっぱなしで元の重さに戻る → ' + JSON.stringify(r9.bigVsFit));
-    ok(r9.thumbVsBig.ch === 'B',
-       '★サムネイルで原本を潰している（写真が小さいまま取り返せない） → ' + JSON.stringify(r9.thumbVsBig));
-    ok(r9.smallFitVsBig.ch === 'P',
+    ok(r9.bigVsFit === true,
+       '★外部で縮めた写真が、現場に残っている撮りっぱなしで元の重さに戻る → ' + JSON.stringify(r9));
+    ok(r9.thumbVsBig === true,
+       '★サムネイルで原本を潰している（写真が小さいまま取り返せない） → ' + JSON.stringify(r9));
+    ok(r9.smallFitVsBig === true,
        '★ちゃんと縮めた小さい写真（横に長い写真など）をサムネと取り違えて、撮りっぱなしに戻している → '
-       + JSON.stringify(r9.smallFitVsBig));
-    ok(r9.fitVsFit.ch === 'G',
-       'どちらも目安の内なら、きれいなほうを残すはず → ' + JSON.stringify(r9.fitVsFit));
-    ok(r9.overVsFit.ch === 'F',
-       '★目安を超えたほうを残している → ' + JSON.stringify(r9.overVsFit));
-    ok(r9.thumbVsFit.ch === 'F',
-       '★サムネイルが、目安に収めた写真を潰している → ' + JSON.stringify(r9.thumbVsFit));
-    ok(r9.bigVsFit.n === 1 && r9.bigVsFit.id === 'p11112222_5697155',
-       '★同じ写真が2枚に増えている／写真IDが消えている → ' + JSON.stringify(r9.bigVsFit));
+       + JSON.stringify(r9));
+    ok(r9.fitVsFit === true,
+       'どちらも目安の内なら、きれいなほうを残すはず → ' + JSON.stringify(r9));
+    ok(r9.overVsFit === true, '★目安を超えたほうを残している → ' + JSON.stringify(r9));
+    ok(r9.thumbVsFit === true, '★サムネイルが、目安に収めた写真を潰している → ' + JSON.stringify(r9));
+    ok(r9.n === 1 && r9.id === 'p11112222_5697155',
+       '★同じ写真が2枚に増えている／写真IDが消えている → ' + JSON.stringify(r9));
+    ok(r9.edge.thumb > 0 && r9.edge.fit > 0,
+       '★写真の長辺を読み取れていない（見分けが効かない） → ' + JSON.stringify(r9.edge));
   }
 
   // ---- ⑩ 縮めた結果が元の写真と違う絵なら、元のまま入れる ----

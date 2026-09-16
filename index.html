@@ -23844,15 +23844,26 @@ async function photoSlimCase(row, onPhoto){
   } catch(_){ restored = false; }
   if(restored) return { kind:"restored", n: real.length, why:"読み返しが合わなかったので、元に戻しました" };
   /* 戻せない → 元の中身を控えへ写す（それも駄目ならダウンロード）。 */
-  let kept = "";
+  /* ★控えの名前は必ず別々にする★ ここは原本の唯一の残り。管理番号を名前にすると、
+     管理番号が空の戸別はどれも同じ名前になり、2件目が1件目の控えを消してしまう。
+     元のフォルダ名＋元のファイル名を土台にし、同じ名前があれば -2, -3 … と足す
+     （🧩 まとめる の控え dupBackupFile と同じ作法）。 */
+  const bbase = ((String(row._dirPath || "").replace(/[\\/]+/g, "_") + String(row._name || ""))
+                   .replace(/^_+/, "").replace(/\.[^.]*$/, "") || (mg || "管理番号なし"))
+                + "_軽くする前.json";
+  let bname = bbase, kept = "";
   try {
     const bdir = await dupBackupDir();
     if(bdir){
-      const nm = (mg || "管理番号なし") + "_軽くする前.json";
-      const bfh = await bdir.getFileHandle(nm, { create: true });
-      const bw = await bfh.createWritable(); await bw.write(text0); await bw.close();
-      const bchk = await (await bfh.getFile()).text();
-      if(String(bchk) === text0) kept = DUP_BACKUP_DIR + " / " + nm;
+      for(let i = 2; i <= 50 && await dupBackupHas(bdir, bname); i++){
+        bname = bbase.replace(/\.json$/i, "") + "-" + i + ".json";
+      }
+      if(!(await dupBackupHas(bdir, bname))){          // まだ空いている名前のときだけ書く
+        const bfh = await bdir.getFileHandle(bname, { create: true });
+        const bw = await bfh.createWritable(); await bw.write(text0); await bw.close();
+        const bchk = await (await bfh.getFile()).text();
+        if(String(bchk) === text0) kept = DUP_BACKUP_DIR + " / " + bname;
+      }
     }
   } catch(_){}
   if(!kept){
@@ -23860,7 +23871,7 @@ async function photoSlimCase(row, onPhoto){
       const blob = new Blob([text0], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url; a.download = (mg || "管理番号なし") + "_軽くする前.json";
+      a.href = url; a.download = bname;
       document.body.appendChild(a); a.click(); a.remove();
       URL.revokeObjectURL(url);
       kept = "ダウンロード";
@@ -34431,6 +34442,55 @@ function _genbaClone(v){ return v==null ? v : JSON.parse(JSON.stringify(v)); }
 
 /* 2枚の同一写真から残す1枚を選ぶ（高画質優先＝dataUri長が大きい方、同点は現場を優先）。
    ラベルは既定名より「人が付けた具体名」を優先して引き継ぐ。 */
+/* 写真の「長辺が何ピクセルか」を、絵を読み込まずに頭のところだけ見て取り出す。
+   ------------------------------------------------------------
+   物件に埋める小さい写真（サムネイル）は長辺512px・25〜70KB ほどで、
+   きちんと縮めた工事写真（長辺2048px）と大きさ（バイト数）だけでは見分けが付かない。
+   見分けを間違えると、サムネイルが原寸の写真を潰す（版159 で塞いだ筋が開く）。
+   ピクセル数なら確実に見分けられるので、JPEG・PNG の頭だけを読む。
+   分からないときは 0 を返し、呼ぶ側は「分からない＝大きいほうを残す」に倒すこと。 */
+const PHOTO_THUMB_EDGE_MAX = 700;   // これ以下はサムネイル扱い（物件のサムネは長辺512px）
+function photoHeadBytes(dataUri, maxBytes){
+  const s = String(dataUri || "");
+  const c = s.indexOf(",");
+  if(c < 0) return null;
+  const b64 = s.slice(c + 1, c + 1 + Math.ceil((maxBytes || 65536) / 3) * 4);
+  let bin;
+  try { bin = atob(b64.replace(/[^A-Za-z0-9+/=]/g, "")); } catch(_){ return null; }
+  const out = new Uint8Array(bin.length);
+  for(let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+function photoLongEdgeOf(dataUri){
+  const b = photoHeadBytes(dataUri, 131072);
+  if(!b || b.length < 24) return 0;
+  // PNG: 8バイトの目印 + IHDR（幅・高さが 16〜24 バイト目）
+  if(b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47){
+    const w = (b[16] << 24) | (b[17] << 16) | (b[18] << 8) | b[19];
+    const h = (b[20] << 24) | (b[21] << 16) | (b[22] << 8) | b[23];
+    return (w > 0 && h > 0) ? Math.max(w, h) : 0;
+  }
+  // JPEG: SOI のあと、印を順に飛ばして SOFn（大きさが書いてある印）を探す
+  if(!(b[0] === 0xFF && b[1] === 0xD8)) return 0;
+  let i = 2;
+  while(i + 9 < b.length){
+    if(b[i] !== 0xFF){ i++; continue; }
+    const m = b[i + 1];
+    if(m === 0xFF){ i++; continue; }
+    if(m === 0xD8 || m === 0x01 || (m >= 0xD0 && m <= 0xD7)){ i += 2; continue; }
+    if(m === 0xD9 || m === 0xDA) return 0;        // 絵の中身に入った＝大きさは見つからなかった
+    const len = (b[i + 2] << 8) | b[i + 3];
+    if(len < 2) return 0;
+    const isSOF = (m >= 0xC0 && m <= 0xCF) && m !== 0xC4 && m !== 0xC8 && m !== 0xCC;
+    if(isSOF){
+      const h = (b[i + 5] << 8) | b[i + 6];
+      const w = (b[i + 7] << 8) | b[i + 8];
+      return (w > 0 && h > 0) ? Math.max(w, h) : 0;
+    }
+    i += 2 + len;
+  }
+  return 0;
+}
 /* 同じ写真が2つあるとき、どちらを残すか。
    ------------------------------------------------------------
    もとは「大きいほう＝きれいなほう」を残していた。版161から、写真は入れるときに
@@ -34440,13 +34500,18 @@ function _genbaClone(v){ return v==null ? v : JSON.parse(JSON.stringify(v)); }
    ただし、ごく小さいもの（物件に埋めるサムネイル）で原本を潰してはいけないので、
    下限を設ける。下限より小さいものは「縮めた写真」とは見なさず、今までどおり
    大きいほうを残す。 */
-/* 大きさだけでサムネを見分けようとすると、ちゃんと縮めた小さい写真（横に長い写真など）まで
-   サムネ扱いになってしまう。サムネかどうかは呼び出し側（chosho_photos_thumb）で見分け、
-   ここの下限は「壊れた・中身の無いもの」をはじくためだけに置く。 */
+/* 「もう目安に収まっている、ちゃんとした写真」かどうか。
+   ★大きさ（バイト数）だけでは、物件に埋める小さい写真（サムネイル・25〜70KB）と
+   ちゃんと縮めた写真の見分けが付かない★ サムネは戸別ファイルに書かれるときに印が外れる
+   （chosho_photos_thumb は物件専用のメタなので落とす）ので、印だけにも頼れない。
+   確実なのはピクセル数。長辺がサムネの大きさ以下なら、縮めた写真とは見なさない。
+   長辺が分からないときは「見なさない」に倒す＝これまでどおり大きいほうを残す（写真は粗くならない）。 */
 const PHOTO_KEEP_MIN_BYTES = 16 * 1024;
 function photoIsFitSize(dataUri){
   const n = photoBytesOf(dataUri);
-  return n >= PHOTO_KEEP_MIN_BYTES && n <= PHOTO_FIT_MAX_BYTES;
+  if(!(n >= PHOTO_KEEP_MIN_BYTES && n <= PHOTO_FIT_MAX_BYTES)) return false;
+  const edge = photoLongEdgeOf(dataUri);
+  return edge > PHOTO_THUMB_EDGE_MAX;
 }
 function pickBetterPhoto(a, b){
   const alen=(a.p.dataUri||"").length, blen=(b.p.dataUri||"").length;

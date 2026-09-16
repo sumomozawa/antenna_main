@@ -353,6 +353,52 @@ const WANT_VER = (function(){ try{
        '★軽くしている途中でも、自動の取り込みが走って一覧が作り直される → ' + JSON.stringify(r11));
   }
 
+  // ---- ⑫ 元に戻せなかったときの控えが、別の戸別ぶんで上書きされない ----
+  const r12 = await page.evaluate(async () => {
+    const backup = {};                                  // 「_整理前の控え」の中身
+    const bdir = {
+      name: '_整理前の控え',
+      async getFileHandle(n, o){
+        if(!backup[n]){ if(!(o && o.create)) throw new Error('ありません'); backup[n] = __mkFile(n, ''); }
+        return backup[n];
+      }
+    };
+    const keepDir = dupBackupDir;
+    dupBackupDir = async () => bdir;
+    const run = async (name) => {
+      const big = __photo(4032, 3024, 30);
+      const text0 = JSON.stringify({ chosho_mgmt_no:'', amplifier:'amp_3u43',   // 管理番号が空の戸別
+        chosho_photos:[{ label:'施工前', dataUri: big, id:'p_' + name }] }, null, 2);
+      const fh = __mkFile(name, text0);
+      fh._st.mutateAfterWrite = buf => {                // 書いても読み返しが壊れ、戻すのも壊れる
+        const j = JSON.parse(buf); j.chosho_photos = []; return JSON.stringify(j, null, 2);
+      };
+      const row = { fileType:'plain', _dir: __mkDir({ [name]: fh }), _name: name, _dirPath:'',
+                    fileHandle: fh, _photoCount: 1, data:{ chosho_mgmt_no:'' } };
+      const out = await photoSlimCase(row);
+      return { kind: out.kind, why: out.why, text0: text0 };
+    };
+    const a = await run('戸別_1.json');
+    const bb = await run('戸別_2.json');
+    const names2 = Object.keys(backup);
+    // 同じ戸別で2回続けて落ちたときも、前の控えを消さない
+    const c = await run('戸別_1.json');
+    dupBackupDir = keepDir;
+    const names = Object.keys(backup);
+    return { aKind: a.kind, bKind: bb.kind, cKind: c.kind, names: names, n2: names2.length,
+             keptA: names.some(n => backup[n]._st.text === a.text0),
+             keptB: names.some(n => backup[n]._st.text === bb.text0),
+             keptC: names.some(n => backup[n]._st.text === c.text0) };
+  });
+  console.log('⑫控えの名前', JSON.stringify(r12));
+  ok(r12.aKind === 'lost' && r12.bKind === 'lost', '試験の前提: 「戻せない」に落ちていない → ' + JSON.stringify(r12));
+  ok(r12.n2 === 2,
+     '★別の戸別の控えが同じ名前で上書きされ、1件目の原本が消える → ' + JSON.stringify(r12));
+  ok(r12.names.length === 3,
+     '★2回目に落ちたとき、前の控えを消している（原本が消える） → ' + JSON.stringify(r12));
+  ok(r12.keptA === true && r12.keptB === true && r12.keptC === true,
+     '★控えの中身が元の戸別と合わない（原本を失っている） → ' + JSON.stringify(r12));
+
   await b.close();
   ok(errs.length === 0, '★画面のエラー: ' + errs.slice(0,4).join(' / '));
   if(fails.length){ console.log('FAIL\n- ' + fails.join('\n- ')); process.exit(1); }

@@ -62,6 +62,22 @@ CASES = [
    u'''  if(typeof _photoSlimBusy !== "undefined" && _photoSlimBusy) return "写真を軽くしている途中です";''',
    u'''  void 0;''', "smoke_v162_main.js", "main"),
 
+  (u"★同じ名前の控えがあっても、そのまま上書きする",
+   u'''      for(let i = 2; i <= 50 && await dupBackupHas(bdir, bname); i++){
+        bname = bbase.replace(/\\.json$/i, "") + "-" + i + ".json";
+      }''',
+   u'''      void 0;''',
+   "smoke_v162_main.js", "main"),
+  (u"★サムネイルを大きさ（バイト数）だけで見分ける（サムネが原寸を潰す）",
+   u'''  const edge = photoLongEdgeOf(dataUri);
+  return edge > PHOTO_THUMB_EDGE_MAX;''',
+   u'''  return true;''',
+   "smoke_v161_main.js", "main"),
+  (u"★写真の長辺を読み取らない（見分けが効かなくなる）",
+   u'''  if(!(b[0] === 0xFF && b[1] === 0xD8)) return 0;''',
+   u'''  if(true) return 0;''',
+   "smoke_v161_main.js", "main"),
+
   # ---- 現場入力：読み込み中に同じ戸別を開き直す ----
   (u"★同じ戸別を開き直したときに、読み込んだ写真を画面へ足さない（あとで消える）",
    u'''  if(a && a === b){                       // 同じ戸別を開き直した
