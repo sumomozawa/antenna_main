@@ -206,6 +206,41 @@ const WANT_VER = (function(){ try{
   ok(Math.max(r7.dim[0], r7.dim[1]) >= ready.minEdge,
      '★とても細かい写真を、工事調書で粗くなるほど小さくしている → ' + JSON.stringify(r7));
 
+  // ---- ⑧ 縦で撮った写真が、横になって入らない（向きの情報を持つJPEG） ----
+  const r8 = await page.evaluate(async () => {
+    const w = 3000, h = 2250;                      // センサーは横長で記録する
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d'), img = ctx.createImageData(w, h);
+    let s = 3; const rnd = () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    for(let y = 0; y < h; y++) for(let x = 0; x < w; x++){
+      const i = (y * w + x) * 4, v = (y < h / 2 ? 210 : 70) + (rnd() - 0.5) * 60;
+      img.data[i] = v; img.data[i+1] = v; img.data[i+2] = v; img.data[i+3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    const plain = cv.toDataURL('image/jpeg', 0.9);
+    // 「右に90度回して見せる」印（Orientation=6）を差し込む＝スマホの縦撮りと同じ形
+    const bin = atob(plain.slice(plain.indexOf(',') + 1));
+    const src = new Uint8Array(bin.length);
+    for(let i = 0; i < bin.length; i++) src[i] = bin.charCodeAt(i);
+    const app1 = [0xFF,0xE1,0x00,0x22, 0x45,0x78,0x69,0x66,0x00,0x00,
+                  0x49,0x49, 0x2A,0x00, 0x08,0x00,0x00,0x00, 0x01,0x00,
+                  0x12,0x01, 0x03,0x00, 0x01,0x00,0x00,0x00, 0x06,0x00,0x00,0x00,
+                  0x00,0x00,0x00,0x00];
+    const arr = new Uint8Array(src.length + app1.length);
+    arr.set(src.slice(0, 2), 0); arr.set(app1, 2); arr.set(src.slice(2), 2 + app1.length);
+    let str = ''; for(let i = 0; i < arr.length; i++) str += String.fromCharCode(arr[i]);
+    const withExif = 'data:image/jpeg;base64,' + btoa(str);
+    const fit = await photoFitForStorage(withExif);
+    const shown = await __dim(withExif), after = await __dim(fit);
+    return { shown, after, kb: Math.round(photoBytesOf(fit)/1024),
+             tateBefore: shown[1] > shown[0], tateAfter: after[1] > after[0] };
+  });
+  console.log('⑧写真の向き', JSON.stringify(r8));
+  ok(r8.tateBefore === true, '試験の前提: 縦に見える写真が作れていない → ' + JSON.stringify(r8));
+  ok(r8.tateAfter === true,
+     '★縦で撮った写真が、軽くしたときに横になって入る → ' + JSON.stringify(r8));
+  ok(r8.kb * 1024 <= ready.cap, '向きのある写真が目安に収まらない → ' + JSON.stringify(r8));
+
   await b.close();
   ok(errs.length === 0, '★画面のエラー: ' + errs.slice(0,4).join(' / '));
   if(fails.length){ console.log('FAIL\n- ' + fails.join('\n- ')); process.exit(1); }
