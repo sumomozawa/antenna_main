@@ -5555,10 +5555,17 @@
             </select>
           </div>
           <div class="field">
-            <label>ラインブースター</label>
+            <label>ラインブースター（主系統）</label>
             <select id="line_booster">
               <option value="no">なし</option>
               <option value="yes" selected>UB18L</option>
+            </select>
+          </div>
+          <div class="field ch46-only">
+            <label><span data-tip="46CH(三沢局)専用アンテナの直下に入れるラインブースター。&#10;46CHの受信が弱いときに使います。主系統のぶんとは別に1台計上します。">ラインブースター（46CH系統）</span></label>
+            <select id="line_booster_46">
+              <option value="no" selected>なし</option>
+              <option value="yes">UB18L</option>
             </select>
           </div>
           <div class="field">
@@ -6907,7 +6914,7 @@ async function lsRestoreFromIdb(){
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "159";
+const APP_VERSION = "160";
 /* ============================================================
    ★日時の表示は、必ずこの端末の時刻で★
    保存している日時は世界時のISO文字列（…T01:03:00.000Z）。これを文字のまま
@@ -7322,6 +7329,7 @@ function getInputs() {
     turnbuckle_qty: Math.max(0, parseInt($("turnbuckle_qty"), 10) || 0),
     amplifier: $("amplifier"),
     line_booster: $("line_booster") === "yes",
+    line_booster_46: $("line_booster_46") === "yes",   // 46CH(三沢局)系統のラインブースター
     hpf: $("hpf"),
     outer_splitter: $("outer_splitter"),
     indoor_split: $("indoor_split"),
@@ -7731,6 +7739,10 @@ function buildBOM(input, qtyOverridesOpt) {
 
   // ラインブースター
   if(input.line_booster) add("booster_ub18l", 1);
+  /* 46CH(三沢局)系統のラインブースター。注記を付けて主系統ぶんと分ける。
+     （注記が同じだと積算表での数量の直しや持出のチェックが主系統ぶんと混ざる。
+       主系統ぶんの注記は空のまま変えない＝保存済みの戸別の直しが外れないように） */
+  if(input.ch46 && input.line_booster_46) add("booster_ub18l", 1, { note:"46CH系統(三沢局)" });
 
   // 外部2分配（3入力増幅器用、3本構成時は各アンテナが個別入力のため不要）
   if(input.amplifier === "amp_3u43" && !input.ch50_separate){
@@ -8338,7 +8350,7 @@ function renderBukkenCasePrint(sr){
   const checked = sr.materials.filter(m => m.checked);
   if(checked.length){
     checked.forEach(m => {
-      html += '<tr><td>' + esc(m.name) + '</td><td class="right">' + fmtSubQty(m.qty) + ' ' + esc(m.unit) + '</td>'
+      html += '<tr><td>' + esc(m.disp || m.name) + '</td><td class="right">' + fmtSubQty(m.qty) + ' ' + esc(m.unit) + '</td>'
         + '<td class="right">' + yen(m.unitMat) + '</td><td class="right">' + yen(m.mat) + '</td></tr>';
     });
     html += '<tr><td colspan="3" class="right"><b>持出材料 計</b></td><td class="right"><b>' + yen(sr.takeout) + '</b></td></tr>';
@@ -9839,9 +9851,18 @@ function renderDiagram(input){
   if(input.line_booster){
     lbNode = mkNode(svg, antMainCx - 40, curY, 80, 32, "LB\nUB18L",
       { id:"booster_ub18l", existing:false,
-        inputId:"line_booster", editTitle:"ラインブースター（有/無）",
+        inputId:"line_booster", editTitle:"ラインブースター（主系統）",
         nodeKey:"lb" });
     curY += 32 + 14;
+  }
+  /* 46CH(三沢局)系統のラインブースター。46CHアンテナの真下・46CHの縦線の上に置く。
+     主系統の縦位置（curY）は使わない・進めない（進めると分配器と増幅器の位置がずれる）。 */
+  let lb46Node = null;
+  if(ant46 && input.line_booster_46){
+    lb46Node = mkNode(svg, ant46Cx - 40, ant46.bottom.y + 26, 80, 32, "LB(46ch)\nUB18L",
+      { id:"booster_ub18l", existing:false,
+        inputId:"line_booster_46", editTitle:"ラインブースター（46CH系統）",
+        nodeKey:"lb46", axisLock:"y" });
   }
   let outerSp = null;
   // 3本構成時は各アンテナが個別に入力されるため外部分配器は不要
@@ -10421,8 +10442,12 @@ function renderDiagram(input){
   if(ant46){
     const inY = ampY + ampH - 12;
     const endX = placeInputAtt(input.att_46, ampX, inY, "att_46", "46CH系統 ATT");
+    /* ラインブースターがあるときは、アンテナ→LB と LB→増幅器 の2本に割る
+       （1本のままだと線が箱を突き抜けて読めない）。色の切り替えは同じ鍵でまとめて効かせる。 */
+    const ch46Out = lb46Node || ant46;
+    if(lb46Node) mkWire(svg, [ ant46.bottom, lb46Node.top ], { existing: false, wireKey:"ch46_amp" });
     mkWire(svg, [
-      ant46.bottom,
+      ch46Out.bottom,
       { x: ant46Cx, y: inY },
       { x: endX, y: inY }
     ], { existing: false, jumps: jumpXs, wireKey:"ch46_amp" });
@@ -13166,7 +13191,7 @@ const PRESETS = {
     mount_type:"side_base_hafu",
     side_base_1:"side_sb22s", side_base_2:"same",
     mast:"mast_m182z", amplifier:"amp_3u43",
-    line_booster:"yes", hpf:"hpf_std",
+    line_booster:"yes", line_booster_46:"no", hpf:"hpf_std",
     outer_splitter:"sp_2cw", indoor_split:"unknown", split_all_pass:"no",
     power_pos:"tv_back", indoor_wire:"existing", outer_wire:"existing",
     tv_count:"4", cable_new_len:"0", cable_indoor_new:"2",
@@ -13187,7 +13212,7 @@ const PRESETS = {
     mount_type:"side_base_hafu",
     side_base_1:"side_sb22s", side_base_2:"same",
     mast:"mast_m182z", amplifier:"amp_1u45",
-    line_booster:"yes", hpf:"hpf_std",
+    line_booster:"yes", line_booster_46:"no", hpf:"hpf_std",
     outer_splitter:"sp_2cdw", indoor_split:"unknown", split_all_pass:"no",
     power_pos:"tv_back", indoor_wire:"existing", outer_wire:"new",
     tv_count:"4", cable_new_len:"0", cable_indoor_new:"0",
@@ -13210,7 +13235,7 @@ const PRESETS = {
     mount_type:"side_base_hafu",
     side_base_1:"side_sb3220", side_base_2:"side_sb22s",
     mast:"mast_m182z", amplifier:"amp_1ubc45",
-    line_booster:"yes", hpf:"hpf_std",
+    line_booster:"yes", line_booster_46:"no", hpf:"hpf_std",
     outer_splitter:"sp_2cdw", indoor_split:"4", split_all_pass:"yes",
     power_pos:"tv_back", indoor_wire:"new", outer_wire:"new",
     tv_count:"4", cable_new_len:"0", cable_indoor_new:"15",
@@ -13231,7 +13256,7 @@ const PRESETS = {
     mount_type:"side_base_hafu",
     side_base_1:"side_sb22s", side_base_2:"same",
     mast:"mast_m182z", amplifier:"amp_3u43",
-    line_booster:"yes", hpf:"hpf_dtf",
+    line_booster:"yes", line_booster_46:"no", hpf:"hpf_dtf",
     outer_splitter:"sp_2cdw", indoor_split:"4", split_all_pass:"yes",
     power_pos:"tv_back", indoor_wire:"existing", outer_wire:"new",
     tv_count:"4", cable_new_len:"0", cable_indoor_new:"0",
@@ -13297,10 +13322,25 @@ function fixLegacyTvRooms(s){
 }
 
 // プリセットデータをフォームに反映する共通関数
+/* 版を上げたときに足した欄。これより前に保存した戸別・プリセットにはこの鍵が無いので、
+   何もしないと「直前に開いていた戸別の値」が画面に残り、黙って金額が乗ってしまう。
+   鍵が無いときだけ既定へ戻す（渡された中身そのものには足さない＝行のデータに鍵を増やさない）。
+   欄を足した版では、ここに1行足すこと。 */
+const LATER_ADDED_FIELDS = {
+  line_booster_46: "no"   // 版160: 46CH(三沢局)系統のラインブースター
+};
+function resetLaterAddedFields(src){
+  for(const k in LATER_ADDED_FIELDS){
+    if(src && (k in src)) continue;
+    const el = document.getElementById(k);
+    if(el) el.value = LATER_ADDED_FIELDS[k];
+  }
+}
 function applyPresetData(p){
   clearGuideFieldMarks(); // プリセット/新規適用でガイド欄が上書きされるため自動入力マークを解除（読込時は直後にreflectで付け直す）
   // 旧マスト/サイドベース/OFMU構成を新ペア構成へ変換してから反映
   Object.assign(p, migrateMountFields(p));
+  resetLaterAddedFields(p);   // 版160より前に作ったユーザープリセット対策
   for(const k in p){
     if(k === "tv_rooms" || k === "tax_mode" || k === "misc_fee"
        || k === "outsource_fee_on" || k === "outsource_fee_amount") continue;
@@ -14059,7 +14099,7 @@ function collectState(){
     "antenna_main","antenna_46","antenna_50","ch46","bs_cs","bs_antenna_state","bsmix_type","bsmix_state",
     "mount_type","side_base_1","side_base_2","side_base_3",
     "mast","mast_2","mast_3","connector_type","connector_qty","turnbuckle_qty",
-    "amplifier","line_booster","hpf","outer_splitter","indoor_split",
+    "amplifier","line_booster","line_booster_46","hpf","outer_splitter","indoor_split",
     "split_all_pass","power_pos","indoor_wire","outer_wire","tv_count",
     "remove_safety","remove_drop","cable_drop_len","dummy_attached","use_fa",
     "fa_splitter","fa_splitter_pos","meas_show",
@@ -15097,6 +15137,7 @@ function applyStateData(s){
   if(typeof clearViewOnlyMaskFromForm === "function") clearViewOnlyMaskFromForm();
   // 旧マスト/サイドベース/OFMU構成を新ペア構成へ変換してから反映
   Object.assign(s, migrateMountFields(s));
+  resetLaterAddedFields(s);   // 版160より前に保存した戸別対策
   for(const k in s){
     if(k === "tv_rooms" || k === "tax_mode" || k === "misc_fee"
        || k === "outsource_fee_on" || k === "outsource_fee_amount") continue;
@@ -15898,6 +15939,7 @@ function convertSavedToInput(d){
     turnbuckle_qty: Math.max(0, parseInt(m.turnbuckle_qty, 10) || 0),
     amplifier: d.amplifier,
     line_booster: d.line_booster === "yes",
+    line_booster_46: d.line_booster_46 === "yes",   // 鍵が無い古い戸別は false（金額は動かない）
     hpf: d.hpf,
     outer_splitter: d.outer_splitter,
     indoor_split: d.indoor_split,
@@ -21272,10 +21314,19 @@ function computeSubRow(row, idx){
       flags[lineKey] = flags[oldKey]; delete flags[oldKey]; migratedTakeout = true;
     }
     materials.push({
-      lineKey, name: it.name, unit: it.unit || "",
+      lineKey, name: it.name, note: it.note || "", unit: it.unit || "",
       qty: it.qty, unitMat: it.unitMat, mat: it.mat
     });
   });
+  /* 同じ品名が2行以上あるとき（46CH系統のラインブースターなど）は、摘要を後ろに付けて
+     どちらがどちらか分かるようにする。1行しか無い品名はこれまでどおりの見た目のまま。 */
+  {
+    const nameCount = {};
+    materials.forEach(m => { nameCount[m.name] = (nameCount[m.name] || 0) + 1; });
+    materials.forEach(m => {
+      m.disp = (nameCount[m.name] > 1 && m.note) ? (m.name + "（" + m.note + "）") : m.name;
+    });
+  }
   if(migratedTakeout){ try { saveTakeoutMap(); } catch(_){} }
   let takeout = 0;
   materials.forEach(m => { m.checked = !!flags[m.lineKey]; if(m.checked) takeout += m.mat; });
@@ -21500,7 +21551,7 @@ function renderListSubcontractorMode(rows, container){
         + '<table class="sub-mat-table"><tbody>';
       sr.materials.forEach(m => {
         html += '<tr>'
-          + '<td><label><input type="checkbox" class="sub-takeout-cb" data-line-key="' + escapeHtml(m.lineKey) + '" data-mat="' + m.mat + '"' + (m.checked ? ' checked' : '') + '> ' + escapeHtml(m.name) + '</label></td>'
+          + '<td><label><input type="checkbox" class="sub-takeout-cb" data-line-key="' + escapeHtml(m.lineKey) + '" data-mat="' + m.mat + '"' + (m.checked ? ' checked' : '') + '> ' + escapeHtml(m.disp || m.name) + '</label></td>'
           + '<td class="num">' + fmtSubQty(m.qty) + ' ' + escapeHtml(m.unit) + '</td>'
           + '<td class="num">@' + yen(m.unitMat) + '</td>'
           + '<td class="num">' + yen(m.mat) + '</td>'
@@ -33837,7 +33888,7 @@ const GENBA_AUTHORITATIVE_FIELDS = [
   "antenna_main","antenna_46","antenna_50","ch46","bs_cs","bs_antenna_state","bsmix_type","bsmix_state",
   "mount_type","side_base_1","side_base_2","side_base_3","mast","mast_2","mast_3",
   "connector_type","connector_qty","turnbuckle_qty",
-  "amplifier","line_booster","hpf","outer_splitter","indoor_split","split_all_pass",
+  "amplifier","line_booster","line_booster_46","hpf","outer_splitter","indoor_split","split_all_pass",
   "power_pos","indoor_wire","outer_wire","tv_count",
   "remove_safety","remove_drop","cable_drop_len","dummy_attached","use_fa",
   "fa_splitter","fa_splitter_pos",
@@ -33939,7 +33990,12 @@ function genbaMergeCaseData(mainData, genbaData, opts){
   // A. 現場権威フィールド → 上書き
   GENBA_AUTHORITATIVE_FIELDS.forEach(k=>{
     if(!(k in g)) return;
-    if(JSON.stringify(base[k]) !== JSON.stringify(g[k])) report.technical.push(k);
+    /* 版を上げて足した欄は、それより前に保存したPCの戸別にまだ鍵が無い。現場が既定のまま
+       （＝何も触っていない）なら「変わった項目」に数えない。数えると、古い戸別を取り込むたびに
+       身に覚えのない項目が並んで、本当に変わった所が埋もれる。中身は既定を入れておく。 */
+    const untouchedNew = (k in LATER_ADDED_FIELDS) && !(k in base)
+      && String(g[k]) === String(LATER_ADDED_FIELDS[k]);
+    if(!untouchedNew && JSON.stringify(base[k]) !== JSON.stringify(g[k])) report.technical.push(k);
     base[k]=_genbaClone(g[k]);
   });
   // B. 顧客 merge-nonempty（main優先。空欄のみ genba で埋める。非空衝突は既定main・opts.customerで現場採用可）
@@ -34079,7 +34135,7 @@ const GENBA_TECH_LABELS = {
   bs_cs:"BS/CS",bs_antenna_state:"BSアンテナ",bsmix_type:"BS混合方式",bsmix_state:"BS混合器",
   mount_type:"取付方式",side_base_1:"サイドベース",side_base_2:"サイドベース2",side_base_3:"サイドベース3",
   mast:"マスト",mast_2:"マスト2",mast_3:"マスト3",connector_type:"接続金具",connector_qty:"接続金具数",turnbuckle_qty:"ターンバックル",
-  amplifier:"増幅器",line_booster:"ラインブースター",hpf:"HPF",outer_splitter:"屋外分配",indoor_split:"宅内分配",split_all_pass:"全端子通電",
+  amplifier:"増幅器",line_booster:"ラインブースター(主系統)",line_booster_46:"ラインブースター(46CH系統)",hpf:"HPF",outer_splitter:"屋外分配",indoor_split:"宅内分配",split_all_pass:"全端子通電",
   power_pos:"電源位置",indoor_wire:"宅内配線",outer_wire:"屋外配線",tv_count:"TV台数",
   remove_safety:"保安器撤去",remove_drop:"引込撤去",cable_drop_len:"引込長",dummy_attached:"ダミー",use_fa:"FA",fa_splitter:"FA接続部の分配",fa_splitter_pos:"分配器の位置",
   att_main:"減衰(主)",att_46:"減衰(46)",att_50:"減衰(50)",box_consent:"BOXコンセント",ofmu_qty:"OFMU数",wire_sus16_len:"SUS16長",ext_power_conn:"外部電源"
