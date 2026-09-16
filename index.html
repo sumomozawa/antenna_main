@@ -34015,9 +34015,26 @@ function _genbaClone(v){ return v==null ? v : JSON.parse(JSON.stringify(v)); }
 
 /* 2枚の同一写真から残す1枚を選ぶ（高画質優先＝dataUri長が大きい方、同点は現場を優先）。
    ラベルは既定名より「人が付けた具体名」を優先して引き継ぐ。 */
+/* 同じ写真が2つあるとき、どちらを残すか。
+   ------------------------------------------------------------
+   もとは「大きいほう＝きれいなほう」を残していた。版161から、写真は入れるときに
+   約1MBへ収める決まりにしたので、片方だけ撮りっぱなし（5MB級）で残っていると、
+   せっかく軽くした戸別ファイルが取り込みのたびに元の重さへ戻ってしまう。
+   そこで「すでに目安（約1MB）に収まっているほう」を残す。
+   ただし、ごく小さいもの（物件に埋めるサムネイル）で原本を潰してはいけないので、
+   下限を設ける。下限より小さいものは「縮めた写真」とは見なさず、今までどおり
+   大きいほうを残す。 */
+const PHOTO_KEEP_MIN_BYTES = 200 * 1024;   // これより小さければサムネ扱い（縮めた写真とは見なさない）
+function photoIsFitSize(dataUri){
+  const n = photoBytesOf(dataUri);
+  return n >= PHOTO_KEEP_MIN_BYTES && n <= PHOTO_FIT_MAX_BYTES;
+}
 function pickBetterPhoto(a, b){
   const alen=(a.p.dataUri||"").length, blen=(b.p.dataUri||"").length;
-  let win = (blen>alen) ? b : (alen>blen ? a : (b.from==="genba" ? b : a));
+  const aFit = photoIsFitSize(a.p.dataUri), bFit = photoIsFitSize(b.p.dataUri);
+  let win = (aFit !== bFit)
+    ? (aFit ? a : b)                                   // 片方だけ目安の内 → そちらを残す
+    : ((blen>alen) ? b : (alen>blen ? a : (b.from==="genba" ? b : a)));
   let label = win.p.label;
   if(_genbaIsDefaultLabel(label)){
     if(!_genbaIsDefaultLabel(a.p.label)) label=a.p.label;

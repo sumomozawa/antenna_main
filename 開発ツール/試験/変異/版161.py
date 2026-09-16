@@ -46,6 +46,29 @@ CASES = [
    u'''    STATE.photos[idx].id = photoContentId(uri); // 撮影/追加時に安定IDを付与''',
    u'''    STATE.photos[idx].id = photoContentId(raw);''', "smoke_v161_main.js", "main"),
 
+  # ---- 同じ写真が2つあるときの残し方 ----
+  (u"★外部で縮めた写真が、現場に残っている撮りっぱなしで元の重さに戻る",
+   u'''  let win = (aFit !== bFit)
+    ? (aFit ? a : b)                                   // 片方だけ目安の内 → そちらを残す
+    : ((blen>alen) ? b : (alen>blen ? a : (b.from==="genba" ? b : a)));''',
+   u'''  let win = (blen>alen) ? b : (alen>blen ? a : (b.from==="genba" ? b : a));''',
+   "smoke_v161_main.js", "main"),
+  (u"★サムネイルで原本を潰す（下限を外す）",
+   u'''const PHOTO_KEEP_MIN_BYTES = 200 * 1024;   // これより小さければサムネ扱い（縮めた写真とは見なさない）''',
+   u'''const PHOTO_KEEP_MIN_BYTES = 0;''',
+   "smoke_v161_main.js", "main"),
+  (u"★目安の内どうしでも、小さいほうを残してしまう",
+   u'''  let win = (aFit !== bFit)
+    ? (aFit ? a : b)                                   // 片方だけ目安の内 → そちらを残す
+    : ((blen>alen) ? b : (alen>blen ? a : (b.from==="genba" ? b : a)));''',
+   u'''  let win = (aFit !== bFit)
+    ? (aFit ? a : b)
+    : ((blen<alen) ? b : (alen<blen ? a : (b.from==="genba" ? b : a)));''',
+   "smoke_v161_main.js", "main"),
+  (u"★残した写真の写真IDを落とす（次の突合で2枚に増える）",
+   u'''  if(win.p.id) o.id=win.p.id;''', u'''  void 0;''',
+   "smoke_v161_main.js", "main"),
+
   # ---- 現場入力 ----
   (u"★現場で撮った写真を軽くしない",
    u'''      const dataUri=await photoFitForStorage(raw);''',

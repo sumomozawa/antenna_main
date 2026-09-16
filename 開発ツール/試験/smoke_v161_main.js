@@ -241,6 +241,45 @@ const WANT_VER = (function(){ try{
      '★縦で撮った写真が、軽くしたときに横になって入る → ' + JSON.stringify(r8));
   ok(r8.kb * 1024 <= ready.cap, '向きのある写真が目安に収まらない → ' + JSON.stringify(r8));
 
+  // ---- ⑨ 同じ写真が2つあるとき、すでに軽いほうを残す（サムネで原本を潰さない） ----
+  const r9 = await page.evaluate(() => {
+    if(typeof mergeGenbaPhotos !== 'function') return { skip: true };
+    const uri = (ch, bytes) => 'data:image/jpeg;base64,' + ch.repeat(Math.round(bytes / 0.75));
+    const ID = 'p11112222_5697155';                 // 同じ写真＝IDは縮めても変えない決まり
+    const one = (pc, genba) => {
+      const r = mergeGenbaPhotos([{ label:'施工前', dataUri: pc, id: ID }],
+                                 [{ label:'施工前', dataUri: genba, id: ID }], {}, {});
+      return { n: r.length, ch: r[0] && r[0].dataUri.charAt(23), id: r[0] && r[0].id };
+    };
+    const big   = uri('B', 5700 * 1024);            // 撮りっぱなし
+    const fit   = uri('F', 700 * 1024);             // 目安に収めたもの
+    const fit2  = uri('G', 900 * 1024);             // 目安に収めたもの（少し大きい）
+    const thumb = uri('T', 60 * 1024);              // 物件に埋めるサムネイル
+    const over  = uri('O', 1500 * 1024);            // 目安を超えている
+    return {
+      bigVsFit:   one(fit, big),                    // 縮めたほう(F)が残るべき
+      thumbVsBig: one(thumb, big),                  // 原本(B)が残るべき（サムネで潰さない）
+      fitVsFit:   one(fit, fit2),                   // どちらも目安の内 → 大きいほう(G)
+      overVsFit:  one(over, fit),                   // 目安の内(F)が残るべき
+      thumbVsFit: one(thumb, fit)                   // 縮めたほう(F)が残るべき
+    };
+  });
+  console.log('⑨同じ写真の残し方', JSON.stringify(r9));
+  if(!r9.skip){
+    ok(r9.bigVsFit.ch === 'F',
+       '★外部で縮めた写真が、現場に残っている撮りっぱなしで元の重さに戻る → ' + JSON.stringify(r9.bigVsFit));
+    ok(r9.thumbVsBig.ch === 'B',
+       '★サムネイルで原本を潰している（写真が小さいまま取り返せない） → ' + JSON.stringify(r9.thumbVsBig));
+    ok(r9.fitVsFit.ch === 'G',
+       'どちらも目安の内なら、きれいなほうを残すはず → ' + JSON.stringify(r9.fitVsFit));
+    ok(r9.overVsFit.ch === 'F',
+       '★目安を超えたほうを残している → ' + JSON.stringify(r9.overVsFit));
+    ok(r9.thumbVsFit.ch === 'F',
+       '★サムネイルが、目安に収めた写真を潰している → ' + JSON.stringify(r9.thumbVsFit));
+    ok(r9.bigVsFit.n === 1 && r9.bigVsFit.id === 'p11112222_5697155',
+       '★同じ写真が2枚に増えている／写真IDが消えている → ' + JSON.stringify(r9.bigVsFit));
+  }
+
   await b.close();
   ok(errs.length === 0, '★画面のエラー: ' + errs.slice(0,4).join(' / '));
   if(fails.length){ console.log('FAIL\n- ' + fails.join('\n- ')); process.exit(1); }
