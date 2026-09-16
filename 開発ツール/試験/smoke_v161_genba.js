@@ -103,7 +103,7 @@ const WANT_VER = (function(){ try{
     const got = (M.chosho_photos || []).filter(p => p && p.dataUri);
     return { n: got.length, srcKB,
              kb: got.map(p => Math.round(photoBytesOf(p.dataUri)/1024)),
-             idOk: got.every(p => p.id && p.id === photoContentId(p.dataUri)),
+             idOk: got.every((p, i) => p.id && p.id === photoContentId(i === 0 ? big : big2)),
              labels: got.map(p => p.label) };
   });
   console.log('②撮る・選ぶ', JSON.stringify(r2));
@@ -145,7 +145,7 @@ const WANT_VER = (function(){ try{
     const got = (_spCur.photos || []).filter(p => p && p.dataUri);
     const out = { n: got.length, srcKB,
                   kb: got.map(p => Math.round(photoBytesOf(p.dataUri)/1024)),
-                  idOk: got.every(p => p.id && p.id === photoContentId(p.dataUri)) };
+                  idOk: got.every(p => p.id && p.id === photoContentId(big)) };
     closeSpecialModal();
     return out;
   });

@@ -136,7 +136,7 @@ const WANT_VER = (function(){ try{
     return { n: got.length,
              kb: got.map(p => Math.round(photoBytesOf(p.dataUri)/1024)),
              srcKB: Math.round(photoBytesOf(big)/1024),
-             idOk: got.every(p => p.id && p.id === photoContentId(p.dataUri)),
+             idOk: got.every((p, i) => p.id && p.id === photoContentId(i === 0 ? big : big2)),
              labels: got.map(p => p.label) };
   });
   console.log('④まとめて取り込み', JSON.stringify(r4));
@@ -144,7 +144,7 @@ const WANT_VER = (function(){ try{
   ok(r4.kb.every(k => k * 1024 <= ready.cap),
      '★まとめて取り込みで写真が軽くならない → ' + JSON.stringify(r4));
   ok(r4.idOk === true,
-     '★写真IDが、入れた中身と合っていない（現場入力との突合が外れる） → ' + JSON.stringify(r4));
+     '★写真IDが「縮める前の中身」から付いていない（版160以前の同じ写真と別物になり二重に入る） → ' + JSON.stringify(r4));
   ok(r4.labels.join('/') === '1_施工前/2_施工完了',
      'ラベルがファイル名になっていない → ' + JSON.stringify(r4.labels));
 
@@ -159,13 +159,26 @@ const WANT_VER = (function(){ try{
     const p = STATE.photos[0];
     return { has: !!(p && p.dataUri), kb: p && p.dataUri ? Math.round(photoBytesOf(p.dataUri)/1024) : 0,
              srcKB: Math.round(photoBytesOf(big)/1024),
-             idOk: !!(p && p.id && p.id === photoContentId(p.dataUri)), n: STATE.photos.length };
+             idOk: !!(p && p.id && p.id === photoContentId(big)), n: STATE.photos.length };
   });
   console.log('⑤1枚ずつ', JSON.stringify(r5));
   ok(r5.has === true, '★1枚ずつの欄から写真が入らない → ' + JSON.stringify(r5));
   ok(r5.kb * 1024 <= ready.cap, '★1枚ずつの欄では軽くならない → ' + JSON.stringify(r5));
-  ok(r5.idOk === true, '★1枚ずつの欄で写真IDが中身と合わない → ' + JSON.stringify(r5));
+  ok(r5.idOk === true, '★1枚ずつの欄で、写真IDが縮める前の中身から付いていない → ' + JSON.stringify(r5));
   ok(r5.n === 1, '枠が増えている → ' + JSON.stringify(r5));
+
+  // ---- ⑤の2 同じ写真をもう一度入れても、二重にならない（版160以前に入れた写真も含む） ----
+  const r5b = await page.evaluate(async () => {
+    const big = __photo(4032, 3024, 30);
+    // 版160以前の入れ方＝縮めずにそのまま入っている写真（IDは元の中身から）
+    STATE.photos = [{ label:'施工前', dataUri: big, id: photoContentId(big) }];
+    await bulkImportPhotoFiles([__file(big, '同じ写真.jpg')]);
+    const got = STATE.photos.filter(p => p && p.dataUri);
+    return { n: got.length, kb: got.map(p => Math.round(photoBytesOf(p.dataUri)/1024)) };
+  });
+  console.log('⑤の2二重に入れない', JSON.stringify(r5b));
+  ok(r5b.n === 1,
+     '★版160以前に入れた写真と同じものを入れると、二重に入る → ' + JSON.stringify(r5b));
 
   // ---- ⑥ もともと2048pxより小さい写真は、引き伸ばさない ----
   const r6 = await page.evaluate(async () => {
@@ -279,6 +292,79 @@ const WANT_VER = (function(){ try{
     ok(r9.bigVsFit.n === 1 && r9.bigVsFit.id === 'p11112222_5697155',
        '★同じ写真が2枚に増えている／写真IDが消えている → ' + JSON.stringify(r9.bigVsFit));
   }
+
+  // ---- ⑩ 縮めた結果が元の写真と違う絵なら、元のまま入れる ----
+  const r10 = await page.evaluate(async () => {
+    const src = __photo(4032, 3024, 30);
+    const flat = (() => {                      // 端末のメモリ不足で真っ白になった想定
+      const cv = document.createElement('canvas'); cv.width = 2048; cv.height = 1536;
+      const c = cv.getContext('2d'); c.fillStyle = '#fff'; c.fillRect(0, 0, 2048, 1536);
+      return cv.toDataURL('image/jpeg', 0.85);
+    })();
+    // 明るさは元と同じだが、模様が消えてのっぺりした絵（＝ばらつきだけで見分ける）
+    const st = await (async () => { const im = new Image();
+      await new Promise(r => { im.onload = r; im.onerror = r; im.src = src; });
+      const n = 24, cv = document.createElement('canvas'); cv.width = n; cv.height = n;
+      const c = cv.getContext('2d'); c.drawImage(im, 0, 0, n, n);
+      const d = c.getImageData(0, 0, n, n).data;
+      let sum = 0, k = 0;
+      for(let i = 0; i < d.length; i += 4){ sum += (d[i]*299 + d[i+1]*587 + d[i+2]*114)/1000; k++; }
+      return Math.round(sum / k);
+    })();
+    const sameMeanFlat = (() => {
+      const cv = document.createElement('canvas'); cv.width = 2048; cv.height = 1536;
+      const c = cv.getContext('2d');
+      c.fillStyle = 'rgb(' + st + ',' + st + ',' + st + ')'; c.fillRect(0, 0, 2048, 1536);
+      return cv.toDataURL('image/jpeg', 0.85);
+    })();
+    /* 模様はそのままだが、明るさがまるで違う絵（＝明るさだけで見分ける）。
+       元の写真をそのまま暗くするので、ばらつきの比（0.4）は見分けの境（0.35）より上に残る。 */
+    const darkTexture = await (async () => {
+      const im = new Image();
+      await new Promise(r => { im.onload = r; im.onerror = r; im.src = src; });
+      const cv = document.createElement('canvas'); cv.width = 2048; cv.height = 1536;
+      const c = cv.getContext('2d');
+      c.filter = 'brightness(0.4)';
+      c.drawImage(im, 0, 0, 2048, 1536);
+      return cv.toDataURL('image/jpeg', 0.85);
+    })();
+    const keep = photoRenderSmaller;
+    const run = async fake => {
+      try{ photoRenderSmaller = async () => fake; return await photoFitForStorage(src); }
+      finally { photoRenderSmaller = keep; }
+    };
+    const white = await run(flat);
+    const dull  = await run(sameMeanFlat);
+    const dark  = await run(darkTexture);
+    const normal = await photoFitForStorage(src);
+    return { white: white === src, dull: dull === src, dark: dark === src,
+             stillWorks: normal !== src, srcMean: st,
+             kb: Math.round(photoBytesOf(normal)/1024) };
+  });
+  console.log('⑩絵が変わったとき', JSON.stringify(r10));
+  ok(r10.white === true,
+     '★縮めた結果が真っ白でも確かめずに入れている（写真が白い枠になって取り返せない） → ' + JSON.stringify(r10));
+  ok(r10.dull === true,
+     '★模様が消えてのっぺりした絵でも、そのまま入れている → ' + JSON.stringify(r10));
+  ok(r10.dark === true,
+     '★明るさがまるで違う絵でも、そのまま入れている → ' + JSON.stringify(r10));
+  ok(r10.stillWorks === true, 'ふつうの写真まで縮めなくなっている → ' + JSON.stringify(r10));
+
+  // ---- ⑪ 1枚ずつの欄：縮めている間に別の戸別を開いたら、よその戸別に入れない ----
+  const r11 = await page.evaluate(async () => {
+    const a = [{ label:'施工前', dataUri:null }];     // 先に開いていた戸別
+    STATE.photos = a;
+    const big = __photo(4032, 3024, 30);
+    readPhotoFileToEntry({ files: [__file(big, 'x.jpg')], value: '' }, 0);
+    await new Promise(r => setTimeout(r, 30));
+    const bOther = [{ label:'施工前', dataUri:null }];  // 待っている間に別の戸別を開いた
+    STATE.photos = bOther;
+    await new Promise(r => setTimeout(r, 4000));
+    return { other: bOther.filter(p => p && p.dataUri).length, first: a.filter(p => p && p.dataUri).length };
+  });
+  console.log('⑪待っている間に戸別を替えた', JSON.stringify(r11));
+  ok(r11.other === 0,
+     '★写真を読んでいる間に別の戸別を開くと、よその戸別に写真が入る → ' + JSON.stringify(r11));
 
   await b.close();
   ok(errs.length === 0, '★画面のエラー: ' + errs.slice(0,4).join(' / '));

@@ -5061,11 +5061,11 @@
             <button type="button" id="btn-photo-add" style="padding:4px 10px;font-size:11px;border:1px solid #2e7d32;color:#2e7d32;background:#fff;border-radius:3px;cursor:pointer;align-self:flex-start;">＋ 写真追加</button>
             <button type="button" id="btn-photo-bulk" style="padding:4px 10px;font-size:11px;border:1px solid #2e7d32;background:#2e7d32;color:#fff;border-radius:3px;cursor:pointer;align-self:flex-start;font-weight:600;" title="PCで名前を付け替えた写真を、何枚でもいちどに選んで入れます。ファイル名がそのままラベルになり、ファイル名の順に並びます。写真の入っていない行に先に入り、余った分は下に足されます。">📷 まとめて取り込み</button>
             <input type="file" id="photo-bulk-file" accept="image/*" multiple style="display:none;">
-            <button type="button" id="btn-photo-export" style="padding:4px 10px;font-size:11px;border:1px solid #0d47a1;color:#0d47a1;background:#fff;border-radius:3px;cursor:pointer;align-self:flex-start;" title="この戸別の写真を、管理番号フォルダ（無ければ作成）に原本のまま無劣化で書き出します。スマホ現場入力で撮った写真の取り出しに使用。">📁 写真をフォルダに書き出し</button>
-            <button type="button" id="btn-photo-compress" style="padding:4px 10px;font-size:11px;border:1px solid #ad6800;color:#ad6800;background:#fff;border-radius:3px;cursor:pointer;align-self:flex-start;" title="この戸別の写真を長辺2000pxに縮小してファイルを軽くします（見積・調書には十分な画質）。フォルダに書き出した原本には影響しません。案件JSONが大きく重い時に。">📉 写真を軽量化</button>
+            <button type="button" id="btn-photo-export" style="padding:4px 10px;font-size:11px;border:1px solid #0d47a1;color:#0d47a1;background:#fff;border-radius:3px;cursor:pointer;align-self:flex-start;" title="この戸別の写真を、管理番号フォルダ（無ければ作成）に、いま入っているまま書き出します（縮め直しません）。スマホ現場入力で撮った写真の取り出しに使用。">📁 写真をフォルダに書き出し</button>
+            <button type="button" id="btn-photo-compress" style="padding:4px 10px;font-size:11px;border:1px solid #ad6800;color:#ad6800;background:#fff;border-radius:3px;cursor:pointer;align-self:flex-start;" title="この戸別の写真のうち、大きいもの（1枚 約1MB を超えるもの）だけを軽くします。見積・工事調書には十分な画質です。すでに軽い写真には触らないので、何度押しても画質は落ちません。">📉 写真を軽量化</button>
           </div>
           <details class="uc-hint"><summary>写真の使い方</summary>
-            <div>ラベル名は自由に変更できます（例: 施工前 / 施工完了 / 屋根上 / 保安器 / 居間TV …）。工事調書・系統図の印刷に使い、保存・読込にも入ります。<br>📷 まとめて取り込み＝PCで名前を付け替えた写真を、何枚でもいちどに選んで入れます。<b>ファイル名がそのままラベル</b>になり、<b>ファイル名の順</b>に並びます（「01_施工前」「02_屋根上」のように番号を付けておくと、その順に入ります）。写真の入っていない行に先に入り、余った分は下に足されます。すでに入っている同じ写真は飛ばすので、二重になりません。<br>📁書き出し＝スマホ「現場入力」で撮った写真を、選んだフォルダの中の「管理番号」フォルダへ、画質を落とさずコピーします（PC・Chrome/Edge）。<br>📉軽量化＝案件のファイルを軽くしたいとき。長辺2000pxに縮めます（元の写真を残したいときは、先に📁書き出しを）。</div>
+            <div>ラベル名は自由に変更できます（例: 施工前 / 施工完了 / 屋根上 / 保安器 / 居間TV …）。工事調書・系統図の印刷に使い、保存・読込にも入ります。<br>📷 まとめて取り込み＝PCで名前を付け替えた写真を、何枚でもいちどに選んで入れます。<b>ファイル名がそのままラベル</b>になり、<b>ファイル名の順</b>に並びます（「01_施工前」「02_屋根上」のように番号を付けておくと、その順に入ります）。写真の入っていない行に先に入り、余った分は下に足されます。すでに入っている同じ写真は飛ばすので、二重になりません。<br>📁書き出し＝いま入っている写真を、選んだフォルダの中の「管理番号」フォルダへ、そのままコピーします（PC・Chrome/Edge）。<br>📉軽量化＝大きい写真（1枚 約1MB を超えるもの）だけを軽くします。すでに軽い写真には触らないので、何度押しても画質は落ちません。<br>※ 写真は入れるときに自動で軽くなります（1枚 約1MB まで・長辺2048px）。原本を残したいときは、入れる前にフォルダへ控えておいてください。</div>
           </details>
         </div>
       </details>
@@ -5941,7 +5941,7 @@
           <button id="btn-list-tidy" title="戸別ファイル（管理番号.json）が複数のフォルダに散らばっているとき、1つのフォルダ（ふつうは「リスト」）へまとめて移します。移す前に書いて読み返し、中身と写真の枚数を確かめてから元を消します。">📂 1つのフォルダにそろえる</button>
           <button id="btn-list-junk" title="中身が空（0KB）のファイルを探して消します。スマホで同じ戸別を保存し直すと「管理番号_長い数字.json」という別ファイルが増え、そのうち空のものは読めないため戸別が一覧から抜けます。消す前に一覧で確かめられます。中身のある壊れたファイルは消しません。">🗑 空ファイルを消す</button>
           <div class="uc-menu-cap">まとめて書き出す</div>
-          <button id="btn-list-bulk-photos" title="この物件（一覧）の全戸別の写真を、選んだフォルダの中に「管理番号」フォルダを作って、画質を落とさずまとめて書き出します。スマホ現場入力で撮った写真の取り出しに使います。">📸 写真をまとめて書き出し</button>
+          <button id="btn-list-bulk-photos" title="この物件（一覧）の全戸別の写真を、選んだフォルダの中に「管理番号」フォルダを作って、いま入っているまままとめて書き出します（縮め直しません）。スマホ現場入力で撮った写真の取り出しに使います。">📸 写真をまとめて書き出し</button>
           <div class="uc-menu-cap">暗号化（ふつうは使いません）</div>
           <button id="btn-list-unlock" title="ハイブリッド(.hyb)は氏名・電話・住所・写真を、全暗号化(.enc)は本体をまとめて復号">🔓 まとめて復号</button>
           <button id="btn-list-bulk-reenc" title="選んだ複数のファイルを、別のパスワード／別の方式にまとめて変えて上書き保存">🔄 まとめて再暗号化</button>
@@ -22938,7 +22938,9 @@ function addPhotoEntry(label){
    ★写真は減らさない。入れる前の枚数を数え、入れたあとに数え直して
      「前の枚数＋入れた枚数」になっていなければ、何もしなかったことにして戻す。
    ============================================================ */
-const PHOTO_BULK_MAX_MB = 15;   // 1枚の上限（1枚ずつ入れるときと同じ）
+/* 1枚の上限。入れるときに自動で軽くするようになったので、大きい写真も入れられる。
+   ただし、あまりに大きいものは読むだけで端末が苦しくなるので、上限そのものは残す。 */
+const PHOTO_BULK_MAX_MB = 40;
 const PHOTO_BULK_MANY = 20;     // これより多いときは、先に一声かける
 
 /* ファイル名 → ラベル（拡張子だけ落とす。番号はそのまま残す） */
@@ -22981,7 +22983,7 @@ function photoCheckDecodable(dataUri){
 /* ============================================================
    写真を入れるときに、大きすぎるものだけ自動で軽くする
    ------------------------------------------------------------
-   工事写真は、見積書・工事調書・写真台帳・印刷で使うぶんには長辺2000pxで十分読める。
+   工事写真は、見積書・工事調書・写真台帳・印刷で使うぶんには長辺2048pxで十分読める。
    いまのスマホの写真は1枚3〜5MBあり、そのまま戸別ファイルへ入れると保存先がすぐ一杯になる。
    ・1枚の目安（約1MB）を超えたものだけ縮める。もともと小さい写真には触らない
      （触ると、保存のたびに少しずつ画質が落ちていく）
@@ -23026,6 +23028,46 @@ function photoRenderSmaller(dataUri, maxEdge, quality){
     img.src = dataUri;
   });
 }
+/* 小さな見本（24x24）にして、明るさの平均とばらつきを取る。
+   端末のメモリが足りないと、大きな写真を描き直したときに真っ白・灰色の絵になることがある。
+   そのまま入れると、写真が入っているつもりで白い枠になり、あとから取り返せない。 */
+function photoTinyStats(dataUri){
+  return new Promise(resolve => {
+    let done = false;
+    const fin = v => { if(!done){ done = true; resolve(v); } };
+    const img = new Image();
+    img.onload = () => {
+      try{
+        const n = 24;
+        const cv = document.createElement("canvas"); cv.width = n; cv.height = n;
+        const ctx = cv.getContext("2d");
+        ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, n, n);
+        ctx.drawImage(img, 0, 0, n, n);
+        const d = ctx.getImageData(0, 0, n, n).data;
+        let sum = 0; const g = [];
+        for(let i = 0; i < d.length; i += 4){
+          const v = (d[i] * 299 + d[i+1] * 587 + d[i+2] * 114) / 1000;
+          g.push(v); sum += v;
+        }
+        const mean = sum / g.length;
+        let vsum = 0;
+        for(let i = 0; i < g.length; i++) vsum += (g[i] - mean) * (g[i] - mean);
+        fin({ mean: mean, sd: Math.sqrt(vsum / g.length) });
+      }catch(err){ fin(null); }
+    };
+    img.onerror = () => fin(null);
+    setTimeout(() => fin(null), 10000);
+    img.src = dataUri;
+  });
+}
+/* 縮めた絵が、元の写真とだいたい同じかを確かめる。違えば「縮めなかったこと」にする。 */
+async function photoLooksLike(src, out){
+  const a = await photoTinyStats(src), b = await photoTinyStats(out);
+  if(!a || !b) return false;                                  // 確かめられない＝採らない
+  if(Math.abs(a.mean - b.mean) > 28) return false;            // 明るさがまるで違う（真っ白など）
+  if(a.sd >= 6 && b.sd < a.sd * 0.35) return false;           // 模様が消えている（のっぺりした絵）
+  return true;
+}
 /* 入れる前に1枚を目安の大きさへ収める。収められなければ元のまま返す（写真は捨てない）。
    JPEGの大きさは画素数にほぼ比例するので、1回試したら「あとどれだけ縮めればよいか」を
    見積もって一気に寄せる。総当たりより速く、目安のぎりぎり手前＝いちばんきれいな所に収まる。 */
@@ -23057,6 +23099,7 @@ async function photoFitForStorage(dataUri){
     ? inside.reduce((a, t) => (t.b > a.b ? t : a))
     : tries.reduce((a, t) => (t.b < a.b ? t : a));
   if(!best || best.out.length >= dataUri.length) return dataUri;     // 小さくならないなら元のまま
+  if(!(await photoLooksLike(dataUri, best.out))) return dataUri;    // 絵が変わっていたら元のまま
   return best.out;
 }
 /* 名前をいくつか並べる（多いときは「ほか」でまとめる） */
@@ -23098,12 +23141,16 @@ async function bulkImportPhotoFiles(fileList){
     const uri = await photoReadFileAsDataUri(f);
     if(!uri || !/^data:image\//i.test(uri)){ notImage.push(f.name); continue; }
     if(!(await photoCheckDecodable(uri))){ notImage.push(f.name); continue; }
+    /* ★写真IDは「縮める前の中身」から付ける★
+       IDは同じ写真を見分けるための鍵で、圧縮しても変えない決まり（現場入力の欄の説明にも書いてある）。
+       縮めたあとの中身から付けると、(a) 版160以前に入れた同じ写真と別物になって二重に入る、
+       (b) 端末やブラウザが違うと縮め方がわずかに変わって別物になる、の2つが起きる。 */
+    const id = photoContentId(uri);
+    if(haveIds.has(id)){ dup.push(f.name); continue; }
+    haveIds.add(id);
     // 大きすぎる写真はここで軽くしてから入れる（軽くできなければ元のまま入る）
     const fit = await photoFitForStorage(uri);
     if(photoBytesOf(fit) < photoBytesOf(uri)){ shrunkBefore += photoBytesOf(uri); shrunkAfter += photoBytesOf(fit); shrunk++; }
-    const id = photoContentId(fit);
-    if(haveIds.has(id)){ dup.push(f.name); continue; }
-    haveIds.add(id);
     added.push({ label: photoLabelFromFileName(f.name), dataUri: fit, id: id });
   }
   if(btn){ btn.disabled = false; btn.textContent = btnText0; }
@@ -23366,7 +23413,7 @@ async function exportPhotosToFolder(){
   if(!parent) return;
   const r = await _writeCasePhotos(parent, mgmtNo, photos);
   const msg = "📁 管理番号フォルダ『" + mgmtNo + "』へ写真を書き出しました。\n\n"
-    + "・書き出し: " + r.written + " 枚（無劣化・原本のまま）\n"
+    + "・書き出し: " + r.written + " 枚（いま入っているまま・縮め直していません）\n"
     + (r.failed ? ("・失敗: " + r.failed + " 枚\n") : "")
     + "\n次回は前回と同じ場所から「📁 フォルダ」でフォルダを選ぶ画面が開きます。";
   alert(msg);
@@ -23464,7 +23511,7 @@ async function bulkExportSpecialPhotos(){
   if(!confirm("「" + (parent.name || "選んだフォルダ") + "」の中に、特別記録ごとのフォルダを作って"
       + "写真を書き出します。\n\n・対象: " + sps.length + " 件\n"
       + "・写真: " + sps.reduce((n, sp) => n + (sp.data.chosho_photos || []).filter(p => p && p.dataUri).length, 0)
-      + " 枚（無劣化・原本のまま）\n\n進めますか？")) return;
+      + " 枚（いま入っているまま・縮め直していません）\n\n進めますか？")) return;
 
   let ok = 0, total = 0, failed = 0;
   const used = {};
@@ -23491,7 +23538,7 @@ async function bulkExportSpecialPhotos(){
   let msg = (aborted ? "📦 特別記録の書き出しを中止しました。\n（中止するまでに書き出した分は残っています）\n\n"
                      : "📦 特別記録の写真を書き出しました。\n\n")
     + "・書き出した記録: " + ok + " 件\n"
-    + "・写真合計: " + total + " 枚（無劣化・原本のまま）\n";
+    + "・写真合計: " + total + " 枚（いま入っているまま・縮め直していません）\n";
   if(failed) msg += "・書込失敗: " + failed + " 枚\n";
   msg += "\nフォルダ名は「特別記録_種類_日付_件名」、\n"
       + "ファイル名は「フォルダ名_連番_品名」です。";
@@ -23563,7 +23610,7 @@ async function bulkExportPhotosToFolders(){
       ? "📸 一括写真書き出しを中止しました。\n（中止するまでに書き出した分はそのまま残っています）\n\n"
       : "📸 一括写真書き出しが完了しました。\n\n")
     + "・書き出した戸別: " + caseOk + " 件\n"
-    + "・写真合計: " + totalPhotos + " 枚（無劣化・原本のまま）\n";
+    + "・写真合計: " + totalPhotos + " 枚（いま入っているまま・縮め直していません）\n";
   if(failedPhotos) msg += "・書込失敗: " + failedPhotos + " 枚\n";
   if(noPhotos)     msg += "・写真なしでスキップ: " + noPhotos + " 件\n";
   if(noMgmt)       msg += "・管理番号なしでスキップ: " + noMgmt + " 件\n";
@@ -23576,46 +23623,32 @@ async function bulkExportPhotosToFolders(){
 /* ============================================================
    📉 写真を軽量化（案件JSONを軽くする・原本フォルダには影響しない）
    ============================================================ */
-/* dataURI画像を長辺maxEdgeに縮小してJPEG化。小さくならない場合は null を返す（元を維持）。 */
-function downscaleImageDataUri(dataUri, maxEdge, quality){
-  return new Promise((resolve) => {
-    if(!dataUri || typeof dataUri !== "string"){ resolve(null); return; }
-    const img = new Image();
-    img.onload = () => {
-      const w = img.naturalWidth, h = img.naturalHeight;
-      const longEdge = Math.max(w, h);
-      if(!longEdge){ resolve(null); return; }
-      const scale = longEdge > maxEdge ? (maxEdge / longEdge) : 1;
-      const nw = Math.max(1, Math.round(w * scale)), nh = Math.max(1, Math.round(h * scale));
-      try{
-        const cv = document.createElement("canvas");
-        cv.width = nw; cv.height = nh;
-        cv.getContext("2d").drawImage(img, 0, 0, nw, nh);
-        const out = cv.toDataURL("image/jpeg", quality || 0.85);
-        resolve((out && out.length < dataUri.length) ? out : null); // 小さくなった時だけ採用
-      }catch(err){ console.warn("downscale failed", err); resolve(null); }
-    };
-    img.onerror = () => resolve(null);
-    img.src = dataUri;
-  });
-}
-/* 現在エディタで開いている戸別の写真を長辺2000pxへ軽量化。 */
+/* いま開いている戸別の写真のうち、大きいものだけを軽くする（入れるときと同じ決まり）。 */
 async function compressCurrentCasePhotos(){
   const photos = Array.isArray(STATE.photos) ? STATE.photos : [];
   const withImg = photos.filter(p => p && p.dataUri);
   if(!withImg.length){ alert("軽量化できる写真がありません。"); return; }
   const bMB = n => Math.round(n / 1024 / 1024 * 10) / 10;
   const beforeBytes = withImg.reduce((s, p) => s + Math.round(p.dataUri.length * 0.75), 0);
-  if(!confirm("この戸別の写真 " + withImg.length + " 枚を長辺2000pxに縮小して軽くします。\n\n"
+  const overN = withImg.filter(p => photoBytesOf(p.dataUri) > PHOTO_FIT_MAX_BYTES).length;
+  if(!overN){
+    alert("この戸別の写真 " + withImg.length + " 枚は、すでに軽くなっています（1枚 約1MB まで）。\n\n"
+      + "これ以上縮めると画質が落ちるだけなので、何もしていません。");
+    return;
+  }
+  if(!confirm("この戸別の写真のうち、大きい " + overN + " 枚を軽くします（1枚 約1MB まで）。\n\n"
     + "・見積書・工事調書には十分な画質です\n"
-    + "・フォルダに書き出した原本には影響しません（原本を残すなら先に📁書き出しを）\n"
-    + "・現在の写真サイズ: 約 " + bMB(beforeBytes) + " MB\n\n実行しますか？")) return;
+    + "・すでに軽い写真には触りません（何度押しても画質は落ちません）\n"
+    + "・原本を残したいときは、先に 📁 写真の書き出し をしてください\n"
+    + "・いまの写真の大きさ: 約 " + bMB(beforeBytes) + " MB\n\n実行しますか？")) return;
   let changed = 0, afterBytes = 0;
   for(const p of photos){
     if(!p || !p.dataUri){ continue; }
     try{
-      const smaller = await downscaleImageDataUri(p.dataUri, 2000, 0.85);
-      if(smaller){ p.dataUri = smaller; changed++; }
+      /* 入れるときとまったく同じ決まりで縮める。ここだけ別の大きさにすると
+         「入れるときに1MBへ収めた写真を、押すたびにもう一段落とす」ことになる。 */
+      const smaller = await photoFitForStorage(p.dataUri);
+      if(smaller && smaller !== p.dataUri){ p.dataUri = smaller; changed++; }
     }catch(err){ console.warn("compress failed", err); }
     afterBytes += Math.round((p.dataUri ? p.dataUri.length : 0) * 0.75);
   }
@@ -23781,21 +23814,33 @@ function renderPhotoInputs(){
 function readPhotoFileToEntry(inp, idx){
   const f = inp.files && inp.files[0];
   if(!f) return;
-  if(f.size > 15 * 1024 * 1024){
-    alert("画像サイズが大きすぎます（15MB以下を推奨）");
+  if(f.size > PHOTO_BULK_MAX_MB * 1024 * 1024){
+    alert("この写真は大きすぎて読み込めません（1枚 " + PHOTO_BULK_MAX_MB + "MB まで）。");
     inp.value = "";
     return;
   }
+  /* ★どの戸別に入れるつもりだったかを覚えておく★
+     大きい写真を軽くするのに1枚あたり0.2〜0.3秒かかる。その間に別の戸別を開かれると、
+     読み終わった写真をよその戸別に入れてしまう。まとめて取り込みと同じ守り方をする。 */
+  const target = STATE.photos;
   const r = new FileReader();
   r.onload = async ev => {
+    const raw = String((ev.target && ev.target.result) || "");
+    // 写真IDは縮める前の中身から付ける（圧縮しても同じ写真だと分かるように）
+    const id = photoContentId(raw);
+    // 大きすぎる写真はここで軽くしてから入れる（軽くできなければ元のまま）
+    const uri = await photoFitForStorage(raw);
+    if(STATE.photos !== target){
+      alert("写真を入れるのをやめました。\n"
+        + "写真を読んでいる間に別の戸別を開いたので、写真はどこにも入れていません。\n\n"
+        + "写真を入れたい戸別を開いてから、もう一度選んでください。");
+      return;
+    }
     if(!STATE.photos[idx]){
       STATE.photos[idx] = { label: "写真" + (idx + 1), dataUri: null };
     }
-    const raw = String((ev.target && ev.target.result) || "");
-    // 大きすぎる写真はここで軽くしてから入れる（軽くできなければ元のまま）
-    const uri = await photoFitForStorage(raw);
     STATE.photos[idx].dataUri = uri;
-    STATE.photos[idx].id = photoContentId(uri); // 撮影/追加時に安定IDを付与
+    STATE.photos[idx].id = id;
     renderPhotoInputs();
     if(photoBytesOf(uri) < photoBytesOf(raw)){
       uiToast("写真が大きかったので、軽くして入れました（約 "
