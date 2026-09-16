@@ -28111,6 +28111,9 @@ function rtOnBump(b){
    取り込みはこの端末の内容を共有ファイルの内容で置き換えるので、
    「まだ共有ファイルへ書けていない直し」が残っている間は絶対にやらない。 */
 function rtAutoPullBlockReason(){
+  /* 写真をまとめて軽くしている間は止める。取り込みは一覧を丸ごと作り直すので、
+     いま書いている戸別の行が入れ替わってしまう。 */
+  if(typeof _photoSlimBusy !== "undefined" && _photoSlimBusy) return "写真を軽くしている途中です";
   if(!_projFileHandle) return "共有ファイルに連動していません";
   if(_projLoading)     return "読み込み中です";
   if(_projSaving)      return "保存中です";

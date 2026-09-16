@@ -338,6 +338,21 @@ const WANT_VER = (function(){ try{
   ok(r10.kind === 'same' && r10.noShrink === 1,
      '縮められなかったことを数えていない → ' + JSON.stringify(r10));
 
+  // ---- ⑪ 軽くしている間は、自動の取り込みを止める ----
+  const r11 = await page.evaluate(() => {
+    if(typeof rtAutoPullBlockReason !== 'function') return { skip: true };
+    const keep = _photoSlimBusy;
+    _photoSlimBusy = true;
+    const why = rtAutoPullBlockReason();
+    _photoSlimBusy = keep;
+    return { why: why };
+  });
+  console.log('⑪実行中の自動取り込み', JSON.stringify(r11));
+  if(!r11.skip){
+    ok(/写真を軽くしている/.test(r11.why || ''),
+       '★軽くしている途中でも、自動の取り込みが走って一覧が作り直される → ' + JSON.stringify(r11));
+  }
+
   await b.close();
   ok(errs.length === 0, '★画面のエラー: ' + errs.slice(0,4).join(' / '));
   if(fails.length){ console.log('FAIL\n- ' + fails.join('\n- ')); process.exit(1); }

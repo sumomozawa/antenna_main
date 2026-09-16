@@ -58,6 +58,10 @@ CASES = [
    u'''  if(!(row._photoCount > 0)) return "写真なし";''', u'''  void 0;''',
    "smoke_v162_main.js", "main"),
 
+  (u"★軽くしている途中でも、自動の取り込みが走る（一覧が作り直される）",
+   u'''  if(typeof _photoSlimBusy !== "undefined" && _photoSlimBusy) return "写真を軽くしている途中です";''',
+   u'''  void 0;''', "smoke_v162_main.js", "main"),
+
   # ---- 現場入力：読み込み中に同じ戸別を開き直す ----
   (u"★同じ戸別を開き直したときに、読み込んだ写真を画面へ足さない（あとで消える）",
    u'''  if(a && a === b){                       // 同じ戸別を開き直した
