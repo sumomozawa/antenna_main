@@ -180,6 +180,20 @@ const WANT_VER = (function(){ try{
   ok(r5b.n === 1,
      '★版160以前に入れた写真と同じものを入れると、二重に入る → ' + JSON.stringify(r5b));
 
+  // ---- ⑤の3 書き出した写真を名前を付け替えて入れ直しても、二重にならない ----
+  const r5c = await page.evaluate(async () => {
+    STATE.photos = [];
+    const big = __photo(4032, 3024, 30);
+    await bulkImportPhotoFiles([__file(big, '01_施工前.jpg')]);
+    const stored = STATE.photos[0] && STATE.photos[0].dataUri;   // 📁 書き出しで出るのはこの中身
+    await bulkImportPhotoFiles([__file(stored, '施工前_やり直し.jpg')]);
+    const got = STATE.photos.filter(p => p && p.dataUri);
+    return { n: got.length, labels: got.map(p => p.label) };
+  });
+  console.log('⑤の3書き出して入れ直し', JSON.stringify(r5c));
+  ok(r5c.n === 1,
+     '★📁書き出し→名前を付け替え→📷まとめて取り込み で、同じ写真が二重に入る → ' + JSON.stringify(r5c));
+
   // ---- ⑥ もともと2048pxより小さい写真は、引き伸ばさない ----
   const r6 = await page.evaluate(async () => {
     const noise = (w, h, q) => {
@@ -259,9 +273,9 @@ const WANT_VER = (function(){ try{
     if(typeof mergeGenbaPhotos !== 'function') return { skip: true };
     const uri = (ch, bytes) => 'data:image/jpeg;base64,' + ch.repeat(Math.round(bytes / 0.75));
     const ID = 'p11112222_5697155';                 // 同じ写真＝IDは縮めても変えない決まり
-    const one = (pc, genba) => {
+    const one = (pc, genba, opt) => {
       const r = mergeGenbaPhotos([{ label:'施工前', dataUri: pc, id: ID }],
-                                 [{ label:'施工前', dataUri: genba, id: ID }], {}, {});
+                                 [{ label:'施工前', dataUri: genba, id: ID }], opt || {}, {});
       return { n: r.length, ch: r[0] && r[0].dataUri.charAt(23), id: r[0] && r[0].id };
     };
     const big   = uri('B', 5700 * 1024);            // 撮りっぱなし
@@ -271,10 +285,11 @@ const WANT_VER = (function(){ try{
     const over  = uri('O', 1500 * 1024);            // 目安を超えている
     return {
       bigVsFit:   one(fit, big),                    // 縮めたほう(F)が残るべき
-      thumbVsBig: one(thumb, big),                  // 原本(B)が残るべき（サムネで潰さない）
+      thumbVsBig: one(thumb, big, { mainThumb: true }),   // 原本(B)が残るべき（サムネで潰さない）
+      smallFitVsBig: one(uri('P', 90 * 1024), big),      // ちゃんと縮めた小さい写真(P)が残るべき
       fitVsFit:   one(fit, fit2),                   // どちらも目安の内 → 大きいほう(G)
       overVsFit:  one(over, fit),                   // 目安の内(F)が残るべき
-      thumbVsFit: one(thumb, fit)                   // 縮めたほう(F)が残るべき
+      thumbVsFit: one(thumb, fit, { mainThumb: true })   // 縮めたほう(F)が残るべき
     };
   });
   console.log('⑨同じ写真の残し方', JSON.stringify(r9));
@@ -283,6 +298,9 @@ const WANT_VER = (function(){ try{
        '★外部で縮めた写真が、現場に残っている撮りっぱなしで元の重さに戻る → ' + JSON.stringify(r9.bigVsFit));
     ok(r9.thumbVsBig.ch === 'B',
        '★サムネイルで原本を潰している（写真が小さいまま取り返せない） → ' + JSON.stringify(r9.thumbVsBig));
+    ok(r9.smallFitVsBig.ch === 'P',
+       '★ちゃんと縮めた小さい写真（横に長い写真など）をサムネと取り違えて、撮りっぱなしに戻している → '
+       + JSON.stringify(r9.smallFitVsBig));
     ok(r9.fitVsFit.ch === 'G',
        'どちらも目安の内なら、きれいなほうを残すはず → ' + JSON.stringify(r9.fitVsFit));
     ok(r9.overVsFit.ch === 'F',

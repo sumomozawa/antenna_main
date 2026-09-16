@@ -20669,7 +20669,8 @@ async function aptMgMovePhotos(target, stray){
     if(!(await dupEnsureWritable(target._dir))) throw new Error("フォルダへの書き込み許可が得られませんでした");
     const tfh = await target._dir.getFileHandle(target._name);
     const tj = JSON.parse(await (await tfh.getFile()).text());
-    const merged = mergeGenbaPhotos(tj.chosho_photos, strayPhotos, {}, null);
+    const merged = mergeGenbaPhotos(tj.chosho_photos, strayPhotos,
+      { genbaThumb: !strayHasFile && !!((stray.data || {}).chosho_photos_thumb) }, null);
     if(cnt(merged) < Math.max(cnt(tj.chosho_photos), n)) throw new Error("写真をまとめた結果が減っています（何もしていません）");
     tj.chosho_photos = merged;
     tj.editedAt = new Date().toISOString();
@@ -20696,7 +20697,10 @@ async function aptMgMovePhotos(target, stray){
     return { moved: n, note: "元のファイル " + stray._name + " を " + ((target.data || {}).chosho_mgmt_no || "") + " の持ち物にしました（「💾 戸別ファイルへ反映」で名前が付け替わります）" };
   }
   // どちらにもファイルが無い → 手元の写真を合わせる
-  target.data = Object.assign({}, target.data || {}, { chosho_photos: mergeGenbaPhotos((target.data || {}).chosho_photos, strayPhotos, {}, null) });
+  target.data = Object.assign({}, target.data || {}, { chosho_photos: mergeGenbaPhotos(
+    (target.data || {}).chosho_photos, strayPhotos,
+    { mainThumb: !!((target.data || {}).chosho_photos_thumb),
+      genbaThumb: !strayHasFile && !!((stray.data || {}).chosho_photos_thumb) }, null) });
   target._photoCount = cnt(target.data.chosho_photos); target._photosKnown = true;
   return { moved: n, note: "写真 " + n + " 枚を移しました" };
 }
@@ -23003,38 +23007,49 @@ function photoBytesOf(dataUri){
   const i = s.indexOf(",");
   return i < 0 ? 0 : Math.round((s.length - i - 1) * 0.75);
 }
-/* 長辺 maxEdge に収まるよう縮めて JPEG にする。開けなければ空文字 */
-function photoRenderSmaller(dataUri, maxEdge, quality){
+/* 写真を1枚だけ読む（開けなければ null）。
+   ★目覚まし（setTimeout）は必ず止める★ 止めないと、読み終わった写真の中身を
+   15秒のあいだ掴んだままになり、何枚も続けて入れるとスマホの画面が落ちる。 */
+function photoLoadImage(dataUri){
   return new Promise(resolve => {
-    let done = false;
-    const fin = v => { if(!done){ done = true; resolve(v); } };
+    let done = false, timer = 0;
+    const fin = v => { if(!done){ done = true; if(timer) clearTimeout(timer); resolve(v); } };
     const img = new Image();
-    img.onload = () => {
-      try{
-        const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
-        if(!w || !h){ fin(""); return; }
-        const scale = Math.min(1, maxEdge / Math.max(w, h));   // 大きくはしない
-        const nw = Math.max(1, Math.round(w * scale)), nh = Math.max(1, Math.round(h * scale));
-        const cv = document.createElement("canvas");
-        cv.width = nw; cv.height = nh;
-        const ctx = cv.getContext("2d");
-        ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, nw, nh);    // JPEGは透過を持てない＝白地で塗る
-        ctx.drawImage(img, 0, 0, nw, nh);
-        fin(cv.toDataURL("image/jpeg", quality));
-      }catch(err){ console.warn("写真を縮められませんでした", err); fin(""); }
-    };
-    img.onerror = () => fin("");
-    setTimeout(() => fin(""), 15000);   // 固まらせない
+    img.onload = () => fin(img);
+    img.onerror = () => fin(null);
+    timer = setTimeout(() => fin(null), 15000);   // 固まらせない
     img.src = dataUri;
   });
+}
+/* 読み終わった写真を、長辺 maxEdge に収まるよう縮めて JPEG にする。だめなら空文字 */
+function photoDrawToJpeg(img, maxEdge, quality){
+  try{
+    if(!img) return "";
+    const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+    if(!w || !h) return "";
+    const scale = Math.min(1, maxEdge / Math.max(w, h));   // 大きくはしない
+    const nw = Math.max(1, Math.round(w * scale)), nh = Math.max(1, Math.round(h * scale));
+    const cv = document.createElement("canvas");
+    cv.width = nw; cv.height = nh;
+    const ctx = cv.getContext("2d");
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, nw, nh);    // JPEGは透過を持てない＝白地で塗る
+    ctx.drawImage(img, 0, 0, nw, nh);
+    return cv.toDataURL("image/jpeg", quality);
+  }catch(err){ console.warn("写真を縮められませんでした", err); return ""; }
+}
+/* 長辺 maxEdge に収まるよう縮めて JPEG にする。開けなければ空文字。
+   img を渡せば、そのぶん読み直さない（1枚を何度も読み直すとスマホが遅くなる）。 */
+async function photoRenderSmaller(dataUri, maxEdge, quality, img){
+  const im = img || await photoLoadImage(dataUri);
+  return photoDrawToJpeg(im, maxEdge, quality);
 }
 /* 小さな見本（24x24）にして、明るさの平均とばらつきを取る。
    端末のメモリが足りないと、大きな写真を描き直したときに真っ白・灰色の絵になることがある。
    そのまま入れると、写真が入っているつもりで白い枠になり、あとから取り返せない。 */
 function photoTinyStats(dataUri){
   return new Promise(resolve => {
-    let done = false;
-    const fin = v => { if(!done){ done = true; resolve(v); } };
+    let done = false, timer = 0;
+    const fin = v => { if(!done){ done = true; if(timer) clearTimeout(timer); resolve(v); } };
     const img = new Image();
     img.onload = () => {
       try{
@@ -23056,7 +23071,7 @@ function photoTinyStats(dataUri){
       }catch(err){ fin(null); }
     };
     img.onerror = () => fin(null);
-    setTimeout(() => fin(null), 10000);
+    timer = setTimeout(() => fin(null), 10000);
     img.src = dataUri;
   });
 }
@@ -23076,8 +23091,10 @@ async function photoFitForStorage(dataUri){
   if(photoBytesOf(dataUri) <= PHOTO_FIT_MAX_BYTES) return dataUri;   // もともと目安の内＝触らない
   const tries = [];
   let edge = PHOTO_FIT_MAX_EDGE, q = PHOTO_FIT_QUALITY;
+  const img = await photoLoadImage(dataUri);   // 読むのは1回だけ（何度も読み直すとスマホが遅い）
+  if(!img) return dataUri;                     // 開けない＝元のまま（写真は捨てない）
   for(let i = 0; i < 4; i++){
-    const out = await photoRenderSmaller(dataUri, edge, q);
+    const out = await photoRenderSmaller(dataUri, edge, q, img);
     if(!out) break;                                                  // 画像として開けない → 元のまま
     const b = photoBytesOf(out);
     tries.push({ out: out, b: b });
@@ -23129,8 +23146,15 @@ async function bulkImportPhotoFiles(fileList){
 
   files.sort((a, b) => photoNameCmp(a.name, b.name));
 
+  /* すでに入っている写真の見分け。写真IDだけでなく「いま入っている中身」からも作っておく。
+     📁 書き出し で出した写真（＝軽くしたあとの中身）を、名前を付け替えて入れ直したときに
+     同じ写真だと分かるようにするため（IDは縮める前の中身から作ってあるので一致しない）。 */
   const haveIds = new Set();
-  STATE.photos.forEach(p => { if(p && p.dataUri) haveIds.add(p.id || photoContentId(p.dataUri)); });
+  STATE.photos.forEach(p => {
+    if(!p || !p.dataUri) return;
+    if(p.id) haveIds.add(p.id);
+    haveIds.add(photoContentId(p.dataUri));
+  });
 
   const added = [], tooBig = [], notImage = [], dup = [];
   let shrunk = 0, shrunkBefore = 0, shrunkAfter = 0;
@@ -23147,9 +23171,10 @@ async function bulkImportPhotoFiles(fileList){
        (b) 端末やブラウザが違うと縮め方がわずかに変わって別物になる、の2つが起きる。 */
     const id = photoContentId(uri);
     if(haveIds.has(id)){ dup.push(f.name); continue; }
-    haveIds.add(id);
     // 大きすぎる写真はここで軽くしてから入れる（軽くできなければ元のまま入る）
     const fit = await photoFitForStorage(uri);
+    // 入れた中身のIDも覚えておく（同じ写真を 📁 書き出し→入れ直し しても二重にしない）
+    haveIds.add(id); haveIds.add(photoContentId(fit));
     if(photoBytesOf(fit) < photoBytesOf(uri)){ shrunkBefore += photoBytesOf(uri); shrunkAfter += photoBytesOf(fit); shrunk++; }
     added.push({ label: photoLabelFromFileName(f.name), dataUri: fit, id: id });
   }
@@ -23843,9 +23868,9 @@ function readPhotoFileToEntry(inp, idx){
     STATE.photos[idx].id = id;
     renderPhotoInputs();
     if(photoBytesOf(uri) < photoBytesOf(raw)){
+      const kb = n => Math.round(n / 1024).toLocaleString();
       uiToast("写真が大きかったので、軽くして入れました（約 "
-        + Math.round(photoBytesOf(raw) / 1024 / 1024 * 10) / 10 + "MB → 約 "
-        + Math.round(photoBytesOf(uri) / 1024 / 1024 * 10) / 10 + "MB）");
+        + kb(photoBytesOf(raw)) + "KB → 約 " + kb(photoBytesOf(uri)) + "KB）");
     }
     if(typeof projAutoSaveEdit === "function") projAutoSaveEdit(); // 写真追加/差替を物件へ自動保存
   };
@@ -32378,7 +32403,7 @@ function renderListPhotoMode(rows, container){
       +   '💾 戸別ファイルへ書き戻す' + (dirtyN ? ('（' + dirtyN + '件）') : '') + '</button>'
       + '<button type="button" id="pj-print" title="1戸別＝1ページで、A4縦の写真台帳を印刷／PDF出力します">🖨 写真台帳を印刷</button>'
       + ((_specialRows || []).length
-          ? ('<button type="button" id="pj-sp-export" title="特別記録（資材検収・検査中・イレギュラー）の写真を、記録ごとのフォルダを作って画質を落とさずに書き出します">'
+          ? ('<button type="button" id="pj-sp-export" title="特別記録（資材検収・検査中・イレギュラー）の写真を、記録ごとのフォルダを作っていま入っているまま書き出します（縮め直しません）">'
              + '📦 特別記録の写真を書き出す（' + (_specialRows || []).length + '件）</button>')
           : '')
       + '</div>';
@@ -34069,14 +34094,18 @@ function _genbaClone(v){ return v==null ? v : JSON.parse(JSON.stringify(v)); }
    ただし、ごく小さいもの（物件に埋めるサムネイル）で原本を潰してはいけないので、
    下限を設ける。下限より小さいものは「縮めた写真」とは見なさず、今までどおり
    大きいほうを残す。 */
-const PHOTO_KEEP_MIN_BYTES = 200 * 1024;   // これより小さければサムネ扱い（縮めた写真とは見なさない）
+/* 大きさだけでサムネを見分けようとすると、ちゃんと縮めた小さい写真（横に長い写真など）まで
+   サムネ扱いになってしまう。サムネかどうかは呼び出し側（chosho_photos_thumb）で見分け、
+   ここの下限は「壊れた・中身の無いもの」をはじくためだけに置く。 */
+const PHOTO_KEEP_MIN_BYTES = 16 * 1024;
 function photoIsFitSize(dataUri){
   const n = photoBytesOf(dataUri);
   return n >= PHOTO_KEEP_MIN_BYTES && n <= PHOTO_FIT_MAX_BYTES;
 }
 function pickBetterPhoto(a, b){
   const alen=(a.p.dataUri||"").length, blen=(b.p.dataUri||"").length;
-  const aFit = photoIsFitSize(a.p.dataUri), bFit = photoIsFitSize(b.p.dataUri);
+  const aFit = !a.thumb && photoIsFitSize(a.p.dataUri);
+  const bFit = !b.thumb && photoIsFitSize(b.p.dataUri);
   let win = (aFit !== bFit)
     ? (aFit ? a : b)                                   // 片方だけ目安の内 → そちらを残す
     : ((blen>alen) ? b : (alen>blen ? a : (b.from==="genba" ? b : a)));
@@ -34087,7 +34116,7 @@ function pickBetterPhoto(a, b){
   }
   const o={ label: label||win.p.label, dataUri: win.p.dataUri };
   if(win.p.id) o.id=win.p.id;
-  return { p:o, from:win.from };
+  return { p:o, from:win.from, thumb: win.thumb };
 }
 
 /* 写真の統合。main/genba の写真配列 → 統合配列（実写真の和集合＋重複1枚化）。
@@ -34106,6 +34135,10 @@ function mergeGenbaPhotos(mainPhotos, genbaPhotos, opts, report){
     return { label:String((p&&p.label)||""), dataUri, id, chosho:!!(p&&p.chosho),
              _key: id || ("uri:"+(dataUri||"")) };
   });
+  /* PC側・現場側それぞれが「物件に埋めたサムネイル（長辺512px）」かどうか。
+     サムネは小さいので、大きさだけで「もう軽い写真だ」と見なすと原本を潰してしまう。
+     呼び出し側は chosho_photos_thumb を見てここに渡す。 */
+  const thumbSide = { main: !!opts.mainThumb, genba: !!opts.genbaThumb };
   const M=norm(mainPhotos), G=norm(genbaPhotos);
   const gReal=G.filter(hasImg);
   if(gReal.length===0){
@@ -34118,7 +34151,7 @@ function mergeGenbaPhotos(mainPhotos, genbaPhotos, opts, report){
     if(!hasImg(p)) return;                 // 空スロットは統合対象外
     if(dropKeys.has(p._key) || (p.id && dropKeys.has(p.id))) return; // L2で除外指定
     const cand={ p:{label:p.label, dataUri:p.dataUri, id:p.id||undefined,
-                    chosho:p.chosho||undefined}, from };
+                    chosho:p.chosho||undefined}, from, thumb: !!thumbSide[from] };
     if(!map.has(p._key)){ map.set(p._key, cand); order.push(p._key); return; }
     const prev = map.get(p._key);
     const both = !!(prev.p.chosho || cand.p.chosho);   // 調書に載せる印は片方にあれば残す
@@ -34223,7 +34256,8 @@ function genbaMergeCaseData(mainData, genbaData, opts){
     }
   }
   // E. 写真 和集合＋重複統合
-  base.chosho_photos = mergeGenbaPhotos(mainData&&mainData.chosho_photos, g.chosho_photos, opts.photo, report);
+  base.chosho_photos = mergeGenbaPhotos(mainData&&mainData.chosho_photos, g.chosho_photos,
+    Object.assign({}, opts.photo, { mainThumb: !!(mainData && mainData.chosho_photos_thumb) }), report);
   // F. hard-keep（base は main クローン＝これらは既に main 値。許可リスト外なので genba は混入しない）
   GENBA_HARD_KEEP_MAIN.forEach(k=>{ if(mainData && (k in mainData)) report.hardKept.push(k); });
   // G. マージスタンプ（呼出側でキャッシュ破棄＋再計算）

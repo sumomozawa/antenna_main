@@ -26,8 +26,8 @@ CASES = [
    u'''const PHOTO_FIT_MAX_BYTES = 1024 * 1024;   // 1枚がこれを超えたら縮める（約1MB）''',
    u'''const PHOTO_FIT_MAX_BYTES = 8 * 1024 * 1024;''', "smoke_v161_main.js", "main"),
   (u"写真を大きく引き伸ばしてしまう",
-   u'''        const scale = Math.min(1, maxEdge / Math.max(w, h));   // 大きくはしない''',
-   u'''        const scale = maxEdge / Math.max(w, h);''', "smoke_v161_main.js", "main"),
+   u'''    const scale = Math.min(1, maxEdge / Math.max(w, h));   // 大きくはしない''',
+   u'''    const scale = maxEdge / Math.max(w, h);''', "smoke_v161_main.js", "main"),
 
   # ---- 取り込み口（メイン） ----
   (u"★まとめて取り込みで軽くしない",
@@ -75,10 +75,6 @@ CASES = [
     : ((blen>alen) ? b : (alen>blen ? a : (b.from==="genba" ? b : a)));''',
    u'''  let win = (blen>alen) ? b : (alen>blen ? a : (b.from==="genba" ? b : a));''',
    "smoke_v161_main.js", "main"),
-  (u"★サムネイルで原本を潰す（下限を外す）",
-   u'''const PHOTO_KEEP_MIN_BYTES = 200 * 1024;   // これより小さければサムネ扱い（縮めた写真とは見なさない）''',
-   u'''const PHOTO_KEEP_MIN_BYTES = 0;''',
-   "smoke_v161_main.js", "main"),
   (u"★目安の内どうしでも、小さいほうを残してしまう",
    u'''  let win = (aFit !== bFit)
     ? (aFit ? a : b)                                   // 片方だけ目安の内 → そちらを残す
@@ -89,6 +85,26 @@ CASES = [
    "smoke_v161_main.js", "main"),
   (u"★残した写真の写真IDを落とす（次の突合で2枚に増える）",
    u'''  if(win.p.id) o.id=win.p.id;''', u'''  void 0;''',
+   "smoke_v161_main.js", "main"),
+
+  (u"★ちゃんと縮めた小さい写真をサムネと取り違える（撮りっぱなしに戻る）",
+   u'''const PHOTO_KEEP_MIN_BYTES = 16 * 1024;''',
+   u'''const PHOTO_KEEP_MIN_BYTES = 200 * 1024;''',
+   "smoke_v161_main.js", "main"),
+  (u"★サムネの印を見ないで大きさだけで決める（サムネで原本を潰す）",
+   u'''  const aFit = !a.thumb && photoIsFitSize(a.p.dataUri);
+  const bFit = !b.thumb && photoIsFitSize(b.p.dataUri);''',
+   u'''  const aFit = photoIsFitSize(a.p.dataUri);
+  const bFit = photoIsFitSize(b.p.dataUri);''',
+   "smoke_v161_main.js", "main"),
+  (u"★書き出した写真を入れ直すと二重に入る",
+   u'''    if(p.id) haveIds.add(p.id);
+    haveIds.add(photoContentId(p.dataUri));''',
+   u'''    haveIds.add(p.id || photoContentId(p.dataUri));''',
+   "smoke_v161_main.js", "main"),
+  (u"★写真を1枚ずつ読み直す部品が、開けないときに元のまま返さない",
+   u'''  if(!img) return dataUri;                     // 開けない＝元のまま（写真は捨てない）''',
+   u'''  if(!img) return "";''',
    "smoke_v161_main.js", "main"),
 
   # ---- 現場入力 ----
