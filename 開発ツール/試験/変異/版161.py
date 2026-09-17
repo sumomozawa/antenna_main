@@ -17,7 +17,7 @@ CASES = [
    u'''  if(photoBytesOf(dataUri) <= PHOTO_FIT_MAX_BYTES) return dataUri;   // もともと目安の内＝触らない''',
    u'''  if(false) return dataUri;''', "smoke_v161_main.js", "main"),
   (u"★目安を超えたままの写真を入れてしまう",
-   u'''    if(b <= PHOTO_FIT_MAX_BYTES) break;                              // 収まった''',
+   u'''    if(b <= room) break;                                             // 収まった''',
    u'''    break;''', "smoke_v161_main.js", "main"),
   (u"★必要以上に小さくする（長辺が2048pxでなくなる）",
    u'''const PHOTO_FIT_MAX_EDGE = 2048;''',

@@ -5750,9 +5750,10 @@
             </select>
           </div>
           <div class="field fa-sp-only">
-            <label><span data-tip="FA接続部（保安器台のところ）に分配器が入る現場で選びます。&#10;1口は今までどおり 壁→宅内分配器 へ、残りは「別系統へ」として図面に出します。&#10;※ 外部電源（2分配器使用）のときは、そこに2分配器WPが入るのでこの欄は出ません。">FA接続部の分配</span></label>
+            <label><span data-tip="FA接続部（保安器台のところ）に分配器が入る現場で選びます。&#10;1口は今までどおり 壁→宅内分配器 へ、残りは「別系統へ」として図面に出します。&#10;「既設2分配器（流用）」＝保安器の所にもとからある2分配器につなぐとき。&#10;　図面は黒（既設）で出て、FA（中継）は出ません。材料費も取付費も乗りません。&#10;※ 外部電源（2分配器使用）のときは、そこに2分配器WPが入るのでこの欄は出ません。">FA接続部の分配</span></label>
             <select id="fa_splitter">
               <option value="no">なし</option>
+              <option value="exist_2sp">既設2分配器（流用・費用なし）</option>
               <option value="sp_2cw">2分配器WP SP2CW</option>
               <option value="sp_2cdw">2分配器WP SP2CDW（全通電）</option>
               <option value="sp_3cw">3分配器WP SP3CW</option>
@@ -6914,7 +6915,7 @@ async function lsRestoreFromIdb(){
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "162";
+const APP_VERSION = "165";
 /* ============================================================
    ★日時の表示は、必ずこの端末の時刻で★
    保存している日時は世界時のISO文字列（…T01:03:00.000Z）。これを文字のまま
@@ -7523,18 +7524,23 @@ function renderTvList(){
 /* ============================================================
    積算ロジック
    ============================================================ */
+/* 保安器の所にもとからある2分配器を流用する（＝新しく買わない）ときの印。
+   もとからある物なので、材料費も取付費も積算に乗せない（利用者の指定・2026-09-17）。 */
+const FA_SP_EXISTING = "exist_2sp";
 /* FA接続部（保安器台のところ）に何が入るか。図面・積算・発注材料数量で同じ答えを使う。
      fa  … FA中継を出すか
      sp  … 分配器の品番（"" なら分配器なし）
+     spExisting … その分配器はもとからある物（既設の流用）＝お金には出さない
      after … 分配器を「FAの後ろ」に置く（FA中継と2段になる）
      any … FA接続部に何かある（＝宅内への引込を fa_indoor グループで見る）
    ※ 外部電源のときは、そこに 2分配器WP／電源部 が入るのでどちらも作らない。 */
 function faPointOf(useFa, powerPos, faSplitter, faSplitterPos){
   const outside = powerPos === "outside";
   const sp    = (!outside && faSplitter && faSplitter !== "no") ? faSplitter : "";
+  const spExisting = (sp === FA_SP_EXISTING);
   const after = !!(sp && faSplitterPos === "after" && useFa);
   const fa    = !!(!outside && useFa && (!sp || after));
-  return { fa, sp, after, any: !!(fa || sp) };
+  return { fa, sp, spExisting, after, any: !!(fa || sp) };
 }
 
 function buildBOM(input, qtyOverridesOpt) {
@@ -7765,9 +7771,10 @@ function buildBOM(input, qtyOverridesOpt) {
 
   // CATV：FA中継 材料費・労務費は雑工事に含まれるため積算しない（系統図のみ表示）
   // FA接続部に分配器が入る現場（1口は宅内へ、残りは別系統へ）。分配器は部材として計上する。
+  // ただし「既設2分配器（流用）」は、もとからある物につなぐだけなので材料費も取付費も乗せない。
   if(input.is_catv){
-    const faSpId = faPointOf(input.use_fa, input.power_pos, input.fa_splitter, input.fa_splitter_pos).sp;
-    if(faSpId) add(faSpId, 1, { note:"FA接続部 分配" });
+    const faPt = faPointOf(input.use_fa, input.power_pos, input.fa_splitter, input.fa_splitter_pos);
+    if(faPt.sp && !faPt.spExisting) add(faPt.sp, 1, { note:"FA接続部 分配" });
   }
 
   APT_SCOPE_BUILDING = false;
@@ -10006,9 +10013,12 @@ function renderDiagram(input){
     }
     if(faPt.sp){
       const faSpP = PARTS[faPt.sp] || {};
-      faSpNode = mkNode(svg, ampX, faPt.after ? 536 : 500, ampW, 44,
-        (faSpP.diagram_label || "分配") + "\n" + (faSpP.model || ""),
-        { id: faPt.sp, existing:false,
+      /* もとからある2分配器を流用するときは、黒（既設）で「2分配器(既設)」と出す。
+         新しく買う物ではないので、使用材料にも金額にも出ない。 */
+      const faSpLabel = faPt.spExisting ? "2分配器\n(既設)"
+        : ((faSpP.diagram_label || "分配") + "\n" + (faSpP.model || ""));
+      faSpNode = mkNode(svg, ampX, faPt.after ? 536 : 500, ampW, 44, faSpLabel,
+        { id: faPt.spExisting ? "" : faPt.sp, existing: faPt.spExisting,
           // 下には「別系統へ」の線を出すので、添え字は付けない
           // （保安器台に付くことは、台からの「台を利用」の破線で分かる）
           inputId:"fa_splitter", editTitle:"FA接続部の分配器",
@@ -23083,12 +23093,213 @@ async function photoLooksLike(src, out){
   if(a.sd >= 6 && b.sd < a.sd * 0.35) return false;           // 模様が消えている（のっぺりした絵）
   return true;
 }
+/* ============================================================
+   撮った日時・場所（GPS）を、縮めたあとの写真にも引き継ぐ
+   ------------------------------------------------------------
+   写真を縮めるときは canvas に描き直すので、出来上がりからは
+   「いつ撮ったか・どこで撮ったか・どの機種で撮ったか」（Exif）が消える。
+   工事写真はいつ撮ったかが大事なので、元の写真の Exif の塊だけをそのまま移す。
+   ・向きの印だけは「そのまま（1）」に直す。焼き直した絵はもう回してあるので、
+     元の印を残すと二重に回って横倒しになる。
+   ・少しでもうまくいかなければ、Exif を付けずにそのまま返す（写真は失わない）。
+   ============================================================ */
+/* dataURI をぜんぶバイトにする（開けなければ null） */
+function photoAllBytes(dataUri){
+  const s = String(dataUri || "");
+  const c = s.indexOf(",");
+  if(c < 0) return null;
+  let bin;
+  try { bin = atob(s.slice(c + 1)); } catch(_){ return null; }
+  const out = new Uint8Array(bin.length);
+  for(let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+/* バイトを dataURI に戻す */
+function photoBytesToDataUri(bytes, mime){
+  let s = "";
+  const step = 0x8000;
+  for(let i = 0; i < bytes.length; i += step){
+    s += String.fromCharCode.apply(null, bytes.subarray(i, i + step));
+  }
+  return "data:" + (mime || "image/jpeg") + ";base64," + btoa(s);
+}
+/* 絵の大きさ [幅, 高さ]（読めなければ null）。Exif に書いてある大きさを直すのに使う。 */
+function photoPixelSizeOf(dataUri){
+  const b = photoHeadBytes(dataUri, 131072);
+  if(!b || b.length < 24) return null;
+  // PNG: 8バイトの目印 + IHDR（幅・高さが 16〜24 バイト目）
+  if(b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47){
+    const w = (b[16] << 24) | (b[17] << 16) | (b[18] << 8) | b[19];
+    const h = (b[20] << 24) | (b[21] << 16) | (b[22] << 8) | b[23];
+    return (w > 0 && h > 0) ? [w, h] : null;
+  }
+  // JPEG: SOI のあと、印を順に飛ばして SOFn（大きさが書いてある印）を探す
+  if(!(b[0] === 0xFF && b[1] === 0xD8)) return null;
+  let i = 2;
+  while(i + 9 < b.length){
+    if(b[i] !== 0xFF){ i++; continue; }
+    const m = b[i + 1];
+    if(m === 0xFF){ i++; continue; }
+    if(m === 0xD8 || m === 0x01 || (m >= 0xD0 && m <= 0xD7)){ i += 2; continue; }
+    if(m === 0xD9 || m === 0xDA) return null;      // 絵の中身に入った＝大きさは見つからなかった
+    const len = (b[i + 2] << 8) | b[i + 3];
+    if(len < 2) return null;
+    const isSOF = (m >= 0xC0 && m <= 0xCF) && m !== 0xC4 && m !== 0xC8 && m !== 0xCC;
+    if(isSOF){
+      const h = (b[i + 5] << 8) | b[i + 6];
+      const w = (b[i + 7] << 8) | b[i + 8];
+      return (w > 0 && h > 0) ? [w, h] : null;
+    }
+    i += 2 + len;
+  }
+  return null;
+}
+/* JPEG の頭から Exif の塊（APP1）を切り出す。無ければ null */
+function photoExifSegment(bytes){
+  if(!bytes || bytes.length < 4) return null;
+  if(!(bytes[0] === 0xFF && bytes[1] === 0xD8)) return null;
+  let i = 2;
+  while(i + 4 < bytes.length){
+    if(bytes[i] !== 0xFF){ i++; continue; }
+    const m = bytes[i + 1];
+    if(m === 0xFF){ i++; continue; }
+    if(m === 0xD8 || m === 0x01 || (m >= 0xD0 && m <= 0xD7)){ i += 2; continue; }
+    if(m === 0xD9 || m === 0xDA) return null;      // 絵の中身に入った＝Exif は無かった
+    const len = (bytes[i + 2] << 8) | bytes[i + 3];
+    if(len < 2 || i + 2 + len > bytes.length) return null;
+    if(m === 0xE1 && len >= 8
+       && bytes[i + 4] === 0x45 && bytes[i + 5] === 0x78 && bytes[i + 6] === 0x69
+       && bytes[i + 7] === 0x66 && bytes[i + 8] === 0x00){
+      return bytes.slice(i, i + 2 + len);          // FFE1 + 長さ + 中身
+    }
+    i += 2 + len;
+  }
+  return null;
+}
+/* Exif の塊の中の「向きの印」を、そのまま（1）に書き替える。
+   焼き直した絵はもう回してあるので、元の印を残すと二重に回る。
+   返り値 true＝「この塊を付けても、もう回らない」（印を直した／もともと印が無い）。
+   false＝中身を読み切れなかった。このときは Exif を付けてはいけない（横倒しになる）。 */
+function photoExifClearOrientation(seg){
+  try {
+    // FFE1(2) + 長さ(2) + "Exif\0\0"(6) = 10 バイト目から TIFF が始まる
+    const t = 10;
+    if(seg.length < t + 8) return false;
+    const little = (seg[t] === 0x49 && seg[t + 1] === 0x49);
+    const big = (seg[t] === 0x4D && seg[t + 1] === 0x4D);
+    if(!little && !big) return false;
+    const u16 = o => little ? (seg[o] | (seg[o + 1] << 8)) : ((seg[o] << 8) | seg[o + 1]);
+    const u32 = o => little
+      ? (seg[o] | (seg[o + 1] << 8) | (seg[o + 2] << 16) | (seg[o + 3] << 24)) >>> 0
+      : ((seg[o] << 24) | (seg[o + 1] << 16) | (seg[o + 2] << 8) | seg[o + 3]) >>> 0;
+    if(u16(t + 2) !== 0x2A) return false;
+    const ifd0 = t + u32(t + 4);
+    if(ifd0 + 2 > seg.length) return false;
+    const n = u16(ifd0);
+    if(ifd0 + 2 + n * 12 + 4 > seg.length) return false;   // 最後まで読み切れない＝あきらめる
+    /* 元の写真に埋まっている「小さい見本」（カメラが入れるサムネイル）を切り離す。
+       見本は回す前の絵・元の大きさのままなので、残すとパソコンのファイル一覧で
+       横倒しに見えたり、縮める前の絵が見えたりする。
+       中身のバイトは触らず、そこへの道しるべ（次の目録の番地）を 0 にするだけ。 */
+    const nx = ifd0 + 2 + n * 12;
+    seg[nx] = 0; seg[nx + 1] = 0; seg[nx + 2] = 0; seg[nx + 3] = 0;
+    for(let k = 0; k < n; k++){
+      const e = ifd0 + 2 + k * 12;
+      if(u16(e) === 0x0112){                        // 向きの印
+        if(u16(e + 2) !== 3 || u32(e + 4) !== 1) return false;   // 見慣れない書き方＝触らない
+        if(little){ seg[e + 8] = 1; seg[e + 9] = 0; }
+        else { seg[e + 8] = 0; seg[e + 9] = 1; }
+        return true;
+      }
+    }
+    return true;                                    // 向きの印がもともと無い＝そのままでよい
+  } catch(_){ return false; }
+}
+/* Exif の中の「絵の大きさ」（ExifImageWidth 0xA002 / ExifImageHeight 0xA003）を、
+   縮めたあとの大きさに書き替える。直せなくても写真は失わない（そのまま進む）。 */
+function photoExifSetPixelSize(seg, w, h){
+  try {
+    const t = 10;
+    if(seg.length < t + 8) return;
+    const little = (seg[t] === 0x49 && seg[t + 1] === 0x49);
+    const big = (seg[t] === 0x4D && seg[t + 1] === 0x4D);
+    if(!little && !big) return;
+    const u16 = o => little ? (seg[o] | (seg[o + 1] << 8)) : ((seg[o] << 8) | seg[o + 1]);
+    const u32 = o => little
+      ? (seg[o] | (seg[o + 1] << 8) | (seg[o + 2] << 16) | (seg[o + 3] << 24)) >>> 0
+      : ((seg[o] << 24) | (seg[o + 1] << 16) | (seg[o + 2] << 8) | seg[o + 3]) >>> 0;
+    const put = (o, type, v) => {
+      if(type === 3){                               // 2バイトの数
+        if(v > 0xFFFF) return;
+        if(little){ seg[o] = v & 255; seg[o + 1] = (v >> 8) & 255; seg[o + 2] = 0; seg[o + 3] = 0; }
+        else { seg[o] = (v >> 8) & 255; seg[o + 1] = v & 255; seg[o + 2] = 0; seg[o + 3] = 0; }
+      } else if(type === 4){                        // 4バイトの数
+        if(little){ seg[o] = v & 255; seg[o+1] = (v >> 8) & 255; seg[o+2] = (v >> 16) & 255; seg[o+3] = (v >>> 24) & 255; }
+        else { seg[o] = (v >>> 24) & 255; seg[o+1] = (v >> 16) & 255; seg[o+2] = (v >> 8) & 255; seg[o+3] = v & 255; }
+      }
+    };
+    if(u16(t + 2) !== 0x2A) return;
+    const ifd0 = t + u32(t + 4);
+    if(ifd0 + 2 > seg.length) return;
+    const n0 = u16(ifd0);
+    if(ifd0 + 2 + n0 * 12 + 4 > seg.length) return;
+    let sub = 0;
+    for(let k = 0; k < n0; k++){
+      const e = ifd0 + 2 + k * 12;
+      if(u16(e) === 0x8769){ sub = t + u32(e + 8); break; }   // 撮影のこまかい目録へ
+    }
+    if(!sub || sub + 2 > seg.length) return;
+    const n1 = u16(sub);
+    if(sub + 2 + n1 * 12 > seg.length) return;
+    for(let k = 0; k < n1; k++){
+      const e = sub + 2 + k * 12;
+      const tag = u16(e), type = u16(e + 2), cnt = u32(e + 4);
+      if(cnt !== 1 || (type !== 3 && type !== 4)) continue;
+      if(tag === 0xA002) put(e + 8, type, w);
+      else if(tag === 0xA003) put(e + 8, type, h);
+    }
+  } catch(_){}
+}
+/* 元の写真から「移せる Exif の塊」を取り出す（無ければ null）。
+   縮める前にこれを見て、足すぶんの場所を空けておく。 */
+function photoExifToCarry(srcDataUri){
+  try {
+    const seg = photoExifSegment(photoHeadBytes(srcDataUri, 262144));   // Exif は写真の頭にある
+    if(!seg || seg.length < 12 || seg.length > 128 * 1024) return null;   // 念のための上限（JPEGの印は長さが2バイト＝実際は約64KBまで）
+    return seg;
+  } catch(_){ return null; }
+}
+/* 縮めた写真（out）へ、元の写真（src）の Exif を移す。
+   うまくいかなければ out をそのまま返す。 */
+function photoCarryExif(outDataUri, srcDataUri){
+  try {
+    if(!/^data:image\/jpeg/i.test(String(outDataUri || ""))) return outDataUri;
+    const seg = photoExifToCarry(srcDataUri);
+    if(!seg) return outDataUri;
+    if(!photoExifClearOrientation(seg)) return outDataUri; // 向きを直せない＝付けない（横倒しになる）
+    const px = photoPixelSizeOf(outDataUri);
+    if(px) photoExifSetPixelSize(seg, px[0], px[1]);       // 大きさの書き置きも、縮めたあとに合わせる
+    const out = photoAllBytes(outDataUri);
+    if(!out || !(out[0] === 0xFF && out[1] === 0xD8)) return outDataUri;
+    if(photoExifSegment(out)) return outDataUri;           // もう入っている＝何もしない
+    const merged = new Uint8Array(out.length + seg.length);
+    merged.set(out.subarray(0, 2), 0);                     // SOI
+    merged.set(seg, 2);                                    // Exif の塊
+    merged.set(out.subarray(2), 2 + seg.length);
+    return photoBytesToDataUri(merged, "image/jpeg");
+  } catch(_){ return outDataUri; }
+}
 /* 入れる前に1枚を目安の大きさへ収める。収められなければ元のまま返す（写真は捨てない）。
    JPEGの大きさは画素数にほぼ比例するので、1回試したら「あとどれだけ縮めればよいか」を
    見積もって一気に寄せる。総当たりより速く、目安のぎりぎり手前＝いちばんきれいな所に収まる。 */
 async function photoFitForStorage(dataUri){
   if(!dataUri || typeof dataUri !== "string") return dataUri;
   if(photoBytesOf(dataUri) <= PHOTO_FIT_MAX_BYTES) return dataUri;   // もともと目安の内＝触らない
+  /* あとで足す「撮った日時・場所」のぶんを、先に空けておく。
+     空けずに足すと出来上がりが目安を超え、次に開いたとき「まだ大きい」と見なされて
+     もう一度縮む＝同じ写真を保存するたびに画質が落ちてしまう。 */
+  const carry = photoExifToCarry(dataUri);
+  const room = PHOTO_FIT_MAX_BYTES - (carry ? carry.length : 0);
   const tries = [];
   let edge = PHOTO_FIT_MAX_EDGE, q = PHOTO_FIT_QUALITY;
   const img = await photoLoadImage(dataUri);   // 読むのは1回だけ（何度も読み直すとスマホが遅い）
@@ -23098,18 +23309,22 @@ async function photoFitForStorage(dataUri){
     if(!out) break;                                                  // 画像として開けない → 元のまま
     const b = photoBytesOf(out);
     tries.push({ out: out, b: b });
-    if(b <= PHOTO_FIT_MAX_BYTES) break;                              // 収まった
+    if(b <= room) break;                                             // 収まった
     /* まだ大きい。まず画質を少し落として同じ大きさで試す（長辺2048pxを保つほうが紙で読みやすい）。
        それでも入らなければ、JPEGの大きさは画素数にほぼ比例するので、必要な縮小率を見積もって寄せる。 */
     if(q > 0.74){ q = 0.74; }
     else {
-      const next = Math.max(PHOTO_FIT_MIN_EDGE, Math.round(edge * Math.sqrt(PHOTO_FIT_MAX_BYTES / b) * 0.95));
+      /* あとどれだけ縮めればよいかを見積もる。ほんの少し超えているだけのときに
+         大きく削ると、要らぬところまで粗くなる。まず控えめ(0.98)に寄せ、
+         最後の1回だけは確実に収まるよう強め(0.90)に寄せる。 */
+      const safety = (i >= 2) ? 0.90 : 0.98;
+      const next = Math.max(PHOTO_FIT_MIN_EDGE, Math.round(edge * Math.sqrt(room / b) * safety));
       if(next >= edge) q = Math.max(0.6, q - 0.07);                  // もう縮められない → 画質を落とす
       else edge = next;
     }
   }
   if(!tries.length) return dataUri;
-  const inside = tries.filter(t => t.b <= PHOTO_FIT_MAX_BYTES);
+  const inside = tries.filter(t => t.b <= room);
   // 目安に収まったもののうち いちばん大きい＝いちばんきれいなもの。
   // 1つも収まらなければ、いちばん小さいもの（それでも元より軽い）。
   const best = inside.length
@@ -23117,7 +23332,12 @@ async function photoFitForStorage(dataUri){
     : tries.reduce((a, t) => (t.b < a.b ? t : a));
   if(!best || best.out.length >= dataUri.length) return dataUri;     // 小さくならないなら元のまま
   if(!(await photoLooksLike(dataUri, best.out))) return dataUri;    // 絵が変わっていたら元のまま
-  return best.out;
+  const withExif = photoCarryExif(best.out, dataUri);   // 撮った日時・場所を引き継ぐ
+  /* 足したぶんで目安を超えた／元より大きくなった、のときは Exif をあきらめる（写真が先）。
+     ここを通さないと、次に開いたときまた縮められて画質が落ちる。 */
+  if(withExif !== best.out && !(photoBytesOf(withExif) <= PHOTO_FIT_MAX_BYTES
+                                && withExif.length < dataUri.length)) return best.out;
+  return withExif;
 }
 /* 名前をいくつか並べる（多いときは「ほか」でまとめる） */
 function photoNameList(arr){
@@ -23768,7 +23988,14 @@ async function photoSlimCase(row, onPhoto){
   if(!real.length) return { kind:"skip", why:"写真なし" };
 
   const before = real.reduce((s, p) => s + photoBytesOf(p.dataUri), 0);
+  /* 見分け（ID）は縮める前の中身から付ける。縮めたあとから付けると、同じ写真だと分からなくなる。 */
+  for(const p of photos){ if(p && p.dataUri && !p.id) p.id = photoContentId(p.dataUri); }
   const idsBefore = real.map(p => p.id || photoContentId(p.dataUri));
+  /* ★縮める前の並びを写しておく★ 名前・調書の印・空の枠まで含めた並びの写し。
+     縮めている間は await のたびに他の処理が動くので、そのあいだに並びが変わっていないかを
+     書く前に見る。ここで取らずに「縮めたあと」で取ると、同じものを同じものと比べることになり
+     見張りが一生鳴らない。 */
+  const print1 = photoSlimPrint(photos);
 
   /* 縮める。写真の入れ物（配列・1枚ずつのオブジェクト）はそのまま使い、dataUri だけ入れ替える。
      並び・名前・調書の印・空の枠・古い形の枠が、どれも変わらない。 */
@@ -23777,7 +24004,6 @@ async function photoSlimCase(row, onPhoto){
     if(!p || !p.dataUri) continue;
     k++;
     if(typeof onPhoto === "function") onPhoto(k, real.length);
-    if(!p.id) p.id = photoContentId(p.dataUri);      // 縮める前に写真の見分けを確定させる
     if(photoBytesOf(p.dataUri) <= PHOTO_FIT_MAX_BYTES) continue;   // もう軽い＝触らない
     let out;
     try { out = await photoFitForStorage(p.dataUri); }
@@ -23787,7 +24013,6 @@ async function photoSlimCase(row, onPhoto){
     p.dataUri = out; changed++;
     await new Promise(r => setTimeout(r, 0));        // 画面へ息継ぎ
   }
-  const print1 = photoSlimPrint(photos);
   const after = photos.filter(p => p && p.dataUri).reduce((s, p) => s + photoBytesOf(p.dataUri), 0);
   if(!changed) return { kind:"same", n: real.length, before: before, after: before, noShrink: noShrink };
 
@@ -34462,34 +34687,8 @@ function photoHeadBytes(dataUri, maxBytes){
   return out;
 }
 function photoLongEdgeOf(dataUri){
-  const b = photoHeadBytes(dataUri, 131072);
-  if(!b || b.length < 24) return 0;
-  // PNG: 8バイトの目印 + IHDR（幅・高さが 16〜24 バイト目）
-  if(b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47){
-    const w = (b[16] << 24) | (b[17] << 16) | (b[18] << 8) | b[19];
-    const h = (b[20] << 24) | (b[21] << 16) | (b[22] << 8) | b[23];
-    return (w > 0 && h > 0) ? Math.max(w, h) : 0;
-  }
-  // JPEG: SOI のあと、印を順に飛ばして SOFn（大きさが書いてある印）を探す
-  if(!(b[0] === 0xFF && b[1] === 0xD8)) return 0;
-  let i = 2;
-  while(i + 9 < b.length){
-    if(b[i] !== 0xFF){ i++; continue; }
-    const m = b[i + 1];
-    if(m === 0xFF){ i++; continue; }
-    if(m === 0xD8 || m === 0x01 || (m >= 0xD0 && m <= 0xD7)){ i += 2; continue; }
-    if(m === 0xD9 || m === 0xDA) return 0;        // 絵の中身に入った＝大きさは見つからなかった
-    const len = (b[i + 2] << 8) | b[i + 3];
-    if(len < 2) return 0;
-    const isSOF = (m >= 0xC0 && m <= 0xCF) && m !== 0xC4 && m !== 0xC8 && m !== 0xCC;
-    if(isSOF){
-      const h = (b[i + 5] << 8) | b[i + 6];
-      const w = (b[i + 7] << 8) | b[i + 8];
-      return (w > 0 && h > 0) ? Math.max(w, h) : 0;
-    }
-    i += 2 + len;
-  }
-  return 0;
+  const s = photoPixelSizeOf(dataUri);      // 大きさの読み方は1つにそろえる
+  return s ? Math.max(s[0], s[1]) : 0;
 }
 /* 同じ写真が2つあるとき、どちらを残すか。
    ------------------------------------------------------------
