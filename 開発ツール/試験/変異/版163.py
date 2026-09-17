@@ -30,7 +30,7 @@ CASES = [
    u'''    if(!photoExifClearOrientation(seg)) return outDataUri; // 向きを直せない＝付けない（横倒しになる）''',
    u'''    void 0;''', "smoke_v163_genba.js", "genba"),
   (u"★Exif の大きさの上限を狭めすぎて、本物の Exif を通さない",
-   u'''    if(!seg || seg.length < 12 || seg.length > 128 * 1024) return null;''',
+   u'''    if(!seg || seg.length < 12 || seg.length > 128 * 1024) return null;   // 念のための上限（JPEGの印は長さが2バイト＝実際は約64KBまで）''',
    u'''    if(!seg || seg.length < 12 || seg.length > 16) return null;''',
    "smoke_v163_main.js", "main"),
 ]

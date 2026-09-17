@@ -70,6 +70,45 @@ CASES = [
   (u"★書くのをやめたのに、覚えていた名前を消す",
    u'''      if(v === null) return;                   // やめた（覚えている名前はそのまま）''',
    u'''      if(v === null) v = "";''', "smoke_v165_genba.js", "genba"),
+
+  # ---- 写真の Exif（小さい見本・大きさの書き置き） ----
+  (u"★元の写真の小さい見本（サムネイル）を持ち越す（回す前の絵が残る）",
+   u'''    seg[nx] = 0; seg[nx + 1] = 0; seg[nx + 2] = 0; seg[nx + 3] = 0;''',
+   u'''    void nx;''', "smoke_v165_main.js", "main"),
+  (u"★Exif の「絵の大きさ」を、縮める前のままにする",
+   u'''    if(px) photoExifSetPixelSize(seg, px[0], px[1]);       // 大きさの書き置きも、縮めたあとに合わせる''',
+   u'''    void px;''', "smoke_v165_main.js", "main"),
+
+  # ---- 📉 まとめて軽くする：並びの見張り ----
+  (u"★縮めている間に並びが変わっても、そのまま書く",
+   u'''  if(print1 !== photoSlimPrint(photos)) return { kind:"fail", why:"写真の並びが変わりました（何も書いていません）" };''',
+   u'''  void print1;''', "smoke_v165_main.js", "main"),
+
+  # ---- 現場入力：📂 の選り分け・知らせ・二重タップ・全角・行き止まり ----
+  (u"★戸別ファイルでないもの（写真・メモ）まで一覧に並べる",
+   u'''  let fs = all.filter(f => openPickIsJson(f.name));''',
+   u'''  let fs = all;''', "smoke_v165_genba.js", "genba"),
+  (u"★一覧から外したものがあることを黙っている",
+   u'''  toast(fs.length + "個から探せます" + (away ? ("（戸別ファイルでない " + away + " 個は外しました）") : ""));''',
+   u'''  toast(fs.length + "個から探せます");''', "smoke_v165_genba.js", "genba"),
+  (u"★全角の数字を半角にそろえずに探す（スマホで0件になる）",
+   u'''  const q = toHalfWidthAn(String((document.getElementById("open-pick-q") || {}).value || "").trim()).toLowerCase();''',
+   u'''  const q = String((document.getElementById("open-pick-q") || {}).value || "").trim().toLowerCase();''',
+   "smoke_v165_genba.js", "genba"),
+  (u"★中身がかたまりでないJSONを、そのまま先へ進める（黙って落ちる）",
+   u'''    if(!data || typeof data !== "object" || Array.isArray(data)){''',
+   u'''    if(false){''', "smoke_v165_genba.js", "genba"),
+  (u"★続けて押すと、押した順と違う戸別が開く",
+   u'''  if(_openBusy) return;''', u'''  void 0;''',
+   "smoke_v165_genba.js", "genba"),
+  (u"★窓が閉じたまま一覧を出す（押しても何も起きない行き止まり）",
+   u'''  if(dm && !dm.classList.contains("open")){
+    try{ await openDraftModal(); }catch(_){ dm.classList.add("open"); }
+  }''',
+   u'''  void dm;''', "smoke_v165_genba.js", "genba"),
+  (u"★フォルダの窓を出せなかったとき、黙って戻る",
+   u'''    return await saveDirChange("nameonly");''', u'''    return;''',
+   "smoke_v165_genba.js", "genba"),
 ]
 
 import sys as _s

@@ -33,8 +33,8 @@ CASES = [
    u'''  if(obj.chosho_photos_thumb) return { kind:"skip", why:"小さい写真しか無い" };''',
    u'''  void 0;''', "smoke_v162_main.js", "main"),
   (u"★見分けの無い写真に、縮めたあとの中身から見分けを付ける",
-   u'''    if(!p.id) p.id = photoContentId(p.dataUri);      // 縮める前に写真の見分けを確定させる''',
-   u'''    void 0;''', "smoke_v162_main.js", "main"),
+   u'''  for(const p of photos){ if(p && p.dataUri && !p.id) p.id = photoContentId(p.dataUri); }''',
+   u'''  void 0;''', "smoke_v162_main.js", "main"),
   (u"★写真以外（氏名・更新日時）にも触る",
    u'''  const outText = JSON.stringify(obj, null, 2);''',
    u'''  obj.editedAt = "2030-01-01T00:00:00.000Z"; const outText = JSON.stringify(obj, null, 2);''',
@@ -74,8 +74,8 @@ CASES = [
    u'''  return true;''',
    "smoke_v161_main.js", "main"),
   (u"★写真の長辺を読み取らない（見分けが効かなくなる）",
-   u'''  if(!(b[0] === 0xFF && b[1] === 0xD8)) return 0;''',
-   u'''  if(true) return 0;''',
+   u'''  if(!(b[0] === 0xFF && b[1] === 0xD8)) return null;''',
+   u'''  if(true) return null;''',
    "smoke_v161_main.js", "main"),
 
   # ---- 現場入力：読み込み中に同じ戸別を開き直す ----

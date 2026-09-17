@@ -137,6 +137,9 @@ const WANT_VER = (function(){ try{
     const tapOk = () => { const t = setInterval(() => {
       const m = document.getElementById('ui-dialog');
       if(m && m.classList.contains('open')) document.getElementById('ui-dialog-ok').click();
+      // 名前を書く窓が出たら閉じる（出しっぱなしだと、この試験が待ちっぱなしで固まる）
+      const ty = document.getElementById('type-modal');
+      if(ty && ty.classList.contains('open')) document.getElementById('type-close').click();
     }, 50); return () => clearInterval(t); };
     const stopOk = tapOk();
     let typed = 0;
@@ -151,7 +154,7 @@ const WANT_VER = (function(){ try{
       .map(el => el.querySelector('.pick-main').textContent.trim());
     seen.titles = rows;
     document.querySelectorAll('#pick-list .pick-row')[0].click();   // 物件名を選ぶ
-    await p;
+    await Promise.race([p, new Promise(r => setTimeout(r, 8000))]);   // 待ちっぱなしにしない
     const after = saveHintName();
     window.prompt = keepPrompt;
     stopOk();
@@ -172,6 +175,8 @@ const WANT_VER = (function(){ try{
     const t = setInterval(() => {
       const m = document.getElementById('ui-dialog');
       if(m && m.classList.contains('open')) document.getElementById('ui-dialog-ok').click();
+      const ty = document.getElementById('type-modal');
+      if(ty && ty.classList.contains('open')) document.getElementById('type-close').click();
     }, 50);
     const p = saveDirChange();
     await new Promise(r => setTimeout(r, 300));
@@ -180,7 +185,7 @@ const WANT_VER = (function(){ try{
     const off = Array.from(document.querySelectorAll('#pick-list .pick-row'))
       .filter(el => el.querySelector('.pick-main').textContent.trim() === '覚えない')[0];
     if(off) off.click(); else document.getElementById('pick-close').click();
-    await p;
+    await Promise.race([p, new Promise(r => setTimeout(r, 8000))]);   // 待ちっぱなしにしない
     clearInterval(t);
     if(window.__keepDirPicker) window.showDirectoryPicker = window.__keepDirPicker;
     return { rows, after: saveHintName() };
