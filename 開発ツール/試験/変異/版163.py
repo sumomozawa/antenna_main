@@ -13,10 +13,10 @@ CR = lambda x: x.replace("\r\n", "\n").replace("\n", "\r\n")
 # (名前, 壊す前, 壊した後, 試験, どちらのファイル)
 CASES = [
   (u"★撮った日時・場所（Exif）を引き継がない",
-   u'''  return photoCarryExif(best.out, dataUri);   // 撮った日時・場所を引き継ぐ（できなければそのまま）''',
-   u'''  return best.out;''', "smoke_v163_main.js", "main"),
+   u'''  const withExif = photoCarryExif(best.out, dataUri);   // 撮った日時・場所を引き継ぐ''',
+   u'''  const withExif = best.out;''', "smoke_v163_main.js", "main"),
   (u"★向きの印をそのまま移す（縦の写真が二重に回って横倒しになる）",
-   u'''    photoExifClearOrientation(seg);                        // 向きは「そのまま」に直す''',
+   u'''    if(!photoExifClearOrientation(seg)) return outDataUri; // 向きを直せない＝付けない（横倒しになる）''',
    u'''    void 0;''', "smoke_v163_main.js", "main"),
   (u"★向きの印の書き替えが、並びの向き（エンディアン）を見ない",
    u'''        if(little){ seg[e + 8] = 1; seg[e + 9] = 0; }
@@ -24,14 +24,14 @@ CASES = [
    u'''        seg[e + 8] = 0; seg[e + 9] = 1;''',
    "smoke_v163_main.js", "main"),
   (u"★現場入力で、撮った日時・場所を引き継がない",
-   u'''  return photoCarryExif(best.out, dataUri);   // 撮った日時・場所を引き継ぐ（できなければそのまま）''',
-   u'''  return best.out;''', "smoke_v163_genba.js", "genba"),
+   u'''  const withExif = photoCarryExif(best.out, dataUri);   // 撮った日時・場所を引き継ぐ''',
+   u'''  const withExif = best.out;''', "smoke_v163_genba.js", "genba"),
   (u"★現場入力で、向きの印をそのまま移す",
-   u'''    photoExifClearOrientation(seg);                        // 向きは「そのまま」に直す''',
+   u'''    if(!photoExifClearOrientation(seg)) return outDataUri; // 向きを直せない＝付けない（横倒しになる）''',
    u'''    void 0;''', "smoke_v163_genba.js", "genba"),
   (u"★Exif の大きさの上限を狭めすぎて、本物の Exif を通さない",
-   u'''    if(!seg || seg.length < 12 || seg.length > 128 * 1024) return outDataUri;''',
-   u'''    if(!seg || seg.length < 12 || seg.length > 16) return outDataUri;''',
+   u'''    if(!seg || seg.length < 12 || seg.length > 128 * 1024) return null;''',
+   u'''    if(!seg || seg.length < 12 || seg.length > 16) return null;''',
    "smoke_v163_main.js", "main"),
 ]
 
