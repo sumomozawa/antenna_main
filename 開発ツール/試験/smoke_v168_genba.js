@@ -118,7 +118,7 @@ window.__reset = async function(){
   const ready = await page.evaluate(() => ({
     f: ['caseDirReady','caseFileFromDir','pcGuardAutoLoad','pcGuardDirLoad',
         'pcGuardNeeded','renderPcGuard','openFromReception','readExistingCaseFiles']
-        .filter(n => typeof window[n] !== 'function' && typeof eval('typeof ' + n) !== 'function'),
+        .filter(n => typeof window[n] !== 'function'),
     ver: APP_VERSION
   }));
   console.log('⓪前提', JSON.stringify(ready));
