@@ -81,20 +81,19 @@ CASES = [
    u'''    toast(no + " をコピーしました。ファイルを選ぶ画面の検索に貼り付けられます");''',
    u'''    toast(no + " をコピーしました");''', "smoke_v169_genba.js", "genba"),
   (u"★スマホの帯に「📋 管理番号をコピー」を出さない",
-   u'''    +   (canDir ? "" : \'<button type="button" id="pcg-copy" class="alt">📋 管理番号をコピー</button>\')''',
+   u'''    +   (canDir ? "" : \'<button type="button" id="pcg-copy" class="alt">📋 管理番号をコピー（探す画面に貼り付け）</button>\')''',
    u'''    +   ""''', "smoke_v169_genba.js", "genba"),
   (u"★フォルダから直に読めるPCにも、コピーのボタンを出して迷わせる",
-   u'''    +   (canDir ? "" : \'<button type="button" id="pcg-copy" class="alt">📋 管理番号をコピー</button>\')''',
-   u'''    +   \'<button type="button" id="pcg-copy" class="alt">📋 管理番号をコピー</button>\'''',
+   u'''    +   (canDir ? "" : \'<button type="button" id="pcg-copy" class="alt">📋 管理番号をコピー（探す画面に貼り付け）</button>\')''',
+   u'''    +   \'<button type="button" id="pcg-copy" class="alt">📋 管理番号をコピー（探す画面に貼り付け）</button>\'''',
    "smoke_v169_genba.js", "genba"),
   (u"★帯のコピーのボタンを押しても、コピーしない",
    u'''  const c = document.getElementById("pcg-copy");
   if(c) c.addEventListener("click", copyMgmtNo);''',
    u'''  void 0;''', "smoke_v169_genba.js", "genba"),
   (u"★帯に、貼り付けて探せることを書かない",
-   u'''    +   (canDir ? ""
-         : "<br>📋 で番号をコピーしてから 📂 を押すと、ファイルを選ぶ画面の検索に貼り付けて探せます。")''',
-   u'''    +   ""''', "smoke_v169_genba.js", "genba"),
+   u'''           + "<br>1つずつ探すときは、📋 で番号をコピーして、ファイルを選ぶ画面の検索に貼り付けてください。")''',
+   u'''           + "")''', "smoke_v169_genba.js", "genba"),
 ]
 
 import sys as _s
