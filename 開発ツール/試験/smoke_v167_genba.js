@@ -77,13 +77,23 @@ const TOOLS = () => {
     for(let i = 1; i <= 40; i++){
       rows.push({ mgmt_no: String(2621000 + i), name: '長野原町 太郎' + i,
         addr: '青森県三沢市大字三沢字園沢' + i + '-' + i + ' コーポ浅間隠山北麓 ' + i + '0' + i + '号室',
-        tel: '0176-00-00' + (10 + i), date: '2026-09-17', time: '09:00',
+        /* ★日付は必ず「今日」★ openCalModal は開くたび _calPick = todayStr() なので、
+           固定の日にすると翌日から1行も描かれず、この場面が何も確かめなくなる。 */
+        tel: '0176-00-00' + (10 + i), date: todayStr(), time: ('0' + (8 + i % 9)).slice(-2) + ':00',
         contractor: '株式会社ながいなまえの電気工事店' + (i % 3),
         status: i % 3 === 0 ? 'completed' : 'in_progress',
         photos: i % 2, has_dwg: i % 2, survey: i % 2 ? 'done' : '',
         flyer: i % 2 ? 'done' : '', hold: i % 7 === 0,
         note: 'これは長い備考です。留守・犬あり・隣家の許可が必要・裏の物置の上に上がる必要あり' });
     }
+    /* 予定カレンダーの行がいちばん長くなる形（アパートの建物名＋部屋＋長い氏名）を1件混ぜる */
+    rows.push({ mgmt_no: '2621999', name: '長野原町大字応桑字浅間隠山北麓 太郎右衛門',
+      addr: '青森県三沢市大字三沢字園沢128-3 コーポ浅間隠山北麓ながいなまえ棟 302号室',
+      tel: '0176-00-0099', date: todayStr(), time: '17:00',
+      contractor: '株式会社ながいなまえの電気工事店',
+      status: 'in_progress', photos: 3, has_dwg: 1, survey: 'done', flyer: 'done',
+      apt_units: 6, apt_idx: 3, apt_bldg: 'コーポ浅間隠山北麓ながいなまえ棟',
+      note: 'これは長い備考です。留守・犬あり・隣家の許可が必要' });
     receptionSaveRows({ rows: rows, project: '令和８年度戸別受信設備設置工事（その２）',
                         exportedAt: '2026-09-17T00:00:00.000Z', appVersion: '167' });
   };
@@ -206,9 +216,39 @@ const TOOLS = () => {
       await openCalModal();
       await new Promise(r => setTimeout(r, 450));
       const a = __over('予定カレンダー');
+      /* ★この場面がちゃんと中身を持っているか、その場で控える★
+         行が0個だと「はみ出し なし」で緑になってしまい、何も確かめていないことになる。 */
+      const evs = Array.from(document.querySelectorAll('.cal-ev'));
+      const w = document.documentElement.clientWidth;
+      window.__cal = {
+        件数: evs.length,
+        /* 行の枠だけでなく、中の字（題・そえ字）まで見る。
+           span のままだと「…」が効かず、枠は画面に収まっているのに字だけ外へ出る。 */
+        はみ出し: evs.filter(e => {
+          const rs = [e].concat(Array.from(e.querySelectorAll('.cal-ev-t, .cal-ev-s')));
+          return rs.some(x => x.getBoundingClientRect().right > w + 1);
+        }).length,
+        切れる: evs.filter(e => { const t = e.querySelector('.cal-ev-t');
+                                 return t && t.scrollWidth > t.clientWidth; }).length,
+        block: evs.every(e => { const t = e.querySelector('.cal-ev-t'), u = e.querySelector('.cal-ev-s');
+          return (!t || getComputedStyle(t).display === 'block')
+              && (!u || getComputedStyle(u).display === 'block'); })
+      };
       document.getElementById('cal-modal').classList.remove('open');
       return a;
     }));
+    {
+      const c = await page.evaluate(() => window.__cal);
+      console.log('　予定カレンダーの中身 画面' + W, JSON.stringify(c));
+      ok(c && c.件数 > 0,
+         '★予定カレンダーに行が1つも出ていない（この場面は何も確かめていない）→ ' + JSON.stringify(c));
+      ok(c && c.はみ出し === 0,
+         '★予定カレンダーの行が画面の外へ出ている（' + (c && c.はみ出し) + '件）');
+      ok(c && c.切れる > 0,
+         '★試験の前提: 長い行が「…」で切られる形になっていない（切れる行が無い）');
+      ok(c && c.block === true,
+         '★予定カレンダーの行が block になっていない（span には「…」が効かず、画面の外へ出る）');
+    }
     add(await page.evaluate(async () => {
       const t = setInterval(() => {
         const m = document.getElementById('ui-dialog');

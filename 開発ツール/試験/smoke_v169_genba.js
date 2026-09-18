@@ -111,34 +111,68 @@ function serve(file){
   ok(/2621HIN101/.test(r2.hint) && /貼り付け/.test(r2.hint),
      '★コピーしたあと、次に何をすればよいか出していない → ' + r2.hint);
 
-  /* ---------- ③ 古い端末（navigator.clipboard が無い）でも、もう一つの道で写せる ----------
-     ここでは「写せたか」までは確かめられない（試験機の古い道は、写していなくても
-     成功と答える）。確かめるのは「古い端末で黙って何もしないことにならない」こと。 */
+  /* ---------- ③ 古い端末（navigator.clipboard が無い）でも、ほんとうに写せる ----------
+     ★版171 で直した所★ ここは「押しても写せていないのに『コピーしました』と出る」
+     という嘘が出ていた（焦点を移していなかったため）。貼り付け先を読み返して確かめる。 */
   const r3 = await page.evaluate(async () => {
+    const rt = navigator.clipboard.readText.bind(navigator.clipboard);
+    await navigator.clipboard.writeText('__まだ__');
     const keep = navigator.clipboard;
     try{ Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true }); }catch(_){}
     let got = false, err = '';
     try{ got = await copyText('2622MAB025'); }catch(e){ err = String(e && e.message); }
     try{ Object.defineProperty(navigator, 'clipboard', { value: keep, configurable: true }); }catch(_){}
-    return { got: got, err: err, sync: typeof copyTextSync === 'function' };
+    let pasted = ''; try{ pasted = await rt(); }catch(e){ pasted = 'ERR'; }
+    return { got: got, err: err, pasted: pasted, sync: typeof copyTextSync === 'function' };
   });
   console.log('③古い端末の道', JSON.stringify(r3));
   ok(r3.sync === true, '★もう一つの道（古い端末むけ）が無い');
   ok(r3.err === '', '★古い端末の道で転んだ → ' + r3.err);
-  ok(r3.got === true, '★navigator.clipboard の無い端末で、コピーの道が1つも働かない');
+  ok(r3.got === 'sync', '★navigator.clipboard の無い端末で、コピーの道が1つも働かない → ' + r3.got);
+  ok(r3.pasted === '2622MAB025',
+     '★古い端末の道が「写した」と答えるのに、貼り付け先が変わっていない（嘘の知らせ）→ ' + r3.pasted);
 
   // ---------- ③b 今どきの道が転んでも、もう一つの道へ落ちる ----------
   const r3b = await page.evaluate(async () => {
+    await navigator.clipboard.writeText('__まだ__');
     const keep = navigator.clipboard.writeText;
     navigator.clipboard.writeText = () => Promise.reject(new Error('だめ'));
     let got = false, err = '';
     try{ got = await copyText('2622MAB025'); }catch(e){ err = String(e && e.message); }
     navigator.clipboard.writeText = keep;
-    return { got: got, err: err };
+    let pasted = ''; try{ pasted = await navigator.clipboard.readText(); }catch(e){ pasted = 'ERR'; }
+    return { got: got, err: err, pasted: pasted };
   });
   console.log('③b今どきの道が転んだとき', JSON.stringify(r3b));
   ok(r3b.err === '', '★今どきの道が転ぶと、そのまま落ちる → ' + r3b.err);
-  ok(r3b.got === true, '★今どきの道が転んだとき、もう一つの道を試していない');
+  ok(r3b.got === 'sync', '★今どきの道が転んだとき、もう一つの道を試していない → ' + r3b.got);
+  ok(r3b.pasted === '2622MAB025', '★落ちた先でも写せていない → ' + r3b.pasted);
+
+  /* ---------- ③c 打ちかけの欄へ、焦点も打っていた場所も戻る ----------
+     コピーの予備の道は、画面に見えない入力欄をいったん置いて写す。
+     戻さないと、備考を打っている途中で 📋 を押したときに、
+     打つ場所が飛んだり、日本語の変換が落ちたりする。 */
+  const r3c = await page.evaluate(async () => {
+    const ta = document.createElement('textarea');
+    ta.id = '__typing'; ta.value = '留守・犬あり・裏の物置';
+    document.body.appendChild(ta);
+    ta.focus(); ta.setSelectionRange(3, 3);
+    const keep = navigator.clipboard;
+    try{ Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true }); }catch(_){}
+    M.chosho_mgmt_no = '2621HIN101'; updateHeader();
+    await copyMgmtNo();
+    try{ Object.defineProperty(navigator, 'clipboard', { value: keep, configurable: true }); }catch(_){}
+    const o = { back: document.activeElement === ta, pos: [ta.selectionStart, ta.selectionEnd],
+                val: ta.value, hint: (document.getElementById('savedhint') || {}).textContent || '' };
+    ta.remove();
+    return o;
+  });
+  console.log('③c打ちかけの欄へ戻る', JSON.stringify(r3c));
+  ok(r3c.back === true, '★コピーしたあと、打っていた欄に焦点が戻らない（打ちかけの字が続けられない）');
+  ok(r3c.pos[0] === 3 && r3c.pos[1] === 3, '★打っていた場所が飛んだ → ' + JSON.stringify(r3c.pos));
+  ok(r3c.val === '留守・犬あり・裏の物置', '★打ちかけの字が変わった → ' + r3c.val);
+  ok(/手で入れて/.test(r3c.hint),
+     '★予備の道なのに「写せた」と言い切っている（確かめようが無いのに）→ ' + r3c.hint);
 
   // ---------- ④ 長い管理番号でも 📋 は消えない ----------
   const r4 = await page.evaluate((LONG) => {
