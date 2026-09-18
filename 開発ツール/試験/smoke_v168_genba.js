@@ -80,6 +80,14 @@ window.__openRow = async function(){
   const r = getReceptionRows().find(x => x.mgmt_no === '2621HIN101');
   await openFromReception(r);
 };
+/* 前の場面で作った下書きを消す。
+   ★これをやらないと「下書きの続き」の道に入り、自動読み込みが走らないまま緑になる★ */
+window.__freshOpen = async function(){
+  M = freshModel(); _caseDirHit = null;
+  try{ await idbDel('no:2621HIN101'); }catch(_){}
+  try{ localStorage.removeItem(LS_LAST); }catch(_){}
+  render();
+};
 window.__reset = async function(){
   M = freshModel(); M._viewOnly = false; _caseDirHit = null; _saveDir = null;
   try{ localStorage.removeItem('genba_last_draft'); }catch(_){}
@@ -326,6 +334,130 @@ window.__reset = async function(){
   ok(r12.fromFile === true, '★下書きの続きの道で、戸別ファイルを読んだ印が立っていない');
   ok(r12.photos === 2, '★下書きの続きの道で、PCの写真が入っていない → ' + r12.photos);
   ok(r12.amp === 'amp_3u43', '★下書きの続きの道で、ファイルの中身が入っていない → ' + r12.amp);
+
+  /* ---------- ⑬ 台帳が空欄の 工事日・時刻・打合せ を、ファイルごと消さない ----------
+     ★版171 で直した所★ 現場がスマホで決めた工事日は、事務所が台帳を作り直すまで
+     台帳には空欄で届く。読み込んだあとに「台帳＝空」で上書きすると、その工事日が
+     戸別ファイルごと消えて、事務所は二度と受け取れない。 */
+  const r13 = await page.evaluate(async () => {
+    __seedLedger({ date:'', time:'', meet:'' });          // 事務所の台帳はまだ日程が空
+    _saveDir = __mkdir('リスト', { '2621HIN101.json': __caseJson('2621HIN101',
+      { chosho_date:'2026-09-25', chosho_time:'13:00', chosho_meet_at:'2026-09-24 10:00' }) }, {});
+    await __freshOpen();
+    await __openRow();
+    await new Promise(r => setTimeout(r, 500));
+    const st = buildStateOf(M);
+    return { date: M.chosho_date, time: M.chosho_time, meet: M.chosho_meet_at,
+             書く中身の日: st.chosho_date, 書く中身の時刻: st.chosho_time,
+             読んだ: !!M._fromCaseFile, 写真: (M.chosho_photos || []).length,
+             viewOnly: !!M._viewOnly };
+  });
+  console.log('⑬台帳が空欄のとき', JSON.stringify(r13));
+  ok(r13.読んだ === true && r13.写真 === 2,
+     '★試験の前提: フォルダのファイルを読めていない（この場面は何も確かめていない）');
+  ok(r13.date === '2026-09-25',
+     '★現場が決めた工事日が、台帳の空欄で消された（事務所へ戻らなくなる）→ ' + r13.date);
+  ok(r13.time === '13:00', '★工事の時刻が、台帳の空欄で消された → ' + r13.time);
+  ok(r13.meet === '2026-09-24 10:00', '★打合せ予定が、台帳の空欄で消された → ' + r13.meet);
+  ok(r13.書く中身の日 === '2026-09-25',
+     '★保存に回る中身でも工事日が消えている（ファイルから消える）→ ' + r13.書く中身の日);
+  ok(r13.書く中身の時刻 === '13:00', '★保存に回る中身で時刻が消えている → ' + r13.書く中身の時刻);
+
+  /* ---------- ⑭ 台帳を入れ直したら、画面も描き直す ----------
+     ★版171 で直した所★ 描き直さないと、画面はファイルの値・中身は台帳の値になる。
+     字は古いのに押したときの動きは新しい中身で決まるので、工程の「済にする」を押すと
+     逆に取り消され、工事が終わっている戸別では工事完了が黙って落ちる。 */
+  const r14 = await page.evaluate(async () => {
+    _caseDirHit = null;
+    __seedLedger({ date:'2026-09-20', name:'台帳の 太郎',
+                   survey:'done', flyer:'done', status:'completed' });
+    _saveDir = __mkdir('リスト', { '2621HIN101.json': __caseJson('2621HIN101',
+      { chosho_date:'2026-09-01', chosho_cust_name:'ファイルの 太郎',
+        survey_done:false, flyer_done:false, work_done:false, chosho_status:'in_progress' }) }, {});
+    await __freshOpen();
+    await __openRow();
+    await new Promise(r => setTimeout(r, 500));
+    const v = f => { const e = document.querySelector('[data-fld="' + f + '"]'); return e ? e.value : null; };
+    return { 読んだ: !!M._fromCaseFile, 写真: (M.chosho_photos || []).length,
+             中身の日: M.chosho_date, 画面の日: v('chosho_date'),
+             中身の名: M.chosho_cust_name, 画面の名: v('chosho_cust_name'),
+             中身の下見: !!M.survey_done, 中身のビラ: !!M.flyer_done,
+             中身の工事: !!M.work_done, 状態: M.chosho_status,
+             工程の字: (document.getElementById('flowbox') || {}).textContent || '',
+             下のボタン: (document.getElementById('btn-flow') || {}).textContent || '' };
+  });
+  console.log('⑭画面と中身がそろう', JSON.stringify(r14));
+  ok(r14.読んだ === true && r14.写真 === 2,
+     '★試験の前提: フォルダのファイルを読めていない（この場面は何も確かめていない）');
+  ok(r14.中身の日 === '2026-09-20' && r14.画面の日 === '2026-09-20',
+     '★工事予定日が画面と中身で食い違っている（現場が違う日を読む）→ 画面 '
+     + r14.画面の日 + ' ／ 中身 ' + r14.中身の日);
+  ok(r14.中身の名 === r14.画面の名,
+     '★氏名が画面と中身で食い違っている → 画面 ' + r14.画面の名 + ' ／ 中身 ' + r14.中身の名);
+  ok(r14.中身の下見 === true && r14.中身のビラ === true,
+     '★台帳の工程が入っていない（試験の前提）');
+  ok(/下見済/.test(r14.工程の字) && /ビラ配り済/.test(r14.工程の字),
+     '★工程の欄が古いまま（下見・ビラが「まだ」に見える）。押すと逆に取り消される → '
+     + r14.工程の字.replace(/\s+/g, ' ').slice(0, 90));
+  ok(!/下見 完了/.test(r14.下のボタン),
+     '★下のバーが「下見 完了」のまま。押すと字とちがう工程が進む → ' + r14.下のボタン);
+  ok(r14.中身の工事 === true && r14.状態 === 'completed',
+     '★工事完了が落ちている → 工事 ' + r14.中身の工事 + ' ／ 状態 ' + r14.状態);
+
+  // ---------- ⑮ 控えなど「_」で始まるフォルダの中は読まない ----------
+  const r15 = await page.evaluate(async () => {
+    _caseDirHit = null;
+    __seedLedger();
+    const inner = __mkdir('リスト', { '2621HIN101.json': __caseJson('2621HIN101', { amplifier:'amp_2u43' }) }, {});
+    const hikae = __mkdir('_控え', { '2621HIN101.json': __caseJson('2621HIN101', { amplifier:'amp_NG' }) }, {});
+    _saveDir = __mkdir('物件', {}, { '_控え': hikae, 'リスト': inner });
+    M = freshModel(); M.chosho_mgmt_no = '2621HIN101'; M._viewOnly = true;
+    const got = await pcGuardAutoLoad();
+    return { got: got, amp: M.amplifier, hit: _caseDirHit && _caseDirHit.name };
+  });
+  console.log('⑮控えフォルダは読まない', JSON.stringify(r15));
+  ok(r15.got === true, '★下のフォルダから読めていない');
+  ok(r15.amp !== 'amp_NG',
+     '★作業用の控えフォルダ（_で始まる）の古いファイルを読んでいる（3つ見比べの土台が狂う）');
+  ok(r15.amp === 'amp_2u43', '★リストのファイルを読んでいない → ' + r15.amp);
+  ok(r15.hit === 'リスト', '★当たったフォルダを取り違えている → ' + r15.hit);
+
+  // ---------- ⑯ 前に当たったフォルダを先に見る（毎回フォルダを総なめしない） ----------
+  const r16 = await page.evaluate(async () => {
+    const inner = __mkdir('リスト', { '2621HIN101.json': __caseJson('2621HIN101') }, {});
+    const oya = __mkdir('物件', {}, { 'リスト': inner });
+    _saveDir = oya; _caseDirHit = null;
+    M = freshModel(); M.chosho_mgmt_no = '2621HIN101'; M._viewOnly = true;
+    await pcGuardAutoLoad();                    // 1回目：総なめして「リスト」を覚える
+    const 総なめ1 = oya.__listed;
+    _cfIdx = null;                              // フォルダの名前一覧の覚えは捨てる
+    M = freshModel(); M.chosho_mgmt_no = '2621HIN101'; M._viewOnly = true;
+    const got = await pcGuardAutoLoad();        // 2回目：覚えている所から
+    return { got: got, 覚え: _caseDirHit && _caseDirHit.name, 総なめ1: 総なめ1, 総なめ2: oya.__listed };
+  });
+  console.log('⑯前に当たった所を先に見る', JSON.stringify(r16));
+  ok(r16.got === true, '★2回目に読めていない');
+  ok(r16.覚え === 'リスト', '★当たったフォルダを覚えていない → ' + r16.覚え);
+  ok(r16.総なめ2 === r16.総なめ1,
+     '★覚えているのに、毎回フォルダを総なめしている（物件が多いと遅くなる）→ '
+     + r16.総なめ1 + ' → ' + r16.総なめ2);
+
+  // ---------- ⑰ 直下で当たったら覚える／別の物件へ切り替えても当たる ----------
+  const r17 = await page.evaluate(async () => {
+    const 前の物件 = __mkdir('前のリスト', { '2622MAB025.json': __caseJson('2622MAB025') }, {});
+    _caseDirHit = 前の物件;                      // 前の物件のフォルダを覚えたまま
+    _cfIdx = null;
+    _saveDir = __mkdir('いまのリスト', { '2621HIN101.json': __caseJson('2621HIN101', { amplifier:'amp_2u43' }) }, {});
+    M = freshModel(); M.chosho_mgmt_no = '2621HIN101'; M._viewOnly = true;
+    const got = await pcGuardAutoLoad();
+    return { got: got, amp: M.amplifier, no: M.chosho_mgmt_no,
+             覚え: _caseDirHit && _caseDirHit.name };
+  });
+  console.log('⑰別の物件へ切り替え', JSON.stringify(r17));
+  ok(r17.got === true, '★別の物件へ切り替えたあと読めていない（前のフォルダを見たまま）');
+  ok(r17.amp === 'amp_2u43', '★いまの物件のファイルを読んでいない → ' + r17.amp);
+  ok(r17.覚え === 'いまのリスト',
+     '★直下で当たったのに覚えていない（次も総なめになる）→ ' + r17.覚え);
 
   await page.evaluate(() => { try{ __stopDlg(); }catch(_){} });
   const e2 = errs.filter(x => !/ResizeObserver|NotFound/.test(x));

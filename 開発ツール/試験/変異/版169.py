@@ -41,34 +41,30 @@ CASES = [
   (u"★今どきの道（navigator.clipboard）を使わず、古い道だけにする",
    u'''  try{
     if(navigator.clipboard && navigator.clipboard.writeText){
-      await navigator.clipboard.writeText(s); return true;
+      await navigator.clipboard.writeText(s); return "api";
     }
   }catch(e){ console.warn("この道では写せませんでした（別の道を試します）", e); }
-  return copyTextSync(s);          // 古い端末・https でない開き方のとき''',
-   u'''  return copyTextSync(s);''', "smoke_v169_genba.js", "genba"),
+  return copyTextSync(s) ? "sync" : false;   // 古い端末・https でない開き方のとき''',
+   u'''  return copyTextSync(s) ? "sync" : false;''', "smoke_v169_genba.js", "genba"),
   (u"★古い端末（navigator.clipboard が無い）で、もう一つの道へ落ちない",
    u'''  }catch(e){ console.warn("この道では写せませんでした（別の道を試します）", e); }
-  return copyTextSync(s);          // 古い端末・https でない開き方のとき''',
+  return copyTextSync(s) ? "sync" : false;   // 古い端末・https でない開き方のとき''',
    u'''  }catch(e){ console.warn("この道では写せませんでした（別の道を試します）", e); }
   return false;''', "smoke_v169_genba.js", "genba"),
   (u"★今どきの道が転んだら、そのまま落ちる（受け止めない）",
    u'''    if(navigator.clipboard && navigator.clipboard.writeText){
-      await navigator.clipboard.writeText(s); return true;
+      await navigator.clipboard.writeText(s); return "api";
     }
   }catch(e){ console.warn("この道では写せませんでした（別の道を試します）", e); }''',
    u'''    if(navigator.clipboard && navigator.clipboard.writeText){
-      await navigator.clipboard.writeText(s); return true;
+      await navigator.clipboard.writeText(s); return "api";
     }
   }catch(e){ throw e; }''', "smoke_v169_genba.js", "genba"),
   (u"★写せなかったのに「コピーしました」と出す",
-   u'''  if(await copyText(no)){
-    toast(no + " をコピーしました。ファイルを選ぶ画面の検索に貼り付けられます");
-    return true;
-  }''',
-   u'''  if(true){ await copyText(no);
-    toast(no + " をコピーしました。ファイルを選ぶ画面の検索に貼り付けられます");
-    return true;
-  }''', "smoke_v169_genba.js", "genba"),
+   u'''  const how = await copyText(no);
+  if(how === "api"){''',
+   u'''  const how = "api";
+  if(how === "api"){''', "smoke_v169_genba.js", "genba"),
   (u"★写せなかったときに黙る（番号を画面に出さない）",
    u'''  await uiAlert("この端末では、押してコピーすることができませんでした。\\n\\n"
     + "お手数ですが、次の番号を手で入れてください。\\n\\n" + no);

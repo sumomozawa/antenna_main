@@ -48,8 +48,10 @@ CASES = [
    u'''    if(false) continue;      // ★中の管理番号でふるう（最後の砦）''',
    "smoke_v168_genba.js", "genba"),
   (u"★読み込んだあと、受付台帳の内容を入れ直さない（事務所が直した工事日が入らない）",
-   u'''  if(row){ try{ receptionApplyToModel(M, row); }catch(e){ console.warn("台帳の入れ直しに失敗", e); } }''',
-   u'''  if(false){ try{ receptionApplyToModel(M, row); }catch(e){ console.warn("台帳の入れ直しに失敗", e); } }''',
+   u'''  if(row){ try{ receptionApplyToModel(M, row, { keepBlank: keepBlank }); }
+           catch(e){ console.warn("台帳の入れ直しに失敗", e); } }''',
+   u'''  if(false){ try{ receptionApplyToModel(M, row, { keepBlank: keepBlank }); }
+           catch(e){ console.warn("台帳の入れ直しに失敗", e); } }''',
    "smoke_v168_genba.js", "genba"),
   (u"★現場で入力した戸別でも、台帳の控えを捨てる（現場の入力が台帳で潰れる）",
    u'''  if(wasTouched && rcSrc) M._rcSrc = rcSrc;
