@@ -54,6 +54,23 @@ function serve(file){
   page.on('dialog', d => d.accept().catch(()=>{}));
   await page.goto(web.url); await page.waitForTimeout(2500);
 
+  /* ★窓（uiAlert/uiConfirm）は、出たら黙って閉じる★
+     これが無いと、本文を壊したとき（変異試験）に窓が開いたまま待ち続けて終わらない。
+     出た文は __said に控えて、あとで中身を確かめる。 */
+  await page.evaluate(() => {
+    window.__said = [];
+    const t = setInterval(() => {
+      const m = document.getElementById('ui-dialog');
+      if(m && m.classList.contains('open')){
+        window.__said.push((document.getElementById('ui-dialog-msg') || {}).textContent || '');
+        const okb = document.getElementById('ui-dialog-ok'); if(okb) okb.click();
+      }
+    }, 40);
+    window.__stopDlg = () => clearInterval(t);
+    /* 待ちっぱなしにしない（壊れた本文でも必ず返る） */
+    window.__race = p => Promise.race([p, new Promise(r => setTimeout(() => r('TIMEOUT'), 5000))]);
+  });
+
   // ---------- ⓪ 前提 ----------
   const ready = await page.evaluate(() => ({
     f: ['copyTextSync','copyText','copyMgmtNo','updateHeader','renderPcGuard']
@@ -82,7 +99,7 @@ function serve(file){
   ok(/未入力/.test(r1.txt), '★空のときの字が違う → ' + r1.txt);
 
   const r1b = await page.evaluate(async () => {
-    const got = await copyMgmtNo();
+    const got = await __race(copyMgmtNo());
     return { got: got, hint: (document.getElementById('savedhint') || {}).textContent || '' };
   });
   console.log('①押したとき', JSON.stringify(r1b));
@@ -160,7 +177,8 @@ function serve(file){
     const keep = navigator.clipboard;
     try{ Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true }); }catch(_){}
     M.chosho_mgmt_no = '2621HIN101'; updateHeader();
-    await copyMgmtNo();
+    __said.length = 0;
+    await __race(copyMgmtNo());
     try{ Object.defineProperty(navigator, 'clipboard', { value: keep, configurable: true }); }catch(_){}
     const o = { back: document.activeElement === ta, pos: [ta.selectionStart, ta.selectionEnd],
                 val: ta.value, hint: (document.getElementById('savedhint') || {}).textContent || '' };
@@ -269,25 +287,18 @@ function serve(file){
     const keepE = document.execCommand;
     navigator.clipboard.writeText = () => Promise.reject(new Error('だめ'));
     document.execCommand = () => false;
-    let said = '';
-    const t = setInterval(() => {
-      const m = document.getElementById('ui-dialog');
-      if(m && m.classList.contains('open')){
-        said = (document.getElementById('ui-dialog-msg') || {}).textContent || '';
-        document.getElementById('ui-dialog-ok').click();
-      }
-    }, 40);
-    const got = await Promise.race([copyMgmtNo(), new Promise(r => setTimeout(() => r('TIMEOUT'), 4000))]);
-    clearInterval(t);
+    __said.length = 0;
+    const got = await __race(copyMgmtNo());
     navigator.clipboard.writeText = keepC;
     document.execCommand = keepE;
-    return { got: got, said: said };
+    return { got: got, said: __said.join(' / ') };
   });
   console.log('⑧どちらでも写せないとき', JSON.stringify(r8));
   ok(r8.got === false, '★写せていないのに、コピーしたことになっている（貼り付けても何も出ない）');
   ok(/2621HIN101/.test(r8.said),
      '★写せなかったのに黙っている（番号を手で入れようにも読めない） → ' + r8.said);
 
+  await page.evaluate(() => { try{ __stopDlg(); }catch(_){} });
   const e2 = errs.filter(x => !/ResizeObserver|NotFound/.test(x));
   ok(e2.length === 0, '★画面でエラーが出た → ' + e2.slice(0, 4).join(' / '));
 
