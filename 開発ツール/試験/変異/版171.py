@@ -52,21 +52,24 @@ CASES = [
    u'''    toast(no + " をコピーしました。出てこないときは、この番号を手で入れてください");''',
    u'''    toast(no + " をコピーしました。ファイルを選ぶ画面の検索に貼り付けられます");''',
    "smoke_v169_genba.js", "genba"),
+  # ↓ 版172 から、物件のフォルダに「リスト」や受付台帳があると先にリストへ寄せる（saveDirSettle）ので、
+  #   smoke_v168 の場面ではすぐ下のフォルダを探す道を通らなくなった。手がかりの弱い組
+  #   （smoke_v172 ⑫・⑫b）で押さえる。
   (u"★C 控えなど「_」で始まるフォルダの中まで読みに行く（古いファイルが土台になる）",
-   u'''      if(/^_/.test(name)) continue;                  // 控えなどの作業用フォルダは見ない''',
+   u'''      if(saveDirSkipChild(name)) continue;           // 控えなどの作業用・写真のフォルダは見ない''',
    u'''      if(false) continue;''',
-   "smoke_v168_genba.js", "genba"),
+   "smoke_v172_genba.js", "genba"),
   # ↓ この2つは対になっている（先に見る枝と、そのあとの「もう見た」の飛ばし）。
   #   片方だけ消すと、覚えているフォルダが飛ばされて見つからなくなる。
   (u"★C 前に当たったフォルダを先に見ない（覚えている所が飛ばされて、見つからなくなる）",
-   u'''  if(_caseDirHit && _caseDirHit !== dir){
+   u'''  if(_caseDirHit && _caseDirHitRoot === root && _caseDirHit !== dir){
     const h0 = await look(_caseDirHit);
     if(h0) return h0;
   }''',
    u'''  void 0;''',
-   "smoke_v168_genba.js", "genba"),
+   "smoke_v172_genba.js", "genba"),
   (u"★C 直下で当たったフォルダを覚えない（次も総なめになる）",
-   u'''  if(h1){ _caseDirHit = dir; return h1; }''',
+   u'''  if(h1){ _caseDirHit = dir; _caseDirHitRoot = root; return h1; }''',
    u'''  if(h1) return h1;''',
    "smoke_v168_genba.js", "genba"),
   (u"★C 予定カレンダーの行を block にしない（版167 の直しを、今度こそ捕まえる）",

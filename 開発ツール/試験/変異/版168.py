@@ -24,6 +24,8 @@ CASES = [
       else toast("下書きの続きを開きました");''',
    u'''      toast("下書きの続きを開きました");''',
    "smoke_v168_genba.js", "genba"),
+  # ↓ 版172 から「リスト」や受付台帳のある物件フォルダは先にリストへ寄せる（saveDirSettle）ので、
+  #   smoke_v168 ③ではこの道を通らない。手がかりの弱い組（smoke_v172 ⑫）で押さえる。
   (u"★すぐ下のフォルダ（リスト）を見ない（ルート直下にしか無いと決めつける）",
    u'''  let looked = 0;
   try{
@@ -32,7 +34,7 @@ CASES = [
   if(dir) return null;
   try{
     for await (const [name, h] of dir.entries()){''',
-   "smoke_v168_genba.js", "genba"),
+   "smoke_v172_genba.js", "genba"),
   (u"★許可が切れていても、勝手に聞き直す（押してもいないのに窓が出る）",
    u'''    return (await saveDirOk(dir, false)) ? dir : null;''',
    u'''    return (await saveDirOk(dir, true)) ? dir : null;''',

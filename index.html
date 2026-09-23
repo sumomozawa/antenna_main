@@ -6915,7 +6915,7 @@ async function lsRestoreFromIdb(){
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "171";
+const APP_VERSION = "172";
 /* ============================================================
    ★日時の表示は、必ずこの端末の時刻で★
    保存している日時は世界時のISO文字列（…T01:03:00.000Z）。これを文字のまま
@@ -16715,6 +16715,7 @@ function dupDialog(groups){
           : "")
       + '<b>残す方はこちらで選んであります。</b>そのまま下の「この内容で整理する」を押せば済みます。<br>'
       + '残す方の中身を <b>管理番号.json</b> という名前で書き直し、同じ組の他のファイルは削除します。<br>'
+      + '<span style="color:#1b5e20;font-weight:600;">ほかのファイルにしか無い写真は、残す方へ足してから消します（写真は減りません）。</span><br>'
       + '<span style="color:#1b5e20;font-weight:600;">消す前に、そのファイルの中身をそのまま '
       + '<b>' + escapeHtml(DUP_BACKUP_DIR) + '</b> フォルダへ写します（写せなければ消しません）。</span><br>'
       + (groups.some(function(x){ return x.multiDir; })
@@ -16793,23 +16794,57 @@ async function dupApply(groups, picks){
     const dir = keep._dir || g.dir;
     try{
       if(!(await dupEnsureWritable(dir))){ fails.push(g.no + "：書き込みを許可されませんでした"); continue; }
-      // 正式な名前でないなら、中身を 管理番号.json へ書き直す（先に書いてから消す）
-      if(keep._name !== g.canon){
-        const text = await (await keep.fileHandle.getFile()).text();
-        if(!text){ fails.push(g.no + "：中身を読めませんでした"); continue; }
+      /* ★消す前に、同じ組のほかのファイルにしか無い写真を、残す方へ足す★（写真は和集合。名前・中身は残す方のもの）
+         足さずに消すと、そのファイルにしか無い写真が戸別から消える（控えのフォルダは一覧に読み込まない）。
+         現場入力の版172は、物件のすぐ下の古い写しを読まずにリストへ書くので、写真の違う写しが2つできることがある。
+         読めなかったファイルは消さない（写真を確かめられないため）。 */
+      const idOf = p => String((p && p.id) || ((p && p.dataUri) ? photoContentId(p.dataUri) : ""));
+      const keepText = await (await keep.fileHandle.getFile()).text();
+      if(!keepText){ fails.push(g.no + "：中身を読めませんでした"); continue; }
+      const kj = JSON.parse(keepText);
+      const have = new Set((Array.isArray(kj.chosho_photos) ? kj.chosho_photos : []).filter(p => p && p.dataUri).map(idOf));
+      const add = [], unread = new Set();
+      for(const it of g.items){
+        if(it === keep) continue;
+        let oj = null;
+        try{ const t0 = await (await it.fileHandle.getFile()).text(); oj = String(t0 || "").trim() ? JSON.parse(t0) : {}; }
+        catch(_){ unread.add(it); continue; }
+        ((oj && oj.chosho_photos) || []).forEach(p => {
+          const id = (p && p.dataUri) ? idOf(p) : "";
+          if(id && !have.has(id)){ have.add(id); add.push(p); }
+        });
+      }
+      let text = keepText;
+      if(add.length){
+        kj.chosho_photos = (Array.isArray(kj.chosho_photos) ? kj.chosho_photos : []).concat(add);
+        text = JSON.stringify(kj, null, 2);
+      }
+      // 正式な名前でないか、写真を足したときは、中身を 管理番号.json へ書き直す（先に書いて、読み返して確かめてから消す）
+      if(keep._name !== g.canon || add.length){
         const fh = await dir.getFileHandle(g.canon, { create: true });
         const w = await fh.createWritable();
         await w.write(text); await w.close();
-        /* ここで消すのは「名前を付け替えた元」で、中身はいま書いた 管理番号.json に入っている。
-           中身が失われないので控えは取らない（工事フォルダを無駄に太らせない）。 */
-        await dir.removeEntry(keep._name);
-        removed.push((g.dirPath || "") + keep._name);
-        renamed++;
+        let got = null;
+        try{ got = new Set(((JSON.parse(await (await fh.getFile()).text()) || {}).chosho_photos || [])
+                            .filter(p => p && p.dataUri).map(idOf)); }catch(_){ got = null; }
+        const lostN = got ? Array.from(have).filter(id => !got.has(id)).length : have.size;
+        if(lostN){ fails.push(g.no + "：写真をまとめて書いたあと読み返したら、" + lostN + " 枚が入っていませんでした（ほかのファイルは消していません）"); continue; }
+        if(keep._name !== g.canon){
+          /* ここで消すのは「名前を付け替えた元」で、中身はいま書いた 管理番号.json に入っている。
+             中身が失われないので控えは取らない（工事フォルダを無駄に太らせない）。 */
+          await dir.removeEntry(keep._name);
+          removed.push((g.dirPath || "") + keep._name);
+          renamed++;
+        }
       }
       for(const it of g.items){
         if(it === keep) continue;
         // 正式名を上書き済みなのは「残す方と同じフォルダ」だけ。別フォルダの同名は消す対象。
         if(it._name === g.canon && String(it._dirPath || "") === String(keep._dirPath || "")) continue;
+        if(unread.has(it)){
+          fails.push(g.no + "：" + (it._dirPath || "") + it._name + " は中身を読めなかったので消していません");
+          continue;
+        }
         /* ★消す前に原文の控えを取る★ 取れなければ消さない（元に戻せないため）。 */
         const bk = await dupBackupFile(bdir, it);
         if(!bk.ok){

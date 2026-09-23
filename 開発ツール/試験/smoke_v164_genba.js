@@ -163,12 +163,15 @@ const WANT_VER = (function(){ try{
   });
   console.log('④場所の名前を選ぶ', JSON.stringify(r4));
   ok(r4.modalOpen === true, '★候補の窓が出ない（手で打たせている） → ' + JSON.stringify(r4));
-  ok(r4.rows[0] === 'テスト物件',
-     '★受付台帳の物件名が候補のいちばん上に出ない → ' + JSON.stringify(r4.rows));
+  // 版172: いちばん上は「物件 ＞ リスト」。物件名だけ（＝物件のすぐ下）の候補は出さない
+  ok(r4.rows[0] === 'テスト物件 ＞ リスト',
+     '★受付台帳の物件名（の中のリスト）が候補のいちばん上に出ない → ' + JSON.stringify(r4.rows));
+  ok(r4.rows.indexOf('テスト物件') < 0,
+     '★物件名だけの候補が出ている（押すだけで物件のすぐ下を覚える） → ' + JSON.stringify(r4.rows));
   ok(r4.rows.indexOf('自分で書く') >= 0, '★どうしても違う名前のときの逃げ道が無い → ' + JSON.stringify(r4.rows));
-  ok(r4.after === 'テスト物件', '★選んだ名前が覚えられていない → ' + JSON.stringify(r4));
+  ok(r4.after === 'テスト物件/リスト', '★選んだ名前が覚えられていない → ' + JSON.stringify(r4));
   ok(r4.typed === 0, '★候補を選んだのに、手で打つ窓が出た → ' + JSON.stringify(r4));
-  ok(r4.hist.indexOf('テスト物件') >= 0, '前に使った名前が次から出ない → ' + JSON.stringify(r4.hist));
+  ok(r4.hist.indexOf('テスト物件/リスト') >= 0, '前に使った名前が次から出ない → ' + JSON.stringify(r4.hist));
 
   // ---- ⑤ 前に使った名前が候補に出る／「覚えない」も選べる ----
   const r5 = await page.evaluate(async () => {

@@ -185,57 +185,37 @@ const fails = []; const ok = (c, m) => { if(!c) fails.push(m); };
      '★窓に id:"genba-save" を渡していない（毎回たどり直しになる） → ' + JSON.stringify(r3.ids));
   ok(r3.spOk === true, '特別記録が保存先を選ぶ窓で保存できていない → ' + JSON.stringify(r3));
 
-  // ---- ④ 覚えているフォルダの許可が切れていたら、保存のあとの知らせに書く ----
+  // ---- ④ 覚えているフォルダの許可が切れていて、聞き直しても取れないとき（版172 第9回で決まりを替えた） ----
+  //   保存先を選ぶ画面・共有・ダウンロードへは回さない（選ぶ画面で同じファイルを選ぶと、ブラウザが中身を空にしてから渡すので
+  //   PCの写真が消える／共有・ダウンロードではPCが読むフォルダに入らない）。止めて、どうすればよいかを言う。
   const r4 = await page.evaluate(async () => {
     const out = {};
     const og = saveDirGet, oo = saveDirOk, op = window.showSaveFilePicker, osh = window.shareFilesSmart;
     const lapsed = __mkDir('リスト');
-    // 覚えてはいるが、書く許可が切れている（ask=false では false）
     saveDirGet = async () => lapsed;
-    saveDirOk = async (h, ask) => false;
-    // (a) 保存先を選ぶ窓の道
-    {
-      const box = { txt:'', wrote:0 };
-      window.showSaveFilePicker = async () => __mkFile('V5741.json', box);
-      __basic('V5741');
-      await saveJsonRun();
-      out.pick = { title:(_lastSaveInfo&&_lastSaveInfo.title)||'', msg:(_lastSaveInfo&&_lastSaveInfo.msg)||'' };
-    }
-    // (b) 共有の道
-    {
-      try{ delete window.showSaveFilePicker; }catch(_){ window.showSaveFilePicker = undefined; }
-      window.shareFilesSmart = async (items) => ({ ok:true, as:'', name:[items[0].name] });
-      __basic('V5742');
-      await saveJsonRun();
-      out.share = { title:(_lastSaveInfo&&_lastSaveInfo.title)||'', msg:(_lastSaveInfo&&_lastSaveInfo.msg)||'' };
-    }
-    // (c) ダウンロードの道
-    {
-      window.shareFilesSmart = async () => ({ ok:false, aborted:false, name:[] });
-      let dl = 0;
-      const oc = HTMLAnchorElement.prototype.click;
-      HTMLAnchorElement.prototype.click = function(){ if(this.download) dl++; else oc.call(this); };
-      __basic('V5743');
-      await saveJsonRun();
-      HTMLAnchorElement.prototype.click = oc;
-      out.dl = { n:dl, title:(_lastSaveInfo&&_lastSaveInfo.title)||'', msg:(_lastSaveInfo&&_lastSaveInfo.msg)||'' };
-    }
-    saveDirGet = og; saveDirOk = oo; if(op) window.showSaveFilePicker = op; window.shareFilesSmart = osh;
-    // フォルダへは1件も書いていない（許可が無いので触らない）
+    saveDirOk = async (h, ask) => { if(ask) out.asked = (out.asked | 0) + 1; return false; };   // 聞いても取れない
+    let picked = 0, shared = 0, dl = 0;
+    window.showSaveFilePicker = async () => { picked++; return __mkFile('V5741.json', { txt:'' }); };
+    window.shareFilesSmart = async (items) => { shared++; return { ok:true, as:'', name:[items[0].name] }; };
+    const oc = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function(){ if(this.download) dl++; else oc.call(this); };
+    __basic('V5741');
+    try{ out.ret = await saveJsonRun(); }
+    finally { HTMLAnchorElement.prototype.click = oc;
+              saveDirGet = og; saveDirOk = oo; if(op) window.showSaveFilePicker = op; window.shareFilesSmart = osh; }
+    out.picked = picked; out.shared = shared; out.dl = dl;
+    out.title = (_lastSaveInfo && _lastSaveInfo.title) || ''; out.msg = (_lastSaveInfo && _lastSaveInfo.msg) || '';
     out.intoDir = Object.keys(lapsed._files);
     return out;
   });
-  console.log('④許可切れの知らせ', JSON.stringify({
-    pick:r4.pick.title, share:r4.share.title, dl:r4.dl.title, n:r4.dl.n, intoDir:r4.intoDir,
-    msgs:[r4.pick.msg, r4.share.msg, r4.dl.msg].map(m => /許可が切れていました/.test(m) && /📁 のボタン/.test(m)) }));
+  console.log('④許可切れで取れないとき', JSON.stringify({ asked:r4.asked, picked:r4.picked, shared:r4.shared, dl:r4.dl, title:r4.title, intoDir:r4.intoDir }));
+  ok(r4.asked === 1, '★覚えているフォルダの許可が切れているのに、押した保存の中で1回聞き直していない → ' + r4.asked);
+  ok(r4.picked === 0 && r4.shared === 0 && r4.dl === 0,
+     '★覚えている保存先へ書けないのに、ほかの道（保存先を選ぶ画面・共有・ダウンロード）へ回した → ' + JSON.stringify(r4));
   ok(r4.intoDir.length === 0, '★許可が切れているフォルダへ書いている → ' + JSON.stringify(r4.intoDir));
-  ok(r4.dl.n === 1, 'ダウンロードの道に入っていない → ' + r4.dl.n);
-  [['窓', r4.pick], ['共有', r4.share], ['ダウンロード', r4.dl]].forEach(([nm, x]) => {
-    ok(/許可が切れていました/.test(x.msg),
-       '★' + nm + 'の道で「覚えているフォルダの許可が切れていた」と言っていない → ' + JSON.stringify(x));
-    ok(/📁 のボタン/.test(x.msg) && /選び直す/.test(x.msg),
-       '★' + nm + 'の道で、保存バーのフォルダのボタンで選び直せると言っていない → ' + JSON.stringify(x));
-  });
+  ok(r4.ret === true && /保存していません/.test(r4.title), '★保存していないことを言っていない → ' + r4.title);
+  ok(/許可が切れていました/.test(r4.msg) && /📁 のボタン/.test(r4.msg) && /選び直す/.test(r4.msg) && /もう一度「保存」/.test(r4.msg),
+     '★許可が切れていたこと・どうすればよいか（もう一度保存／📁 で選び直す）を言っていない → ' + r4.msg);
 
   // ---- ⑤ 共有で渡した 管理番号.json.txt も、フォルダから読めるようになった ----
   const r5 = await page.evaluate(async () => {

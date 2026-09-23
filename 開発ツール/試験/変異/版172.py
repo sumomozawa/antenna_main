@@ -1,0 +1,449 @@
+# -*- coding: utf-8 -*-
+# 版172 変異試験: 1箇所ずつ壊して、試験が赤くなるか確かめる（現場入力）
+#   版172 は「保存先を『物件 ＞ リスト』に固定する」版。
+#     PC   … 物件のフォルダを選んでも中の「リスト」を覚える（親も覚える）。前の版で覚えたルートも寄せる。
+#             ルートにできてしまった写しは、保存のたびに写真を和集合にしてリストへ（ルートは消さない）。
+#     スマホ … 受付台帳を取り込むと入れる場所が「物件名/リスト」に決まる。案内も入れない所まで言う。
+import io, subprocess, os
+HERE = os.path.dirname(os.path.abspath(__file__))
+SP = os.path.join(HERE, "..") + os.sep
+ROOT = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+MAIN = os.environ.get("MAIN") or os.path.join(ROOT, "antenna_main", "index.html")
+GENBA = os.environ.get("GENBA") or os.path.join(ROOT, "antenna_genba", "index.html")
+OUTM = os.path.join(HERE, "mut_main.html")
+OUTG = os.path.join(HERE, "mut_genba.html")
+CR = lambda x: x.replace("\r\n", "\n").replace("\n", "\r\n")
+
+# (名前, 壊す前, 壊した後, 試験, どちらのファイル)
+CASES = [
+  (u"★1-1 「リスト」という名前で決めない（中が空の新しい物件で、物件のすぐ下に書く）",
+   u'''      if(!named && saveDirIsListName(name)){ named = { dir:h, name:name, strong:true }; continue; }''',
+   u'''      void 0;''',
+   "smoke_v172_genba.js", "genba"),
+  (u"★1-1 特別記録を戸別の数に入れる",
+   u'''!/^現場用|^受付台帳|^特別記録_/.test(name)) n++;''',
+   u'''!/^現場用|^受付台帳/.test(name)) n++;''',
+   "smoke_v172_genba.js", "genba"),
+  (u"★1-2 強い手がかりでも中へ入るか聞く（押す回数が増える）",
+   u'''  if(f && !f.strong){''',
+   u'''  if(f){''',
+   "smoke_v172_genba.js", "genba"),
+  (u"★1-2 まとめて保存で選んだフォルダをそのまま覚える（物件のすぐ下に書く）",
+   u'''      dir = await saveDirAdopt(dir, { ask:false });''',
+   u'''      await saveDirSet(dir);''',
+   "smoke_v172_genba.js", "genba"),
+  (u"★1-3 保存（1件）で、前の版で覚えたルートをリストへ寄せない",
+   u'''  let dirLapsed = false, dirErr = null;
+  if(dir && !(await saveDirOk(dir, true))){ dir = null; dirLapsed = true; }
+  if(dir) dir = await saveDirSettle(dir);    // 前の版で物件のフォルダを覚えていたら、中の「リスト」へ寄せる''',
+   u'''  let dirLapsed = false, dirErr = null;
+  if(dir && !(await saveDirOk(dir, true))){ dir = null; dirLapsed = true; }''',
+   "smoke_v172_genba.js", "genba"),
+  (u"★1-3 特別記録の保存で、前の版で覚えたルートをリストへ寄せない",
+   u'''  /* 戸別の「保存」と同じ。許可が切れているときは1回聞き直し、取れなければ下の道へ落として、あとで伝える。 */
+  let dirLapsed = false;
+  if(dir && !(await saveDirOk(dir, true))){ dir = null; dirLapsed = true; }
+  if(dir) dir = await saveDirSettle(dir);    // 前の版で物件のフォルダを覚えていたら、中の「リスト」へ寄せる''',
+   u'''  /* 戸別の「保存」と同じ。許可が切れているときは1回聞き直し、取れなければ下の道へ落として、あとで伝える。 */
+  let dirLapsed = false;
+  if(dir && !(await saveDirOk(dir, true))){ dir = null; dirLapsed = true; }''',
+   "smoke_v172_genba.js", "genba"),
+  (u"★1-3 寄せられないフォルダを、保存のたびに総なめする",
+   u'''  if(_saveDirChecked.has(dir)) return dir;''',
+   u'''  void 0;''',
+   "smoke_v172_genba.js", "genba"),
+  (u"★1-4 覚えるフォルダを替えても、前の物件で当たったフォルダ・名前の一覧を捨てない",
+   u'''  _caseDirHit = null; _caseDirHitRoot = null; _cfIdx = null;''',
+   u'''  void 0;''',
+   "smoke_v172_genba.js", "genba"),
+  (u"★1-5 保存バーに「物件 ＞ リスト」を出さない（どこへ入れているか見えない）",
+   u'''  const destHtml = (dest && destPP.outer && destPP.inner)''',
+   u'''  const destHtml = (false && destPP.outer && destPP.inner)''',
+   "smoke_v172_genba.js", "genba"),
+  (u"★1-5 「＞ リスト」の max-width を消す（中の名前が長いと「変更」が画面の外へ）",
+   u'''  .sb-dest-in{ flex:none; max-width:8em; overflow:hidden; text-overflow:ellipsis;''',
+   u'''  .sb-dest-in{ flex:none; overflow:hidden; text-overflow:ellipsis;''',
+   "smoke_v172_genba.js", "genba"),
+  (u"★1-5 「＞ リスト」を縮む箱に戻す（長い物件名で「＞ リ…」まで削られる）",
+   u'''  .sb-dest-in{ flex:none; max-width:8em; overflow:hidden; text-overflow:ellipsis;''',
+   u'''  .sb-dest-in{ flex:0 1 auto; min-width:3em; max-width:8em; overflow:hidden; text-overflow:ellipsis;''',
+   "smoke_v172_genba.js", "genba"),
+  (u"★1-6 根元（物件）が違っても、前に当たったフォルダを先に見る（前の物件のファイルを読む）",
+   u'''  if(_caseDirHit && _caseDirHitRoot === root && _caseDirHit !== dir){''',
+   u'''  if(_caseDirHit && _caseDirHit !== dir){''',
+   "smoke_v172_genba.js", "genba"),
+  (u"★1-9 📥 で物件のすぐ下のファイルを読まない（スマホが前の案内どおり入れた分を取りこぼす）",
+   u'''          if(h && h.kind === "file" && /\\.json(\\.txt)?$/i.test(h.name)) out.push({ name: h.name, handle: h, root: true });''',
+   u'''          void 0;''',
+   "smoke_v172_genba.js", "genba"),
+  (u"★2-4 案内で「物件の中のリスト」と言わない（名前1つの言い方に戻る）",
+   u'''  if(pp.outer) return "''',
+   u'''  if(false) return "''',
+   "smoke_v172_genba.js", "genba"),
+  (u"★2-4 特別記録を共有で渡したとき、入れる場所を言わない",
+   u'''        + saveHintLine()
+        + shareRenameNote(sr.as) + lapsedLine(), warn:true };''',
+   u'''        + shareRenameNote(sr.as) + lapsedLine(), warn:true };''',
+   "smoke_v172_genba.js", "genba"),
+  (u"★2-2 受付台帳を取り込んでも、入れる場所を決めない",
+   u'''  try{ if(saveHintAuto(src && src.project, oldProj)) renderSaveBar(); }catch(_){}''',
+   u'''  void 0;''',
+   "smoke_v172_genba.js", "genba"),
+  (u"★2-2 自分で選んだ名前まで書き替える",
+   u'''  if(mine) return "";''',
+   u'''  void 0;''',
+   "smoke_v172_genba.js", "genba"),
+  (u"★2-5 保存中の暗幕に「入れる所」を出さない",
+   u'''    + (where ? ('<div class="save-ov-s">入れる所：' + esc(where) + "</div>") : "")''',
+   u'''    + ""''',
+   "smoke_v172_genba.js", "genba"),
+  # ---- 反証を生き延びた指摘の直し（工事フォルダ・リストの中の子・PCの名前だけの道）と、試験の抜け ----
+  (u"★修1 弱い手がかりで「はい」と答えたとき、中のリストまで降りない（物件Aのすぐ下を覚える）",
+   u"""    const t = await saveDirInto(f.dir, picked);""",
+   u"""    const t = { dir:f.dir, parent:picked };""",
+   "smoke_v172_genba.js", "genba"),
+  (u"★修1 中のリストへ入れないのに覚え直す（物件Aのすぐ下を親つきで覚える）",
+   u"""    if(!(await saveDirOk(f.dir, false))) return null;""",
+   u"""    void 0;""",
+   "smoke_v172_genba.js", "genba"),
+  (u"★修1 中のリストへ降りるとき、許可を聞き直す（押した操作を使ってしまう）",
+   u"""    if(!(await saveDirOk(f.dir, false))) return null;""",
+   u"""    if(!(await saveDirOk(f.dir, true))) return null;""",
+   "smoke_v172_genba.js", "genba"),
+  (u"★修1 根元が物件と確かめずに子を見る（工事フォルダの下の別の物件を読んで、ここへ書く）",
+   u"""  if(root !== dir && !(await saveDirRootIsProj(root, dir))) return null;""",
+   u"""  void 0;""",
+   "smoke_v172_genba.js", "genba"),
+  (u"★修2 PC（フォルダを選べる端末）でも、取り込みで名前だけの入れる場所を決める（「未設定 選ぶ」が消える）",
+   u"""  if(window.showDirectoryPicker) return "";""",
+   u"""  void 0;""",
+   "smoke_v172_genba.js", "genba"),
+  (u"★修2 PC の取り込みの知らせに、名前だけの入れる場所を出す",
+   u"""(saveHintWhere() && !window.showDirectoryPicker && !saveDirName())""",
+   u"""(saveHintWhere() && !saveDirName())""",
+   "smoke_v172_genba.js", "genba"),
+  (u"★修5 「覚えない」を選んだ印を残さない（次の取り込みで入れる場所が黙って戻る）",
+   u"""      try{ localStorage.setItem(LS_SAVEHINT_AUTO,
+        !got ? "\\u0000off" : ((proj && got === proj + "/リスト") ? got : "")); }catch(_){}""",
+   u"""      void 0;""",
+   "smoke_v172_genba.js", "genba"),
+  (u"★修6 親（物件）を IndexedDB に残さない（開き直すと親が消える）",
+   u"""  try{ await idbMapPut({ key:SAVEDIR_KEY, handle:h, parent:(h && parent) || null,""",
+   u"""  try{ await idbMapPut({ key:SAVEDIR_KEY, handle:h, parent:null,""",
+   "smoke_v172_genba.js", "genba"),
+  (u"★修6 開き直したとき、親（物件）を戻さない",
+   u"""    _saveDirPar = (_saveDir && r.parent)""",
+   u"""    _saveDirPar = (false && r.parent)""",
+   "smoke_v172_genba.js", "genba"),
+  (u"★修7 リストへ寄せるとき、リストの許可を聞き直す",
+   u"""  if(!(await saveDirOk(f.dir, false))) return dir;""",
+   u"""  if(!(await saveDirOk(f.dir, true))) return dir;""",
+   "smoke_v172_genba.js", "genba"),
+  (u"★修7 📥 で、物件のフォルダの許可を聞き直す",
+   u"""      if(await saveDirOk(par, false)){""",
+   u"""      if(await saveDirOk(par, true)){""",
+   "smoke_v172_genba.js", "genba"),
+  (u"★修8 前の版の履歴に残った「物件名だけ」を候補に出す",
+   u"""  const notBare = h => !proj || h !== proj;""",
+   u"""  const notBare = h => true;""",
+   "smoke_v172_genba.js", "genba"),
+  # ---- 版172 第1回の直し（反証で潰せなかったもの） ----
+  (u"★直1 工事フォルダを覚えているとき、「物件」らしい子（中に「リスト」／台帳）まで読む（別の物件の迷子を開いて、そこへ書く）",
+   u"""      if(root === list && (await saveDirLooksProj(h))) continue;""",
+   u"""      void 0;""",
+   "smoke_v172_genba.js", "genba"),
+  (u"★直1 中に「リスト」がある子を「物件」と見なさない",
+   u"""      if(h.kind === "directory" && saveDirIsListName(name)) return true;""",
+   u"""      void 0;""",
+   "smoke_v172_genba.js", "genba"),
+  (u"★直1 受付台帳がある子を「物件」と見なさない",
+   u"""      if(h.kind === "file" && SAVEDIR_LEDGER_RE.test(name)) return true;""",
+   u"""      void 0;""",
+   "smoke_v172_genba.js", "genba"),
+  (u"★直1 読んで当たった所に合わせて保存先を覚え直す（外した仕組みを戻す：別の物件のリストへ移る）",
+   u"""     保存先は、選んだとき（saveDirAdopt）と前の版の覚えを寄せるとき（saveDirSettle）の確かな手がかりだけで決める。 */
+  return true;""",
+   u"""     保存先は、選んだとき（saveDirAdopt）と前の版の覚えを寄せるとき（saveDirSettle）の確かな手がかりだけで決める。 */
+  try{ if(hit.dir && hit.dir !== dir && !hit.fromRoot && dir === _saveDir && !saveDirParentOf(dir)){
+    const t = await saveDirInto(hit.dir, dir); if(t){ await saveDirSet(t.dir, t.parent); } } }catch(_){}
+  return true;""",
+   "smoke_v172_genba.js", "genba"),
+  (u"★直2 「リスト」そのものを選んで（覚えて）いても、中へ降りる（中の「完了」へ黙って移る）",
+   u"""  if(!dir || saveDirIsListName(dir.name)) return null;""",
+   u"""  if(!dir) return null;""",
+   "smoke_v172_genba.js", "genba"),
+  (u"★直2 「完了」などの子も保存先の候補にする",
+   u"""      if(saveDirSkipChild(name) || saveDirOldChild(name)) continue;""",
+   u"""      if(saveDirSkipChild(name)) continue;""",
+   "smoke_v172_genba.js", "genba"),
+  (u"★直3 同じフォルダかを isSameEntry で確かめない（本物ではいつも「違う」）",
+   u"""  try{ if(typeof a.isSameEntry === "function") return (await a.isSameEntry(b)) === true; }catch(_){}""",
+   u"""  void 0;""",
+   "smoke_v172_genba.js", "genba"),
+  (u"★直3 根元が物件かを === で比べる（本物では、リストを覚えていても物件の中の子を見なくなる）",
+   u"""  return !!(f && f.strong && (await saveDirSame(f.dir, dir)));""",
+   u"""  return !!(f && f.strong && f.dir === dir);""",
+   "smoke_v172_genba.js", "genba"),
+  (u"★直3 もう見たフォルダを === で比べる（本物では、覚えているリストをもう一度読む）",
+   u"""      if((await saveDirSame(h, list)) || (await saveDirSame(h, _caseDirHit))) continue;  // もう見た""",
+   u"""      if(h === list || h === _caseDirHit) continue;  // もう見た""",
+   "smoke_v172_genba.js", "genba"),
+  (u"★直4→直9 「控え≠すぐ下の写し」だけで「PCがリストを直した」と決めつける（消した行を戻す）",
+   u"""  return Object.assign({}, b, { stale:true });           // 出どころが確かでない → 値の見比べをやめる（1件保存では1回聞く）""",
+   u"""  if(!baseFitsFile(b, cf.rootPrimary)) return b;
+  return Object.assign({}, b, { stale:true });""",
+   "smoke_v172_genba.js", "genba"),
+  (u"★直5 前の版で「覚えない」を選んだ端末でも、取り込むと入れる場所を決め直す",
+   u"""    if(h === ""){ try{ localStorage.setItem(LS_SAVEHINT_AUTO, "\\u0000off"); }catch(_){} return ""; }""",
+   u"""    void 0;""",
+   "smoke_v172_genba.js", "genba"),
+  # ---- 版172 第2回の直し（反証で潰せなかったもの） ----
+  (u"★直6 台帳の目印で拡張子を見ない（受付台帳_まとめ.xlsx でも強い手がかりになる）",
+   u"""const SAVEDIR_LEDGER_RE = /^(現場用|受付台帳).*\\.json(\\.txt)?$/i;""",
+   u"""const SAVEDIR_LEDGER_RE = /^(現場用|受付台帳)/;""",
+   "smoke_v172_genba.js", "genba"),
+  (u"★直7 控えに出どころの印を残さない",
+   u"""stale: false, from: String(from || ""),""",
+   u"""stale: false, from: "",""",
+   "smoke_v172_genba.js", "genba"),
+  (u"★直8 リストを覚えていて戸別がルートにだけあるとき、開いてもルートの写しを読まない",
+   u"""    const h3 = await look(root);""",
+   u"""    const h3 = null;""",
+   "smoke_v172_genba.js", "genba"),
+  # ---- 版172 第3回の直し（反証で潰せなかったもの） ----
+  (u"★直9 控えがどちらとも言えないとき、見比べを続ける（黙って決めつける）",
+   u"""  return Object.assign({}, b, { stale:true });           // 出どころが確かでない → 値の見比べをやめる（1件保存では1回聞く）""",
+   u"""  return b;""",
+   "smoke_v172_genba.js", "genba"),
+  # ---- 版172 第4回（Claude）：減らして、迷ったら聞く ----
+  (u"★第4回 「リスト」を探すとき、中のフォルダ20個で打ち切る（番号のフォルダが並ぶ物件で見落とし、物件のすぐ下へ書く）",
+   u"""      if(kids.length < 20) kids.push([name, h]);           // 数えるのは20個まで（名前は最後まで見る）""",
+   u"""      if(kids.length >= 20) break;
+      kids.push([name, h]);""", "smoke_v172_genba.js", "genba"),
+  (u"★第4回 受付台帳を強い手がかりに戻す（台帳がリストの中・工事フォルダにあると、リストの外や別の物件へ書く）",
+   u"""  best.strong = false;                    // 名前が「リスト」でなければ、いつも弱い手がかり""",
+   u"""  best.strong = here === 0;""", "smoke_v172_genba.js", "genba"),
+  (u"★第4回 印の無い控え（出どころが確かでない）でも見比べる（ルートから取った控えで、現場の入力が黙って戻る）",
+   u"""  return Object.assign({}, b, { stale:true });           // 出どころが確かでない → 値の見比べをやめる（1件保存では1回聞く）""",
+   u"""  if(!b.from) return b;
+  return Object.assign({}, b, { stale:true });""", "smoke_v172_genba.js", "genba"),
+  (u"★第4回 帯の📁で見つからないとき、どこを探したか（物件 ＞ リスト）を言わない",
+   u"""(saveDirPlace() || dir.name || "選んだフォルダ") + "」の中に、この戸別のファイルが見つかりませんでした。""",
+   u"""(dir.name || "選んだフォルダ") + "」の中に、この戸別のファイルが見つかりませんでした。""", "smoke_v172_genba.js", "genba"),
+  (u"★第4回 帯の📁で、覚えているフォルダの許可が切れていても聞き直さない（押しても読み込めない）",
+   u"""    if(!(await saveDirOk(dir, true))){              // 許可が切れていたら、ここで聞き直す""",
+   u"""    if(!(await saveDirOk(dir, false))){""", "smoke_v172_genba.js", "genba"),
+  # ---- 版172 第5回（Claude）：まとめて保存は、出どころの確かでない控えで書かずに残す ----
+  (u"★第5回 まとめて保存で、出どころの確かでない控えのまま この端末の値を書く（PCがリストで直した値が黙って戻る）",
+   u"""          if(b0 && !baseUseValues(base0)""",
+   u"""          if(false""", "smoke_v172_genba.js", "genba"),
+  (u"★第5回 まとめて保存で書かなかった戸別を知らせない",
+   u"""    if(unsureNos.length){""",
+   u"""    if(false){""", "smoke_v172_genba.js", "genba"),
+  (u"★第5回 書かなかった戸別も「渡した」扱いにする（まとめて保存から外れて取り残される）",
+   u"""            unsureNos.push(f.no); continue;""",
+   u"""            unsureNos.push(f.no); okNos.push(f); continue;""", "smoke_v172_genba.js", "genba"),
+  # ---- 版172 第6回（Claude）：欄ごとの決まりで残る現場の値も数える・すぐ下の写しは写真を足すだけ ----
+  (u"★第6回 書くとファイルの値が変わる欄を拾わない（TVの台数・測定値がPCの直しから黙って戻る）",
+   u"""    if(JSON.stringify(a[k]) !== JSON.stringify(b[k])) out.add(mergeLabelOf(k));""",
+   u"""    void 0;""", "smoke_v172_genba.js", "genba"),
+  (u"★第6回 まとめて保存で、この端末の材料を捨てて書く（控えが無い＝前の版からの道。下書きからも消える）",
+   u"""          if(mergeBuildDrops(f.state, mg0)){ buildNos.push(f.no); continue; }""",
+   u"""          void 0;""", "smoke_v172_genba.js", "genba"),
+  (u"★第6回 材料が本当に違うかを見ない（いつも「捨てない」扱い）",
+   u"""  return keys.some(k => JSON.stringify(a[k]) !== JSON.stringify(b[k]));""",
+   u"""  return false;""", "smoke_v172_genba.js", "genba"),
+  (u"★第6回 まとめて保存の保留を「控えを格下げしたとき」だけにする（前から古い扱いの控えで黙って書く）",
+   u"""          if(b0 && !baseUseValues(base0)""",
+   u"""          if(base0 !== b0 && !baseUseValues(base0)""", "smoke_v172_genba.js", "genba"),
+  (u"★第6回 1件ずつの保存で、書くとファイルの値が変わる欄を聞かない",
+   u"""        const chg = (fileBaseGet(M) && !baseUseValues(base)) ? mergeChangesFile(state, primary) : [];""",
+   u"""        const chg = [];""", "smoke_v172_genba.js", "genba"),
+  (u"★第6回 保存先を選ぶ画面の道で、見比べをやめても聞かずに書く",
+   u"""            if(!baseUseValues(base)){
+              const what = Array.from(new Set(mgp.mine.concat(mgp.conflicts.map(c => c.label),""",
+   u"""            if(false){
+              const what = Array.from(new Set(mgp.mine.concat(mgp.conflicts.map(c => c.label),""", "smoke_v172_genba.js", "genba"),
+  (u"★第6回 すぐ下の古い写しからも写真の名前・印を採る（保存のたびに入れ替わる）",
+   u"""  if(opt && opt.addOnly) return missing.concat(my);""",
+   u"""  void 0;""", "smoke_v172_genba.js", "genba"),
+  (u"★第6回 覚えている「リスト」を選び直すと、親（物件）を忘れる",
+   u"""  if(par0 && (await saveDirSame(picked, _saveDir))){ await saveDirSet(picked, par0); return picked; }""",
+   u"""  void 0;""", "smoke_v172_genba.js", "genba"),
+  (u"★第6回 覚えている「リスト」かを === で比べる（本物ではいつも「違う」＝親を忘れる）",
+   u"""(await saveDirSame(picked, _saveDir))""",
+   u"""(picked === _saveDir)""", "smoke_v172_genba.js", "genba"),
+  (u"★第6回 まとめて保存の案内で、前回の保存先を「リスト」とだけ出す",
+   u"""(saveDirPlace() || saveDirName())""",
+   u"""(saveDirName())""", "smoke_v172_genba.js", "genba"),
+  # ---- 版172 第7回（Claude）：物件の許可が無い・画面の道・使えない控えの写真の名前と印 ----
+  (u"★第7回 使えない控えで、土台のファイルの写真の名前・印を見比べる（現場が付けた名前・印が消える）",
+   u"""useB ? base : null, keepPh ? { addOnly:true } : undefined);   // 使えない控えで名前・印を見比べない""",
+   u"""base);""", "smoke_v172_genba.js", "genba"),
+  (u"★第7回 まとめて保存の保留を、すぐ下の写しがあるときだけにする（古い扱いの控えでPCの直しを戻す）",
+   u"""          if(b0 && !baseUseValues(base0)""",
+   u"""          if(cf0.rootPrimary && b0 && !baseUseValues(base0)""", "smoke_v172_genba.js", "genba"),
+  # ---- 版172 第8回（Claude）：ふつうの流れで聞きすぎない・使えない控えの写真の名前と印 ----
+  (u"★第8回 使えない控えで写真の名前・印が違っても、この端末の値として数えない（確かめに出ない）",
+   u"""    if(differs) out.mine.push("写真の名前・工事調書の印");""",
+   u"""    void 0;""", "smoke_v172_genba.js", "genba"),
+  (u"★第8回 まとめて保存の保留で、この端末の値（写真の名前・印）を数えない",
+   u"""             && (mg0.mine.length || mg0.conflicts.length
+                 || mergeChangesFile(f.state, cf0.primary).length || mergeBuildDrops(f.state, mg0))){""",
+   u"""             && (mergeChangesFile(f.state, cf0.primary).length || mergeBuildDrops(f.state, mg0))){""", "smoke_v172_genba.js", "genba"),
+  (u"★第7回 1件ずつの保存で、書くと変わる欄を聞くのを、すぐ下の写しがあるときだけにする",
+   u"""        const chg = (fileBaseGet(M) && !baseUseValues(base)) ? mergeChangesFile(state, primary) : [];""",
+   u"""        const chg = (cf.rootPrimary && fileBaseGet(M) && !baseUseValues(base)) ? mergeChangesFile(state, primary) : [];""", "smoke_v172_genba.js", "genba"),
+  # ---- 版172 第9回（利用者の決め 2026-09-23）：保存では物件のすぐ下の古いファイルを読まない ----
+  # すぐ下の写しを読んで混ぜる仕組み（土台の選び方・和集合・控えの印 root/list・物件の許可）を外したので、
+  # それを壊す変異（★1-7・★修4・★修7・★直7・★直9・★第6〜8回の一部、計 22 件）は外した。
+  # （★修4「まとめて保存で、ルートの写しを読み合わせない」は readCaseFilesForWrite＝readExistingCaseFiles になり、壊しても同じ動き）
+  (u"★第9回 保存のときに物件のすぐ下の古いファイルを読んで混ぜる",
+   u"""  return await readExistingCaseFiles(dir, fname, no);""",
+   u"""  const cf = await readExistingCaseFiles(dir, fname, no); const par = saveDirParentOf(dir);
+  if(par){ const cp = await readExistingCaseFiles(par, fname, no); if(cp.primary){ if(!cf.primary) cf.primary = cp.primary; else cf.others.push(cp.primary); } }
+  return cf;""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回 今の保存先から取った控え（印 ep）でも使わない（PCがあとで直すと毎回聞く）",
+   u"""  if(cf.sameDir !== false && b.ep && b.ep === _saveDirEp) return b;    // 今の保存先から取った控え""",
+   u"""  void 0;""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回 どこから取ったか分からない控えでも見比べに使う（現場の入力が黙って戻る）",
+   u"""  return Object.assign({}, b, { stale:true });           // 出どころが確かでない → 値の見比べをやめる（1件保存では1回聞く）""",
+   u"""  return b;""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回 保存先を覚えていない端末でも、控えを疑う（保存先を選ぶ画面だけの端末で毎回聞く）",
+   u"""  if(!_saveDir) return b;                                              // 保存先を覚えていない端末＝今までどおり""",
+   u"""  void 0;""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回 同じフォルダを選び直しても、保存先の印を新しくする",
+   u"""  _saveDirEp = h ? (same ? _saveDirEp : saveDirNewEp()) : "";""",
+   u"""  _saveDirEp = h ? saveDirNewEp() : "";""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回 開き直したとき、保存先の印を戻さない",
+   u"""    _saveDirEp = (_saveDir && r.ep) ? String(r.ep) : "";""",
+   u"""    _saveDirEp = "";""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回 書いたあとの控えに、保存先の印を残さない",
+   u"""    ep: (from === "list") ? _saveDirEp : "",               // 今の保存先の印（そこから取った控えのときだけ）""",
+   u"""    ep: "",""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回 今の保存先から読んだ控えに、保存先の印を付けない",
+   u"""    M._fileBase.ep = inSave ? _saveDirEp : "";""",
+   u"""    M._fileBase.ep = "";""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回 保存先を選ぶ画面で今の保存先へ書いても、控えに保存先の印を付けない",
+   u"""            if(_saveDir && (inSave || (b0 && b0.ep && b0.ep === _saveDirEp && baseFitsFile(b0, oj)))) pickedFrom = "list";""",
+   u"""            void 0;""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回 保存先を選ぶ画面の道で、控えの出どころを確かめずに見比べる",
+   u"""            const base = baseForWrite(b0, { primary: oj, sameDir: inSave });""",
+   u"""            const base = b0;""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回 （1件保存）あるのに読めないファイルを「無い」とみなして上書きする（PCの写真が消える）",
+   u"""      if((cf.unreadable || []).indexOf(fname) >= 0){""",
+   u"""      if(false){""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回 （まとめて保存）あるのに読めないファイルを「無い」とみなして上書きする",
+   u"""        if((cf0.unreadable || []).indexOf(f.name) >= 0){ unreadNos.push(f.no); ngNos.push(f.no); continue; }   // あるのに読めない＝書かない""",
+   u"""        void 0;""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回 読めなかったファイルの名前を控えない",
+   u"""  }catch(_){ if(bad) bad.push(fname); return null; }""",
+   u"""  }catch(_){ return null; }""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回 まとめて保存で、開いている戸別を下書きの写しで書く（画面の控えが古いまま残る）",
+   u"""    const model = (M && M._lastDraftKey && rec.key === M._lastDraftKey) ? M : rec.model;""",
+   u"""    const model = rec.model;""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回 まとめて保存で、融合のあとに書く中身を作り直さないことがある（PCの解除・写真の名前・印が戻る）",
+   u"""          f.text = JSON.stringify(f.state);        // ★融合のあとは必ず作り直す★（PCが消した欄・写真の名前と印も入れる）""",
+   u"""          if(mg0.kept.length || mg0.changed.length) f.text = JSON.stringify(f.state);""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回 まとめて保存で、両方で直した工事日・備考をPCの値で書く（この端末の値が下書きからも消える）",
+   u"""          if(conf0.length){""",
+   u"""          if(false){""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回 書いたあと、写真の名前・印を画面の写真に合わせない（次の保存で戻る）",
+   u"""    (model.chosho_photos || []).forEach(p => {""",
+   u"""    ([]).forEach(p => {""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回 📂 で読み直したとき、画面の写真の名前・印で上書きする（PCが外した印が戻る）",
+   u"""    m.chosho_photos = mergePhotosUnion(m.chosho_photos, M.chosho_photos, null, { addOnly:true });""",
+   u"""    m.chosho_photos = mergePhotosUnion(m.chosho_photos, M.chosho_photos);""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回 スマホで起動したとき、入れる場所を直さない（物件のすぐ下を案内し続ける）",
+   u"""    try{ const pj = String(((getReceptionData() || {}).project) || ""); if(pj && saveHintAuto(pj, pj)) renderSaveBar(); }catch(_){}""",
+   u"""    void 0;""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回 許可が切れたときの保存先を選ぶ画面を、覚えているリストから開かない",
+   u"""      }, _saveDir ? { startIn:_saveDir } : {}));""",
+   u"""      }, {}));""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回 同じ戸別の別名ファイルからも欄を足す（PCが消した欄が戻る）",
+   u"""  for(const k in old){ if(!MERGE_NEVER.has(k) && !(k in state)){ state[k] = old[k]; out.changed.push(k); } }""",
+   u"""  for(const k in old){ if(!MERGE_NEVER.has(k) && !(k in state)){ state[k] = old[k]; out.changed.push(k); } }
+  others.forEach(o => { for(const k in o){ if(!MERGE_NEVER.has(k) && !(k in state)){ state[k] = o[k]; out.changed.push(k); } } });""", "smoke_v172_genba.js", "genba"),
+  # ---- 版172 第9回の2（2回目の総ざらい）：許可切れは聞き直して止める・読み込みはリストが先・台帳の工事日・🧩 の写真 ----
+  (u"★第9回の2 許可が切れた1件保存で聞き直さない（保存先を選ぶ画面へ回り、選んだファイルが空にされて写真が消える）",
+   u"""  let dirLapsed = false, dirErr = null;
+  if(dir && !(await saveDirOk(dir, true))){ dir = null; dirLapsed = true; }""",
+   u"""  let dirLapsed = false, dirErr = null;
+  if(dir && !(await saveDirOk(dir, false))){ dir = null; dirLapsed = true; }""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回の2 特別記録の保存で、許可が切れていても聞き直さない",
+   u"""  if(dir && !(await saveDirOk(dir, true))){ dir = null; dirLapsed = true; }
+  if(dir) dir = await saveDirSettle(dir);    // 前の版で物件のフォルダを覚えていたら、中の「リスト」へ寄せる
+  const lapsedLine""",
+   u"""  if(dir && !(await saveDirOk(dir, false))){ dir = null; dirLapsed = true; }
+  if(dir) dir = await saveDirSettle(dir);    // 前の版で物件のフォルダを覚えていたら、中の「リスト」へ寄せる
+  const lapsedLine""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回の2 許可が取れなかったのに、保存先を選ぶ画面・共有・ダウンロードへ回す",
+   u"""  if(dirLapsed){
+    _lastSaveInfo = { title: "⚠ 保存先へ書く許可が取れないので、保存していません",""",
+   u"""  if(false){
+    _lastSaveInfo = { title: "⚠ 保存先へ書く許可が取れないので、保存していません",""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回の2 覚えている保存先へ書けなかったのに、ほかの道へ回す",
+   u"""  if(dirErr){""",
+   u"""  if(false){""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回の2 写真の歯止めを、保存先を選ぶ画面を開いたあとにする（選んだファイルが空のまま残る）",
+   u"""      if(await photoGateStop(M, state)) return true;
+      const handle=await window.showSaveFilePicker(""",
+   u"""      const handle=await window.showSaveFilePicker(""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回の2 読み込みで、前に当たったほかのフォルダを、リストより先に見る（古い写しで開く）",
+   u"""  const h1 = await look(dir);
+  if(h1){ _caseDirHit = dir; _caseDirHitRoot = root; return h1; }
+  if(_caseDirHit && _caseDirHitRoot === root && _caseDirHit !== dir){
+    const h0 = await look(_caseDirHit);
+    if(h0) return h0;
+  }""",
+   u"""  if(_caseDirHit && _caseDirHitRoot === root && _caseDirHit !== dir){
+    const h0 = await look(_caseDirHit);
+    if(h0) return h0;
+  }
+  const h1 = await look(dir);
+  if(h1){ _caseDirHit = dir; _caseDirHitRoot = root; return h1; }""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回の2 まとめて保存で、受付台帳から入った工事日も「両方で直した」に数える（書かずに残す）",
+   u"""          const conf0 = mg0.conflicts.filter(c => !(rc0 && baseHas(rc0, c.key) && baseSame(rc0, c.key, c.mine)));""",
+   u"""          const conf0 = mg0.conflicts;""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回の2 📥 で物件のすぐ下のファイルにも「他の端末のファイル」の印を付ける",
+   u"""    if(notMine && !it.root && model._otherFile !== it.rec.from){""",
+   u"""    if(notMine && model._otherFile !== it.rec.from){""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回の2 壊れたファイルのとき、PCで開いて確かめる案内を出さない",
+   u"""             + "何度押しても同じときは、PCでこのファイルを開いて確かめてください。\\n（この端末の入力と写真は、そのまま残っています）", warn: true };""",
+   u"""             + "（この端末の入力と写真は、そのまま残っています）", warn: true };""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回の2 物件の許可が無いだけなのに「別の物件のフォルダを覚えているのかも」と言う",
+   u"""    + (parNg""",
+   u"""    + (false""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回の2 リストに無い戸別で写真の歯止めが止めたとき、「ファイルから消えます」と言う（書き替えないのに）",
+   u"""        if(_lastSaveInfo){
+          let n = 0;""",
+   u"""        if(false){
+          let n = 0;""", "smoke_v172_genba.js", "genba"),
+  (u"★第9回の2（メイン）🧩 で消す前に、ほかのファイルにしか無い写真を残す方へ足さない（写真が消える）",
+   u"""      if(add.length){
+        kj.chosho_photos = """,
+   u"""      if(false){
+        kj.chosho_photos = """, "smoke_v172_main.js", "main"),
+  (u"★第9回 控えとファイルの見比べで、写真の名前・印を見ない",
+   u"""    return !p || (String(p.label || "") === String(bp.label || "") && !!p.chosho === !!bp.chosho); });""",
+   u"""    return true; });""", "smoke_v172_genba.js", "genba"),
+]
+
+import sys as _s
+_only = _s.argv[1] if len(_s.argv) > 1 else ""
+red = 0; n_run = 0
+for name, old, new, test, which in CASES:
+    if _only and _only not in name: continue
+    n_run += 1
+    src, OUT = (GENBA, OUTG) if which == "genba" else (MAIN, OUTM)
+    base = io.open(src, encoding="utf-8", newline="").read()
+    o, n = CR(old), CR(new)
+    if base.count(o) != 1:
+        print("SKIP（目印 %d 件）: %s" % (base.count(o), name)); continue
+    io.open(OUT, "w", encoding="utf-8", newline="").write(base.replace(o, n))
+    r = subprocess.run(["node", SP + test, "file://" + OUT], capture_output=True, text=True, timeout=900)
+    last = [l for l in (r.stdout + r.stderr).splitlines() if l.startswith("- ")][:1]
+    isred = r.returncode != 0
+    if isred: red += 1
+    print(("赤 ✓" if isred else "緑 ✗（検出できていない）"), name, "|", " / ".join(x[:120] for x in last))
+print("=== 赤 %d / %d ===" % (red, n_run))

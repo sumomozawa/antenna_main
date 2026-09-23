@@ -290,7 +290,7 @@ const WANT_VER = (function(){ try{
     }
     if(opened){
       const row = Array.from(document.querySelectorAll('#pick-list .pick-row'))
-        .filter(el => el.querySelector('.pick-main').textContent.trim() === 'テスト物件')[0];
+        .filter(el => el.querySelector('.pick-main').textContent.trim() === 'テスト物件 ＞ リスト')[0];
       if(row) row.click(); else document.getElementById('pick-close').click();
     }
     await p;
@@ -301,7 +301,7 @@ const WANT_VER = (function(){ try{
   console.log('⑩窓が出せない端末', JSON.stringify(r10));
   ok(r10.opened === true,
      '★フォルダの窓を出せないと、名前の窓にも来られず何も起きない → ' + JSON.stringify(r10));
-  ok(r10.after === 'テスト物件', '★選んだ名前が覚えられていない → ' + JSON.stringify(r10));
+  ok(r10.after === 'テスト物件/リスト', '★選んだ名前が覚えられていない → ' + JSON.stringify(r10));
 
   await b.close();
   ok(errs.length === 0, '★画面のエラー: ' + errs.slice(0,4).join(' / '));

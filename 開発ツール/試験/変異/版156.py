@@ -12,7 +12,7 @@ CR = lambda x: x.replace("\r\n", "\n").replace("\n", "\r\n")
 CASES = [
   # ---- 写真（憲法1）----
   ("★写真の和集合をやめる（PCの写真が消える）",
-   '  state.chosho_photos = mergePhotosUnion(state.chosho_photos, old.chosho_photos, base);',
+   '  state.chosho_photos = mergePhotosUnion(state.chosho_photos, old.chosho_photos, useB ? base : null, keepPh ? { addOnly:true } : undefined);   // 使えない控えで名前・印を見比べない',
    '  void 0;', "smoke_pcbase.js"),
   ("★控えに写真を載せない（写真の歯止めがまるごと効かなくなる）",
    '    photos: ((st.chosho_photos || (fileObj && fileObj.chosho_photos) || [])).filter(p => p && p.dataUri).map(p => ({',
@@ -31,7 +31,7 @@ CASES = [
    '  const nothingNew = isNothingNewHere(M);\n  const state=buildState();',
    '  const state=buildState();\n  const nothingNew = (M._touched = true) && isNothingNewHere(M);', "smoke_pcbase.js"),
   ("★まとめて保存で、何も入力していない戸別まで書き替える",
-   '    if(isNothingNewHere(rec.model)){ skippedNothing.push(no); return; }',
+   '    if(isNothingNewHere(model)){ skippedNothing.push(no); return; }',
    '    if(false){ skippedNothing.push(no); return; }', "smoke_pcbase.js"),
 
   # ---- 控え（3つ見比べ）----
@@ -48,7 +48,7 @@ CASES = [
    '        if(!opt || opt.mode !== "load"){ state[k] = old[k]; out.changed.push(k); }',
    '        void 0;', "smoke_pcbase.js"),
   ("★書けたあとに控えを取り直さない（次の保存で壊れる）",
-   '  fileBaseSet(model, mine, fname, fileObj);',
+   '  fileBaseSet(model, mine, fname, fileObj, from);',
    '  void 0;', "smoke_pcbase.js"),
   ("★書けたあとにファイルから採った分をモデルへ入れない",
    '  adoptStateIntoModel(model, st, keys);',
@@ -80,7 +80,7 @@ CASES = [
    '      } else if(asbMine){ keptMine = true; }            // 控えなし＝現場がこの建物の石綿を入れている',
    '      } else if(false){ keptMine = true; }', "smoke_pcbase.js"),
   ("控えが無いのに、置き換わるものを確かめない",
-   '        if(!baseUseValues(base) && (mg.mine.length || mg.conflicts.length)){',
+   '        if(!baseUseValues(base) && (mg.mine.length || mg.conflicts.length || chg.length)){',
    '        if(false){', "smoke_pcbase.js"),
 
   # ---- アパート・TV・門番・別名ファイル ----
