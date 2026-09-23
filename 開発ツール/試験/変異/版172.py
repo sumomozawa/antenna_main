@@ -124,10 +124,6 @@ CASES = [
    u"""(saveHintWhere() && !window.showDirectoryPicker && !saveDirName())""",
    u"""(saveHintWhere() && !saveDirName())""",
    "smoke_v172_genba.js", "genba"),
-  (u"★修4 まとめて保存で、ルートの写しを読み合わせない（写真・PCだけの中身が入らない）",
-   u"""        const cf0 = await readCaseFilesForWrite(dir, f.name, f.no);""",
-   u"""        const cf0 = await readExistingCaseFiles(dir, f.name, f.no);""",
-   "smoke_v172_genba.js", "genba"),
   (u"★修5 「覚えない」を選んだ印を残さない（次の取り込みで入れる場所が黙って戻る）",
    u"""      try{ localStorage.setItem(LS_SAVEHINT_AUTO,
         !got ? "\\u0000off" : ((proj && got === proj + "/リスト") ? got : "")); }catch(_){}""",
@@ -302,7 +298,8 @@ CASES = [
    u"""        const chg = (cf.rootPrimary && fileBaseGet(M) && !baseUseValues(base)) ? mergeChangesFile(state, primary) : [];""", "smoke_v172_genba.js", "genba"),
   # ---- 版172 第9回（利用者の決め 2026-09-23）：保存では物件のすぐ下の古いファイルを読まない ----
   # すぐ下の写しを読んで混ぜる仕組み（土台の選び方・和集合・控えの印 root/list・物件の許可）を外したので、
-  # それを壊す変異（★1-7・★修4・★修7・★直7・★直9・★第6〜8回の一部、計 21 件）は外した。
+  # それを壊す変異（★1-7・★修4・★修7・★直7・★直9・★第6〜8回の一部、計 22 件）は外した。
+  # （★修4「まとめて保存で、ルートの写しを読み合わせない」は readCaseFilesForWrite＝readExistingCaseFiles になり、壊しても同じ動き）
   (u"★第9回 保存のときに物件のすぐ下の古いファイルを読んで混ぜる",
    u"""  return await readExistingCaseFiles(dir, fname, no);""",
    u"""  const cf = await readExistingCaseFiles(dir, fname, no); const par = saveDirParentOf(dir);
