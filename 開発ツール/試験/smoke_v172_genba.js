@@ -1845,6 +1845,194 @@ window.__mine = function(no){
      '★「完了」を保存先の候補にした（終わった分の置き場へ書く）→ ' + JSON.stringify([r34.b_覚え, r34.b_聞いた]));
   ok(r34.c_読めた === true, '★まとめ表（.xlsx）を受付台帳と見なして、その中の戸別を読まなかった');
 
+  /* ---------- ㉟ 控えが使えないとき、欄ごとの決まりで現場の値が黙って残る所（第6回） ----------
+     控えの出どころが確かでないと、融合は欄ごとの決まり（TVの台数・測定値・材料）で「現場が触ったか」を推し量る。
+     その決まりで現場の値が残っても「この端末の値」として数えないと、まとめて保存が黙って書き、
+     PCがリストで直した値が戻る。書くとファイルの値が1つでも変わるなら、書かずに残すこと。
+     a TVの台数 / b 測定値 / c 材料（控えが使えない）/ d 材料（控えが無い：前の版から）
+     e 保存先を選ぶ画面の道（許可が切れた）でも、すぐ下の写しから取った控えなら1回聞く
+     f 前に読み返しが合わず古い扱いになっている控え＋すぐ下の写し → まとめて保存で書かない */
+  const r35 = await page.evaluate(async () => {
+    const o = {};
+    const bulk = async (root) => {
+      const odp = window.showDirectoryPicker;
+      window.showDirectoryPicker = async () => root;
+      __said.length = 0;
+      try{ await __T(saveAllDrafts(), 10000); } finally { window.showDirectoryPicker = odp; }
+    };
+    const setup = async (no, rootOver, listOver, from) => {
+      __noDir(); await __clearDrafts();
+      const rootTxt = rootOver ? __caseJson(no, Object.assign({ chosho_photos:[ __ph('p1', '#c33') ],
+        editedAt:'2026-09-05T00:00:00.000Z' }, rootOver)) : null;
+      const listTxt = __caseJson(no, Object.assign({ chosho_photos:[ __ph('p1', '#c33') ],
+        editedAt:'2026-09-20T00:00:00.000Z' }, listOver));
+      const list = __mkdir('リスト', { [no + '.json']: listTxt }, {});
+      const rf = { '現場用_物件.json':'{}' }; if(rootTxt) rf[no + '.json'] = rootTxt;
+      const root = __mkdir('物件', rf, { 'リスト': list });
+      await saveDirSet(list, root);
+      return { list, root, listTxt, rootTxt };
+    };
+    const openFrom = async (txt, no, from) => {
+      await loadStateInto(JSON.parse(txt), no + '.json');
+      if(M._fileBase){ if(from) M._fileBase.from = from; else delete M._fileBase.from; }
+    };
+    const held = no => __said.some(s => new RegExp(no).test(s) && /書いていません/.test(s));
+    const draftOf = async no => { try{ return await idbGet('no:' + no); }catch(_){ return null; } };
+    // a TVの台数：前の版の現場はすぐ下の写しに1台。PCがリストで3台に直した。現場は写真を足しただけ
+    {
+      const x = await setup('Z172L01', { tv_count:'1', survey_done:false }, { tv_count:'3', survey_done:false });
+      await openFrom(x.rootTxt, 'Z172L01', '');
+      M.chosho_photos.push(__ph('p2', '#3a6')); M._touched = true; await persistDraft();
+      await bulk(x.root);
+      o.a_TV = (__read(x.list, 'Z172L01.json') || {}).tv_count; o.a_残した = held('Z172L01');
+    }
+    // b 測定値：すぐ下の写しに60、PCがリストで66に直した
+    {
+      const mA = v => ({ channels:['14-2ch'], antenna:[{ db:v, mer:'', ber:'' }] });
+      const x = await setup('Z172L02', { measurements: mA('60') }, { measurements: mA('66') });
+      await openFrom(x.rootTxt, 'Z172L02', '');
+      M.chosho_photos.push(__ph('p2', '#3a6')); M._touched = true; await persistDraft();
+      await bulk(x.root);
+      const j = __read(x.list, 'Z172L02.json') || {};
+      o.b_測定 = (((j.measurements || {}).antenna || [])[0] || {}).db; o.b_残した = held('Z172L02');
+    }
+    // c 材料（控えが使えない）：ファイルは下見済み。現場は増幅器だけ直した
+    {
+      // リストとの違いは PC だけの欄（料金の扱い）だけ＝この端末の値として数えるものは材料のほかに無い
+      const x = await setup('Z172L03', { survey_done:true }, { survey_done:true, misc_fee:'exclude' });
+      await openFrom(x.rootTxt, 'Z172L03', '');
+      M.amplifier = 'amp_2u43'; M._touched = true; await persistDraft();
+      await bulk(x.root);
+      const d = await draftOf('Z172L03');
+      o.c_リスト増幅器 = (__read(x.list, 'Z172L03.json') || {}).amplifier;
+      o.c_下書き増幅器 = d && d.model && d.model.amplifier; o.c_渡した = !!(d && d.fileSavedAt);
+      o.c_残した = held('Z172L03');
+    }
+    // d 材料（控えが無い＝前の版からの道）：ファイルは下見済み・PCの増幅器。現場は増幅器を入れた
+    {
+      const x = await setup('Z172L04', null, { survey_done:true });
+      M = freshModel(); ensureModelShape(M); M.chosho_mgmt_no = 'Z172L04';
+      M.amplifier = 'amp_2u43'; M._touched = true; M._viewOnly = false; await persistDraft();
+      await bulk(x.root);
+      const d = await draftOf('Z172L04');
+      o.d_リスト増幅器 = (__read(x.list, 'Z172L04.json') || {}).amplifier;
+      o.d_下書き増幅器 = d && d.model && d.model.amplifier; o.d_渡した = !!(d && d.fileSavedAt);
+      o.d_知らせ = __said.filter(s => /Z172L04/.test(s) && /下見の内容/.test(s)).join(' / ').slice(0, 400);
+    }
+    // e 許可が切れて「保存先を選ぶ画面」の道：控えはすぐ下の写しから（印 root）、選んだのはリストのファイル
+    {
+      const x = await setup('Z172L05', { amplifier:'amp_2u43', chosho_note:'現場で書いた（前の版）' },
+                                       { amplifier:'amp_3u43', chosho_note:'PCで書いた備考' });
+      await openFrom(x.rootTxt, 'Z172L05', 'root');
+      o.e_印 = (M._fileBase && M._fileBase.from) || '';
+      M.chosho_photos.push(__ph('p2', '#3a6')); M._touched = true;
+      const og = saveDirGet, oo = saveDirOk, op = window.showSaveFilePicker;
+      const fh = await x.list.getFileHandle('Z172L05.json');
+      __noDir();
+      saveDirGet = async () => null; saveDirOk = async () => false;
+      window.showSaveFilePicker = async () => fh;
+      __said.length = 0;
+      try{ await __T(saveJsonRun(), 8000); }
+      finally { saveDirGet = og; saveDirOk = oo; window.showSaveFilePicker = op; }
+      o.e_窓 = __said.filter(s => /PCのファイルに中身が入っています/.test(s)).length;
+      const j = __read(x.list, 'Z172L05.json') || {};
+      o.e_写真 = __pids(j); o.e_備考 = j.chosho_note;
+    }
+    // f 控えが前から古い扱い（読み返しが合わなかった）＋すぐ下の写しもある → まとめて保存で書かない
+    {
+      const x = await setup('Z172L06', { chosho_note:'前の版' }, { chosho_note:'PCの直し' });
+      await openFrom(x.listTxt, 'Z172L06', 'list');
+      if(M._fileBase) M._fileBase.stale = true;
+      M.chosho_note = '現場で直した'; M._touched = true; await persistDraft();
+      await bulk(x.root);
+      o.f_備考 = (__read(x.list, 'Z172L06.json') || {}).chosho_note; o.f_残した = held('Z172L06');
+    }
+    // g 1件ずつの保存でも、TVの台数のように「この端末の値」と数えない欄で黙って戻さない（1回聞く）
+    {
+      const x = await setup('Z172L07', { tv_count:'1', survey_done:false }, { tv_count:'3', survey_done:false });
+      await openFrom(x.rootTxt, 'Z172L07', '');
+      M.chosho_photos.push(__ph('p2', '#3a6')); M._touched = true;
+      __said.length = 0;
+      await __T(saveJsonRun(), 8000);
+      o.g_窓 = __said.filter(s => /PCのファイルに中身が入っています/.test(s) && /TV/.test(s)).length;
+      o.g_写真 = __pids(__read(x.list, 'Z172L07.json'));
+    }
+    __noDir(); await __clearDrafts();
+    return o;
+  });
+  console.log('㉟欄ごとの決まりで現場の値が残る所', JSON.stringify(r35));
+  ok(r35.g_窓 === 1 && r35.g_写真 === 'p1,p2',
+     '★（1件ずつの保存）控えが使えないのに、TVの台数を黙ってこの端末の値にした（聞かなかった）→ '
+     + JSON.stringify([r35.g_窓, r35.g_写真]));
+  ok(r35.a_TV === '3' && r35.a_残した === true,
+     '★（まとめて保存）PCがリストで直したTVの台数が、黙ってこの端末の古い値へ戻った → ' + JSON.stringify([r35.a_TV, r35.a_残した]));
+  ok(r35.b_測定 === '66' && r35.b_残した === true,
+     '★（まとめて保存）PCがリストで直した測定値が、黙ってこの端末の古い値へ戻った → ' + JSON.stringify([r35.b_測定, r35.b_残した]));
+  ok(r35.c_下書き増幅器 === 'amp_2u43' && r35.c_渡した === false && r35.c_残した === true,
+     '★（まとめて保存・控えが使えない）この端末の材料が下書きから消えた／渡した扱いになった → '
+     + JSON.stringify([r35.c_リスト増幅器, r35.c_下書き増幅器, r35.c_渡した, r35.c_残した]));
+  ok(r35.d_下書き増幅器 === 'amp_2u43' && r35.d_渡した === false && /書いていません/.test(r35.d_知らせ) && /材料/.test(r35.d_知らせ),
+     '★（まとめて保存・控えが無い）この端末の材料が下書きから消えた、または書かなかったことを知らせていない → '
+     + JSON.stringify([r35.d_リスト増幅器, r35.d_下書き増幅器, r35.d_渡した, r35.d_知らせ]));
+  ok(r35.e_印 === 'root', '試験の前提: 控えの印が root になっていない → ' + r35.e_印);
+  ok(r35.e_窓 === 1 && r35.e_写真 === 'p1,p2',
+     '★保存先を選ぶ画面の道で、すぐ下の写しから取った控えのまま見比べ、黙ってリストの値にした → '
+     + JSON.stringify([r35.e_窓, r35.e_写真, r35.e_備考]));
+  ok(r35.f_備考 === 'PCの直し' && r35.f_残した === true,
+     '★（まとめて保存）古い扱いの控え＋すぐ下の写しで、PCの直しを黙って戻した → ' + JSON.stringify([r35.f_備考, r35.f_残した]));
+
+  /* ---------- ㊱ すぐ下の古い写しは、足りない写真を足すだけ（名前・印を戻さない）／リストを選び直しても親を忘れない ----------
+     a リストとすぐ下の両方に同じ戸別。現場で p1 に名前を付け「工事調書に載せる」印を付けて保存 → 備考だけ直して保存。
+       すぐ下の古い写し（名前 p1・印なし）を控えと見比べると「PCが直した」と読み違え、保存のたびに入れ替わる。
+     b まとめて保存で、覚えている「リスト」をもう一度選ぶ → 親（物件）を忘れない。案内にも「物件 ＞ リスト」 */
+  const r36 = await page.evaluate(async () => {
+    const o = {};
+    __noDir(); await __clearDrafts();
+    const listTxt = __caseJson('Z172P01', { chosho_photos:[ __ph('p1', '#c33') ], editedAt:'2026-09-20T00:00:00.000Z' });
+    const rootTxt = __caseJson('Z172P01', { chosho_photos:[ __ph('p1', '#c33'), __ph('p2', '#3a6') ], editedAt:'2026-09-05T00:00:00.000Z' });
+    const list = __mkdir('リスト', { 'Z172P01.json': listTxt }, {});
+    const root = __mkdir('物件', { '現場用_物件.json':'{}', 'Z172P01.json': rootTxt }, { 'リスト': list });
+    await saveDirSet(list, root);
+    M = freshModel(); M.chosho_mgmt_no = 'Z172P01'; M._viewOnly = true;
+    o.a_got = await __T(pcGuardAutoLoad());
+    const p1 = (M.chosho_photos || []).find(p => String(p.id) === 'p1');
+    if(p1){ p1.label = '屋根アンテナ'; p1.chosho = true; }
+    M._touched = true;
+    const look = () => { const j = __read(list, 'Z172P01.json') || {};
+      const q = (j.chosho_photos || []).find(p => String(p.id) === 'p1') || {};
+      return (q.label || '') + '/' + (q.chosho ? '印あり' : '印なし'); };
+    o.a_回 = [];
+    for(let i = 1; i <= 3; i++){
+      M.chosho_note = '直し' + i; M._touched = true;
+      await __T(saveJsonRun(), 8000);
+      o.a_回.push(look());
+    }
+    o.a_写真 = __pids(__read(list, 'Z172P01.json'));
+    o.a_ルートそのまま = root.__files['Z172P01.json'] === rootTxt;
+    // b
+    await __clearDrafts();
+    await saveDirSet(list, root);
+    __mine('Z172P02'); await persistDraft();
+    const odp = window.showDirectoryPicker;
+    window.showDirectoryPicker = async () => __copyDir(list);    // 本物と同じく、選ぶたびに別の取っ手
+    __said.length = 0;
+    try{ await __T(saveAllDrafts(), 10000); } finally { window.showDirectoryPicker = odp; }
+    o.b_覚え = saveDirPlace();
+    o.b_案内 = /前回は「物件 ＞ リスト」/.test(__said.join(' / '));
+    o.b_書いた = Object.keys(list.__files).includes('Z172P02.json');
+    __noDir(); await __clearDrafts();
+    return o;
+  });
+  console.log('㊱すぐ下の写しの名前・印／リストの選び直し', JSON.stringify(r36));
+  ok(r36.a_got === true, '試験の前提: リストから開けていない');
+  ok(r36.a_回.every(x => x === '屋根アンテナ/印あり'),
+     '★すぐ下の古い写しで、写真の名前・「工事調書に載せる」印が保存のたびに戻る → ' + JSON.stringify(r36.a_回));
+  ok(r36.a_写真 === 'p1,p2' && r36.a_ルートそのまま === true,
+     '★すぐ下の写しにしか無い写真が入っていない、またはすぐ下の写しを書き替えた → ' + JSON.stringify([r36.a_写真, r36.a_ルートそのまま]));
+  ok(r36.b_覚え === '物件 ＞ リスト' && r36.b_書いた === true,
+     '★まとめて保存で覚えている「リスト」を選び直すと、親（物件）を忘れた → ' + JSON.stringify([r36.b_覚え, r36.b_書いた]));
+  ok(r36.b_案内 === true, '★まとめて保存の案内で、前回の保存先を「物件 ＞ リスト」と出していない');
+
   await page.evaluate(() => { try{ __stopDlg(); }catch(_){} });
   const e2 = errs.filter(x => !/ResizeObserver|NotFound|DataCloneError|could not be cloned/.test(x));
   ok(e2.length === 0, '★画面でエラーが出た → ' + e2.slice(0, 4).join(' / '));

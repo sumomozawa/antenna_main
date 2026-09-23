@@ -80,7 +80,7 @@ CASES = [
    '      } else if(asbMine){ keptMine = true; }            // 控えなし＝現場がこの建物の石綿を入れている',
    '      } else if(false){ keptMine = true; }', "smoke_pcbase.js"),
   ("控えが無いのに、置き換わるものを確かめない",
-   '        if(!baseUseValues(base) && (mg.mine.length || mg.conflicts.length)){',
+   '        if(!baseUseValues(base) && (mg.mine.length || mg.conflicts.length || chg.length)){',
    '        if(false){', "smoke_pcbase.js"),
 
   # ---- アパート・TV・門番・別名ファイル ----
