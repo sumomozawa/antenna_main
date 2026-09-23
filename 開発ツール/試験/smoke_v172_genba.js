@@ -2180,6 +2180,119 @@ window.__mine = function(no){
   ok(r37.e_測定 === '66' && r37.e_残した === true,
      '★（まとめて保存）古い扱いの控え（すぐ下の写し無し）で、PCが直した測定値を黙って戻した → ' + JSON.stringify([r37.e_測定, r37.e_残した]));
 
+  /* ---------- ㊳ 第8回：ふつうの流れで聞きすぎない／使えない控えのときの写真の名前・印 ----------
+     a1 リストから開く → 許可が切れて「保存先を選ぶ画面」でリストのファイルへ保存 → 控えの印は list のまま。
+        そのあと物件（親）の許可だけ戻らない。PCがリストで備考を直し、現場は電話を直して保存 → 聞かない・両方残る
+     a2 📂 で読んだ控え（印 ""）＋物件の許可が無い → 同じく聞かない・両方残る
+     b  控えが使えない（すぐ下の写しから取った前の版の控え）。PCがリストで写真の名前を直し、印を外した。
+        現場は写真を1枚足しただけ → 1件保存は「写真の名前・工事調書の印」を確かめる・まとめて保存は書かない */
+  const r38 = await page.evaluate(async () => {
+    const o = {};
+    const asked = () => __said.filter(s => /PCのファイルに中身が入っています/.test(s)).length;
+    const pcEdit = (dir, no, over) => {
+      const j = JSON.parse(dir.__files[no + '.json']);
+      dir.__files[no + '.json'] = JSON.stringify(Object.assign(j, over, { editedAt: new Date(Date.now() + 60000).toISOString() }));
+    };
+    const viaPicker = async (fh) => {
+      const og = saveDirGet, oo = saveDirOk, op = window.showSaveFilePicker;
+      const keep = { d:_saveDir, p:_saveDirPar };
+      _saveDir = null; _saveDirPar = null;
+      saveDirGet = async () => null; saveDirOk = async () => false;
+      window.showSaveFilePicker = async () => fh;
+      __said.length = 0;
+      try{ return await __T(saveJsonRun(), 8000); }
+      finally { saveDirGet = og; saveDirOk = oo; window.showSaveFilePicker = op; _saveDir = keep.d; _saveDirPar = keep.p; }
+    };
+    // a1
+    {
+      __noDir(); await __clearDrafts();
+      const list = __mkdir('リスト', { 'Z172H01.json': __caseJson('Z172H01') }, {});
+      const root = __mkdir('物件', { '現場用_物件.json':'{}' }, { 'リスト': list });
+      await saveDirSet(list, root);
+      M = freshModel(); M.chosho_mgmt_no = 'Z172H01'; M._viewOnly = true;
+      o.a1_got = await __T(pcGuardAutoLoad());
+      M.chosho_cust_addr = '現場で直した住所'; M._touched = true;
+      await viaPicker(await list.getFileHandle('Z172H01.json'));
+      o.a1_印 = (M._fileBase && M._fileBase.from) || '';
+      await saveDirSet(list, root);
+      root.__perm = 'prompt';
+      pcEdit(list, 'Z172H01', { chosho_note:'PCがあとで直した備考' });
+      M.chosho_cust_tel = '0176-11-2222'; M._touched = true;
+      __said.length = 0;
+      await __T(saveJsonRun(), 8000);
+      const j = __read(list, 'Z172H01.json') || {};
+      o.a1_窓 = asked(); o.a1_備考 = j.chosho_note; o.a1_電話 = j.chosho_cust_tel;
+    }
+    // a2
+    {
+      __noDir(); await __clearDrafts();
+      const txt = __caseJson('Z172H02');
+      const list = __mkdir('リスト', { 'Z172H02.json': txt }, {});
+      const root = __mkdir('物件', { '現場用_物件.json':'{}' }, { 'リスト': list });
+      await loadStateInto(JSON.parse(txt), 'Z172H02.json');
+      o.a2_印 = (M._fileBase && ('from' in M._fileBase)) ? ('"' + M._fileBase.from + '"') : '（欄なし）';
+      await saveDirSet(list, root);
+      root.__perm = 'prompt';
+      pcEdit(list, 'Z172H02', { chosho_note:'PCがあとで直した備考' });
+      M.chosho_cust_tel = '0176-11-3333'; M._touched = true;
+      __said.length = 0;
+      await __T(saveJsonRun(), 8000);
+      const j = __read(list, 'Z172H02.json') || {};
+      o.a2_窓 = asked(); o.a2_備考 = j.chosho_note; o.a2_電話 = j.chosho_cust_tel;
+    }
+    // b
+    const mkB = (no) => {
+      const rootTxt = __caseJson(no, { chosho_photos:[ Object.assign(__ph('p1', '#c33'), { label:'屋根' }),
+        Object.assign(__ph('p2', '#3a6'), { chosho:true }) ], editedAt:'2026-09-05T00:00:00.000Z' });
+      const listTxt = __caseJson(no, { misc_fee:'exclude', chosho_photos:[ Object.assign(__ph('p1', '#c33'), { label:'屋根（施工前）' }),
+        __ph('p2', '#3a6') ], editedAt:'2026-09-20T00:00:00.000Z' });
+      const list = __mkdir('リスト', { [no + '.json']: listTxt }, {});
+      const root = __mkdir('物件', { '現場用_物件.json':'{}', [no + '.json']: rootTxt }, { 'リスト': list });
+      return { list, root, listTxt, rootTxt };
+    };
+    {
+      __noDir(); await __clearDrafts();
+      const x = mkB('Z172H03');
+      await saveDirSet(x.list, x.root);
+      await loadStateInto(JSON.parse(x.rootTxt), 'Z172H03.json');
+      if(M._fileBase) delete M._fileBase.from;
+      M.chosho_photos.push(__ph('p3', '#36c')); M._touched = true;
+      __said.length = 0;
+      await __T(saveJsonRun(), 8000);
+      o.b1_窓 = __said.filter(s => /PCのファイルに中身が入っています/.test(s) && /写真の名前/.test(s)).length;
+      o.b1_写真 = __pids(__read(x.list, 'Z172H03.json'));
+    }
+    {
+      __noDir(); await __clearDrafts();
+      const x = mkB('Z172H04');
+      await saveDirSet(x.list, x.root);
+      await loadStateInto(JSON.parse(x.rootTxt), 'Z172H04.json');
+      if(M._fileBase) delete M._fileBase.from;
+      M.chosho_photos.push(__ph('p3', '#36c')); M._touched = true; await persistDraft();
+      const odp = window.showDirectoryPicker;
+      window.showDirectoryPicker = async () => x.root;
+      __said.length = 0;
+      try{ await __T(saveAllDrafts(), 10000); } finally { window.showDirectoryPicker = odp; }
+      o.b2_リストそのまま = x.list.__files['Z172H04.json'] === x.listTxt;
+      o.b2_残した = __said.some(s => /Z172H04/.test(s) && /書いていません/.test(s));
+    }
+    __noDir(); await __clearDrafts();
+    return o;
+  });
+  console.log('㊳第8回', JSON.stringify(r38));
+  ok(r38.a1_got === true && r38.a1_印 === 'list', '★保存先を選ぶ画面でリストのファイルへ書いたあと、控えの印 list が落ちた → ' + JSON.stringify([r38.a1_got, r38.a1_印]));
+  ok(r38.a1_窓 === 0 && r38.a1_備考 === 'PCがあとで直した備考' && r38.a1_電話 === '0176-11-2222',
+     '★ふつうの流れ（物件の許可だけ戻らない）で聞いた、またはPCの直し・現場の直しが残らない → '
+     + JSON.stringify([r38.a1_窓, r38.a1_備考, r38.a1_電話]));
+  ok(r38.a2_印 === '""', '試験の前提: 📂 で読んだ控えの印が "" でない → ' + r38.a2_印);
+  ok(r38.a2_窓 === 0 && r38.a2_備考 === 'PCがあとで直した備考' && r38.a2_電話 === '0176-11-3333',
+     '★📂 で読んだ控え＋物件の許可が無いだけで聞いた、またはPCの直し・現場の直しが残らない → '
+     + JSON.stringify([r38.a2_窓, r38.a2_備考, r38.a2_電話]));
+  ok(r38.b1_窓 === 1 && r38.b1_写真 === 'p1,p2,p3',
+     '★（1件ずつの保存）控えが使えないのに、写真の名前・印を黙って替えた（確かめに出ない）→ ' + JSON.stringify([r38.b1_窓, r38.b1_写真]));
+  ok(r38.b2_リストそのまま === true && r38.b2_残した === true,
+     '★（まとめて保存）控えが使えないのに、写真の名前・印を黙って替えて書いた → ' + JSON.stringify([r38.b2_リストそのまま, r38.b2_残した]));
+
   await page.evaluate(() => { try{ __stopDlg(); }catch(_){} });
   const e2 = errs.filter(x => !/ResizeObserver|NotFound|DataCloneError|could not be cloned/.test(x));
   ok(e2.length === 0, '★画面でエラーが出た → ' + e2.slice(0, 4).join(' / '));

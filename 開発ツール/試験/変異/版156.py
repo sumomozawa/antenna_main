@@ -12,7 +12,7 @@ CR = lambda x: x.replace("\r\n", "\n").replace("\n", "\r\n")
 CASES = [
   # ---- 写真（憲法1）----
   ("★写真の和集合をやめる（PCの写真が消える）",
-   '  state.chosho_photos = mergePhotosUnion(state.chosho_photos, old.chosho_photos, useB ? base : null);   // 使えない控えで名前・印を見比べない',
+   '  state.chosho_photos = mergePhotosUnion(state.chosho_photos, old.chosho_photos, useB ? base : null, keepPh ? { addOnly:true } : undefined);   // 使えない控えで名前・印を見比べない',
    '  void 0;', "smoke_pcbase.js"),
   ("★控えに写真を載せない（写真の歯止めがまるごと効かなくなる）",
    '    photos: ((st.chosho_photos || (fileObj && fileObj.chosho_photos) || [])).filter(p => p && p.dataUri).map(p => ({',
