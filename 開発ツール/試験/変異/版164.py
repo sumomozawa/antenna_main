@@ -41,7 +41,7 @@ CASES = [
    u'''    const picked = (window.prompt("\u5165\u308c\u308b\u5834\u6240\u306e\u540d\u524d", now) || ""); await Promise.resolve(0 &&''',
    "smoke_v164_genba.js", "genba"),
   (u"★受付台帳の物件名を候補に出さない",
-   u'''      if(proj) add(proj, proj, "\u53d7\u4ed8\u53f0\u5e33\u306e\u7269\u4ef6\u540d", "");''',
+   u'''    if(proj) add(proj + " ＞ リスト", proj + "/リスト", "受付台帳の物件名の中の「リスト」（決まりの置き場所）", "");''',
    u'''      void proj;''',
    "smoke_v164_genba.js", "genba"),
   (u"★「自分で書く」の逃げ道を無くす",

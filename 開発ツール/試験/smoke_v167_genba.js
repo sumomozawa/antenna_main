@@ -264,7 +264,8 @@ const TOOLS = () => {
     }));
     add(await page.evaluate(async () => {
       const p = uiAlert('保存しました\n\n2621MNT051.json\n写真 15枚 ふくむ 8.2MB\n\n'
-        + '★入れる場所： 「令和８年度戸別受信設備設置工事（その２）」フォルダ★\nここに入れないと、PCが読み込めません。');
+        + '★入れる場所：「令和８年度戸別受信設備設置工事（その２）」フォルダの中の「リスト」フォルダ★\n'
+        + '（「令和８年度戸別受信設備設置工事（その２）」フォルダのすぐ下には入れません。管理番号.json が並んでいるフォルダです）');
       await new Promise(r => setTimeout(r, 250));
       const a = __over('知らせの窓');
       document.getElementById('ui-dialog-ok').click();
