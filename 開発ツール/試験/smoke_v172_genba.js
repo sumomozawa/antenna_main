@@ -1636,9 +1636,12 @@ window.__mine = function(no){
   ok(!(r29.b_増幅器 === 'amp_3u43' && r29.b_窓 === 0),
      '★リストから取った控えのまま、新しいルートの写しと見比べて、現場の値を黙って替えた → ' + JSON.stringify([r29.b_増幅器, r29.b_窓]));
   ok(r29.b_窓 === 1 && r29.b_備考 === '現場で直した', '★どちらとも言えないのに、確かめの窓が出ない → ' + JSON.stringify(r29));
-  ok(r29.c_got === true && r29.c_備考 === '現場で直した', '試験の前提: まとめて保存がリストに入っていない → ' + JSON.stringify(r29));
+  /* c は ㉝ と同じ扱い：控えの出どころが確かでないので、まとめて保存では書かずに残して知らせる */
+  ok(r29.c_got === true, '試験の前提: リストから開けていない → ' + JSON.stringify(r29));
   ok(r29.c_増幅器 !== 'amp_3u43',
      '★（まとめて保存）リストから取った控えのまま新しいルートの写しと見比べて、現場の値を黙って替えた → ' + r29.c_増幅器);
+  ok(r29.c_備考 === '現場で直した' || (r29.c_備考 === 'PCで書いた備考' && /Z172X03[\s\S]*1件ずつ/.test(r29.c_知らせ)),
+     '★（まとめて保存）書かなかったのに知らせていない、または現場の備考が入っていない → ' + JSON.stringify([r29.c_備考, r29.c_知らせ]));
 
   /* ---------- ㉚ 物件の中にフォルダが21個以上あっても、「リスト」を見落とさない ----------
      メインの「全戸別の写真を書き出す」は、管理番号のフォルダを何十個も作る。Windows では名前順に並ぶので、
@@ -1759,6 +1762,88 @@ window.__mine = function(no){
   ok(r32.c_聞いた === 1 && r32.c_読んだ === true && r32.c_窓を開いた === false && r32.c_覚え === '物件 ＞ リスト',
      '★許可が切れているとき、1回だけ聞き直して読み込めていない（または窓を開き直した）→ '
      + JSON.stringify([r32.c_聞いた, r32.c_読んだ, r32.c_窓を開いた, r32.c_覚え]));
+
+  /* ---------- ㉝ まとめて保存：出どころの確かでない控え＋あとでPCが直したリスト → 書かずに残して知らせる ----------
+     ㉛ と同じ場面を「まとめて保存」で。まとめて保存は聞けないので、黙って書くと
+     PCがリストで直した備考・増幅器が、この端末の古い値（ルートの写しの値）へ戻る。
+     その戸別は書かない（下書きは残る＝写真も入力も減らない）。1件ずつ開いて保存するよう知らせる。
+     「PCで入れた写真や工事日は、消えていません」とは言わない（書いていないので）。 */
+  const r33 = await page.evaluate(async () => {
+    const o = {};
+    __noDir(); await __clearDrafts();
+    const rootObj = JSON.parse(__caseJson('Z172Y02', { amplifier:'amp_2u43', chosho_note:'現場で書いた（前の版）',
+      chosho_photos:[ __ph('p1', '#c33') ], editedAt:'2026-09-05T00:00:00.000Z' }));
+    const listObj = JSON.parse(__caseJson('Z172Y02', { amplifier:'amp_3u43', chosho_note:'PCで書いた備考',
+      misc_fee:'exclude', chosho_photos:[ __ph('p1', '#c33') ], editedAt:'2026-09-20T00:00:00.000Z' }));
+    const listTxt = JSON.stringify(listObj), rootTxt = JSON.stringify(rootObj);
+    const list = __mkdir('リスト', { 'Z172Y02.json': listTxt }, {});
+    const root = __mkdir('物件', { '現場用_物件.json':'{}', 'Z172Y02.json': rootTxt }, { 'リスト': list });
+    await saveDirSet(list, root);
+    await loadStateInto(JSON.parse(rootTxt), 'Z172Y02.json');
+    if(M._fileBase) delete M._fileBase.from;
+    o.控えの印 = (M._fileBase && M._fileBase.from) || '';
+    M.chosho_photos.push(__ph('p2', '#3a6')); M._touched = true;
+    await persistDraft();
+    const odp = window.showDirectoryPicker;
+    window.showDirectoryPicker = async () => root;
+    __said.length = 0;
+    try{ await __T(saveAllDrafts(), 10000); } finally { window.showDirectoryPicker = odp; }
+    o.リストそのまま = list.__files['Z172Y02.json'] === listTxt;
+    o.ルートそのまま = root.__files['Z172Y02.json'] === rootTxt;
+    o.書いた = list.__wrote.concat(root.__wrote).filter(n => /Z172Y02/.test(n)).join(',');   // 前の場面の下書きは数えない
+    o.知らせ = __said.filter(s => /どちらの値が新しいか分からない/.test(s)).join(' / ').slice(0, 300);
+    o.消えていません = __said.some(s => /PCで入れた写真や工事日は、消えていません/.test(s));
+    let rec = null; try{ rec = await idbGet('no:Z172Y02'); }catch(_){}
+    o.下書き = !!rec; o.渡した印 = !!(rec && rec.fileSavedAt);
+    o.下書きの写真 = rec && rec.model ? __pids({ chosho_photos: rec.model.chosho_photos }) : '';
+    __noDir(); await __clearDrafts();
+    return o;
+  });
+  console.log('㉝まとめて保存・出どころの確かでない控え', JSON.stringify(r33));
+  ok(r33.控えの印 === '', '試験の前提: 控えに印が付いている');
+  ok(r33.リストそのまま === true && r33.書いた === '',
+     '★（まとめて保存）出どころの確かでない控えのまま書いた（PCがリストで直した備考・増幅器が古い値へ戻る）→ ' + r33.書いた);
+  ok(r33.ルートそのまま === true, '★ルートの写しを書き替えた');
+  ok(/Z172Y02/.test(r33.知らせ) && /1件ずつ/.test(r33.知らせ),
+     '★書かなかった戸別を知らせていない（1件ずつ開いて保存すること）→ ' + r33.知らせ);
+  ok(r33.消えていません === false, '★書いていないのに「消えていません」と言った');
+  ok(r33.下書き === true && r33.渡した印 === false && r33.下書きの写真 === 'p1,p2',
+     '★書かなかった戸別の下書きが消えた・渡した扱いになった・写真が減った → '
+     + JSON.stringify([r33.下書き, r33.渡した印, r33.下書きの写真]));
+
+  /* ---------- ㉞ 中へ降りない所（「リスト」そのもの・「完了」などの子）と、まとめ表は台帳と見なさない ---------- */
+  const r34 = await page.evaluate(async () => {
+    const o = {};
+    // a 「リスト」そのものを選んだ：中に戸別の多いフォルダがあっても降りない・聞かない
+    __noDir(); await __clearDrafts();
+    const ya = __mkdir('2024', { 'Z172V01.json':'{}', 'Z172V02.json':'{}', 'Z172V03.json':'{}' }, {});
+    const la = __mkdir('リスト', { 'Z172V09.json':'{}' }, { '2024': ya });
+    __said.length = 0;
+    const ga = await __T(saveDirAdopt(la, { ask:true }), 5000);
+    o.a_覚え = ga && ga.name; o.a_聞いた = __said.length;
+    // b 「リスト」の無い物件に「完了」がある：戸別が多くても「完了」へは入らない・聞かない
+    __noDir();
+    const done = __mkdir('完了', { 'Z172V11.json':'{}', 'Z172V12.json':'{}', 'Z172V13.json':'{}' }, {});
+    const pb = __mkdir('物件Z', { 'Z172V19.json':'{}' }, { '完了': done });
+    __said.length = 0;
+    const gb = await __T(saveDirAdopt(pb, { ask:true }), 5000);
+    o.b_覚え = gb && gb.name; o.b_聞いた = __said.length;
+    // c 中のフォルダに「受付台帳_まとめ.xlsx」（まとめ表）があっても、物件とは見なさずに読む
+    __noDir();
+    const yc = __mkdir('2024分', { 'Z172V21.json': __caseJson('Z172V21'), '受付台帳_まとめ.xlsx':'x' }, {});
+    const pc = __mkdir('物件Y', {}, { '2024分': yc });
+    await saveDirSet(pc, null);
+    const hc = await __T(caseFileFromDir(pc, 'Z172V21'), 5000);
+    o.c_読めた = !!(hc && hc.data && hc.data.chosho_mgmt_no === 'Z172V21');
+    __noDir(); await __clearDrafts();
+    return o;
+  });
+  console.log('㉞降りない所・まとめ表', JSON.stringify(r34));
+  ok(r34.a_覚え === 'リスト' && r34.a_聞いた === 0,
+     '★「リスト」そのものを選んだのに、中のフォルダへ降りた（または聞いた）→ ' + JSON.stringify([r34.a_覚え, r34.a_聞いた]));
+  ok(r34.b_覚え === '物件Z' && r34.b_聞いた === 0,
+     '★「完了」を保存先の候補にした（終わった分の置き場へ書く）→ ' + JSON.stringify([r34.b_覚え, r34.b_聞いた]));
+  ok(r34.c_読めた === true, '★まとめ表（.xlsx）を受付台帳と見なして、その中の戸別を読まなかった');
 
   await page.evaluate(() => { try{ __stopDlg(); }catch(_){} });
   const e2 = errs.filter(x => !/ResizeObserver|NotFound|DataCloneError|could not be cloned/.test(x));

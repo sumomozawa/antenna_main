@@ -145,8 +145,8 @@ CASES = [
    u"""        const cf0 = await readExistingCaseFiles(dir, f.name, f.no);""",
    "smoke_v172_genba.js", "genba"),
   (u"★修4 まとめて保存で、控えを古い扱いにしない（現場の値がリストの古い値に黙って戻る）",
-   u"""          const base0 = baseForWrite(fileBaseGet(f.model), cf0);""",
-   u"""          const base0 = fileBaseGet(f.model);""",
+   u"""          const base0 = baseForWrite(b0, cf0);   // 物件のすぐ下にも同じ戸別があったとき""",
+   u"""          const base0 = b0;""",
    "smoke_v172_genba.js", "genba"),
   (u"★修5 「覚えない」を選んだ印を残さない（次の取り込みで入れる場所が黙って戻る）",
    u"""      try{ localStorage.setItem(LS_SAVEHINT_AUTO,
@@ -295,6 +295,16 @@ CASES = [
   (u"★第4回 帯の📁で、覚えているフォルダの許可が切れていても聞き直さない（押しても読み込めない）",
    u"""    if(!(await saveDirOk(dir, true))){              // 許可が切れていたら、ここで聞き直す""",
    u"""    if(!(await saveDirOk(dir, false))){""", "smoke_v172_genba.js", "genba"),
+  # ---- 版172 第5回（Claude）：まとめて保存は、出どころの確かでない控えで書かずに残す ----
+  (u"★第5回 まとめて保存で、出どころの確かでない控えのまま この端末の値を書く（PCがリストで直した値が黙って戻る）",
+   u"""          if(base0 !== b0 && !baseUseValues(base0) && (mg0.mine.length || mg0.conflicts.length)){""",
+   u"""          if(false){""", "smoke_v172_genba.js", "genba"),
+  (u"★第5回 まとめて保存で書かなかった戸別を知らせない",
+   u"""    if(unsureNos.length){""",
+   u"""    if(false){""", "smoke_v172_genba.js", "genba"),
+  (u"★第5回 書かなかった戸別も「渡した」扱いにする（まとめて保存から外れて取り残される）",
+   u"""            unsureNos.push(f.no); ngNos.push(f.no); continue;""",
+   u"""            unsureNos.push(f.no); okNos.push(f); continue;""", "smoke_v172_genba.js", "genba"),
 ]
 
 import sys as _s
