@@ -31,7 +31,7 @@ CASES = [
    '  const nothingNew = isNothingNewHere(M);\n  const state=buildState();',
    '  const state=buildState();\n  const nothingNew = (M._touched = true) && isNothingNewHere(M);', "smoke_pcbase.js"),
   ("★まとめて保存で、何も入力していない戸別まで書き替える",
-   '    if(isNothingNewHere(rec.model)){ skippedNothing.push(no); return; }',
+   '    if(isNothingNewHere(model)){ skippedNothing.push(no); return; }',
    '    if(false){ skippedNothing.push(no); return; }', "smoke_pcbase.js"),
 
   # ---- 控え（3つ見比べ）----

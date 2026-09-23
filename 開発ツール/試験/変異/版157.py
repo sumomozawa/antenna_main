@@ -27,8 +27,8 @@ CASES = [
   # ---- ③ 窓の開く場所 ----
   ("保存の窓をフォルダの窓と別の場所から開く", u'''        id:"genba-save",                 // フォルダを選ぶ窓と同じ場所から開く（毎回たどり直さない）\r\n''',
    u'''''', "smoke_v157_genba.js", "genba"),
-  ("特別記録の窓も別の場所から開く", u'''      const h = await window.showSaveFilePicker({ id:"genba-save", suggestedName: fname,''',
-   u'''      const h = await window.showSaveFilePicker({ suggestedName: fname,''', "smoke_v157_genba.js", "genba"),
+  ("特別記録の窓も別の場所から開く", u'''      const h = await window.showSaveFilePicker(Object.assign({ id:"genba-save", suggestedName: fname,''',
+   u'''      const h = await window.showSaveFilePicker(Object.assign({ suggestedName: fname,''', "smoke_v157_genba.js", "genba"),
 
   # ---- ④ 許可が切れていたことを知らせない ----
   ("★フォルダの許可が切れたことを知らせない",
