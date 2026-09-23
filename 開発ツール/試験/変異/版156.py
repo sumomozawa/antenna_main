@@ -48,7 +48,7 @@ CASES = [
    '        if(!opt || opt.mode !== "load"){ state[k] = old[k]; out.changed.push(k); }',
    '        void 0;', "smoke_pcbase.js"),
   ("★書けたあとに控えを取り直さない（次の保存で壊れる）",
-   '  fileBaseSet(model, mine, fname, fileObj);',
+   '  fileBaseSet(model, mine, fname, fileObj, from);',
    '  void 0;', "smoke_pcbase.js"),
   ("★書けたあとにファイルから採った分をモデルへ入れない",
    '  adoptStateIntoModel(model, st, keys);',
