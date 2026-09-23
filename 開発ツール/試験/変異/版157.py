@@ -32,12 +32,10 @@ CASES = [
 
   # ---- ④ 許可が切れていたことを知らせない ----
   ("★フォルダの許可が切れたことを知らせない",
-   u'''     ただし黙って別の道へ行くと「いつもと違う画面が出た」理由が分からないので、あとで伝える。 */
-  let dirLapsed = false;
-  if(dir && !(await saveDirOk(dir, false))){ dir = null; dirLapsed = true; }''',
-   u'''     ただし黙って別の道へ行くと「いつもと違う画面が出た」理由が分からないので、あとで伝える。 */
-  let dirLapsed = false;
-  if(dir && !(await saveDirOk(dir, false))){ dir = null; }''', "smoke_v157_genba.js", "genba"),
+   u'''  let dirLapsed = false, dirErr = null;
+  if(dir && !(await saveDirOk(dir, true))){ dir = null; dirLapsed = true; }''',
+   u'''  let dirLapsed = false, dirErr = null;
+  if(dir && !(await saveDirOk(dir, true))){ dir = null; }''', "smoke_v157_genba.js", "genba"),
 
   # ---- ⑤ 共有で渡した .json.txt を読まない ----
   ("共有で渡したファイル（.json.txt）を印の引き継ぎで読まない",
@@ -76,11 +74,11 @@ CASES = [
    u'''        try{ await spPersist(rec, false); }catch(_){}''', u'''        void 0;''',
    "smoke_v157_genba.js", "genba"),
   ("特別記録で、覚えているフォルダの許可切れを知らせない",
-   u'''  /* 戸別の「保存」と同じ。許可が切れているときは聞き直さずに落として、あとで伝える。 */
+   u'''  /* 戸別の「保存」と同じ。許可が切れているときは1回聞き直し、取れなければ下の道へ落として、あとで伝える。 */
   let dirLapsed = false;
-  if(dir && !(await saveDirOk(dir, false))){ dir = null; dirLapsed = true; }''',
+  if(dir && !(await saveDirOk(dir, true))){ dir = null; dirLapsed = true; }''',
    u'''  let dirLapsed = false;
-  if(dir && !(await saveDirOk(dir, false))){ dir = null; }''',
+  if(dir && !(await saveDirOk(dir, true))){ dir = null; }''',
    "smoke_v157_genba.js", "genba"),
   ("まとめて保存の逃げ道（1件ずつ保存）を書かない",
    u'''          + "それでも開かないときは、戸別を1件ずつ開いて「保存」を押すと、\\n"

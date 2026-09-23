@@ -2535,6 +2535,348 @@ window.__mine = function(no){
   ok(r39.i_入力あり === 'p1:屋根（施工前）:印 p2:分配器:-' && r39.i_入力なし === 'p1:屋根（施工前）:印 p2:分配器:-',
      '★📂 で読み直したとき、PCが外した工事調書の印を画面で戻した → ' + JSON.stringify([r39.i_入力あり, r39.i_入力なし]));
 
+  /* ---------- 第9回の直しの場面（㊶・㊸〜㊻）で使う道具 ---------- */
+  await page.evaluate(() => {
+    /* 本物の Chrome の「保存先を選ぶ画面」：選んだ既にあるファイルは、ページへ渡す前に空にする（WICG の決まり） */
+    window.__chromePicker = function(box){
+      return async (opt) => {
+        box.n++; box.startIn = (opt && opt.startIn && opt.startIn.name) || '';
+        const d = (opt && opt.startIn) || box.dir;
+        const n = box.pick || opt.suggestedName;
+        const h = await d.getFileHandle(n, { create:true });
+        d.__files[n] = '';
+        return h;
+      };
+    };
+    window.__pcEdit = (dir, no, over) => {
+      if(!dir.__files[no + '.json']) return;
+      const j = JSON.parse(dir.__files[no + '.json']);
+      dir.__files[no + '.json'] = JSON.stringify(Object.assign(j, over, { editedAt: new Date(Date.now() + 60000).toISOString() }));
+    };
+    window.__asked = () => __said.filter(s => /PCのファイルに中身が入っています/.test(s)).length;
+  });
+
+  /* ---------- ㊶ 許可が切れた1件保存：保存先を選ぶ画面を出さず、1回聞き直して①の道で読み合わせてから書く ----------
+     a リストから開いた戸別。PCがあとで写真 p9 と備考を足す。ブラウザを開き直して許可が切れる → 保存
+       （直す前：保存先を選ぶ画面 → Chrome が選んだファイルを空にする → p9 と PC の備考が消えて「保存しました」）
+     b 前の版で「物件」を覚えていた端末（許可切れ）→ 1回聞いて、中の「リスト」へ寄せてから書く（物件のすぐ下に書かない）
+     c 許可切れで、リストにまだ無い新しい戸別 → ①の道でリストへ。控えに今の保存先の印。PCが直しても次は聞かない
+     d 「許可しない」を選んだ → ほかの道へ回さず止める（下書きは残る）
+     g 覚えているフォルダへ書けなかった → 保存先を選ぶ画面へ回さず止める
+     f 保存先を覚えていない端末：写真の歯止めは、保存先を選ぶ画面を開く前に
+     e 特別記録も同じ（保存先を選ぶ画面を出さない） */
+  const r41 = await page.evaluate(async () => {
+    const o = {};
+    const op = window.showSaveFilePicker;
+    try{
+      // a
+      __noDir(); await __clearDrafts();
+      { const NO = 'W9D1A';
+        const list = __mkdir('リスト', { [NO + '.json']: __caseJson(NO) }, {});
+        const root = __mkdir('物件', { '現場用_物件.json':'{}' }, { 'リスト': list });
+        await saveDirSet(list, root);
+        M = freshModel(); M.chosho_mgmt_no = NO; M._viewOnly = true;
+        o.a_got = await __T(pcGuardAutoLoad());
+        const j = JSON.parse(list.__files[NO + '.json']);
+        j.chosho_photos.push(__ph('p9', '#999')); j.chosho_note = 'PCがあとで直した備考';
+        j.editedAt = new Date(Date.now() + 60000).toISOString();
+        list.__files[NO + '.json'] = JSON.stringify(j);
+        list.__perm = 'prompt'; root.__perm = 'prompt';
+        const box = { n:0, dir:list }; window.showSaveFilePicker = __chromePicker(box);
+        M.chosho_cust_tel = '0176-10-1001'; M._touched = true;
+        __said.length = 0;
+        await __T(saveJsonRun(), 8000);
+        const a = __read(list, NO + '.json') || {};
+        o.a = { 画面: box.n, 聞いた: list.__asked, 写真: __pids(a), 備考: a.chosho_note, 電話: a.chosho_cust_tel,
+                title: (_lastSaveInfo && _lastSaveInfo.title) || '' };
+      }
+      // b
+      __noDir(); await __clearDrafts();
+      { const NO = 'W9D1B';
+        const list = __mkdir('リスト', { [NO + '.json']: __caseJson(NO, { chosho_note:'PCがリストで直した備考' }) }, {});
+        const rootCopy = __caseJson(NO, { chosho_note:'前の版の写し', chosho_photos:[ __ph('p1', '#c33') ] });
+        const root = __mkdir('物件', { '現場用_物件.json':'{}', [NO + '.json']: rootCopy }, { 'リスト': list });
+        _saveDir = root;                                      // 前の版の記録（親なし・物件）
+        root.__perm = 'prompt'; list.__perm = 'prompt';
+        const rq = root.requestPermission;                     // 本物の Chrome：物件の許可で中のリストも書ける
+        root.requestPermission = async () => { const r = await rq(); list.__perm = 'granted'; return r; };
+        await loadStateInto(JSON.parse(list.__files[NO + '.json']), NO + '.json');
+        M.chosho_cust_tel = '0176-10-1002'; M._touched = true;
+        const box = { n:0, dir:root }; window.showSaveFilePicker = __chromePicker(box);
+        __said.length = 0;
+        await __T(saveJsonRun(), 8000);
+        const a = __read(list, NO + '.json') || {};
+        o.b = { 画面: box.n, 物件に書いた: root.__wrote.length, 写しそのまま: root.__files[NO + '.json'] === rootCopy,
+                リスト電話: a.chosho_cust_tel, リスト備考: a.chosho_note, 場所: saveDirPlace() };
+      }
+      // c
+      __noDir(); await __clearDrafts();
+      { const NO = 'W9D1C';
+        const list = __mkdir('リスト', {}, {});
+        const root = __mkdir('物件', { '現場用_物件.json':'{}' }, { 'リスト': list });
+        await saveDirSet(list, root);
+        list.__perm = 'prompt'; root.__perm = 'prompt';
+        __mine(NO); M.chosho_photos = [ __ph('q1', '#3a6') ];
+        const box = { n:0, dir:list }; window.showSaveFilePicker = __chromePicker(box);
+        await __T(saveJsonRun(), 8000);
+        o.c_画面 = box.n; o.c_印 = [ (M._fileBase && M._fileBase.from) || '', !!(M._fileBase && M._fileBase.ep && M._fileBase.ep === _saveDirEp) ];
+        __pcEdit(list, NO, { chosho_note:'PCが書き足した備考', chosho_time:'13:30' });
+        M.chosho_cust_addr = '現場で直した住所'; M._touched = true;
+        __said.length = 0;
+        await __T(saveJsonRun(), 8000);
+        const a = __read(list, NO + '.json') || {};
+        o.c = { 聞いた: __asked(), 備考: a.chosho_note, 時刻: a.chosho_time, 住所: a.chosho_cust_addr, 写真: __pids(a) };
+      }
+      // d 「許可しない」を選んだ → ほかの道（保存先を選ぶ画面など）へ回さず止める。下書きは残る（💾は付かない）
+      __noDir(); await __clearDrafts();
+      { const NO = 'W9D1D';
+        const list = __mkdir('リスト', { [NO + '.json']: __caseJson(NO) }, {});
+        const root = __mkdir('物件', { '現場用_物件.json':'{}' }, { 'リスト': list });
+        await saveDirSet(list, root);
+        list.__perm = 'prompt';
+        list.requestPermission = async () => { list.__asked++; return 'denied'; };
+        __mine(NO);
+        const box = { n:0, dir:list }; window.showSaveFilePicker = __chromePicker(box);
+        const ret = await __T(saveJsonRun(), 8000);
+        o.d = { ret: ret, 画面: box.n, 聞いた: list.__asked, title: (_lastSaveInfo && _lastSaveInfo.title) || '',
+                文: /もう一度「保存」/.test((_lastSaveInfo && _lastSaveInfo.msg) || '') && /📁 のボタン/.test((_lastSaveInfo && _lastSaveInfo.msg) || ''),
+                写真: __pids(__read(list, NO + '.json')), 書いた: list.__wrote.length, 保存済: saveButtonState() === 'saved' };
+      }
+      // g 覚えているフォルダへ書けなかった（ほかのアプリが使っている等）→ 保存先を選ぶ画面へ回さず止める
+      __noDir(); await __clearDrafts();
+      { const NO = 'W9D1G';
+        const list = __mkdir('リスト', { [NO + '.json']: __caseJson(NO) }, {});
+        const root = __mkdir('物件', { '現場用_物件.json':'{}' }, { 'リスト': list });
+        await saveDirSet(list, root);
+        M = freshModel(); M.chosho_mgmt_no = NO; M._viewOnly = true;
+        await __T(pcGuardAutoLoad());
+        const gf = list.getFileHandle;
+        list.getFileHandle = async (n, opt) => { if(opt && opt.create){ const e = new Error('使用中'); e.name = 'NoModificationAllowedError'; throw e; } return gf(n, opt); };
+        M.chosho_cust_tel = '0176-10-1007'; M._touched = true;
+        const box = { n:0, dir:list }; window.showSaveFilePicker = __chromePicker(box);
+        await __T(saveJsonRun(), 8000);
+        list.getFileHandle = gf;
+        o.g = { 画面: box.n, title: (_lastSaveInfo && _lastSaveInfo.title) || '', 写真: __pids(__read(list, NO + '.json')) };
+      }
+      // e
+      __noDir(); await __clearDrafts();
+      { const list = __mkdir('リスト', {}, {});
+        const root = __mkdir('物件', { '現場用_物件.json':'{}' }, { 'リスト': list });
+        await saveDirSet(list, root);
+        list.__perm = 'prompt';
+        const box = { n:0, dir:list }; window.showSaveFilePicker = __chromePicker(box);
+        const rec = { key:'sp-w9d1e', id:'w9d1e', kind:'検収', title:'資材検収', date:'2026-09-23',
+                      note:'', photos:[{ label:'納品書', dataUri:__png('#3a3') }], rev:1, fileRev:0, fileSavedAt:0 };
+        const res = await __T(spSaveFile(rec), 8000);
+        o.e = { 画面: box.n, 聞いた: list.__asked, ok: !!(res && res.ok), リストに: Object.keys(list.__files).filter(n => /^特別記録_/.test(n)).length };
+      }
+      // f 保存先を覚えていない端末（保存先を選ぶ画面だけ）。この端末に無い写真を控えが知っている → 画面を開く前に止める
+      __noDir(); await __clearDrafts();
+      { const NO = 'W9D1F';
+        const txt = __caseJson(NO);
+        const list = __mkdir('リスト', { [NO + '.json']: txt }, {});
+        await loadStateInto(JSON.parse(txt), NO + '.json');
+        M.chosho_photos = M.chosho_photos.filter(p => String(p.id) !== 'p2'); M._touched = true;
+        const og = saveDirGet; saveDirGet = async () => null;
+        const box = { n:0, dir:list }; window.showSaveFilePicker = __chromePicker(box);
+        try{ await __T(saveJsonRun(), 8000); } finally { saveDirGet = og; }
+        o.f = { 画面: box.n, title: (_lastSaveInfo && _lastSaveInfo.title) || '', 写真: __pids(__read(list, NO + '.json')),
+                大きさ: (list.__files[NO + '.json'] || '').length };
+      }
+    } finally { window.showSaveFilePicker = op; }
+    __noDir(); await __clearDrafts();
+    return o;
+  });
+  console.log('㊶許可切れの1件保存', JSON.stringify(r41));
+  ok(r41.a_got === true, '試験の前提: リストから開けていない');
+  ok(r41.a.画面 === 0 && r41.a.聞いた === 1, '★許可が切れているとき、聞き直さずに保存先を選ぶ画面へ回した → ' + JSON.stringify(r41.a));
+  ok(r41.a.写真 === 'p1,p2,p9' && r41.a.備考 === 'PCがあとで直した備考' && r41.a.電話 === '0176-10-1001',
+     '★許可が切れた1件保存で、PCがあとで足した写真・直した備考が消えた → ' + JSON.stringify(r41.a));
+  ok(r41.b.画面 === 0 && r41.b.物件に書いた === 0 && r41.b.写しそのまま === true,
+     '★前の版で物件を覚えていた端末（許可切れ）で、物件のすぐ下の写しを書き替えた → ' + JSON.stringify(r41.b));
+  ok(r41.b.リスト電話 === '0176-10-1002' && r41.b.リスト備考 === 'PCがリストで直した備考' && r41.b.場所 === '物件 ＞ リスト',
+     '★前の版で物件を覚えていた端末（許可切れ）で、リストへ寄せて書いていない → ' + JSON.stringify(r41.b));
+  ok(r41.c_画面 === 0 && r41.c_印[0] === 'list' && r41.c_印[1] === true,
+     '★許可切れで新しく作ったリストのファイルの控えに、今の保存先の印が無い → ' + JSON.stringify([r41.c_画面, r41.c_印]));
+  ok(r41.c.聞いた === 0 && r41.c.備考 === 'PCが書き足した備考' && r41.c.時刻 === '13:30' && r41.c.住所 === '現場で直した住所' && r41.c.写真 === 'q1',
+     '★新しく作った戸別をPCが直したあと、聞いた／どちらかの値が残らない → ' + JSON.stringify(r41.c));
+  ok(r41.d.ret === true && r41.d.画面 === 0 && r41.d.聞いた === 1 && /保存していません/.test(r41.d.title) && r41.d.文 === true,
+     '★「許可しない」を選んだあと、ほかの道（保存先を選ぶ画面など）へ回した／どうすればよいか言わない → ' + JSON.stringify(r41.d));
+  ok(r41.d.写真 === 'p1,p2' && r41.d.書いた === 0 && r41.d.保存済 === false,
+     '★「許可しない」を選んだのに、ファイルを書いた（または渡した扱いにした）→ ' + JSON.stringify(r41.d));
+  ok(r41.g.画面 === 0 && /保存していません/.test(r41.g.title) && r41.g.写真 === 'p1,p2',
+     '★覚えている保存先へ書けなかったとき、保存先を選ぶ画面へ回した → ' + JSON.stringify(r41.g));
+  ok(r41.f.title === '⚠ 写真が減るので保存していません' && r41.f.画面 === 0 && r41.f.写真 === 'p1,p2',
+     '★写真の歯止めで止まるのに、先に保存先を選ぶ画面を開いた（選んだファイルが空のまま残る）→ ' + JSON.stringify(r41.f));
+  ok(r41.e.画面 === 0 && r41.e.聞いた === 1 && r41.e.ok && r41.e.リストに === 1,
+     '★特別記録で、許可が切れているとき聞き直さずに保存先を選ぶ画面へ回した → ' + JSON.stringify(r41.e));
+
+  /* ---------- ㊸ 読み込み：前にリストの隣のフォルダで当たっても、リストにある戸別はリストから開く ---------- */
+  const r43 = await page.evaluate(async () => {
+    const o = {};
+    __noDir(); await __clearDrafts();
+    const copy = __mkdir('リスト - コピー', {
+      'W9D3A.json': __caseJson('W9D3A', { chosho_note:'写しの備考' }),
+      'W9D3B.json': __caseJson('W9D3B', { chosho_note:'古い備考', amplifier:'amp_2u43', chosho_photos:[ __ph('p1', '#c33') ] }) }, {});
+    const list = __mkdir('リスト', { 'W9D3B.json': __caseJson('W9D3B', { chosho_note:'PCが直した新しい備考' }) }, {});
+    const root = __mkdir('物件', { '現場用_物件.json':'{}' }, { 'リスト': list, 'リスト - コピー': copy });
+    await saveDirSet(list, root);
+    M = freshModel(); M.chosho_mgmt_no = 'W9D3A'; M._viewOnly = true;
+    o.A = await __T(pcGuardAutoLoad());
+    M = freshModel(); M.chosho_mgmt_no = 'W9D3B'; M._viewOnly = true;
+    o.B = await __T(pcGuardAutoLoad());
+    o.B備考 = M.chosho_note; o.B写真 = (M.chosho_photos || []).length;
+    o.B印 = [ (M._fileBase && M._fileBase.from) || '', !!(M._fileBase && M._fileBase.ep && M._fileBase.ep === _saveDirEp) ];
+    /* ⑤c（⑤b の続き）前の物件で当たった覚えが残っていて、いまのリストにその戸別が無い → 前の物件のファイルは読まない
+       （リストを先に見るようにしたので、⑤b だけでは「根元が違えば見ない」を確かめられない） */
+    __noDir();
+    const listA = __mkdir('リスト', { 'W9D3C.json': __caseJson('W9D3C', { amplifier:'amp_2u43' }) }, {});
+    const rootA = __mkdir('物件A', { '現場用_A.json':'{}' }, { 'リスト': listA });
+    _caseDirHit = listA; _caseDirHitRoot = rootA;
+    _saveDir = __mkdir('いまのリスト', {}, {});
+    M = freshModel(); M.chosho_mgmt_no = 'W9D3C'; M._viewOnly = true;
+    o.C = await __T(pcGuardAutoLoad()); o.C増幅器 = M.amplifier;
+    __noDir(); await __clearDrafts();
+    return o;
+  });
+  console.log('㊸読み込みはリストが先', JSON.stringify(r43));
+  ok(r43.A === true, '試験の前提: リストに無い戸別を隣のフォルダから読めていない');
+  ok(r43.C === false && r43.C増幅器 !== 'amp_2u43', '★前の物件のリストで当たった覚えから、別の物件のファイルを読んだ → ' + JSON.stringify([r43.C, r43.C増幅器]));
+  ok(r43.B備考 === 'PCが直した新しい備考' && r43.B写真 === 2 && r43.B印[0] === 'list' && r43.B印[1] === true,
+     '★前に隣のフォルダで当たったあと、リストにある戸別を隣の古い写しで開いた → ' + JSON.stringify(r43));
+
+  /* ---------- ㊹ まとめて保存：受付台帳から入った工事日は「この端末が直した」に数えない ----------
+     a 事務所が工事日を 9/20→9/25（ファイルと台帳）→ 現場が台帳を取り込む → 事務所がファイルだけ 9/28
+       → まとめて保存：書かずに残さない。PCの 9/28 と現場の住所が入る
+     b 現場が工事日を自分で打った（9/30）ときは、今までどおり書かずに残す */
+  const r44 = await page.evaluate(async () => {
+    const o = {};
+    const run = async (NO, typed) => {
+      __noDir(); await __clearDrafts();
+      const list = __mkdir('リスト', { [NO + '.json']: __caseJson(NO, { chosho_date:'2026-09-20' }) }, {});
+      const root = __mkdir('物件', { '現場用_物件.json':'{}' }, { 'リスト': list });
+      const led = v => ({ type:'antenna_reception_ledger', version:5, project:'物件', exportedAt:new Date().toISOString(), appVersion:'172',
+        rows: [{ mgmt_no:NO, name:'台帳の 太郎', date:v, photos:2, has_dwg:true }] });
+      receptionSaveRows(led('2026-09-20'));
+      await saveDirSet(list, root);
+      await __T(openFromReception(getReceptionRows().find(x => x.mgmt_no === NO)), 8000);
+      M.chosho_cust_tel = '0176-40-0001'; M._touched = true;
+      await __T(saveJsonRun(), 8000);
+      __pcEdit(list, NO, { chosho_date:'2026-09-25' });
+      receptionSaveRows(led('2026-09-25')); await receptionApplyToDrafts();
+      const got = M.chosho_date;
+      if(typed) M.chosho_date = typed;
+      M.chosho_cust_addr = '現場で直した住所'; M._touched = true; await persistDraft();
+      __pcEdit(list, NO, { chosho_date:'2026-09-28' });
+      __said.length = 0; __toasts.length = 0;
+      const odp = window.showDirectoryPicker; window.showDirectoryPicker = async () => root;
+      try{ await __T(saveAllDrafts(), 15000); } finally { window.showDirectoryPicker = odp; }
+      const j = __read(list, NO + '.json') || {};
+      return { 取り込み後: got, 日: j.chosho_date, 住所: j.chosho_cust_addr || '',
+               残した: __said.some(s => /両方で直していた/.test(s) && s.indexOf(NO) >= 0),
+               画面の日: M.chosho_date };
+    };
+    o.a = await run('W9D4A', '');
+    o.b = await run('W9D4B', '2026-09-30');
+    __noDir(); await __clearDrafts();
+    return o;
+  });
+  console.log('㊹まとめて保存と台帳の工事日', JSON.stringify(r44));
+  ok(r44.a.取り込み後 === '2026-09-25', '試験の前提: 台帳の取り込みで工事日が入っていない → ' + JSON.stringify(r44.a));
+  ok(r44.a.残した === false && r44.a.日 === '2026-09-28' && r44.a.住所 === '現場で直した住所',
+     '★受付台帳から入っただけの工事日を「両方で直した」と数え、まとめて保存で書かずに残した → ' + JSON.stringify(r44.a));
+  ok(r44.b.残した === true && r44.b.日 === '2026-09-28' && r44.b.住所 === '',
+     '★現場が自分で打った工事日とPCの工事日がぶつかるのに、まとめて保存で書いた → ' + JSON.stringify(r44.b));
+
+  /* ---------- ㊺ 📥：物件のすぐ下のスマホのファイルから印を採っても、「他の端末のファイル」の確かめを出さない ---------- */
+  const r45 = await page.evaluate(async () => {
+    const o = {};
+    __noDir(); await __clearDrafts();
+    const NO = 'W9D5A';
+    const list = __mkdir('リスト', {}, {});
+    const root = __mkdir('物件', { '現場用_物件.json':'{}',
+      [NO + '.json']: __caseJson(NO, { flyer_done:true, flyer_done_at:'2026-09-22', editedAt: new Date(Date.now() + 300000).toISOString() }) },
+      { 'リスト': list });
+    await saveDirSet(list, root);
+    __mine(NO); M.chosho_note = '現場の備考'; await persistDraft();
+    const ort = readTextFile; readTextFile = f => f.text();          // にせのファイルは FileReader で読めない
+    __said.length = 0;
+    try{ await __T(flowShareFromDir(), 8000); } finally { readTextFile = ort; }
+    o.印 = !!M.flyer_done; o.other = M._otherFile || null;
+    __said.length = 0;
+    o.確かめ = (await __T(flowShareConfirmOverwrite(M), 4000)) === true && !__said.some(s => /すでにファイルに保存されています/.test(s));
+    __noDir(); await __clearDrafts();
+    return o;
+  });
+  console.log('㊺📥とすぐ下のファイル', JSON.stringify(r45));
+  ok(r45.印 === true, '試験の前提: 物件のすぐ下のファイルから印を採れていない → ' + JSON.stringify(r45));
+  ok(r45.other === null && r45.確かめ === true,
+     '★保存では触らない物件のすぐ下のファイルを「そのファイルから消えます」と確かめる → ' + JSON.stringify(r45));
+
+  /* ---------- ㊻ 文言：壊れたファイル／物件の許可が無いときの「見つからない」／リストに無いときの写真の歯止め ---------- */
+  const r46 = await page.evaluate(async () => {
+    const o = {};
+    // a 壊れたファイル
+    __noDir(); await __clearDrafts();
+    { const NO = 'W9D6A';
+      const list = __mkdir('リスト', { [NO + '.json']: __caseJson(NO).slice(0, 300) }, {});
+      const root = __mkdir('物件', { '現場用_物件.json':'{}' }, { 'リスト': list });
+      await saveDirSet(list, root);
+      __mine(NO);
+      await __T(saveJsonRun(), 8000);
+      o.a_1件 = (_lastSaveInfo && _lastSaveInfo.msg) || '';
+      await persistDraft();
+      __said.length = 0;
+      const odp = window.showDirectoryPicker; window.showDirectoryPicker = async () => root;
+      try{ await __T(saveAllDrafts(), 15000); } finally { window.showDirectoryPicker = odp; }
+      o.a_まとめ = __said.filter(s => /いま読めない/.test(s)).join(' / ');
+      o.a_そのまま = list.__files[NO + '.json'] === __caseJson(NO).slice(0, 300) || list.__wrote.length === 0;
+    }
+    // b 物件の許可が無い（開き直したあと）。物件のすぐ下にしか無い戸別を帯の📁で読む
+    __noDir(); await __clearDrafts();
+    { const NO = 'W9D6B';
+      const list = __mkdir('リスト', {}, {});
+      const root = __mkdir('物件', { '現場用_物件.json':'{}', [NO + '.json']: __caseJson(NO) }, { 'リスト': list });
+      await saveDirSet(list, root);
+      root.__perm = 'prompt';
+      const ng = () => { const e = new Error('NotAllowed'); e.name = 'NotAllowedError'; return e; };
+      const gf = root.getFileHandle, en = root.entries, vs = root.values;   // 本物の Chrome：許可が無いと読めない
+      root.getFileHandle = async (...a) => { if(root.__perm !== 'granted') throw ng(); return gf(...a); };
+      root.entries = () => { if(root.__perm !== 'granted') return { [Symbol.asyncIterator](){ return { next: async () => { throw ng(); } }; } }; return en(); };
+      root.values = () => { if(root.__perm !== 'granted') return { [Symbol.asyncIterator](){ return { next: async () => { throw ng(); } }; } }; return vs(); };
+      M = freshModel(); M.chosho_mgmt_no = NO; M._viewOnly = true;
+      __said.length = 0;
+      await __T(pcGuardDirLoad(), 8000);
+      o.b = __said.filter(s => /見つかりませんでした/.test(s)).join(' / ');
+    }
+    // c リストに無い戸別で、この端末に無い写真を控えが知っている（前の版で物件のすぐ下に置いた戸別）
+    __noDir(); await __clearDrafts();
+    { const NO = 'W9D6C';
+      const rootObj = JSON.parse(__caseJson(NO, { chosho_photos:[ __ph('d1', '#c33'), __ph('b1', '#36c') ] }));
+      const list = __mkdir('リスト', {}, {});
+      const root = __mkdir('物件', { '現場用_物件.json':'{}', [NO + '.json']: JSON.stringify(rootObj) }, { 'リスト': list });
+      await loadStateInto(rootObj, NO + '.json');
+      M.chosho_photos = M.chosho_photos.filter(p => String(p.id) !== 'b1');   // 前の版：写真はモデルへ取り込まれていない
+      await saveDirSet(list, root);
+      M.chosho_cust_tel = '0176-60-0003'; M._touched = true;
+      await __T(saveJsonRun(), 8000);
+      o.c_title = (_lastSaveInfo && _lastSaveInfo.title) || ''; o.c_msg = (_lastSaveInfo && _lastSaveInfo.msg) || '';
+      o.c_書いた = list.__wrote.length + root.__wrote.length;
+    }
+    __noDir(); await __clearDrafts();
+    return o;
+  });
+  console.log('㊻文言', JSON.stringify(r46));
+  ok(/壊れている/.test(r46.a_1件) && /PCでこのファイルを開いて/.test(r46.a_1件) && /読めない|読めませんでした/.test(r46.a_1件),
+     '★壊れたファイルのとき、「少し待って」だけで先へ進む案内が無い（1件保存）→ ' + r46.a_1件);
+  ok(/壊れている/.test(r46.a_まとめ), '★壊れたファイルのとき、「少し待って」だけで先へ進む案内が無い（まとめて保存）→ ' + r46.a_まとめ);
+  ok(r46.a_そのまま === true, '★壊れたファイルを上書きした');
+  ok(/いま見る許可が無い/.test(r46.b) && !/別の物件のフォルダを覚えている/.test(r46.b),
+     '★物件の許可が無くてすぐ下を探せないのに「別の物件のフォルダを覚えているのかも」と言った → ' + r46.b);
+  ok(r46.c_title === '⚠ 写真が減るので保存していません' && r46.c_書いた === 0, '試験の前提: 写真の歯止めで止まっていない → ' + JSON.stringify([r46.c_title, r46.c_書いた]));
+  ok(!/ファイルから消えます/.test(r46.c_msg) && /すぐ下など/.test(r46.c_msg) && /物件 ＞ リスト/.test(r46.c_msg),
+     '★リストに無い戸別で、書き替えない写しの写真が「ファイルから消えます」と言った／どこを読めばよいか言わない → ' + r46.c_msg);
+
   await page.evaluate(() => { try{ __stopDlg(); }catch(_){} });
   const e2 = errs.filter(x => !/ResizeObserver|NotFound|DataCloneError|could not be cloned/.test(x));
   ok(e2.length === 0, '★画面でエラーが出た → ' + e2.slice(0, 4).join(' / '));
