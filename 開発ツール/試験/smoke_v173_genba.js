@@ -162,7 +162,13 @@ const SETUP = SRC172.slice(SRC172.indexOf('const SETUP = `') + 'const SETUP = `'
   await page.evaluate(() => { try{ __stopDlg(); }catch(_){} });
   const e2 = errs.filter(x => !/ResizeObserver|NotFound|DataCloneError|could not be cloned/.test(x));
   ok(e2.length === 0, '★画面でエラーが出た → ' + e2.slice(0, 4).join(' / '));
-  ok(r1.版 === '173', '試験の前提: 版が 173 でない → ' + r1.版);
+  /* 版番号は上げるたびに試験を直さなくてよいように、読み込むファイルから拾う（版174 で直した） */
+  const WANT_VER = (function(){ try{
+    const f = decodeURIComponent(String(HTML).replace(/^file:\/\//, ''));
+    const m = fs.readFileSync(f, 'utf8').match(/const APP_VERSION = "(\d+)"/);
+    return m ? m[1] : '';
+  }catch(_){ return ''; } })();
+  ok(!!WANT_VER && r1.版 === WANT_VER, '試験の前提: 画面の版がファイルの APP_VERSION と違う → 画面 ' + r1.版 + ' ／ ファイル ' + WANT_VER);
   await b.close();
   if(fails.length){ console.log('FAIL\n- ' + fails.join('\n- ')); process.exit(1); }
   console.log('PASS 版173（現場入力）');
