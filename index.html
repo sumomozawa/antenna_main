@@ -5369,8 +5369,16 @@
               <option value="triple">3本（14-24/46/50 個別）</option>
             </select>
           </div>
+          <div class="field sta-only">
+            <label><span data-tip="ふだんは八戸局(14-24ch)とめんこい(二戸局50ch)を主アンテナ1本で受け、三沢局(46ch)は別のアンテナです。&#10;「八戸と三沢が1本」「めんこいと三沢が1本」の現場のときだけ選びます。&#10;金額は変わりません。図面のアンテナの見出し・線の名前・取付構成の付箋が変わります。">主アンテナで受ける局</span></label>
+            <select id="antenna_stations">
+              <option value="" selected>八戸＋めんこい(ふだん)</option>
+              <option value="hachinohe_misawa">八戸＋三沢(めんこい別)</option>
+              <option value="ninohe_misawa">めんこい＋三沢(八戸別)</option>
+            </select>
+          </div>
           <div class="field ch46-only">
-            <label>46CH(三沢局)</label>
+            <label id="antenna_46_label">46CH(三沢局)</label>
             <select id="antenna_46">
               <option value="">主と同型</option>
               <option value="antenna_u206">U206（20素子）</option>
@@ -5566,6 +5574,14 @@
             <select id="line_booster_46">
               <option value="no" selected>なし</option>
               <option value="yes">UB18L</option>
+            </select>
+          </div>
+          <div class="field lbpos-only">
+            <label><span data-tip="主系統のラインブースター（UB18L）を入れる場所です。ふだんはHPFの下（2分配器の手前）。&#10;アンテナ直下の2分配器の後、片方の線だけを上げたいとき（めんこいだけ等）に選びます。&#10;台数・金額は変わりません。図面の箱の場所だけが変わります。">ラインブースター（主系統）の場所</span></label>
+            <select id="line_booster_pos">
+              <option value="" selected>HPFの下（ふだん）</option>
+              <option value="sp_right">分配後 50ch(めんこい)</option>
+              <option value="sp_left">分配後 14-24ch(八戸)</option>
             </select>
           </div>
           <div class="field">
@@ -5798,7 +5814,7 @@
             <label>46CH系統</label>
             <input type="number" id="cable_ch46_len" value="5" min="0" step="0.5">
           </div>
-          <div style="font-size:10px;color:#555;margin:-4px 0 4px 108px;">三沢局U206→増幅器46ch入力</div>
+          <div id="cable_ch46_hint" style="font-size:10px;color:#555;margin:-4px 0 4px 108px;">三沢局U206→増幅器46ch入力</div>
           <div class="field triple-only">
             <label>50CH系統</label>
             <input type="number" id="cable_ch50_len" value="5" min="0" step="0.5">
@@ -6915,7 +6931,7 @@ async function lsRestoreFromIdb(){
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "173";
+const APP_VERSION = "174";
 /* ============================================================
    ★日時の表示は、必ずこの端末の時刻で★
    保存している日時は世界時のISO文字列（…T01:03:00.000Z）。これを文字のまま
@@ -7314,6 +7330,7 @@ function getInputs() {
     antenna_50: $("antenna_50") || "",      // 50CH(二戸局) アンテナ。空文字=主と同型
     ch46: $("ch46") !== "no",               // 46CHアンテナあり（yes / triple 共通）
     ch50_separate: $("ch46") === "triple",  // 3本構成：50CH専用アンテナも追加
+    antenna_stations: $("antenna_stations") || "",   // 版174: 主アンテナで受ける局（図面の文字だけ。金額には使わない）
     bs_cs: $("bs_cs") === "yes",
     bs_antenna_state: $("bs_antenna_state"),
     bsmix_type: $("bsmix_type") || "mixer",
@@ -7331,6 +7348,7 @@ function getInputs() {
     amplifier: $("amplifier"),
     line_booster: $("line_booster") === "yes",
     line_booster_46: $("line_booster_46") === "yes",   // 46CH(三沢局)系統のラインブースター
+    line_booster_pos: $("line_booster_pos") || "",      // 版174: ラインブースターの場所（図面だけ。金額には使わない）
     hpf: $("hpf"),
     outer_splitter: $("outer_splitter"),
     indoor_split: $("indoor_split"),
@@ -9606,6 +9624,52 @@ function mkLabel(svg, x, y, text, cls="boundary-label"){
    - BS時：増幅器の前に衛星ミキサーを配置
    - CATV時：増幅器アウト→保安器台/FA中継→宅内分配
    ============================================================ */
+/* 版174: 主アンテナで受ける局の組み合わせ（antenna_stations）から、図面と画面に出す局名をまとめて返す。
+   ""（いつもどおり）＝八戸14-24ch＋めんこい(二戸局50ch)が主アンテナ、三沢局46chは別のアンテナ。
+   既定の文字は今までの文字と1字も違わない（＝既定の図面は1ドットも変わらない）。
+   3本構成・3分配器WP（3局とも主アンテナ）は組み合わせを選ぶ余地が無いので applicable=false（いつもどおりの文字）。
+   ※ 図面・画面の文字だけ。部材・数量・金額の分岐には使わない（buildBOM は読まない）。 */
+function stationLayout(input){
+  const inp = input || {};
+  const def = { applicable:true, isDefault:true,
+    mainTop2:"八戸14-24+二戸50ch", secondTop:"三沢局\n46ch 専用", secondEditTitle:"46CH(三沢局)アンテナ",
+    secondFieldLabel:"46CH(三沢局)", secondCableHint:"三沢局U206→増幅器46ch入力",
+    secondWire:"46ch(三沢局)", lb46Label:"LB(46ch)\nUB18L",
+    spLabel2:"2分配\n(14-24/50別調整)", splitLeft:"14-24ch", splitRight:"50ch",
+    lbPosLeft:"分配後 14-24ch(八戸)", lbPosRight:"分配後 50ch(めんこい)",
+    aptSecondTop:"46CH", noteLine:"" };
+  const noPair = !!inp.ch50_separate
+    || (inp.amplifier === "amp_3u43" && inp.outer_splitter === "sp_3cw");
+  if(noPair) return Object.assign(def, { applicable:false });
+  const v = inp.antenna_stations || "";
+  if(v === "hachinohe_misawa") return Object.assign(def, { isDefault:false,
+    mainTop2:"八戸14-24+三沢46ch", secondTop:"二戸局\n50ch 専用", secondEditTitle:"50CH(二戸局)アンテナ",
+    secondFieldLabel:"2本目 50CH(二戸局)", secondCableHint:"二戸局U206→増幅器50ch入力",
+    secondWire:"50ch(二戸局)", lb46Label:"LB(50ch)\nUB18L",
+    spLabel2:"2分配\n(14-24/46別調整)", splitLeft:"14-24ch", splitRight:"46ch",
+    lbPosLeft:"分配後 14-24ch(八戸)", lbPosRight:"分配後 46ch(三沢)",
+    aptSecondTop:"50CH", noteLine: inp.ch46 ? "受信: 八戸+三沢が1本、二戸は別" : "受信: 八戸+三沢を1本で" });
+  if(v === "ninohe_misawa") return Object.assign(def, { isDefault:false,
+    mainTop2:"二戸50+三沢46ch", secondTop:"八戸局\n14-24ch 専用", secondEditTitle:"14-24CH(八戸局)アンテナ",
+    secondFieldLabel:"2本目 14-24CH(八戸局)", secondCableHint:"八戸局U206→増幅器14-24ch入力",
+    secondWire:"14-24ch(八戸局)", lb46Label:"LB(14-24ch)\nUB18L",
+    spLabel2:"2分配\n(50/46別調整)", splitLeft:"50ch", splitRight:"46ch",
+    lbPosLeft:"分配後 50ch(めんこい)", lbPosRight:"分配後 46ch(三沢)",
+    aptSecondTop:"14-24CH", noteLine: inp.ch46 ? "受信: 二戸+三沢が1本、八戸は別" : "受信: 二戸+三沢を1本で" });
+  return def;
+}
+/* 版174: ラインブースターの場所を選べるのは、主アンテナの真下に2分配があるとき
+   （3入力増幅器・3本構成でない・3分配でない）で、ラインブースターが「あり」のときだけ。 */
+function lbPosApplicable(input){
+  return !!input && !!input.line_booster && input.amplifier === "amp_3u43"
+    && !input.ch50_separate && input.outer_splitter !== "sp_3cw";
+}
+/* 図面で使う場所。"" ＝ HPFの下（今まで）。選べない構成・知らない値も "" として描く（値そのものは消さない）。
+   ※ 図面の置き場所だけ。台数・金額は変わらない（buildBOM は読まない）。 */
+function lbPosOf(input){
+  const v = (input && input.line_booster_pos) || "";
+  return ((v === "sp_left" || v === "sp_right") && lbPosApplicable(input)) ? v : "";
+}
 function renderDiagram(input){
   const svg = document.getElementById("diagram");
   svg.innerHTML = "";
@@ -9692,9 +9756,10 @@ function renderDiagram(input){
     return suf ? (base + " " + suf) : base;
   };
 
+  const staL = stationLayout(input);   // 版174: 主アンテナで受ける局（既定は今までの文字そのまま）
   const mainTop = input.ch50_separate
     ? "八戸局\n14-24ch 専用"
-    : "主系統\n八戸14-24+二戸50ch";
+    : "主系統\n" + staL.mainTop2;
   const antMain = mkNode(svg, antMainCx - antW/2, antY, antW, antH,
     labelWithPos(idMain, "ant_main"),
     { id: idMain, existing: false,
@@ -9707,8 +9772,8 @@ function renderDiagram(input){
     ant46 = mkNode(svg, ant46Cx - antW/2, antY, antW, antH,
       labelWithPos(id46, "ant_46"),
       { id: id46, existing: false,
-        toplabel:"三沢局\n46ch 専用",
-        inputId:"antenna_46", editTitle:"46CH(三沢局)アンテナ",
+        toplabel: staL.secondTop,
+        inputId:"antenna_46", editTitle: staL.secondEditTitle,
         nodeKey:"ant_46", axisLock:"y" });
   }
 
@@ -9804,6 +9869,8 @@ function renderDiagram(input){
     if(input.high_work){
       lines.push("※ 高所作業車 必要");
     }
+    // 版174: 主アンテナで受ける局が「いつもどおり」でないときだけ1行（既定は足さない＝箱の高さも同じ）
+    if(staL.noteLine) lines.push(staL.noteLine);
 
     // 取付構成ボックスは最右アンテナと重ならない位置に配置
     // （3本構成+BS時はBSアンテナがcx=440まで来るため、デフォルト400だと重なる）
@@ -9855,7 +9922,10 @@ function renderDiagram(input){
     curY += 32 + 14;
   }
   let lbNode = null;
-  if(input.line_booster){
+  /* 版174: ラインブースターの場所。"" ＝ HPFの下（今まで）。分配器の後の片方に移すときは
+     ここ（主系統の縦の並び）には置かず、下で分配器の枝の上に置く（lbSpNode）。台数・金額は同じ。 */
+  const lbPos = lbPosOf(input);
+  if(input.line_booster && !lbPos){
     lbNode = mkNode(svg, antMainCx - 40, curY, 80, 32, "LB\nUB18L",
       { id:"booster_ub18l", existing:false,
         inputId:"line_booster", editTitle:"ラインブースター（主系統）",
@@ -9866,7 +9936,7 @@ function renderDiagram(input){
      主系統の縦位置（curY）は使わない・進めない（進めると分配器と増幅器の位置がずれる）。 */
   let lb46Node = null;
   if(ant46 && input.line_booster_46){
-    lb46Node = mkNode(svg, ant46Cx - 40, ant46.bottom.y + 26, 80, 32, "LB(46ch)\nUB18L",
+    lb46Node = mkNode(svg, ant46Cx - 40, ant46.bottom.y + 26, 80, 32, staL.lb46Label,
       { id:"booster_ub18l", existing:false,
         inputId:"line_booster_46", editTitle:"ラインブースター（46CH系統）",
         nodeKey:"lb46", axisLock:"y" });
@@ -9875,7 +9945,7 @@ function renderDiagram(input){
   // 3本構成時は各アンテナが個別に入力されるため外部分配器は不要
   if(input.amplifier === "amp_3u43" && !input.ch50_separate){
     const is3sp = input.outer_splitter === "sp_3cw";
-    const spLabel = is3sp ? "3分配\n(14-24/46/50別調整)" : "2分配\n(14-24/50別調整)";
+    const spLabel = is3sp ? "3分配\n(14-24/46/50別調整)" : staL.spLabel2;
     const spW = is3sp ? 120 : 90;
     // sublabelは下の配線ラベル(14-24ch/50ch)と被るため、ノードラベル2行に統合
     outerSp = mkNode(svg, antMainCx - spW/2, curY, spW, 40, spLabel,
@@ -9883,6 +9953,17 @@ function renderDiagram(input){
         inputId:"outer_splitter", editTitle: is3sp ? "外部3分配器" : "外部2分配器",
         nodeKey:"outer_sp" });
     curY += 40 + 14;
+  }
+  /* 版174: ラインブースターを2分配の後の片方（左＝増幅器の1番入力へ／右＝2番入力へ）に置く。
+     箱は枝の縦線の上（縦にだけ動かせる）。幅は64（左の枝は屋外の枠に近く、80だと枠の線にかかる）。
+     nodeKey は "lb" と分ける＝HPFの下で動かした位置を、枝の上の箱へ持ち込まない。 */
+  let lbSpNode = null;
+  if(lbPos && outerSp){
+    const brX = (lbPos === "sp_left") ? outerSp.x + 20 : outerSp.x + outerSp.w - 20;
+    lbSpNode = mkNode(svg, brX - 32, outerSp.bottom.y + 26, 64, 32, "LB\nUB18L",
+      { id:"booster_ub18l", existing:false,
+        inputId:"line_booster", editTitle:"ラインブースター（主系統）",
+        nodeKey:"lb_sp", axisLock:"y" });
   }
 
   // ========== 増幅器（中央） ==========
@@ -10421,22 +10502,28 @@ function renderDiagram(input){
       // 2分配で主系統(八戸+二戸)を2系統に分け、14-24chと50chで別調整
       const leftOut = { x: outerSp.x + 20, y: outerSp.bottom.y };
       const rightOut = { x: outerSp.x + outerSp.w - 20, y: outerSp.bottom.y };
+      /* 版174: 枝にラインブースターがあるときは 分配器→箱 と 箱→増幅器 の2本に割る（同じ鍵。
+         線色の切り替えも積算の判定も今までの鍵のまま）。無いときは今までと同じ1本。 */
+      const leftFrom  = (lbSpNode && lbPos === "sp_left")  ? lbSpNode.bottom : leftOut;
+      const rightFrom = (lbSpNode && lbPos === "sp_right") ? lbSpNode.bottom : rightOut;
+      if(leftFrom !== leftOut)   mkWire(svg, [ leftOut,  lbSpNode.top ], { existing: false, wireKey:"main_amp_1" });
+      if(rightFrom !== rightOut) mkWire(svg, [ rightOut, lbSpNode.top ], { existing: false, wireKey:"main_amp_2" });
       // 14-24ch → ATT(主系統) → 増幅器 入力1
       const inY1 = ampY + 12;
       const endX1 = placeInputAtt(input.att_main, ampX, inY1, "att_main", "主系統 ATT");
       mkWire(svg, [
-        leftOut,
-        { x: leftOut.x, y: inY1 },
+        leftFrom,
+        { x: leftFrom.x, y: inY1 },
         { x: endX1, y: inY1 }
       ], { existing: false, jumps: jumpXs, wireKey:"main_amp_1" });
-      mkLabel(svg, leftOut.x - 22, leftOut.y + 10, "14-24ch", "wire-label");
+      mkLabel(svg, leftOut.x - 22, leftOut.y + 10, staL.splitLeft, "wire-label");
       // 50ch → 増幅器 入力3（非triple時はatt_50は非表示なので付けない）
       mkWire(svg, [
-        rightOut,
-        { x: rightOut.x, y: ampY + 26 },
+        rightFrom,
+        { x: rightFrom.x, y: ampY + 26 },
         { x: ampX, y: ampY + 26 }
       ], { existing: false, jumps: jumpXs, wireKey:"main_amp_2" });
-      mkLabel(svg, rightOut.x + 2, rightOut.y + 10, "50ch", "wire-label");
+      mkLabel(svg, rightOut.x + 2, rightOut.y + 10, staL.splitRight, "wire-label");
     }
   } else {
     const inY = ampY + 15;
@@ -10462,7 +10549,7 @@ function renderDiagram(input){
       { x: endX, y: inY }
     ], { existing: false, jumps: jumpXs, wireKey:"ch46_amp" });
     const chLen = input.cable_ch46_len > 0 ? " " + input.cable_ch46_len + "m" : "";
-    mkLabel(svg, ant46Cx + 6, ant46.bottom.y + 12, "46ch(三沢局)" + chLen, "wire-label");
+    mkLabel(svg, ant46Cx + 6, ant46.bottom.y + 12, staL.secondWire + chLen, "wire-label");
   }
 
   // --- 50CH → ATT → 増幅器（中入力、3本構成時のみ）---
@@ -10701,7 +10788,7 @@ function renderAptCommonDiagram(svg, input, W, H){
   // ---- アンテナ列 ----
   const ants = [];
   ants.push({ id: input.antenna_main, top: "主系統" });
-  if(input.ch46) ants.push({ id: input.antenna_46 || input.antenna_main, top: "46CH" });
+  if(input.ch46) ants.push({ id: input.antenna_46 || input.antenna_main, top: stationLayout(input).aptSecondTop });
   if(input.ch50_separate) ants.push({ id: input.antenna_50 || input.antenna_main, top: "50CH" });
   if(input.bs_cs) ants.push({ id: null, top: "衛星", label: "BS/CS" });
   const antW = 110, antH = 34, antX = 50;
@@ -12478,6 +12565,28 @@ function rebuild(){
   document.querySelectorAll(".ch46-only").forEach(el => {
     el.style.display = STATE.input.ch46 ? "" : "none";
   });
+  /* 版174: 主アンテナで受ける局（3本構成・3分配器WPでは選ぶ余地が無いので隠す）と、
+     ラインブースターの場所（主アンテナの真下に2分配がある戸建てのときだけ）。
+     隠しても値は消さない（本数などを戻せば、また効く）。局名は組み合わせに合わせて差し替える
+     （既定は今までの文字と同じ＝見た目は変わらない）。 */
+  {
+    const staL = stationLayout(STATE.input);
+    document.querySelectorAll(".sta-only").forEach(el => {
+      el.style.display = staL.applicable ? "" : "none";
+    });
+    const lbPosOn = lbPosApplicable(STATE.input) && !((parseInt(STATE.input.apt_units, 10) || 0) >= 2);
+    document.querySelectorAll(".lbpos-only").forEach(el => {
+      el.style.display = lbPosOn ? "" : "none";
+    });
+    const setTxt = (el, t) => { if(el && el.textContent !== t) el.textContent = t; };
+    const lbSel = document.getElementById("line_booster_pos");
+    if(lbSel){
+      setTxt(lbSel.querySelector('option[value="sp_right"]'), staL.lbPosRight);
+      setTxt(lbSel.querySelector('option[value="sp_left"]'), staL.lbPosLeft);
+    }
+    setTxt(document.getElementById("antenna_46_label"), staL.secondFieldLabel);
+    setTxt(document.getElementById("cable_ch46_hint"), staL.secondCableHint);
+  }
   // サイドベース欄は破風/壁面/縦並びのときのみ表示（ルーフ/支柱は非表示）
   const _mt = STATE.input.mount_type;
   const isSideBaseMountUI = (_mt === "side_base_hafu" || _mt === "side_base_wall" || _mt === "side_base_double");
@@ -13197,7 +13306,7 @@ const PRESETS = {
     work_type:"catv_to_uhf", is_catv:"yes", antenna_main:"antenna_u206",
     ch46:"yes", bs_cs:"no",
     bs_antenna_state:"new", bsmix_type:"mixer", bsmix_state:"new",
-    antenna_46:"", antenna_50:"",
+    antenna_46:"", antenna_50:"", antenna_stations:"", line_booster_pos:"",
     mount_type:"side_base_hafu",
     side_base_1:"side_sb22s", side_base_2:"same",
     mast:"mast_m182z", amplifier:"amp_3u43",
@@ -13218,7 +13327,7 @@ const PRESETS = {
     work_type:"catv_to_uhf", is_catv:"yes", antenna_main:"antenna_u206",
     ch46:"no", bs_cs:"no",
     bs_antenna_state:"new", bsmix_type:"mixer", bsmix_state:"new",
-    antenna_46:"", antenna_50:"",
+    antenna_46:"", antenna_50:"", antenna_stations:"", line_booster_pos:"",
     mount_type:"side_base_hafu",
     side_base_1:"side_sb22s", side_base_2:"same",
     mast:"mast_m182z", amplifier:"amp_1u45",
@@ -13241,7 +13350,7 @@ const PRESETS = {
     work_type:"new", is_catv:"no", antenna_main:"antenna_u206",
     ch46:"no", bs_cs:"yes",
     bs_antenna_state:"new", bsmix_type:"mixer", bsmix_state:"new",
-    antenna_46:"", antenna_50:"",
+    antenna_46:"", antenna_50:"", antenna_stations:"", line_booster_pos:"",
     mount_type:"side_base_hafu",
     side_base_1:"side_sb3220", side_base_2:"side_sb22s",
     mast:"mast_m182z", amplifier:"amp_1ubc45",
@@ -13262,7 +13371,7 @@ const PRESETS = {
     work_type:"new", is_catv:"no", antenna_main:"antenna_u206",
     ch46:"yes", bs_cs:"no",
     bs_antenna_state:"new", bsmix_type:"mixer", bsmix_state:"new",
-    antenna_46:"", antenna_50:"",
+    antenna_46:"", antenna_50:"", antenna_stations:"", line_booster_pos:"",
     mount_type:"side_base_hafu",
     side_base_1:"side_sb22s", side_base_2:"same",
     mast:"mast_m182z", amplifier:"amp_3u43",
@@ -13337,6 +13446,8 @@ function fixLegacyTvRooms(s){
    鍵が無いときだけ既定へ戻す（渡された中身そのものには足さない＝行のデータに鍵を増やさない）。
    欄を足した版では、ここに1行足すこと。 */
 const LATER_ADDED_FIELDS = {
+  antenna_stations: "",   // 版174: 主アンテナで受ける局（いつもどおり）
+  line_booster_pos: "",   // 版174: ラインブースターの場所（HPFの下）
   line_booster_46: "no"   // 版160: 46CH(三沢局)系統のラインブースター
 };
 function resetLaterAddedFields(src){
@@ -14106,6 +14217,7 @@ function photoContentId(dataUri){
 
 function collectState(){
   const ids = ["work_type","is_catv","high_work","snow_guard","indoor_adj",
+    "antenna_stations","line_booster_pos",   // 版174
     "antenna_main","antenna_46","antenna_50","ch46","bs_cs","bs_antenna_state","bsmix_type","bsmix_state",
     "mount_type","side_base_1","side_base_2","side_base_3",
     "mast","mast_2","mast_3","connector_type","connector_qty","turnbuckle_qty",
@@ -15933,6 +16045,7 @@ function convertSavedToInput(d){
     antenna_50: d.antenna_50 || "",   // 3本目(50CH)アンテナ機種（3本構成時）
     ch46: d.ch46 !== "no",
     ch50_separate: d.ch46 === "triple",
+    antenna_stations: d.antenna_stations || "",   // 版174: 図面の文字だけ（金額には使わない）
     bs_cs: d.bs_cs === "yes",
     bs_antenna_state: d.bs_antenna_state,
     bsmix_type: d.bsmix_type || "mixer",
@@ -15950,6 +16063,7 @@ function convertSavedToInput(d){
     amplifier: d.amplifier,
     line_booster: d.line_booster === "yes",
     line_booster_46: d.line_booster_46 === "yes",   // 鍵が無い古い戸別は false（金額は動かない）
+    line_booster_pos: d.line_booster_pos || "",   // 版174: 図面だけ（金額には使わない）
     hpf: d.hpf,
     outer_splitter: d.outer_splitter,
     indoor_split: d.indoor_split,
@@ -34670,6 +34784,7 @@ function bindEditorCaseFieldSync(){
 // 現場(genba)が権威＝上書き取込する入力フィールド（顧客/日付/状態/写真は下で個別処理）
 const GENBA_AUTHORITATIVE_FIELDS = [
   "work_type","is_catv","high_work","snow_guard","indoor_adj",
+  "antenna_stations","line_booster_pos",   // 版174
   "antenna_main","antenna_46","antenna_50","ch46","bs_cs","bs_antenna_state","bsmix_type","bsmix_state",
   "mount_type","side_base_1","side_base_2","side_base_3","mast","mast_2","mast_3",
   "connector_type","connector_qty","turnbuckle_qty",
@@ -34970,7 +35085,7 @@ async function genbaBuildPhotoSimilarPairs(mainPhotos, genbaPhotos){
 
 const GENBA_TECH_LABELS = {
   work_type:"工事種別",is_catv:"既設CATV",high_work:"高所作業車",snow_guard:"雪害対策",indoor_adj:"宅内調整",
-  antenna_main:"主アンテナ",antenna_46:"46chアンテナ",antenna_50:"50chアンテナ",ch46:"UHF本数",
+  antenna_main:"主アンテナ",antenna_46:"46chアンテナ",antenna_50:"50chアンテナ",ch46:"UHF本数",antenna_stations:"主アンテナで受ける局",line_booster_pos:"ラインブースター(主系統)の場所",
   bs_cs:"BS/CS",bs_antenna_state:"BSアンテナ",bsmix_type:"BS混合方式",bsmix_state:"BS混合器",
   mount_type:"取付方式",side_base_1:"サイドベース",side_base_2:"サイドベース2",side_base_3:"サイドベース3",
   mast:"マスト",mast_2:"マスト2",mast_3:"マスト3",connector_type:"接続金具",connector_qty:"接続金具数",turnbuckle_qty:"ターンバックル",
