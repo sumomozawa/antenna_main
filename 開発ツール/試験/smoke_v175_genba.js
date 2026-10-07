@@ -307,7 +307,9 @@ window.__okKey = () => { try{ return localStorage.getItem('field_saveplace_ok_v1
       ['工事（その十一）', '工事（その十二）', true], ['工事（その二十）', '工事（その二）', true],
       ['工事（その十一）', '工事（その11）', false],
       // 番号は、かっこ・空白を消す前の名前で読む（「その十 三沢」を 13 と読まない）
-      ['工事 その十 三沢地区', '工事 その10', false], ['工事 その一（十和田）', '工事（その１）', false]
+      ['工事 その十 三沢地区', '工事 その10', false], ['工事 その一（十和田）', '工事（その１）', false],
+      // 番号の無い名前どうしでも、全角半角・かっこの違いは同じ物件とみる
+      ['Ａ地区（北）', 'A地区(北)', false]
     ];
     const r0b = await page.evaluate(cs => cs.map(c => (typeof pjDiffers === 'function') ? pjDiffers(c[0], c[1]) : null), cases);
     const bad = cases.filter((c, i) => r0b[i] !== c[2]).map(c => c[0] + ' ／ ' + c[1] + ' → ' + !c[2]);

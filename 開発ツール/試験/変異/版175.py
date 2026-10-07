@@ -352,8 +352,8 @@ CASES = [
    u'''      if(!cur){ _projName = fp; touch(); }
       else if(pjDiffers(fp, cur)){''', u'''      if(false){ }
       else if(true){''', TM, "lg"),
-  (u"台帳：同じ物件名でも聞く",
-   u'''if(fp && fp !== cur){''', u'''if(fp){''', TM, "lg"),
+  # 「台帳：同じ物件名でも聞く」（if(fp && fp !== cur) → if(fp)）は版175 の3回目の見直しで同じ動きになった
+  # （同じ名前なら、下の3つの分かれ道のどれも何もしない）ので外した。
 ]
 
 import sys as _s
