@@ -1375,6 +1375,16 @@ async function importLedgerFile(file){
   try { p = JSON.parse(await file.text()); }
   catch(e){ alert("ファイルを読み込めませんでした。"); return; }
   if(!p || p.type !== LEDGER_FILE_TYPE || !Array.isArray(p.rows)){ alert("受付台帳ファイルではありません。"); return; }
+  /* ★物件名もファイルに合わせる★（版175）前はファイルの物件名を見ていなかったので、
+     前の物件（その２）の名前のまま、その１の台帳を書き出していた（現場入力にも その２ と出る）。
+     物件名が空なら黙って入れる。違う名前が入っているときだけ聞く。 */
+  {
+    const fp = String(p.project || "").trim(), cur = String(_projName || "").trim();
+    if(fp && fp !== cur){
+      if(!cur || confirm("取り込むファイルの物件は「" + fp + "」です。\nいまの物件名は「" + cur + "」です。\n\n"
+          + "物件名を「" + fp + "」に変えますか？\n（OK＝変える／キャンセル＝いまのまま）")){ _projName = fp; touch(); }
+    }
+  }
   const byNo = new Map();
   _rows.forEach(r => { const k = String(r.d.chosho_mgmt_no || "").trim(); if(k && !byNo.has(k)) byNo.set(k, r); });
   let upd = 0, add = 0;

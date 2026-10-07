@@ -6931,7 +6931,7 @@ async function lsRestoreFromIdb(){
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "174";
+const APP_VERSION = "175";
 /* ============================================================
    ★日時の表示は、必ずこの端末の時刻で★
    保存している日時は世界時のISO文字列（…T01:03:00.000Z）。これを文字のまま
@@ -18168,10 +18168,41 @@ async function lgwbButton(){
             写真の枚数＋サムネイルが物件へ保存される＝以後フォルダ再読込なしで写真を確認できる。
    "normal"＝物件を切り離してから読み込む（別の工事を見たい時。物件データは残る）
    "cancel"＝中止 */
-function resolveListLoadWithProject(){
+/* ★物件の名前どうしを比べる★（版175。現場入力と同じ考え方）
+   その１の工事の人に、前の物件（その２）の名前が出ていた。アプリに「その２」と決め打ちした所は無く、
+   開いていた物件（その２）へ、その１のフォルダを取り込んでしまうと、その１の台帳が「その２」の名前で出ていく。
+   名前は人が打つので、かっこ・空白・全角半角の違いは見ない。「その１」「その２」と両方に番号があれば番号で決める。
+   片方が空のときは「違う」と言わない。 */
+function pjNameKey(s){
+  return String(s == null ? "" : s).normalize("NFKC")
+    .replace(/[\s()\[\]{}「」『』【】〔〕<>・_\-]/g, "").toLowerCase();
+}
+function pjSonoNo(k){
+  const m = /その([0-9]+|[一二三四五六七八九十])/.exec(String(k || ""));
+  if(!m) return "";
+  const v = m[1];
+  if(/^[0-9]+$/.test(v)) return String(+v);
+  return v === "十" ? "10" : String("一二三四五六七八九".indexOf(v) + 1);
+}
+function pjDiffers(a, b){
+  const x = pjNameKey(a), y = pjNameKey(b);
+  if(!x || !y || x === y) return false;
+  const sx = pjSonoNo(x), sy = pjSonoNo(y);
+  if(sx && sy) return sx !== sy;                     // その１ と その２ は別の物件
+  if(sx || sy) return false;                         // 片方にだけ番号がある＝分からない（脅さない）
+  return !(x.indexOf(y) >= 0 || y.indexOf(x) >= 0);  // 片方がもう片方の一部なら同じ物件とみる
+}
+function resolveListLoadWithProject(folderName){
   if(!_currentProject) return "normal";
+  /* ★選んだフォルダの名前が、開いている物件と違う★（版175）
+     ここで「OK」を押すと、別の工事の一覧がこの物件の名前で保存され、現場用の台帳にもこの物件の名前で出ていく。
+     「リスト」は物件の中のフォルダなので比べない（どの物件にもある名前のため）。 */
+  const fn = String(folderName || "").trim();
+  const other = !!(fn && fn.normalize("NFKC") !== "リスト" && pjDiffers(fn, _currentProject.name));
   const absorb = confirm(
-    "現在 物件「" + (_currentProject.name || "") + "」を開いています。\n\n"
+    (other ? ("⚠ 選んだフォルダ「" + fn + "」は、開いている物件「" + (_currentProject.name || "") + "」と名前が違います。\n"
+              + "別の工事のフォルダなら「キャンセル」を押し、次で「切り離して読み込む」を選んでください。\n\n") : "")
+    + "現在 物件「" + (_currentProject.name || "") + "」を開いています。\n\n"
     + "これから読み込む一覧を、この物件に取り込みますか？\n"
     + "（この物件の工事フォルダの読み込みなら「OK」。写真の枚数とサムネイルが物件に保存され、"
     + "以後はフォルダを読み込まなくても写真を確認できます）\n\n"
@@ -18210,7 +18241,7 @@ async function listSelectFolder(){
       + "（それでも開かないときは Chrome / Edge でお試しください）\n\n" + (err && err.message ? err.message : err));
     return;
   }
-  const loadMode = resolveListLoadWithProject(); // 物件を開いたまま＝取り込み/切り離し/中止を選択
+  const loadMode = resolveListLoadWithProject(dirHandle && dirHandle.name); // 物件を開いたまま＝取り込み/切り離し/中止を選択
   if(loadMode === "cancel") return;
   // 台帳で直したままの分があれば、上書きして消える前に知らせる
   if(!lgConfirmDiscardCaseEdits("読み込む")) return;
@@ -28878,16 +28909,26 @@ function rtOpenConfig(){
 
 /* ---------- 物件操作（新規・複製・改名・削除・出入力） ---------- */
 async function createProjectFlow(){
-  const name = prompt("物件名を入力してください（例：三沢市〇〇地区 アンテナ改修工事）", _listSelectedFolderName || "");
+  /* ★物件を開いているときは、その物件の名前を最初から入れておかない★（版175）
+     _listSelectedFolderName は開いている物件の名前なので、そのまま OK を押すと
+     別の工事（その１）の物件が、前の物件（その２）と同じ名前で作られてしまう。 */
+  const hadProj = !!_currentProject;
+  const name = prompt("物件名を入力してください（例：三沢市〇〇地区 アンテナ改修工事）", hadProj ? "" : (_listSelectedFolderName || ""));
   if(name == null || !name.trim()) return;
   const now = new Date().toISOString();
   let p = { schema: PROJ_SCHEMA, id: projNewId(), name: name.trim(), createdAt: now, updatedAt: now,
             caseCount: 0, encSkipped: 0, cases: [], ledger: {}, takeout: {}, review: {} };
   let absorb = false;
   if(_listRows.length > 0){
-    absorb = confirm("現在読み込まれている一覧（" + _listRows.length + " 件）をこの物件に取り込みますか？\n\nOK＝取り込む ／ キャンセル＝空の物件として作成");
+    absorb = confirm(hadProj
+      ? ("いま開いている物件「" + (_currentProject.name || "") + "」の一覧（" + _listRows.length + " 件）を、新しい物件にも入れますか？\n\n"
+         + "OK＝入れる ／ キャンセル＝空の物件として作成（別の工事なら、こちら）")
+      : ("現在読み込まれている一覧（" + _listRows.length + " 件）をこの物件に取り込みますか？\n\nOK＝取り込む ／ キャンセル＝空の物件として作成"));
   }
   _currentProject = { id: p.id, name: p.name };
+  /* ★開いていた物件の履行報告（工事名・月ごとの記録）を持ち込まない★（版175）
+     持ち込むと、新しい物件の報告書に前の物件（その２）の工事名が出る。 */
+  if(hadProj){ try { hkAdopt({}); } catch(_){} }
   snapshotNormalIfNeeded();      // 通常(全物件共通)状態を退避（切り離しで戻せるように）
   _projSelfContained = true;     // 新規物件は自己完結(v3)＝単価マスター/プリセットを内包する
   _projWriteWarn = "";
@@ -30659,7 +30700,8 @@ async function exportGenbaSet(){
       + (map ? ("地図：" + map.sheetCount + " 枚（管理番号のついた建物 " + map.markCount + " 件）\n") : "地図：なし\n")
       + "大きさ：約 " + (mb < 1 ? (Math.round(mb * 1024) + " KB") : (mb.toFixed(1) + " MB")) + "\n\n"
       + "このファイルをスマホへ移し、現場入力アプリの「台帳」か「地図」から取り込んでください。\n"
-      + "1回の取り込みで、受付台帳と地図の両方が入ります。");
+      + "1回の取り込みで、受付台帳と地図の両方が入ります。"
+      + genbaNoProjNote(ledger.project));
   };
   if(window.showSaveFilePicker){
     try {
@@ -30677,6 +30719,14 @@ async function exportGenbaSet(){
   a.href = url; a.download = fname; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
   done();
+}
+/* ★物件名の入っていない書き出し★（版175）現場入力では入れる場所が「リスト」とだけ出る。
+   前は前の物件の名前（その２）が出たままになっていたので、物件を開いてから書き出すよう言う。 */
+function genbaNoProjNote(proj){
+  if(String(proj || "").trim()) return "";
+  return "\n\n⚠ 物件を開いていないので、このファイルには物件名が入っていません。\n"
+    + "現場入力では、入れる場所が「リスト」とだけ出ます。\n"
+    + "物件を開いてから書き出すと、物件名が入ります。";
 }
 /* 受付台帳ファイルの中身を作る（単独の書き出しと、現場用ひとまとめの両方で使う）。
    version 2＝ビラ・同意書・完了書 を含む。増えた項目を読まない現場入力アプリでも従来どおり読める。 */
@@ -30761,7 +30811,7 @@ async function exportReceptionLedgerForGenba(){
       await writable.write(content);
       await writable.close();
       try { lastSaveDirHandle = handle.getParent ? await handle.getParent() : lastSaveDirHandle; } catch(_){}
-      alert("受付台帳ファイルを保存しました（" + rows.length + "件）。\n選んだ保存先に「" + fname + "」を書き出しました。\n\nこのファイルは次のどちらでも読めます。\n・スマホの現場入力アプリ →「🗒台帳」から取り込む\n・受付台帳ソフト →「📥 台帳を取り込み」から取り込む");
+      alert("受付台帳ファイルを保存しました（" + rows.length + "件）。\n選んだ保存先に「" + fname + "」を書き出しました。\n\nこのファイルは次のどちらでも読めます。\n・スマホの現場入力アプリ →「🗒台帳」から取り込む\n・受付台帳ソフト →「📥 台帳を取り込み」から取り込む" + genbaNoProjNote(projName));
       return;
     } catch(err){
       if(err && err.name === "AbortError") return;   // ユーザーがキャンセル
@@ -30776,7 +30826,7 @@ async function exportReceptionLedgerForGenba(){
   a.href = url; a.download = fname;
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
-  alert("受付台帳を書き出しました（" + rows.length + "件）。\n保存先：ブラウザの「ダウンロード」フォルダ（ファイル名「" + fname + "」）。\nこのファイルをスマホに移し、現場入力アプリの「🗒 受付台帳」から取り込んでください。");
+  alert("受付台帳を書き出しました（" + rows.length + "件）。\n保存先：ブラウザの「ダウンロード」フォルダ（ファイル名「" + fname + "」）。\nこのファイルをスマホに移し、現場入力アプリの「🗒 受付台帳」から取り込んでください。" + genbaNoProjNote(projName));
 }
 /* ============================================================
    🌐 受付台帳を「データ入りHTML」で書き出す
@@ -32097,6 +32147,13 @@ const HK_SRC = [
   { key:"manual",   label:"手入力（工事全体の％）" }
 ];
 let _hk = null;
+/* 履行報告の頭（請負金額・着手・完成）が、その２の初期値のままで、開いている物件が その２ ではないか */
+function hkHeadIsSono2Default(h){
+  if(typeof _currentProject === "undefined" || !_currentProject) return false;
+  if(pjSonoNo(pjNameKey(_currentProject.name)) === "2") return false;
+  const hd = (h && h.head) || {};
+  return hd.net === 27200000 && hd.start === "2026-07-03" && hd.end === "2027-03-26";
+}
 function hkLoad(){
   if(_hk) return _hk;
   let o = null;
@@ -32463,7 +32520,7 @@ function renderListProgressMode(rows, container){
     +   '<label>報告する月 <input type="month" id="hk-ym" value="' + escapeHtml(ym) + '"></label>'
     +   (ymStale ? '<span class="hk-ym-stale">いまは ' + escapeHtml(hkYmLabel(nowYm)) + ' です'
         + ' <button type="button" id="hk-ym-now" class="hk-btn">' + escapeHtml(hkYmLabel(nowYm)) + 'にする</button></span>' : '')
-    +   '<label>工事名 <input type="text" id="hk-name" size="40" value="' + escapeHtml(h.head.name || "") + '" placeholder="令和８年度戸別受信設備設置工事（その２）"></label>'
+    +   '<label>工事名 <input type="text" id="hk-name" size="40" value="' + escapeHtml(h.head.name || "") + '" placeholder="' + escapeHtml((typeof _currentProject !== "undefined" && _currentProject && _currentProject.name) || "例：〇〇地区 アンテナ改修工事") + '"></label>'
     +   '<label>請負金額（税抜） <input type="number" id="hk-net" step="1" value="' + (net || 0) + '"> 円</label>'
     +   '<label>消費税 <input type="number" id="hk-tax" step="0.1" style="width:64px" value="' + (h.head.tax || 0) + '"> %</label>'
     +   '<label title="工程表の着手日">着手 <input type="date" id="hk-start" value="' + escapeHtml(h.head.start || "") + '"></label>'
@@ -32472,6 +32529,10 @@ function renderListProgressMode(rows, container){
     +   '<label title="保留の戸別を戸数から外します。既定は入れたまま（着工を止めているだけで、契約からは外れないため）">'
     +     '<input type="checkbox" id="hk-skiphold"' + (h.head.skipHold ? " checked" : "") + '> 保留の戸別を数に入れない</label>'
     + '</div>'
+    /* ★初期値は「その２」の内訳書・工程表の数字★（版175）別の物件で開くと、その２の数字のまま出る。
+       数字は消さず（その２の物件では正しい）、別の物件のときだけ直すよう言う。 */
+    + (hkHeadIsSono2Default(h) ? ('<div class="hk-warn hk-init">⚠ 請負金額・着手・完成・段階の予定は、その２の内訳書と工程表から入れた初期値のままです。'
+        + 'この工事の数字に直してください。</div>') : '')
     + '<div class="hk-warn' + (Math.abs(sum - 100) < 0.005 ? " ok" : "") + '">'
     +   '割合の合計 <b>' + hkFixed(sum, 2) + '%</b>'
     +   (Math.abs(sum - 100) < 0.005 ? '（100%ちょうどです）'
@@ -36948,6 +37009,7 @@ window.addEventListener("DOMContentLoaded", init);
   try { _bldShowBanchi = localStorage.getItem("antenna_map_bld_banchi") === "1"; } catch(_){}
 
   var sheets = [];          // 現在の文脈（物件 or 端末ローカル）のMapSheet配列
+  var sheetsCtx = "";       // sheets をどの物件で読んだか（"p:物件id"／"local"）。物件が替わったら読み直す（版175）
   var current = null;       // 現在開いているMapSheet
   var view = { scale: 1, tx: 0, ty: 0, rot: 0 };  // 表示専用（ワールド→画面）。保存はsheet.viewへ。rot=度、回転中心=ワールド原点
   var tool = "pan";         // pan | road | boundary | building | text | pin | delete
@@ -40136,14 +40198,16 @@ window.addEventListener("DOMContentLoaded", init);
     var p = curProj();
     e2.textContent = p ? ("📁 " + (p.name || "")) : "（物件未オープン・端末ローカル地図）";
   }
+  function sheetsCtxNow(){ var p = curProj(); return p ? ("p:" + p.id) : "local"; }
   function loadSheetsForContext(){
     var p = curProj();
+    var ctx = p ? ("p:" + p.id) : "local";
     var q = p ? sheetByProject(p.id) : sheetLocal();
     return q.then(function(list){
       list = (list || []).sort(function(a, b){ return String(a.createdAt).localeCompare(String(b.createdAt)); });
       if(!list.length){
         var s = p ? newSheetObj("全体図", { zentai: true, projectId: p.id }) : newSheetObj("新規シート（端末ローカル）");
-        sheets = [s];
+        sheets = [s]; sheetsCtx = ctx;
         return sheetPut(s);
       }
       // 既存シート内の「全体図」を決定的uidへ収束させ、重複は端末非依存キーで退避改名する（地図シート増殖対策）。
@@ -40187,7 +40251,7 @@ window.addEventListener("DOMContentLoaded", init);
           }
         }
       }
-      sheets = list;
+      sheets = list; sheetsCtx = ctx;
       return convergePromise;
     });
   }
@@ -42895,7 +42959,11 @@ window.addEventListener("DOMContentLoaded", init);
   /* 受付台帳の「現場用」からも地図を採れるようにする。地図画面をまだ開いていない場合は
      先にシートを読み込む。採り終わったら、開いていたシートへ戻す。 */
   window.mapCollectViewerPack = async function(){
-    if(!sheets || !sheets.length){
+    /* ★物件が替わっていたら読み直す★（版175）前は、地図を一度開いたあとに物件を替えても
+       前の物件（その２）の地図のまま「その１」の名前で現場用に入っていた。 */
+    var ctxNow = sheetsCtxNow();
+    if(!sheets || !sheets.length || sheetsCtx !== ctxNow){
+      if(sheetsCtx !== ctxNow){ current = null; sheets = []; }   // 前の物件のシートは開いたままにしない
       try { await loadSheetsForContext(); } catch(e){ console.warn("[map] シートの読み込みに失敗", e); return null; }
     }
     if(!sheets || !sheets.length) return null;
@@ -43830,65 +43898,74 @@ gqTjg6vjgpLoqq3jgb/ovrzjgoDvvIjnrqHnkIbnlarlj7fjgafnqoHjgY3lkIjjgo/jgZvjgIHpgZXj
 gIIgKi8KYXN5bmMgZnVuY3Rpb24gaW1wb3J0TGVkZ2VyRmlsZShmaWxlKXsKICBsZXQgcDsKICB0cnkgeyBwID0gSlNPTi5wYXJzZShhd2FpdCBmaWxlLnRl
 eHQoKSk7IH0KICBjYXRjaChlKXsgYWxlcnQoIuODleOCoeOCpOODq+OCkuiqreOBv+i+vOOCgeOBvuOBm+OCk+OBp+OBl+OBn+OAgiIpOyByZXR1cm47IH0K
 ICBpZighcCB8fCBwLnR5cGUgIT09IExFREdFUl9GSUxFX1RZUEUgfHwgIUFycmF5LmlzQXJyYXkocC5yb3dzKSl7IGFsZXJ0KCLlj5fku5jlj7DluLPjg5Xj
-gqHjgqTjg6vjgafjga/jgYLjgorjgb7jgZvjgpPjgIIiKTsgcmV0dXJuOyB9CiAgY29uc3QgYnlObyA9IG5ldyBNYXAoKTsKICBfcm93cy5mb3JFYWNoKHIg
-PT4geyBjb25zdCBrID0gU3RyaW5nKHIuZC5jaG9zaG9fbWdtdF9ubyB8fCAiIikudHJpbSgpOyBpZihrICYmICFieU5vLmhhcyhrKSkgYnlOby5zZXQoaywg
-cik7IH0pOwogIGxldCB1cGQgPSAwLCBhZGQgPSAwOwogIHAucm93cy5mb3JFYWNoKHggPT4gewogICAgY29uc3Qgbm8gPSBTdHJpbmcoeC5tZ210X25vIHx8
-ICIiKS50cmltKCk7IGlmKCFubykgcmV0dXJuOwogICAgbGV0IHIgPSBieU5vLmdldChubyk7CiAgICBpZighcil7CiAgICAgIGNvbnN0IHBheWxvYWQgPSB7
-IGNob3Nob19tZ210X25vOiBubywgY2hvc2hvX2RhdGU6IHguZGF0ZSB8fCAiIiwgY2hvc2hvX2N1c3RfbmFtZTogeC5uYW1lIHx8ICIiLAogICAgICAgIGNo
-b3Nob19jdXN0X2FkZHI6IHRvSGFsZldpZHRoQW4oeC5hZGRyIHx8ICIiKSwgY2hvc2hvX2N1c3RfdGVsOiB0b0hhbGZXaWR0aEFuKHgudGVsIHx8ICIiKSwK
-ICAgICAgICBjaG9zaG9fc3RhdHVzOiB4LnN0YXR1cyB8fCAicHJvdmlzaW9uYWwiLCB3b3JrX3R5cGU6IiIsIF9tYW51YWw6dHJ1ZSwgX29yaWdpbjoibGVk
-Z2VyLWZpbGUiIH07CiAgICAgIHIgPSB7IGNhc2VJZDogbmV3SWQoKSwgZmlsZTogIm1hbnVhbDoiICsgbmV3SWQoKSwgbGFzdE1vZGlmaWVkOiBEYXRlLm5v
-dygpLCBwcmV2U3ViOiIiLAogICAgICAgICAgICBwYXlsb2FkLCBoeWJyaWQ6ZmFsc2UsIGQ6IE9iamVjdC5hc3NpZ24oe30sIHBheWxvYWQpLCBtYW51YWw6
-dHJ1ZSwgb3JpZ2luOiJsZWRnZXItZmlsZSIgfTsKICAgICAgZGVsZXRlIHIuZC5fbWFudWFsOyBkZWxldGUgci5kLl9vcmlnaW47CiAgICAgIF9yb3dzLnB1
-c2gocik7IGJ5Tm8uc2V0KG5vLCByKTsgbWFya0Nhc2Uocik7IGFkZCsrOwogICAgfSBlbHNlIHsKICAgICAgWyJuYW1lIiwiYWRkciIsInRlbCIsImRhdGUi
-XS5mb3JFYWNoKGYgPT4gewogICAgICAgIGNvbnN0IHYgPSBTdHJpbmcoeFtmXSA9PT0gdW5kZWZpbmVkID8gIiIgOiB4W2ZdKTsKICAgICAgICBjb25zdCBr
-ZXkgPSB7IG5hbWU6ImNob3Nob19jdXN0X25hbWUiLCBhZGRyOiJjaG9zaG9fY3VzdF9hZGRyIiwgdGVsOiJjaG9zaG9fY3VzdF90ZWwiLCBkYXRlOiJjaG9z
-aG9fZGF0ZSIgfVtmXTsKICAgICAgICAvLyBrZWVwU3RhdHVzIOKApiDlkI3liY3jgarjganjgpLlhaXjgozjgabjgoLnirbmhYvjga/li5XjgYvjgZXjgarj
-gYTvvIjnirbmhYvjga/jgZPjga7kuIvjgafjg5XjgqHjgqTjg6vjga7lgKTjgpLlhaXjgozjgovvvIkKICAgICAgICBpZih2ICYmIFN0cmluZyhyLmRba2V5
-XSB8fCAiIikgIT09IHYgJiYgY2FuRWRpdChyLCBmID09PSAiZGF0ZSIgPyAiZGF0ZSIgOiBmKSkgd3JpdGVGaWVsZChyLCBmLCB2LCB7IGtlZXBTdGF0dXM6
-dHJ1ZSB9KTsKICAgICAgfSk7CiAgICAgIC8vIOeKtuaFi+OCguODleOCoeOCpOODq+OBruWApOOBq+WQiOOCj+OBm+OCi+OAguOBk+OCjOOBvuOBp+WFpeOC
-jOOBpuOBhOOBquOBi+OBo+OBn+OBn+OCgeOAgeabuOOBjeWHuuOBl+OBpuiqreOBv+aIu+OBmeOBqAogICAgICAvLyDnirbmhYvjgaDjgZHlhYPjgavmiLvj
-gonjgarjgYvjgaPjgZ/jgILjg5XjgqHjgqTjg6vjgavnirbmhYvjgYznhKHjgYTjgajjgY3jga/op6bjgonjgarjgYTjgIIKICAgICAgeyBjb25zdCBzdCA9
-IFN0cmluZyh4LnN0YXR1cyB8fCAiIikudHJpbSgpOwogICAgICAgIGlmKHN0ICYmIFNUX05BTUVbc3RdICYmIHN0ICE9PSBzdGF0dXNPZihyKSAmJiBjYW5F
-ZGl0KHIsICJzdGF0dXMiKSkgd3JpdGVGaWVsZChyLCAic3RhdHVzIiwgc3QsIHsga2VlcFN0YXR1czp0cnVlIH0pOyB9CiAgICAgIHVwZCsrOwogICAgfQog
-ICAgLy8g44OV44Kh44Kk44Or44Gr5YWl44Gj44Gm44GE44Gq44GE6aCF55uu44Gv6Kem44KJ44Gq44GE44CC5Y+k44GE54mI44Gu44Oh44Kk44Oz44GM5pu4
-44GN5Ye644GX44Gf44OV44Kh44Kk44Or44Gr44GvCiAgICAvLyDjg5Pjg6njg7vlkIzmhI/mm7jjg7vlrozkuobmm7gg44GM5YWl44Gj44Gm44GK44KJ44Ga
-44CB44G+44Go44KB44Gm5YWl44KM44KL44Go44OB44Kn44OD44Kv44GM5aSW44KM44Gm44GX44G+44GG44Gf44KB44CCCiAgICBjb25zdCBwYXRjaCA9IHt9
-OwogICAgaWYoInRpbWUiIGluIHgpIHBhdGNoLnRpbWUgPSB4LnRpbWUgfHwgIiI7CiAgICBpZigibWVldCIgaW4geCkgcGF0Y2gubWVldEF0ID0geC5tZWV0
-IHx8ICIiOwogICAgaWYoImZseWVyIiBpbiB4KSBwYXRjaC5mbHllciA9ICEheC5mbHllcjsKICAgIGlmKCJob2xkIiBpbiB4KSBwYXRjaC5ob2xkID0gISF4
-LmhvbGQ7CiAgICBpZigiY29uc2VudCIgaW4geCkgcGF0Y2guY29uc2VudCA9ICEheC5jb25zZW50OwogICAgaWYoImNvbXBkb2MiIGluIHgpIHBhdGNoLmNv
-bXBkb2MgPSAhIXguY29tcGRvYzsKICAgIGlmKCJub3RlIiBpbiB4KSBwYXRjaC5ub3RlID0geC5ub3RlIHx8ICIiOwogICAgaWYoT2JqZWN0LmtleXMocGF0
-Y2gpLmxlbmd0aCkgc2V0TGcoc3ViS2V5T2Yobm8sIHIuZmlsZSksIHBhdGNoKTsKICAgIC8vIOaWveW3peS8muekvuOBr+OAgeODleOCoeOCpOODq+WBtOOB
-q+WQjeWJjeOBjOWFpeOBo+OBpuOBhOOBpuS7iuOBqOmBleOBhuOBqOOBjeOBoOOBkeWFpeOCjOabv+OBiOOCi++8iOepuuOBp+OBr+ino+mZpOOBl+OBquOB
-hO+8iQogICAgY29uc3QgY24gPSBTdHJpbmcoeC5jb250cmFjdG9yIHx8ICIiKS50cmltKCk7CiAgICBpZihjbiAmJiBjdHJPZihyKS5uYW1lICE9PSBjbil7
-CiAgICAgIGlmKF9jb250cmFjdG9ycy5pbmRleE9mKGNuKSA8IDApIF9jb250cmFjdG9ycy5wdXNoKGNuKTsKICAgICAgc2V0Q3RyKHIsIGNuKTsKICAgIH0K
-ICB9KTsKICByZW5kZXIoKTsKICB0b2FzdCgi8J+TpSDlj5fku5jlj7DluLPjgpLlj5bjgorovrzjgb/jgb7jgZfjgZ/vvIjmm7TmlrAgIiArIHVwZCArICIg
-5Lu2IC8g6L+95YqgICIgKyBhZGQgKyAiIOS7tu+8iSIpOwp9CgovKiA9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09
-PT09PT09PT09PT09PT09PT09PT09PT09CiAgIDkuIOi1t+WLleOBqOmFjee3mgogICA9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09
-PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09ICovCmVsKCJidG4tYWRkIikuYWRkRXZlbnRMaXN0ZW5lcigiY2xpY2siLCBhZGRSb3cpOwplbCgi
-YnRuLXhsc3gtb3V0IikuYWRkRXZlbnRMaXN0ZW5lcigiY2xpY2siLCB4bHN4RXhwb3J0KTsKZWwoImJ0bi11bmRvIikuYWRkRXZlbnRMaXN0ZW5lcigiY2xp
-Y2siLCB1bmRvSW1wb3J0KTsKZWwoImJ0bi14bHN4LWluIikuYWRkRXZlbnRMaXN0ZW5lcigiY2xpY2siLCAoKSA9PiB7CiAgY29uc3QgZiA9IGRvY3VtZW50
-LmNyZWF0ZUVsZW1lbnQoImlucHV0Iik7CiAgZi50eXBlID0gImZpbGUiOyBmLmFjY2VwdCA9ICIueGxzeCI7CiAgZi5hZGRFdmVudExpc3RlbmVyKCJjaGFu
-Z2UiLCAoKSA9PiB7IGlmKGYuZmlsZXMgJiYgZi5maWxlc1swXSkgeGxzeEltcG9ydChmLmZpbGVzWzBdKTsgfSk7CiAgZi5jbGljaygpOwp9KTsKZWwoImJ0
-bi1leHBvcnQiKS5hZGRFdmVudExpc3RlbmVyKCJjbGljayIsIGV4cG9ydExlZGdlckZpbGUpOwplbCgiYnRuLWltcG9ydCIpLmFkZEV2ZW50TGlzdGVuZXIo
-ImNsaWNrIiwgKCkgPT4gewogIGNvbnN0IGYgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KCJpbnB1dCIpOwogIGYudHlwZSA9ICJmaWxlIjsgZi5hY2NlcHQg
-PSAiLmpzb24iOwogIGYuYWRkRXZlbnRMaXN0ZW5lcigiY2hhbmdlIiwgKCkgPT4geyBpZihmLmZpbGVzICYmIGYuZmlsZXNbMF0pIGltcG9ydExlZGdlckZp
-bGUoZi5maWxlc1swXSk7IH0pOwogIGYuY2xpY2soKTsKfSk7CmVsKCJidG4tcHJpbnQiKS5hZGRFdmVudExpc3RlbmVyKCJjbGljayIsIGRvUHJpbnQpOwpl
-bCgiYnRuLWN0ciIpLmFkZEV2ZW50TGlzdGVuZXIoImNsaWNrIiwgb3BlbkN0ckVkaXRvcik7CmVsKCJidG4tZmNsZWFyIikuYWRkRXZlbnRMaXN0ZW5lcigi
-Y2xpY2siLCBjbGVhckZpbHRlcnMpOwplbCgicHJvai1uYW1lIikuYWRkRXZlbnRMaXN0ZW5lcigiaW5wdXQiLCAoKSA9PiB7IF9wcm9qTmFtZSA9IGVsKCJw
-cm9qLW5hbWUiKS52YWx1ZTsgdG91Y2goKTsgfSk7ClsicSIsImYtcHJvdiIsImYtcGVuZGluZyIsImYtbm9mbHllciIsImYtaG9sZCIsImYtY3RyIiwiZi1k
-MSIsImYtZDIiXS5mb3JFYWNoKGlkID0+IHsKICBlbChpZCkuYWRkRXZlbnRMaXN0ZW5lcigiaW5wdXQiLCAoKSA9PiB7IF9uZXdLZXkgPSAiIjsgcmVuZGVy
-KCk7IH0pOwogIGVsKGlkKS5hZGRFdmVudExpc3RlbmVyKCJjaGFuZ2UiLCAoKSA9PiB7IF9uZXdLZXkgPSAiIjsgcmVuZGVyKCk7IH0pOwp9KTsKd2luZG93
-LmFkZEV2ZW50TGlzdGVuZXIoImJlZm9yZXVubG9hZCIsIGUgPT4gewogIGlmKF9kaXJ0eSl7IGUucHJldmVudERlZmF1bHQoKTsgZS5yZXR1cm5WYWx1ZSA9
-ICIiOyB9Cn0pOwpkb2N1bWVudC5hZGRFdmVudExpc3RlbmVyKCJrZXlkb3duIiwgZSA9PiB7CiAgaWYoKGUuY3RybEtleSB8fCBlLm1ldGFLZXkpICYmIGUu
-a2V5ID09PSAicyIpeyBlLnByZXZlbnREZWZhdWx0KCk7IHNhdmVOb3codHJ1ZSkudGhlbihvayA9PiB7IGlmKG9rKSB0b2FzdCgi8J+SviDjgZPjga7nq6/m
-nKvjgavkv53lrZjjgZfjgb7jgZfjgZ8iKTsgfSk7IH0KfSk7Cihhc3luYyBmdW5jdGlvbiBib290KCl7CiAgbGV0IGxvY2FsID0gbnVsbDsKICB0cnkgeyBs
-b2NhbCA9IGF3YWl0IGxvY2FsR2V0KCk7IH0gY2F0Y2goXyl7fQogIC8vIOe2muOBje+8iOOBk+OBruODleOCoeOCpOODq+OBp+WJjeOBq+ebtOOBl+OBn+WG
-heWuue+8ieOBjOOBguOCjOOBsOOBneOCjOOAgueEoeOBkeOCjOOBsOOAgeODoeOCpOODs+OBi+OCiQogIC8vIOW3ruOBl+i+vOOBvuOCjOOBn+S4rei6q+OA
-guOBqeOBoeOCieOCgueEoeOBkeOCjOOBsOepuuOBruWPsOW4s+OBi+OCieWni+OCgeOCi+OAggogIGFkb3B0U25hcHNob3QobG9jYWwgJiYgaXNQcm9qZWN0
-RmlsZShsb2NhbCkgPyBsb2NhbCA6IChFTUJFRCB8fCB7CiAgICBzY2hlbWE6IFBST0pfU0NIRU1BLCBpZDogImxlZGdlcl9sb2NhbCIsIG5hbWU6ICIiLAog
-ICAgY3JlYXRlZEF0OiBuZXcgRGF0ZSgpLnRvSVNPU3RyaW5nKCksIHVwZGF0ZWRBdDogIiIsIGNhc2VzOiBbXSwgbGVkZ2VyOiB7fSwgY29udHJhY3RvckFz
-c2lnbjoge30KICB9KSk7CiAgcmVuZGVyRW1iZWROb3RlKCk7CiAgcmVuZGVyKCk7Cn0pKCk7Cjwvc2NyaXB0Pgo8L2JvZHk+CjwvaHRtbD4K
+gqHjgqTjg6vjgafjga/jgYLjgorjgb7jgZvjgpPjgIIiKTsgcmV0dXJuOyB9CiAgLyog4piF54mp5Lu25ZCN44KC44OV44Kh44Kk44Or44Gr5ZCI44KP44Gb
+44KL4piF77yI54mIMTc177yJ5YmN44Gv44OV44Kh44Kk44Or44Gu54mp5Lu25ZCN44KS6KaL44Gm44GE44Gq44GL44Gj44Gf44Gu44Gn44CBCiAgICAg5YmN
+44Gu54mp5Lu277yI44Gd44Gu77yS77yJ44Gu5ZCN5YmN44Gu44G+44G+44CB44Gd44Gu77yR44Gu5Y+w5biz44KS5pu444GN5Ye644GX44Gm44GE44Gf77yI
+54++5aC05YWl5Yqb44Gr44KCIOOBneOBru+8kiDjgajlh7rjgovvvInjgIIKICAgICDnianku7blkI3jgYznqbrjgarjgonpu5njgaPjgablhaXjgozjgovj
+gILpgZXjgYblkI3liY3jgYzlhaXjgaPjgabjgYTjgovjgajjgY3jgaDjgZHogZ7jgY/jgIIgKi8KICB7CiAgICBjb25zdCBmcCA9IFN0cmluZyhwLnByb2pl
+Y3QgfHwgIiIpLnRyaW0oKSwgY3VyID0gU3RyaW5nKF9wcm9qTmFtZSB8fCAiIikudHJpbSgpOwogICAgaWYoZnAgJiYgZnAgIT09IGN1cil7CiAgICAgIGlm
+KCFjdXIgfHwgY29uZmlybSgi5Y+W44KK6L6844KA44OV44Kh44Kk44Or44Gu54mp5Lu244Gv44CMIiArIGZwICsgIuOAjeOBp+OBmeOAglxu44GE44G+44Gu
+54mp5Lu25ZCN44Gv44CMIiArIGN1ciArICLjgI3jgafjgZnjgIJcblxuIgogICAgICAgICAgKyAi54mp5Lu25ZCN44KS44CMIiArIGZwICsgIuOAjeOBq+Wk
+ieOBiOOBvuOBmeOBi++8n1xu77yIT0vvvJ3lpInjgYjjgovvvI/jgq3jg6Pjg7Pjgrvjg6vvvJ3jgYTjgb7jga7jgb7jgb7vvIkiKSl7IF9wcm9qTmFtZSA9
+IGZwOyB0b3VjaCgpOyB9CiAgICB9CiAgfQogIGNvbnN0IGJ5Tm8gPSBuZXcgTWFwKCk7CiAgX3Jvd3MuZm9yRWFjaChyID0+IHsgY29uc3QgayA9IFN0cmlu
+ZyhyLmQuY2hvc2hvX21nbXRfbm8gfHwgIiIpLnRyaW0oKTsgaWYoayAmJiAhYnlOby5oYXMoaykpIGJ5Tm8uc2V0KGssIHIpOyB9KTsKICBsZXQgdXBkID0g
+MCwgYWRkID0gMDsKICBwLnJvd3MuZm9yRWFjaCh4ID0+IHsKICAgIGNvbnN0IG5vID0gU3RyaW5nKHgubWdtdF9ubyB8fCAiIikudHJpbSgpOyBpZighbm8p
+IHJldHVybjsKICAgIGxldCByID0gYnlOby5nZXQobm8pOwogICAgaWYoIXIpewogICAgICBjb25zdCBwYXlsb2FkID0geyBjaG9zaG9fbWdtdF9ubzogbm8s
+IGNob3Nob19kYXRlOiB4LmRhdGUgfHwgIiIsIGNob3Nob19jdXN0X25hbWU6IHgubmFtZSB8fCAiIiwKICAgICAgICBjaG9zaG9fY3VzdF9hZGRyOiB0b0hh
+bGZXaWR0aEFuKHguYWRkciB8fCAiIiksIGNob3Nob19jdXN0X3RlbDogdG9IYWxmV2lkdGhBbih4LnRlbCB8fCAiIiksCiAgICAgICAgY2hvc2hvX3N0YXR1
+czogeC5zdGF0dXMgfHwgInByb3Zpc2lvbmFsIiwgd29ya190eXBlOiIiLCBfbWFudWFsOnRydWUsIF9vcmlnaW46ImxlZGdlci1maWxlIiB9OwogICAgICBy
+ID0geyBjYXNlSWQ6IG5ld0lkKCksIGZpbGU6ICJtYW51YWw6IiArIG5ld0lkKCksIGxhc3RNb2RpZmllZDogRGF0ZS5ub3coKSwgcHJldlN1YjoiIiwKICAg
+ICAgICAgICAgcGF5bG9hZCwgaHlicmlkOmZhbHNlLCBkOiBPYmplY3QuYXNzaWduKHt9LCBwYXlsb2FkKSwgbWFudWFsOnRydWUsIG9yaWdpbjoibGVkZ2Vy
+LWZpbGUiIH07CiAgICAgIGRlbGV0ZSByLmQuX21hbnVhbDsgZGVsZXRlIHIuZC5fb3JpZ2luOwogICAgICBfcm93cy5wdXNoKHIpOyBieU5vLnNldChubywg
+cik7IG1hcmtDYXNlKHIpOyBhZGQrKzsKICAgIH0gZWxzZSB7CiAgICAgIFsibmFtZSIsImFkZHIiLCJ0ZWwiLCJkYXRlIl0uZm9yRWFjaChmID0+IHsKICAg
+ICAgICBjb25zdCB2ID0gU3RyaW5nKHhbZl0gPT09IHVuZGVmaW5lZCA/ICIiIDogeFtmXSk7CiAgICAgICAgY29uc3Qga2V5ID0geyBuYW1lOiJjaG9zaG9f
+Y3VzdF9uYW1lIiwgYWRkcjoiY2hvc2hvX2N1c3RfYWRkciIsIHRlbDoiY2hvc2hvX2N1c3RfdGVsIiwgZGF0ZToiY2hvc2hvX2RhdGUiIH1bZl07CiAgICAg
+ICAgLy8ga2VlcFN0YXR1cyDigKYg5ZCN5YmN44Gq44Gp44KS5YWl44KM44Gm44KC54q25oWL44Gv5YuV44GL44GV44Gq44GE77yI54q25oWL44Gv44GT44Gu
+5LiL44Gn44OV44Kh44Kk44Or44Gu5YCk44KS5YWl44KM44KL77yJCiAgICAgICAgaWYodiAmJiBTdHJpbmcoci5kW2tleV0gfHwgIiIpICE9PSB2ICYmIGNh
+bkVkaXQociwgZiA9PT0gImRhdGUiID8gImRhdGUiIDogZikpIHdyaXRlRmllbGQociwgZiwgdiwgeyBrZWVwU3RhdHVzOnRydWUgfSk7CiAgICAgIH0pOwog
+ICAgICAvLyDnirbmhYvjgoLjg5XjgqHjgqTjg6vjga7lgKTjgavlkIjjgo/jgZvjgovjgILjgZPjgozjgb7jgaflhaXjgozjgabjgYTjgarjgYvjgaPjgZ/j
+gZ/jgoHjgIHmm7jjgY3lh7rjgZfjgaboqq3jgb/miLvjgZnjgagKICAgICAgLy8g54q25oWL44Gg44GR5YWD44Gr5oi744KJ44Gq44GL44Gj44Gf44CC44OV
+44Kh44Kk44Or44Gr54q25oWL44GM54Sh44GE44Go44GN44Gv6Kem44KJ44Gq44GE44CCCiAgICAgIHsgY29uc3Qgc3QgPSBTdHJpbmcoeC5zdGF0dXMgfHwg
+IiIpLnRyaW0oKTsKICAgICAgICBpZihzdCAmJiBTVF9OQU1FW3N0XSAmJiBzdCAhPT0gc3RhdHVzT2YocikgJiYgY2FuRWRpdChyLCAic3RhdHVzIikpIHdy
+aXRlRmllbGQociwgInN0YXR1cyIsIHN0LCB7IGtlZXBTdGF0dXM6dHJ1ZSB9KTsgfQogICAgICB1cGQrKzsKICAgIH0KICAgIC8vIOODleOCoeOCpOODq+OB
+q+WFpeOBo+OBpuOBhOOBquOBhOmgheebruOBr+inpuOCieOBquOBhOOAguWPpOOBhOeJiOOBruODoeOCpOODs+OBjOabuOOBjeWHuuOBl+OBn+ODleOCoeOC
+pOODq+OBq+OBrwogICAgLy8g44OT44Op44O75ZCM5oSP5pu444O75a6M5LqG5pu4IOOBjOWFpeOBo+OBpuOBiuOCieOBmuOAgeOBvuOBqOOCgeOBpuWFpeOC
+jOOCi+OBqOODgeOCp+ODg+OCr+OBjOWkluOCjOOBpuOBl+OBvuOBhuOBn+OCgeOAggogICAgY29uc3QgcGF0Y2ggPSB7fTsKICAgIGlmKCJ0aW1lIiBpbiB4
+KSBwYXRjaC50aW1lID0geC50aW1lIHx8ICIiOwogICAgaWYoIm1lZXQiIGluIHgpIHBhdGNoLm1lZXRBdCA9IHgubWVldCB8fCAiIjsKICAgIGlmKCJmbHll
+ciIgaW4geCkgcGF0Y2guZmx5ZXIgPSAhIXguZmx5ZXI7CiAgICBpZigiaG9sZCIgaW4geCkgcGF0Y2guaG9sZCA9ICEheC5ob2xkOwogICAgaWYoImNvbnNl
+bnQiIGluIHgpIHBhdGNoLmNvbnNlbnQgPSAhIXguY29uc2VudDsKICAgIGlmKCJjb21wZG9jIiBpbiB4KSBwYXRjaC5jb21wZG9jID0gISF4LmNvbXBkb2M7
+CiAgICBpZigibm90ZSIgaW4geCkgcGF0Y2gubm90ZSA9IHgubm90ZSB8fCAiIjsKICAgIGlmKE9iamVjdC5rZXlzKHBhdGNoKS5sZW5ndGgpIHNldExnKHN1
+YktleU9mKG5vLCByLmZpbGUpLCBwYXRjaCk7CiAgICAvLyDmlr3lt6XkvJrnpL7jga/jgIHjg5XjgqHjgqTjg6vlgbTjgavlkI3liY3jgYzlhaXjgaPjgabj
+gYTjgabku4rjgajpgZXjgYbjgajjgY3jgaDjgZHlhaXjgozmm7/jgYjjgovvvIjnqbrjgafjga/op6PpmaTjgZfjgarjgYTvvIkKICAgIGNvbnN0IGNuID0g
+U3RyaW5nKHguY29udHJhY3RvciB8fCAiIikudHJpbSgpOwogICAgaWYoY24gJiYgY3RyT2YocikubmFtZSAhPT0gY24pewogICAgICBpZihfY29udHJhY3Rv
+cnMuaW5kZXhPZihjbikgPCAwKSBfY29udHJhY3RvcnMucHVzaChjbik7CiAgICAgIHNldEN0cihyLCBjbik7CiAgICB9CiAgfSk7CiAgcmVuZGVyKCk7CiAg
+dG9hc3QoIvCfk6Ug5Y+X5LuY5Y+w5biz44KS5Y+W44KK6L6844G/44G+44GX44Gf77yI5pu05pawICIgKyB1cGQgKyAiIOS7tiAvIOi/veWKoCAiICsgYWRk
+ICsgIiDku7bvvIkiKTsKfQoKLyogPT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09
+PT09PQogICA5LiDotbfli5XjgajphY3nt5oKICAgPT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09
+PT09PT09PT09PT09PSAqLwplbCgiYnRuLWFkZCIpLmFkZEV2ZW50TGlzdGVuZXIoImNsaWNrIiwgYWRkUm93KTsKZWwoImJ0bi14bHN4LW91dCIpLmFkZEV2
+ZW50TGlzdGVuZXIoImNsaWNrIiwgeGxzeEV4cG9ydCk7CmVsKCJidG4tdW5kbyIpLmFkZEV2ZW50TGlzdGVuZXIoImNsaWNrIiwgdW5kb0ltcG9ydCk7CmVs
+KCJidG4teGxzeC1pbiIpLmFkZEV2ZW50TGlzdGVuZXIoImNsaWNrIiwgKCkgPT4gewogIGNvbnN0IGYgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KCJpbnB1
+dCIpOwogIGYudHlwZSA9ICJmaWxlIjsgZi5hY2NlcHQgPSAiLnhsc3giOwogIGYuYWRkRXZlbnRMaXN0ZW5lcigiY2hhbmdlIiwgKCkgPT4geyBpZihmLmZp
+bGVzICYmIGYuZmlsZXNbMF0pIHhsc3hJbXBvcnQoZi5maWxlc1swXSk7IH0pOwogIGYuY2xpY2soKTsKfSk7CmVsKCJidG4tZXhwb3J0IikuYWRkRXZlbnRM
+aXN0ZW5lcigiY2xpY2siLCBleHBvcnRMZWRnZXJGaWxlKTsKZWwoImJ0bi1pbXBvcnQiKS5hZGRFdmVudExpc3RlbmVyKCJjbGljayIsICgpID0+IHsKICBj
+b25zdCBmID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudCgiaW5wdXQiKTsKICBmLnR5cGUgPSAiZmlsZSI7IGYuYWNjZXB0ID0gIi5qc29uIjsKICBmLmFkZEV2
+ZW50TGlzdGVuZXIoImNoYW5nZSIsICgpID0+IHsgaWYoZi5maWxlcyAmJiBmLmZpbGVzWzBdKSBpbXBvcnRMZWRnZXJGaWxlKGYuZmlsZXNbMF0pOyB9KTsK
+ICBmLmNsaWNrKCk7Cn0pOwplbCgiYnRuLXByaW50IikuYWRkRXZlbnRMaXN0ZW5lcigiY2xpY2siLCBkb1ByaW50KTsKZWwoImJ0bi1jdHIiKS5hZGRFdmVu
+dExpc3RlbmVyKCJjbGljayIsIG9wZW5DdHJFZGl0b3IpOwplbCgiYnRuLWZjbGVhciIpLmFkZEV2ZW50TGlzdGVuZXIoImNsaWNrIiwgY2xlYXJGaWx0ZXJz
+KTsKZWwoInByb2otbmFtZSIpLmFkZEV2ZW50TGlzdGVuZXIoImlucHV0IiwgKCkgPT4geyBfcHJvak5hbWUgPSBlbCgicHJvai1uYW1lIikudmFsdWU7IHRv
+dWNoKCk7IH0pOwpbInEiLCJmLXByb3YiLCJmLXBlbmRpbmciLCJmLW5vZmx5ZXIiLCJmLWhvbGQiLCJmLWN0ciIsImYtZDEiLCJmLWQyIl0uZm9yRWFjaChp
+ZCA9PiB7CiAgZWwoaWQpLmFkZEV2ZW50TGlzdGVuZXIoImlucHV0IiwgKCkgPT4geyBfbmV3S2V5ID0gIiI7IHJlbmRlcigpOyB9KTsKICBlbChpZCkuYWRk
+RXZlbnRMaXN0ZW5lcigiY2hhbmdlIiwgKCkgPT4geyBfbmV3S2V5ID0gIiI7IHJlbmRlcigpOyB9KTsKfSk7CndpbmRvdy5hZGRFdmVudExpc3RlbmVyKCJi
+ZWZvcmV1bmxvYWQiLCBlID0+IHsKICBpZihfZGlydHkpeyBlLnByZXZlbnREZWZhdWx0KCk7IGUucmV0dXJuVmFsdWUgPSAiIjsgfQp9KTsKZG9jdW1lbnQu
+YWRkRXZlbnRMaXN0ZW5lcigia2V5ZG93biIsIGUgPT4gewogIGlmKChlLmN0cmxLZXkgfHwgZS5tZXRhS2V5KSAmJiBlLmtleSA9PT0gInMiKXsgZS5wcmV2
+ZW50RGVmYXVsdCgpOyBzYXZlTm93KHRydWUpLnRoZW4ob2sgPT4geyBpZihvaykgdG9hc3QoIvCfkr4g44GT44Gu56uv5pyr44Gr5L+d5a2Y44GX44G+44GX
+44GfIik7IH0pOyB9Cn0pOwooYXN5bmMgZnVuY3Rpb24gYm9vdCgpewogIGxldCBsb2NhbCA9IG51bGw7CiAgdHJ5IHsgbG9jYWwgPSBhd2FpdCBsb2NhbEdl
+dCgpOyB9IGNhdGNoKF8pe30KICAvLyDntprjgY3vvIjjgZPjga7jg5XjgqHjgqTjg6vjgafliY3jgavnm7TjgZfjgZ/lhoXlrrnvvInjgYzjgYLjgozjgbDj
+gZ3jgozjgILnhKHjgZHjgozjgbDjgIHjg6HjgqTjg7PjgYvjgokKICAvLyDlt67jgZfovrzjgb7jgozjgZ/kuK3ouqvjgILjganjgaHjgonjgoLnhKHjgZHj
+gozjgbDnqbrjga7lj7DluLPjgYvjgonlp4vjgoHjgovjgIIKICBhZG9wdFNuYXBzaG90KGxvY2FsICYmIGlzUHJvamVjdEZpbGUobG9jYWwpID8gbG9jYWwg
+OiAoRU1CRUQgfHwgewogICAgc2NoZW1hOiBQUk9KX1NDSEVNQSwgaWQ6ICJsZWRnZXJfbG9jYWwiLCBuYW1lOiAiIiwKICAgIGNyZWF0ZWRBdDogbmV3IERh
+dGUoKS50b0lTT1N0cmluZygpLCB1cGRhdGVkQXQ6ICIiLCBjYXNlczogW10sIGxlZGdlcjoge30sIGNvbnRyYWN0b3JBc3NpZ246IHt9CiAgfSkpOwogIHJl
+bmRlckVtYmVkTm90ZSgpOwogIHJlbmRlcigpOwp9KSgpOwo8L3NjcmlwdD4KPC9ib2R5Pgo8L2h0bWw+Cg==
 </script>
 <!-- ==受付台帳テンプレート END== -->
 </body>
