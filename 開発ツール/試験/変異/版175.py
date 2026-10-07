@@ -36,6 +36,9 @@ CASES = [
     .replace(''', TG, "genba"),
   (u"現場：漢数字の「その二」を読まない",
    u'''  if(t < 0) return String(d(v));''', u'''  if(t < 0) return v;''', TG, "genba"),
+  (u"★現場：番号を、かっこ・空白を消したあとの名前で読む（「その十 三沢」を 13 と読む）（版175 3回目の見直し）",
+   u'''  const sx = pjSonoNo(a), sy = pjSonoNo(b);         // 番号は、かっこ・空白を消す前の名前で読む''',
+   u'''  const sx = pjSonoNo(pjNameKey(a)), sy = pjSonoNo(pjNameKey(b));''', TG, "genba"),
   (u"現場：漢数字の「その十一」「その二十」を「その十」と読む（版175 見直し）",
    u'''  return String((t > 0 ? d(v[0]) : 1) * 10 + (v.length > t + 1 ? d(v[t + 1]) : 0));''', u'''  return "10";''', TG, "genba"),
   (u"現場：片方がもう片方の一部でも「違う」と言う",
@@ -226,8 +229,18 @@ CASES = [
   (u"メイン：漢数字の「その十一」「その二十」を「その十」と読む（版175 見直し）",
    u'''  return String((t > 0 ? d(v[0]) : 1) * 10 + (v.length > t + 1 ? d(v[t + 1]) : 0));''', u'''  return "10";''', TM, "main"),
   (u"★メイン：前の物件の保存が終わらないうちに、新しい物件に替える（版175 2回目の見直し）",
-   u'''      try { rtJoinForCurrentProject(); } catch(_){}
-      return;''', u'''      try { rtJoinForCurrentProject(); } catch(_){}''', TM, "main"),
+   u'''（いまは何も変えていません）");
+      return;''', u'''（いまは何も変えていません）");''', TM, "main"),
+  (u"★メイン：新しい物件へ替えている途中でも、他の端末の更新を取り込む（前の物件へ戻る）（版175 3回目の見直し）",
+   u'''  if(_projSwitching) return false;                // 新しい物件へ替えている途中は取り込まない（前の物件へ戻らないように・版175）''', u'''''', TM, "main"),
+  (u"★メイン：前の物件の保存を待っている間に「替えている途中」の印を立てない（版175 3回目の見直し）",
+   u'''   _projSwitching = true;
+''', u'''''', TM, "main"),
+  (u"メイン：「替えている途中」の印を戻さない（版175 3回目の見直し）",
+   u'''   } finally { _projSwitching = false; }''', u'''   } finally { }''', TM, "main"),
+  (u"★メイン：番号を、かっこ・空白を消したあとの名前で読む（「その十 三沢」を 13 と読む）（版175 3回目の見直し）",
+   u'''  const sx = pjSonoNo(a), sy = pjSonoNo(b);         // 番号は、かっこ・空白を消す前の名前で読む''',
+   u'''  const sx = pjSonoNo(pjNameKey(a)), sy = pjSonoNo(pjNameKey(b));''', TM, "main"),
   (u"★メイン：新しい物件の持出明細PDFの見出しに、前の物件の工事名を残す（版175 2回目の見直し）",
    u'''      if(sp && sp.project){ sp.project = ""; lsSet(SFP_PREF_KEY, JSON.stringify(sp)); }''', u'''''', TM, "main"),
   (u"★メイン：空の新しい物件に履行報告を入れない（開き直すと端末の控えが戻る）（版175 2回目の見直し）",
@@ -309,7 +322,7 @@ CASES = [
   (u"★メイン：履行報告の初期値（その２ の数字）の知らせを出さない",
    u'''+ (hkSono2Left(h).length ? (''', u'''+ (false ? (''', TM, "main"),
   (u"メイン：その２ の物件でも初期値の知らせを出す",
-   u'''  if(pjSonoNo(pjNameKey(_currentProject.name)) === "2") return [];
+   u'''  if(pjSonoNo(_currentProject.name) === "2") return [];
 ''', u'''''', TM, "main"),
   (u"メイン：請負金額を直しても、知らせが「請負金額」を言う",
    u'''  if(hd.net === 27200000) out.push("請負金額");''', u'''  out.push("請負金額");''', TM, "main"),

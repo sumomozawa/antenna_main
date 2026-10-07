@@ -1377,8 +1377,9 @@ function pjNameKey(s){
     .replace(/[\s()\[\]{}「」『』【】〔〕<>・_\-]/g, "").toLowerCase();
 }
 function pjSonoNo(k){
-  /* 漢数字は 九十九 まで読む（「その十一」「その二十」を「その十」「その二」と読み違えない） */
-  const m = /その([0-9]+|[一二三四五六七八九]?十[一二三四五六七八九]?|[一二三四五六七八九])/.exec(String(k || ""));
+  /* 漢数字は 九十九 まで読む（「その十一」「その二十」を「その十」「その二」と読み違えない）。
+     ★かっこ・空白を消す前の名前で読む★ 消したあとだと「その十 三沢」が「その十三沢」＝13 になる。 */
+  const m = /その([0-9]+|[一二三四五六七八九]?十[一二三四五六七八九]?|[一二三四五六七八九])/.exec(String(k == null ? "" : k).normalize("NFKC"));
   if(!m) return "";
   const v = m[1];
   if(/^[0-9]+$/.test(v)) return String(+v);
@@ -1390,7 +1391,7 @@ function pjSonoNo(k){
 function pjDiffers(a, b){
   const x = pjNameKey(a), y = pjNameKey(b);
   if(!x || !y || x === y) return false;
-  const sx = pjSonoNo(x), sy = pjSonoNo(y);
+  const sx = pjSonoNo(a), sy = pjSonoNo(b);         // 番号は、かっこ・空白を消す前の名前で読む
   if(sx && sy) return sx !== sy;                     // その１ と その２ は別の物件
   if(sx || sy) return false;                         // 片方にだけ番号がある＝分からない（脅さない）
   return !(x.indexOf(y) >= 0 || y.indexOf(x) >= 0);  // 片方がもう片方の一部なら同じ物件とみる

@@ -355,17 +355,22 @@ async function openMain(label){
       const P2 = __proj('pjE2', P2N, [NO2]); await projIdbPut(P2); await applyProject(P2, { silent: true });
       _projSaving = true;                        // 前の物件の保存がいつまでも終わらない
       const t0 = Date.now();
-      await createProjectFlow();
+      const pr = createProjectFlow();
+      await new Promise(r => setTimeout(r, 1500));
+      const during = _projSwitching;             // 待っている間は「替えている途中」
+      await pr;
       const waited = Date.now() - t0;
+      const after = _projSwitching;
       _projSaving = false;
       const all = await new Promise(res => { projOpenDb().then(db => { const q = db.transaction('projects').objectStore('projects').getAll();
         q.onsuccess = () => res(q.result.map(x => x.id)); q.onerror = () => res(null); }).catch(() => res(null)); });
-      return { cur: _currentProject && _currentProject.id, waited, ids: all };
+      return { cur: _currentProject && _currentProject.id, waited, ids: all, during, after };
     }, { P2N, NO2 });
     const al = said.filter(x => x.type === 'alert').map(x => x.msg);
     console.log('③e保存が終わらない', JSON.stringify({ r, al: al.map(m => m.slice(0, 60)) }));
     ok(r.cur === 'pjE2', '★前の物件の保存が終わらないのに、新しい物件に替えた（その保存が新しい物件の中身で前の物件を書き替える） → ' + JSON.stringify(r.cur));
     ok(al.some(m => /まだ終わっていません/.test(m)), '★新しい物件に替えなかった理由を知らせない → ' + JSON.stringify(al));
+    ok(r.during === true && r.after === false, '★前の物件の保存を待っている間に「替えている途中」の印が立たない／残ったまま → ' + JSON.stringify([r.during, r.after]));
     ok(!r.ids || r.ids.filter(id => !/^ls:/.test(String(id))).every(id => id === 'pjE2'), '★新しい物件に替えないのに、新しい物件を保存した → ' + JSON.stringify(r.ids));
     await ctx.close();
   }
@@ -396,12 +401,27 @@ async function openMain(label){
       _currentProject = { id: 'pjF1', name: '新しい工事（その１）' };
       o.con = await con;
       o.fh = (_projFileHandle === h);
+      // 新しい物件へ替えている途中は、他の端末の更新を取り込まない
+      const keepPull = rtPullLatest; let pulled = 0;
+      rtPullLatest = async () => { pulled++; };
+      _currentProject = { id: 'pjF2', name: P2N }; _projFileHandle = { name: 'その２.json' };
+      if(_projSaveTimer){ clearTimeout(_projSaveTimer); _projSaveTimer = null; }
+      _projWriteWarn = ""; try { clearEditedMarks(); } catch(_){}
+      _rtRemoteBump = { updatedAt: '2099-01-01T00:00:00Z' };
+      o.why = rtAutoPullBlockReason();
+      _projSwitching = true;
+      o.r1 = await rtMaybeAutoPull({ name: '別の端末' }); o.p1 = pulled;
+      _projSwitching = false;
+      o.r2 = await rtMaybeAutoPull({ name: '別の端末' }); o.p2 = pulled;
+      rtPullLatest = keepPull; _projFileHandle = null; _rtRemoteBump = null;
       return o;
     }, { P2N, NO2 });
     console.log('③f途中で物件が替わる', JSON.stringify(r));
     ok(r.ready === true, '試験の前提: 取り込みの前の保存に回ってしまう');
     ok(r.pullCur === 'pjF1', '★共有ファイルの取り込みの途中で物件を替えると、画面が前の物件（その２）に戻る → ' + JSON.stringify(r.pullCur));
     ok(r.con === 'stale' && r.fh === false, '★再接続の途中で物件を替えると、新しい物件に前の物件の共有ファイルがつながる → ' + JSON.stringify(r));
+    ok(r.why === '' && r.p2 === 1, '試験の前提: ふだんは他の端末の更新を取り込む道を通らない → ' + JSON.stringify(r));
+    ok(r.r1 === false && r.p1 === 0, '★新しい物件へ替えている途中に、他の端末の更新を取り込む（前の物件へ戻る） → ' + JSON.stringify(r));
     await ctx.close();
   }
 
@@ -656,7 +676,9 @@ async function openMain(label){
         ['A地区', 'A地区 アンテナ改修工事', false],   // 片方がもう片方の一部＝同じ物件とみる
         ['工事（その十一）', '工事（その十二）', true],  // 漢数字は 十一・十二 まで読む
         ['工事（その二十）', '工事（その二）', true],
-        ['工事（その十一）', '工事（その11）', false]
+        ['工事（その十一）', '工事（その11）', false],
+        ['工事 その十 三沢地区', '工事 その10', false],   // 番号は、かっこ・空白を消す前の名前で読む
+        ['工事 その一（十和田）', '工事（その１）', false]
       ];
       return T.map(([a, b, w]) => ({ a, b, w, got: pjDiffers(a, b) })).filter(x => x.got !== x.w);
     }, { P1N, P2N });
