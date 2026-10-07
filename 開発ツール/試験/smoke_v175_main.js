@@ -248,6 +248,9 @@ async function openMain(label){
       const P2 = __proj('pjN2', P2N, [NO2], { hakou: { head: { name: P2N, net: 27200000 }, rate:{}, src:{}, manual:{}, snap:{}, span:{} } });
       await projIdbPut(P2); await applyProject(P2, { silent: true });
       const before = { hk: hkLoad().head.name, folder: _listSelectedFolderName };
+      // 開いていた物件で直したばかり（自動保存の待ち時間の中）＋共有ファイルの再接続待ち
+      _listRows[0].data.chosho_cust_name = '直したばかり'; projTouch();
+      _projPendingHandle = { name: 'その２.json' };
       await createProjectFlow();
       await new Promise(r => setTimeout(r, 300));
       const h = hkLoad();
@@ -262,7 +265,9 @@ async function openMain(label){
                savedHk: !sh ? '(履行報告なし)' : (sh.head ? (sh.head.name || '') : '(頭なし)'),
                savedNet: sh && sh.head ? sh.head.net : null,
                ledgerProj: buildReceptionLedgerPayload().project, rows: _listRows.length,
-               oldHk: old && old.hakou && old.hakou.head && old.hakou.head.name };
+               oldHk: old && old.hakou && old.hakou.head && old.hakou.head.name,
+               oldName: old && old.cases && old.cases[0] && old.cases[0].payload && old.cases[0].payload.chosho_cust_name,
+               handles: [_projFileHandle, _projDirHandle, _projPendingHandle].map(x => x === null) };
     }, { P2N, NO2, NEWN });
     // 新しい物件で履行報告の画面が開ける（工事名は空・見本は新しい物件名）
     const r3v = await page.evaluate(() => {
@@ -289,6 +294,8 @@ async function openMain(label){
     ok(r3v === '' && !!r3view && r3view.val === '' && r3view.ph === NEWN,
        '★新しい物件で履行報告の画面が開けない（または前の物件の工事名が出る） → ' + JSON.stringify({ err: r3v, view: r3view }));
     ok(r3.oldHk === P2N, '★その２ の物件の履行報告が消える → ' + JSON.stringify(r3.oldHk));
+    ok(r3.oldName === '直したばかり', '★新しい物件を作る直前に その２ で直したものが、その２ に保存されない → ' + JSON.stringify(r3.oldName));
+    ok(r3.handles.every(Boolean), '★新しい物件が、前の物件の共有ファイル・フォルダのつながりを持ったまま → ' + JSON.stringify(r3.handles));
     await ctx.close();
   }
   {
@@ -304,6 +311,31 @@ async function openMain(label){
     ok(said[0] && said[0].type === 'prompt' && said[0].def === 'B地区フォルダ（その１）',
        '物件を開いていないとき、読み込んだフォルダの名前が名前の欄に入らない（今までと違う） → ' + JSON.stringify(said[0] && said[0].def));
     ok(r3b.proj === null, 'prompt をキャンセルしたのに物件が作られる → ' + JSON.stringify(r3b.proj));
+    await ctx.close();
+  }
+
+  for(const [lbl, devName, want] of [['③c', P2N, ''], ['③d', '', 'keep']]){
+    const { ctx, page, answers } = await openMain(lbl);
+    answers.push('新しい工事（その１）', false);
+    const r = await page.evaluate(async ({ devName }) => {
+      lsSet(HK_LS, JSON.stringify({ head: { name: devName, net: 12345678 }, rate:{}, src:{}, manual:{},
+                                    snap: { '2026-08': { mark: 'device' } }, span:{} }));
+      _hk = null;
+      await createProjectFlow();
+      const h = hkLoad();
+      let dev = null; try { dev = JSON.parse(lsGet(HK_LS)); } catch(_){}
+      return { name: h.head.name || '', net: h.head.net, snap: Object.keys(h.snap || {}).join(','),
+               dev: dev && dev.head && dev.head.name, proj: _currentProject && _currentProject.name };
+    }, { devName });
+    console.log(lbl + '物件なしで新しい物件（端末の履行報告）', JSON.stringify(r));
+    ok(r.proj === '新しい工事（その１）', '試験の前提: 新しい物件が作られていない（' + lbl + '） → ' + JSON.stringify(r.proj));
+    if(want === ''){
+      ok(r.name === '' && r.net === 27200000 && r.snap === '',
+         '★物件を開いていないとき、端末に残った その２ の履行報告（工事名・月の記録）を新しい物件に持ち込む → ' + JSON.stringify(r));
+    } else {
+      ok(r.net === 12345678 && r.snap === '2026-08', '物件を作る前に入れていた履行報告（工事名なし）が新しい物件に引き継がれない → ' + JSON.stringify(r));
+    }
+    ok(r.dev === devName, '★端末の履行報告の控えが消えた／変わった（' + lbl + '） → ' + JSON.stringify(r.dev));
     await ctx.close();
   }
 
@@ -360,7 +392,7 @@ async function openMain(label){
         val: document.getElementById('hk-name').value,
         init: !!document.querySelector('.hk-init'),
         initText: (document.querySelector('.hk-init') || {}).textContent || '',
-        fn: (typeof hkHeadIsSono2Default === 'function') ? hkHeadIsSono2Default(hkLoad()) : '(関数なし)',
+        fn: (typeof hkSono2Left === 'function') ? hkSono2Left(hkLoad()).join('・') : '(関数なし)',
         net: hkLoad().head.net
       }));
     };
@@ -373,6 +405,10 @@ async function openMain(label){
     await page.dispatchEvent('#hk-net', 'change');
     await sleep(500);
     r5.p1net = await look();
+    // 着手・完成も直す → 知らせは消える
+    await page.fill('#hk-start', '2026-06-01'); await page.dispatchEvent('#hk-start', 'change'); await sleep(300);
+    await page.fill('#hk-end', '2027-02-26'); await page.dispatchEvent('#hk-end', 'change'); await sleep(500);
+    r5.p1all = await look();
     await page.evaluate(async ({ P2N, NO2 }) => { const P2 = __proj('pjH2', P2N, [NO2]); await projIdbPut(P2); await applyProject(P2, { silent: true }); }, { P2N, NO2 });
     r5.p2 = await look();
     console.log('⑤履行報告', JSON.stringify(r5));
@@ -383,11 +419,13 @@ async function openMain(label){
     ok(r5.p1.ph === P1N, '物件を開いているのに、工事名の見本が物件名でない → ' + JSON.stringify(r5.p1.ph));
     ok(r5.p1.val === '', '試験の前提: その１ の工事名が空でない → ' + JSON.stringify(r5.p1.val));
     ok(r5.p1.net === 27200000, '試験の前提: その１ の請負金額が初期値でない → ' + JSON.stringify(r5.p1.net));
-    ok(r5.p1.fn === true && r5.p1.init, '★その１ の物件で、請負金額などが その２ の初期値のままなのに知らせない → ' + JSON.stringify(r5.p1));
+    ok(r5.p1.fn === '請負金額・着手・完成・段階の予定' && r5.p1.init, '★その１ の物件で、請負金額などが その２ の初期値のままなのに知らせない → ' + JSON.stringify(r5.p1));
     ok(/その２/.test(r5.p1.initText) && /直して/.test(r5.p1.initText), '知らせの文に「その２の初期値」「直して」が無い → ' + JSON.stringify(r5.p1.initText));
-    ok(r5.p1net.net === 15000000 && r5.p1net.fn === false && !r5.p1net.init, '★請負金額を直したのに、まだ初期値のままと知らせる → ' + JSON.stringify(r5.p1net));
-    ok(r5.p2.net === 27200000 && r5.p2.fn === false && !r5.p2.init, '★その２ の物件で「その２ の初期値のまま」と知らせる（その２ では正しい数字） → ' + JSON.stringify(r5.p2));
-    ok(r5.none.fn === false && !r5.none.init, '物件を開いていないのに知らせる → ' + JSON.stringify(r5.none));
+    ok(r5.p1net.net === 15000000 && r5.p1net.fn === '着手・完成・段階の予定' && r5.p1net.init && !/請負金額/.test(r5.p1net.initText),
+       '★請負金額だけ直したとき、知らせが「請負金額」まで言う／着手・完成が初期値のままなのに知らせない → ' + JSON.stringify(r5.p1net));
+    ok(r5.p1all.fn === '' && !r5.p1all.init, '★請負金額・着手・完成を直したのに、まだ初期値のままと知らせる → ' + JSON.stringify(r5.p1all));
+    ok(r5.p2.net === 27200000 && r5.p2.fn === '' && !r5.p2.init, '★その２ の物件で「その２ の初期値のまま」と知らせる（その２ では正しい数字） → ' + JSON.stringify(r5.p2));
+    ok(r5.none.fn === '' && !r5.none.init, '物件を開いていないのに知らせる → ' + JSON.stringify(r5.none));
     await ctx.close();
   }
 
@@ -402,6 +440,12 @@ async function openMain(label){
       const fc = await fcP; await fc.setFiles(fileOf(project));
       await page.waitForFunction(no => buildLedgerFile().rows.some(x => x.mgmt_no === no), NO1, { timeout: 10000 });
       await sleep(600);   // 自動保存（0.3秒後）が済むのを待つ
+    };
+    const importNoWait = async (page, project) => {
+      const fcP = page.waitForEvent('filechooser');
+      await page.click('#btn-import');
+      const fc = await fcP; await fc.setFiles(fileOf(project));
+      await sleep(1500);
     };
     const state = page => page.evaluate(() => ({ field: document.getElementById('proj-name').value, out: buildLedgerFile().project,
                                                  rows: buildLedgerFile().rows.map(x => x.mgmt_no) }));
@@ -436,7 +480,7 @@ async function openMain(label){
     {
       const { ctx, page, said, answers } = await openLedger('⑥B', P2N);
       answers.push(false);
-      await importVia(page, P1N);
+      await importNoWait(page, P1N);
       r6.B = Object.assign(await state(page), { said: said.map(x => x.type) });
       await ctx.close();
     }
@@ -452,6 +496,13 @@ async function openMain(label){
       const { ctx, page, said } = await openLedger('⑥D', P1N);
       await importVia(page, P1N);
       r6.D = Object.assign(await state(page), { said: said.map(x => x.type) });
+      await ctx.close();
+    }
+    // F. 書き方だけ違う（同じ その１）→ 聞かない・いまの名前のまま・行は入る
+    {
+      const { ctx, page, said } = await openLedger('⑥F', P1N);
+      await importVia(page, '令和8年度 戸別受信設備設置工事(その1)');
+      r6.F = Object.assign(await state(page), { said: said.map(x => x.type) });
       await ctx.close();
     }
     // E. ファイルに物件名が無い → 今の名前のまま・聞かない
@@ -476,8 +527,10 @@ async function openMain(label){
     ok(r6.A.rows.join(',') === NO1, '取り込んだ行が入っていない → ' + JSON.stringify(r6.A.rows));
     ok(r6.Areload.field === P1N && r6.Areload.out === P1N, '★開き直すと物件名が その２ に戻る（この端末に保存していない） → ' + JSON.stringify(r6.Areload));
     ok(r6.B.said.join(',') === 'confirm' && r6.B.field === P2N && r6.B.out === P2N, '★「キャンセル＝いまのまま」の道：聞かれない／物件名が変わる → ' + JSON.stringify(r6.B));
-    ok(r6.B.rows.join(',') === NO1, 'キャンセルしたら行まで取り込まれない（物件名だけの問い） → ' + JSON.stringify(r6.B.rows));
+    ok(r6.B.rows.length === 0, '★別の工事の台帳で「キャンセル＝取り込まない」を選んだのに、行が混ざった → ' + JSON.stringify(r6.B.rows));
     ok(r6.C.said.length === 0, '★物件名が空の台帳で、聞かなくてよいのに聞く → ' + JSON.stringify(r6.C.said));
+    ok(r6.F.said.length === 0 && r6.F.field === P1N && r6.F.rows.join(',') === NO1,
+       '★書き方が違うだけの同じ物件（その１）で聞く／名前が変わる／行が入らない → ' + JSON.stringify(r6.F));
     ok(r6.C.field === P1N && r6.C.out === P1N, '★物件名が空の台帳に取り込んでも、ファイルの物件名が入らない → ' + JSON.stringify(r6.C));
     ok(r6.D.said.length === 0 && r6.D.field === P1N, '同じ物件名なのに聞く → ' + JSON.stringify(r6.D));
     ok(r6.E.said.length === 0 && r6.E.field === P2N && r6.E.out === P2N, '物件名の無いファイルで、今の物件名が消える／聞かれる → ' + JSON.stringify(r6.E));
@@ -531,6 +584,30 @@ async function openMain(label){
     console.log('⑧物件名の見比べ', JSON.stringify(r8));
     ok(r8 !== null, '★物件名を見比べる仕組み（pjDiffers）が無い');
     ok(!r8 || r8.length === 0, '★物件名の見比べが違う → ' + JSON.stringify(r8));
+    await ctx.close();
+  }
+
+  // ---- ⑨ 同じ物件を共有ファイルから開き直す（地図の中身が替わる）→ 現場用の地図も新しい中身 ----
+  {
+    const { ctx, page } = await openMain('⑨');
+    const r9 = await page.evaluate(async ({ P1N }) => {
+      const layers = (no) => ({ road:{visible:true,color:'#1976d2',vector:true,objects:[]}, boundary:{visible:true,color:'#8e24aa',objects:[]},
+          building:{visible:true,color:'#2e7d32',objects:[{ id:'b1', type:'building', points:[[0,0],[100,0],[100,100],[0,100]], linkMgmtNo: no }]},
+          chome:{visible:true,color:'#e53935',objects:[]}, label:{visible:true,objects:[]} });
+      const mk = (upd, no) => ({ schema: PROJ_SCHEMA, id: 'pjR1', name: P1N, createdAt: '2026-09-01T00:00:00Z', updatedAt: upd,
+        cases: [], ledger:{}, takeout:{}, review:{},
+        maps: [{ uid: 'zentai_r1', name: '全体図', _zentai: true, createdAt: '2026-09-01T00:00:00Z', updatedAt: upd,
+                 view:{scale:1,tx:0,ty:0}, layers: layers(no) }] });
+      await applyProject(mk('2026-09-02T00:00:00Z', '2611AAA001'), { silent: true });
+      const a = await window.mapCollectViewerPack();
+      await applyProject(mk('2026-09-03T00:00:00Z', '2611AAA999'), { silent: true });
+      await new Promise(r => setTimeout(r, 500));
+      const b = await window.mapCollectViewerPack();
+      return { a: __marks(a), b: __marks(b) };
+    }, { P1N });
+    console.log('⑨開き直した物件の地図', JSON.stringify(r9));
+    ok(r9.a.join(',') === '2611AAA001', '試験の前提: はじめの地図が採れない → ' + JSON.stringify(r9.a));
+    ok(r9.b.join(',') === '2611AAA999', '★同じ物件を共有ファイルから開き直しても、現場用には前の地図の中身が入る → ' + JSON.stringify(r9.b));
     await ctx.close();
   }
 

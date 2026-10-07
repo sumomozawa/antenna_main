@@ -24,6 +24,11 @@
      ⑭ 幅320px：長い物件名＋「⚠ 物件が違う」でも横にはみ出さない（PC のフォルダ／スマホの名前）
      ⑮ ③で「その１ ＞ リスト」を選んだあとは、画面にも、そのあとの知らせにも「その２」が出ない
         （③の取り込みの知らせそのものは、本人が書いた「その２」を言うので数えない）
+     ⑯ 聞く窓・知らせの窓は地図の画面より上に出る（地図の画面から取り込んでも隠れない）
+     ⑰ PC のまとめて保存：別の物件（その２）のフォルダを選んだら、書く前に確かめる（キャンセル＝何も書かない）
+     ⑱ 名前1つの入れる場所（「その２」）・リストの無い物件のフォルダそのものでも、番号が違えば知らせる（「data」では脅さない）
+     ⑲ 物件が合う台帳（または物件名の無い台帳）に戻したら、帯の ⚠ もすぐ消える
+     ⑳ フォルダを覚えた PC で名前だけ選んでも、フォルダの ⚠ は消さない
    ★場面ごとに新しいブラウザの入れ物（newContext）を使う★ 前の場面の覚え書き（localStorage・IndexedDB）を持ち越さない。
    スマホ＝起動の前に「フォルダを選ぶ窓」を消した入れ物（__noPicker と同じ）。
    使い方: node smoke_v175_genba.js [index.html の file:// URL]
@@ -825,6 +830,184 @@ window.__okKey = () => { try{ return localStorage.getItem('field_saveplace_ok_v1
       ok(v.inR <= v.W, '★「＞ リスト」が画面の外に出た（' + k + '） → ' + v.inR);
       ok(v.nCut === true, '★長い物件名が「…」になっていない（' + k + '）');
     }
+  });
+
+  /* ====================== 見直しで足した場面（版175） ====================== */
+
+  /* ---------- ⑯ 聞く窓・知らせの窓は、地図の画面より上に出る ----------
+     地図の画面から現場用ファイルを入れると、保存先を聞く窓が地図の裏に隠れ、地図も出なくなっていた。 */
+  await scene('⑯', { phone:true }, async page => {
+    const r = await page.evaluate(async () => {
+      const z = id => parseInt(getComputedStyle(document.getElementById(id)).zIndex, 10) || 0;
+      const o = { map: z('map-modal'), pick: z('pick-modal'), type: z('type-modal'), dlg: z('ui-dialog') };
+      await __imp(__led(__P.P2, __ROWS.P2));
+      await __pickHint('自分で書く', 'その２/リスト');
+      receptionSaveRows(__led(__P.P1, __ROWS.P1));
+      document.getElementById('map-modal').classList.add('open');     // 地図の画面を開いたまま
+      const p = savePlaceCheckAfterImport();
+      const pm = document.getElementById('pick-modal');
+      for(let i = 0; i < 60 && !pm.classList.contains('open'); i++) await __sleep(50);
+      await __sleep(700);                       // 下から出てくる動きが終わるのを待つ
+      const box = document.getElementById('pick-list').getBoundingClientRect();
+      o.box = [Math.round(box.left), Math.round(box.top), Math.round(box.width), Math.round(box.height)];
+      const el = document.elementFromPoint(box.left + box.width / 2, box.top + Math.min(20, box.height / 2));
+      o.onTop = !!(el && el.closest('#pick-modal'));
+      o.hit = el ? (el.id || el.className || el.tagName) : null;
+      o.open = pm.classList.contains('open');
+      await __pickAnswer(null); await __T(p, 3000);
+      document.getElementById('map-modal').classList.remove('open');
+      return o;
+    });
+    console.log('⑯地図の上の窓', JSON.stringify(r));
+    ok(r.open, '試験の前提: 入れる場所が物件と違うのに選ぶ窓が出ない');
+    ok(r.pick > r.map && r.type > r.map && r.dlg > r.map,
+       '★聞く窓・知らせの窓が、地図の画面より下にある（地図の裏に隠れる） → ' + JSON.stringify(r));
+    ok(r.onTop, '★地図の画面を開いたまま選ぶ窓を出すと、窓が地図の裏に隠れる → ' + JSON.stringify(r));
+  });
+
+  /* ---------- ⑰ PC のまとめて保存：別の物件（その２）のフォルダを選んだら、書く前に確かめる ----------
+     窓はいつも前のフォルダ（その２）から開くので、そのまま選んで その１ の戸別を その２ のリストへ書いていた。
+     キャンセル＝何も書かない（下書きも写真もそのまま）。OK＝このフォルダに書く（この物件では、もう聞かない）。 */
+  await scene('⑰', {}, async page => {
+    const r = await page.evaluate(async () => {
+      const o = {};
+      await __imp(__led(__P.P2, __ROWS.P2));
+      const list = __mkdir('リスト', {}, {});
+      const root = __mkdir(__P.P2, {}, { 'リスト': list });
+      await saveDirSet(list, root); renderSaveBar();
+      const c = await __imp(__led(__P.P1, __ROWS.P1));
+      if(c.pick.open) await __pickAnswer('あとで');
+      M = freshModel(); ensureModelShape(M);
+      M.chosho_mgmt_no = '2611AAA001'; M.chosho_cust_name = '現場の 花子'; M.chosho_date = '2026-09-10';
+      M.chosho_photos = [__ph('n1', '#36c')]; M._touched = true; M._viewOnly = false;
+      await persistDraft();
+      M = freshModel(); render();
+      const snap = async () => ((await idbGetAll()) || []).filter(x => x && x.model)
+        .map(x => x.key + ':' + (x.model.chosho_photos || []).map(p => p.id).join(',')).sort();
+      o.before = await snap();
+      let n = 0;
+      window.showDirectoryPicker = async () => { n++; return root; };   // そのまま前のフォルダ（その２）を選ぶ
+      window.__cancelIf = /このフォルダでよいですか/;
+      let n0 = __said.length;
+      await __T(saveAllDrafts(), 10000); await __sleep(300);
+      window.__cancelIf = null;
+      o.said1 = __said.slice(n0); o.wrote1 = list.__wrote.concat(root.__wrote); o.after1 = await snap(); o.n1 = n;
+      o.busy = document.body.classList.contains('busy') || !!document.querySelector('.busy-ov.open');
+      n0 = __said.length;
+      await __T(saveAllDrafts(), 20000); await __sleep(500);
+      o.said2 = __said.slice(n0); o.wrote2 = list.__wrote.slice(); o.bar = __bar();
+      return o;
+    });
+    console.log('⑰PCのまとめて保存', JSON.stringify(r));
+    const pre = r.said1.find(s => /まとめて保存します/.test(s)) || '';
+    ok(r.n1 === 1, '試験の前提: まとめて保存でフォルダを選ぶ窓が出ない → ' + r.n1);
+    ok(/⚠ 前回のフォルダは、受付台帳の物件「/.test(pre) && pre.indexOf(P1) >= 0,
+       '★まとめて保存の前の確かめで、前回のフォルダが物件と違うと言わない → ' + pre);
+    ok(r.said1.some(s => /名前が違います/.test(s) && s.indexOf(P1) >= 0),
+       '★まとめて保存で別の物件（その２）のフォルダを選んでも、書く前に確かめない → ' + JSON.stringify(r.said1));
+    ok(r.wrote1.length === 0, '★確かめで「キャンセル」したのに、別の物件のフォルダへ書いた → ' + JSON.stringify(r.wrote1));
+    ok(JSON.stringify(r.before) === JSON.stringify(r.after1), '★キャンセルしたのに下書き・写真が変わった → ' + JSON.stringify([r.before, r.after1]));
+    ok(r.said2.some(s => /名前が違います/.test(s)) && r.wrote2.indexOf('2611AAA001.json') >= 0,
+       '試験の前提: 確かめで OK なのに書かない → ' + JSON.stringify({ said: r.said2.map(s => s.slice(0, 40)), wrote: r.wrote2 }));
+    ok(!r.bar.other, '★確かめで OK（このフォルダにする）と答えたのに、帯に ⚠ が残る → ' + JSON.stringify(r.bar));
+  });
+
+  /* ---------- ⑱ 名前1つの入れる場所（「その２」）・物件のフォルダそのものを覚えた PC ----------
+     「/」の無い名前（前の版のころの書き方）や、リストの無い物件のフォルダそのものでも、
+     その番号が違えば知らせる。「data」のような物件名でない名前では脅さない。 */
+  await scene('⑱', { phone:true }, async page => {
+    const r = await page.evaluate(async () => {
+      const o = {};
+      await __imp(__led(__P.P2, __ROWS.P2));
+      await __pickHint('自分で書く', 'その２');
+      o.hint0 = saveHintName();
+      const c = await __imp(__led(__P.P1, __ROWS.P1));
+      o.alert = c.alert; o.pick = c.pick; o.bar = __bar();
+      o.line = saveHintLine();
+      o.chose = await __pickAnswer(__P.P1 + ' ＞ リスト');
+      o.hint1 = saveHintName(); o.bar1 = __bar();
+      await __pickHint('自分で書く', 'data');
+      const d = await __imp(__led(__P.P2, __ROWS.P2));
+      o.pickData = d.pick.open; o.barData = __bar();
+      if(d.pick.open) await __pickAnswer(null);
+      return o;
+    });
+    console.log('⑱名前1つの入れる場所', JSON.stringify(r));
+    ok(r.hint0 === 'その２', '試験の前提: 「その２」と書いた名前を覚えていない → ' + r.hint0);
+    ok(/⚠ 入れる場所が、この物件と違います/.test(r.alert), '★名前1つ（「その２」）の入れる場所が物件と違うのに、取り込みの知らせで言わない → ' + r.alert);
+    ok(r.pick.open && (r.pick.rows[0] || {}).main === P1 + ' ＞ リスト', '★名前1つ（「その２」）の入れる場所で、選ぶ窓が出ない → ' + JSON.stringify(r.pick));
+    ok(r.bar.other && r.bar.tag === '⚠ 物件が違う', '★名前1つの入れる場所で、帯に「⚠ 物件が違う」が出ない → ' + JSON.stringify(r.bar));
+    ok(/⚠ 受付台帳の物件「/.test(r.line), '★名前1つの入れる場所で、保存のたびの案内に ⚠ が無い → ' + r.line);
+    ok(r.hint1 === P1 + '/リスト' && !r.bar1.other, '★おすすめを選んでも その１ ＞ リスト にならない／⚠ が残る → ' + JSON.stringify([r.hint1, r.bar1]));
+    ok(!r.pickData && !r.barData.other, '★物件名でない名前（「data」）で「物件が違う」と脅した → ' + JSON.stringify(r.barData));
+  });
+  await scene('⑱b', {}, async page => {
+    const r = await page.evaluate(async () => {
+      const o = {};
+      await __imp(__led(__P.P2, __ROWS.P2));
+      const root = __mkdir(__P.P2, { '2622MAT001.json':'{}' }, {});   // リストの無い物件のフォルダそのもの
+      await saveDirSet(root, null); renderSaveBar();
+      o.bar0 = __bar();
+      const c = await __imp(__led(__P.P1, __ROWS.P1));
+      o.alert = c.alert; o.pick = c.pick;
+      if(c.pick.open) await __pickAnswer('あとで');
+      o.bar1 = __bar();
+      return o;
+    });
+    console.log('⑱b物件のフォルダそのもの', JSON.stringify(r));
+    ok(!r.bar0.other, '試験の前提: その２ の台帳なのに ⚠ → ' + JSON.stringify(r.bar0));
+    ok(/⚠ 保存先が、この物件と違います/.test(r.alert) && r.pick.open,
+       '★その２ の物件のフォルダそのものを覚えた PC で、その１ を入れても知らせない → ' + JSON.stringify({ alert: r.alert, pick: r.pick.open }));
+    ok(r.bar1.other && r.bar1.tag === '⚠ 物件が違う', '★物件のフォルダそのものを覚えた PC で、帯に ⚠ が出ない → ' + JSON.stringify(r.bar1));
+  });
+
+  /* ---------- ⑲ 物件が合う台帳に戻したら、帯の ⚠ もすぐ消える ---------- */
+  await scene('⑲', { phone:true }, async page => {
+    const r = await page.evaluate(async () => {
+      const o = {};
+      await __imp(__led(__P.P2, __ROWS.P2));
+      await __pickHint('自分で書く', 'その２/リスト');
+      const c = await __imp(__led(__P.P1, __ROWS.P1));
+      if(c.pick.open) await __pickAnswer(null);       // やめる
+      o.bar1 = __bar();
+      const d = await __imp(__led(__P.P2, __ROWS.P2));
+      o.pick2 = d.pick.open; o.bar2 = __bar();
+      const e = await __imp(__led(__P.P1, __ROWS.P1));
+      if(e.pick.open) await __pickAnswer(null);
+      o.bar3 = __bar();
+      const f = await __imp(__led('', __ROWS.P1));
+      o.pick4 = f.pick.open; o.bar4 = __bar();
+      return o;
+    });
+    console.log('⑲帯の描き直し', JSON.stringify(r));
+    ok(r.bar1.other, '試験の前提: その１ を入れたあと帯に ⚠ が出ていない → ' + JSON.stringify(r.bar1));
+    ok(!r.pick2 && !r.bar2.other, '★その２ の台帳に戻したのに、帯に「⚠ 物件が違う」が残る → ' + JSON.stringify(r.bar2));
+    ok(r.bar3.other, '試験の前提: もう一度 その１ を入れたのに ⚠ が出ない → ' + JSON.stringify(r.bar3));
+    ok(!r.pick4 && !r.bar4.other, '★物件名の無い台帳を入れたのに、帯に「⚠ 物件が違う」が残る → ' + JSON.stringify(r.bar4));
+  });
+
+  /* ---------- ⑳ フォルダを覚えた PC で「名前だけ」選んでも、フォルダの ⚠ は消さない ----------
+     名前を選んでも保存の行き先（覚えているフォルダ）は変わらない。⚠ だけ消すと、気づかないまま その２ に書く。 */
+  await scene('⑳', {}, async page => {
+    const r = await page.evaluate(async () => {
+      const o = {};
+      await __imp(__led(__P.P2, __ROWS.P2));
+      const list = __mkdir('リスト', {}, {});
+      const root = __mkdir(__P.P2, {}, { 'リスト': list });
+      await saveDirSet(list, root);
+      const c = await __imp(__led(__P.P1, __ROWS.P1));
+      if(c.pick.open) await __pickAnswer('あとで');
+      o.bar0 = __bar();
+      const v = await __pickHint(__P.P1 + ' ＞ リスト');
+      o.clicked = v.clicked; o.bar1 = __bar(); o.dir = _saveDir && _saveDir.name;
+      o.par = __same(saveDirParentOf(_saveDir), root);
+      return o;
+    });
+    console.log('⑳名前だけ選んだPC', JSON.stringify(r));
+    ok(r.bar0.other && r.clicked, '試験の前提: ⚠ が出ていない／名前を選べない → ' + JSON.stringify([r.bar0, r.clicked]));
+    ok(r.dir === 'リスト' && r.par === true, '試験の前提: 覚えているフォルダが変わった → ' + JSON.stringify([r.dir, r.par]));
+    ok(r.bar1.other && r.bar1.tag === '⚠ 物件が違う',
+       '★名前だけ選んだら、覚えている その２ のフォルダの ⚠ が消えた（行き先は その２ のまま） → ' + JSON.stringify(r.bar1));
   });
 
   await b.close();

@@ -1369,6 +1369,28 @@ async function exportLedgerFile(){
       + "違いのある項目だけを一覧で確認してから取り込めます。");
   }
 }
+/* ★物件の名前どうしを比べる★（版175。メイン・現場入力と同じ考え方）
+   かっこ・空白・全角半角の違いは見ない。「その１」「その２」と両方に番号があれば番号で決める。
+   片方にしか番号が無いときは「違う」と言わない。 */
+function pjNameKey(s){
+  return String(s == null ? "" : s).normalize("NFKC")
+    .replace(/[\s()\[\]{}「」『』【】〔〕<>・_\-]/g, "").toLowerCase();
+}
+function pjSonoNo(k){
+  const m = /その([0-9]+|[一二三四五六七八九十])/.exec(String(k || ""));
+  if(!m) return "";
+  const v = m[1];
+  if(/^[0-9]+$/.test(v)) return String(+v);
+  return v === "十" ? "10" : String("一二三四五六七八九".indexOf(v) + 1);
+}
+function pjDiffers(a, b){
+  const x = pjNameKey(a), y = pjNameKey(b);
+  if(!x || !y || x === y) return false;
+  const sx = pjSonoNo(x), sy = pjSonoNo(y);
+  if(sx && sy) return sx !== sy;                     // その１ と その２ は別の物件
+  if(sx || sy) return false;                         // 片方にだけ番号がある＝分からない（脅さない）
+  return !(x.indexOf(y) >= 0 || y.indexOf(x) >= 0);  // 片方がもう片方の一部なら同じ物件とみる
+}
 /* 受付台帳ファイルを読み込む（管理番号で突き合わせ、違うところだけ入れる）。 */
 async function importLedgerFile(file){
   let p;
@@ -1381,8 +1403,16 @@ async function importLedgerFile(file){
   {
     const fp = String(p.project || "").trim(), cur = String(_projName || "").trim();
     if(fp && fp !== cur){
-      if(!cur || confirm("取り込むファイルの物件は「" + fp + "」です。\nいまの物件名は「" + cur + "」です。\n\n"
-          + "物件名を「" + fp + "」に変えますか？\n（OK＝変える／キャンセル＝いまのまま）")){ _projName = fp; touch(); }
+      if(!cur){ _projName = fp; touch(); }
+      else if(pjDiffers(fp, cur)){
+        /* ★はっきり別の物件（その１ と その２ など）★ そのまま入れると、別の工事の行がこの台帳に混ざる。
+           やめたら何も入れない。 */
+        if(!confirm("取り込むファイルの物件は「" + fp + "」です。\nいまの物件名は「" + cur + "」です。\n\n"
+            + "別の工事の台帳かもしれません。\n\n"
+            + "OK＝取り込んで、物件名を「" + fp + "」にする\nキャンセル＝取り込まない")) return;
+        _projName = fp; touch();
+      }
+      // 書き方が違うだけ（同じ物件）のときは、いまの物件名のまま
     }
   }
   const byNo = new Map();

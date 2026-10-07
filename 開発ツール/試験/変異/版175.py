@@ -59,8 +59,10 @@ CASES = [
 
   # ---- 現場入力：保存先が物件と違うか ----
   (u"★現場：保存先の名前を物件と見比べない（いつも「違う」）",
-   u'''  if(!pjDiffers(pp.outer, proj)) return null;
+   u'''  if(!savePlaceDiffers(pp, proj)) return null;        // 「リスト」だけ＝どの物件でも正しい
 ''', u'''''', TG, "genba"),
+  (u"★現場：名前1つ（「その２」・物件のフォルダそのもの）は見比べない（版175 見直し）",
+   u'''  return pjSonoDiffers(nm, proj);''', u'''  return false;''', TG, "genba"),
   (u"★現場：「このままでよい」と答えた物件でも、また聞く",
    u'''  if(savePlaceOkFor(proj, held)) return null;         // 「このままでよい」と答えた物件
 ''', u'''''', TG, "genba"),
@@ -83,17 +85,25 @@ CASES = [
    u'''  return !!(o && o.proj && pjNameKey(o.proj) === pjNameKey(proj) && o.place === savePlaceNow(held));''',
    u'''  return !!(o && o.proj && pjNameKey(o.proj) === pjNameKey(proj));''', TG, "genba"),
   (u"★現場：📁 で名前を選んでも、この物件の答えとして覚えない",
-   u'''      if(got && proj) savePlaceOkSet(proj);
+   u'''      if(got && proj && !saveDirName()) savePlaceOkSet(proj);
 ''', u'''''', TG, "genba"),
+  (u"★現場：フォルダを覚えた PC で名前だけ選ぶと、フォルダの ⚠ まで消す（版175 見直し）",
+   u'''      if(got && proj && !saveDirName()) savePlaceOkSet(proj);''', u'''      if(got && proj) savePlaceOkSet(proj);''', TG, "genba"),
   (u"★現場：📁 でフォルダを選んだあと、物件と違っても確かめない",
-   u'''  const mm = savePlaceMismatch();
-  if(mm && mm.held){''',
-   u'''  const mm = savePlaceMismatch();
-  if(false && mm && mm.held){''', TG, "genba"),
+   u'''  await savePlaceConfirmAfterPick("later");
+}''', u'''
+}''', TG, "genba"),
+  (u"★現場：まとめて保存で、別の物件のフォルダを選んでも確かめない（版175 見直し）",
+   u'''      if(!(await savePlaceConfirmAfterPick("stop"))){ setBusy(false); return; }
+''', u'''''', TG, "genba"),
+  (u"★現場：まとめて保存の確かめで「キャンセル」しても書く（版175 見直し）",
+   u'''if(!(await savePlaceConfirmAfterPick("stop"))){ setBusy(false); return; }''',
+   u'''if(!(await savePlaceConfirmAfterPick("stop"))){ }''', TG, "genba"),
+  (u"現場：まとめて保存の前の確かめで、前回のフォルダが物件と違うと言わない（版175 見直し）",
+   u'''return (m0 && m0.held) ? (''', u'''return false ? (''', TG, "genba"),
   (u"★現場：フォルダの確かめで OK でも答えを覚えない",
-   u'''+ "キャンセル＝あとで「📁」で選び直す（帯に ⚠ が出たままになります）")) savePlaceOkSet(mm.proj);''',
-   u'''+ "キャンセル＝あとで「📁」で選び直す（帯に ⚠ が出たままになります）")) {}''', TG, "genba"),
-
+   u'''  if(ok) savePlaceOkSet(mm.proj);
+''', u'''''', TG, "genba"),
   # ---- 現場入力：取り込んだあとの窓 ----
   (u"★現場：受付台帳ファイルを取り込んだあと、保存先を確かめない",
    u'''      try{ await savePlaceCheckAfterImport(); }catch(e){ console.warn("保存先の確かめに失敗", e); }''', u'''''', TG, "genba"),
@@ -136,9 +146,25 @@ CASES = [
    u'''nowOther ? "いま覚えている名前（⚠ 受付台帳の物件と違います）" : "いま覚えている名前"''',
    u'''"いま覚えている名前"''', TG, "genba"),
   (u"現場：保存のあとの案内で ⚠ を言わない",
-   u'''    + (mm ? ("\\n⚠ 受付台帳の物件「" + mm.proj + "」とは違う名前です。違っていたら「📁」で変えてください。") : "");''',
-   u'''    ;''', TG, "genba"),
-
+   u'''」フォルダのすぐ下には入れません。管理番号.json が並んでいるフォルダです）"
+    + (mm ? (''', u'''」フォルダのすぐ下には入れません。管理番号.json が並んでいるフォルダです）"
+    + (false ? (''', TG, "genba"),
+  (u"現場：名前1つの入れる場所で、保存のあとの案内に ⚠ を言わない（版175 見直し）",
+   u'''」フォルダ★\\n（管理番号.json が並んでいるフォルダです）"
+    + (mm ? (''', u'''」フォルダ★\\n（管理番号.json が並んでいるフォルダです）"
+    + (false ? (''', TG, "genba"),
+  (u"★現場：聞く窓・知らせの窓が地図の画面の裏に隠れる（版175 見直し）",
+   u'''  #pick-modal, #type-modal, #ui-dialog{ z-index:120; }
+''', u'''''', TG, "genba"),
+  (u"★現場：取り込んだあと帯を描き直さない（物件が合っても ⚠ が残る）（版175 見直し）",
+   u'''  try{ renderSaveBar(); }catch(_){}   // 物件が替わると ⚠ の有無も変わるので、いつも描き直す（版175）
+''', u'''''', TG, "genba"),
+  (u"★現場：物件のフォルダそのものを覚えた PC で、帯に ⚠ を出さない（版175 見直し）",
+   u'''    ? '<button type="button" class="sb-dest' + mmCls + '" id="sb-dest" title="' + mmTip + '「保存」を押すと、「' + esc(dest)''',
+   u'''    ? '<button type="button" class="sb-dest" id="sb-dest" title="' + mmTip + '「保存」を押すと、「' + esc(dest)''', TG, "genba"),
+  (u"★現場：名前1つの入れる場所で、帯に ⚠ を出さない（版175 見直し）",
+   u'''      ? '<button type="button" class="sb-dest' + mmCls + '" id="sb-dest" title="' + mmTip + '入れる場所： 「' + esc(saveHintName())''',
+   u'''      ? '<button type="button" class="sb-dest" id="sb-dest" title="' + mmTip + '入れる場所： 「' + esc(saveHintName())''', TG, "genba"),
   # ---- 現場入力：取り込みの知らせ ----
   (u"★現場：知らせに「前の物件から替わりました」を出さない",
    u'''((beforeProj && pjDiffers(beforeProj, project)) ? "\\n（前に取り込んでいた物件から替わりました）" : "")''', u'''""''', TG, "genba"),
@@ -216,8 +242,24 @@ CASES = [
   (u"メイン：一覧を入れるかの確認で、開いている物件の名前を言わない",
    u'''    absorb = confirm(hadProj''', u'''    absorb = confirm(false''', TM, "main"),
   (u"★メイン：新しい物件に、前の物件（その２）の履行報告を持ち込む",
-   u'''  if(hadProj){ try { hkAdopt(''', u'''  if(false){ try { hkAdopt(''', TM, "main"),
-
+   u'''    if(fresh){ try { hkAdopt({}); } catch(_){} }''', u'''    if(false){ try { hkAdopt({}); } catch(_){} }''', TM, "main"),
+  (u"★メイン：物件なしで新しい物件を作るとき、端末に残った その２ の履行報告を持ち込む（版175 見直し）",
+   u'''    let fresh = hadProj;
+    if(!fresh){''', u'''    let fresh = hadProj;
+    if(false){''', TM, "main"),
+  (u"メイン：物件なしで新しい物件を作るとき、工事名の無い端末の履行報告まで捨てる（版175 見直し）",
+   u'''fresh = !!(dn && pjDiffers(dn, p.name));''', u'''fresh = true;''', TM, "main"),
+  (u"★メイン：履行報告の欠けた所を埋めない（新しい物件の履行報告の画面が開けない）（版175 見直し）",
+   u'''  if(!_hk){
+    let o = null;''', u'''  if(_hk) return _hk;
+  if(!_hk){
+    let o = null;''', TM, "main"),
+  (u"★メイン：新しい物件を作る前に、開いていた物件の直しを保存しない（版175 見直し）",
+   u'''    if(_projSaveTimer){ clearTimeout(_projSaveTimer); _projSaveTimer = null; try { await projSaveNow(); } catch(_){} }''',
+   u'''    if(_projSaveTimer){ clearTimeout(_projSaveTimer); _projSaveTimer = null; }''', TM, "main"),
+  (u"★メイン：新しい物件が、前の物件の共有ファイルのつながりを持ったまま（版175 見直し）",
+   u'''    _projFileHandle = null; _projDirHandle = null; _projPendingHandle = null;
+''', u'''''', TM, "main"),
   # ---- メイン：物件名の無い書き出し ----
   (u"★メイン：物件名の無い書き出しでも知らせない",
    u'''  if(String(proj || "").trim()) return "";
@@ -242,22 +284,36 @@ CASES = [
    u'''placeholder="' + escapeHtml((typeof _currentProject !== "undefined" && _currentProject && _currentProject.name) || "例：〇〇地区 アンテナ改修工事") + '"''',
    u'''placeholder="令和８年度戸別受信設備設置工事（その２）"''', TM, "main"),
   (u"★メイン：履行報告の初期値（その２ の数字）の知らせを出さない",
-   u'''+ (hkHeadIsSono2Default(h) ? (''', u'''+ (false ? (''', TM, "main"),
+   u'''+ (hkSono2Left(h).length ? (''', u'''+ (false ? (''', TM, "main"),
   (u"メイン：その２ の物件でも初期値の知らせを出す",
-   u'''  if(pjSonoNo(pjNameKey(_currentProject.name)) === "2") return false;
+   u'''  if(pjSonoNo(pjNameKey(_currentProject.name)) === "2") return [];
 ''', u'''''', TM, "main"),
-  (u"メイン：請負金額を直しても初期値の知らせが消えない",
-   u'''  return hd.net === 27200000 && hd.start''', u'''  return hd.start''', TM, "main"),
-
+  (u"メイン：請負金額を直しても、知らせが「請負金額」を言う",
+   u'''  if(hd.net === 27200000) out.push("請負金額");''', u'''  out.push("請負金額");''', TM, "main"),
+  (u"メイン：請負金額・着手・完成を直しても知らせが消えない（版175 見直し）",
+   u'''  if(!out.length) return out;''', u'''  if(!out.length) out.push("着手");''', TM, "main"),
+  (u"メイン：知らせが「段階の予定」を言わない（版175 見直し）",
+   u'''  if(!Object.keys(sp).some(k => sp[k] && (sp[k].from || sp[k].to))) out.push("段階の予定");''', u'''''', TM, "main"),
+  (u"★メイン：共有ファイルから同じ物件を開き直しても、現場用に前の地図の中身が入る（版175 見直し）",
+   u'''    } finally { window.__mapRestoring = __wasRestoring; sheetsCtx = ""; }''',
+   u'''    } finally { window.__mapRestoring = __wasRestoring; }''', TM, "main"),
   # ---- 受付台帳.html ----
   (u"★台帳：取り込んだファイルの物件名を使わない（その２ のまま書き出す）",
    u'''_projName = fp; touch(); }''', u'''}''', TM, "lg"),
   (u"★台帳：物件名を替えても保存しない（開き直すと その２ に戻る）",
-   u'''_projName = fp; touch(); }''', u'''_projName = fp; }''', TM, "lg"),
+   u'''        _projName = fp; touch();
+      }''', u'''        _projName = fp;
+      }''', TM, "lg"),
   (u"台帳：違う物件名でも聞かずに替える",
-   u'''if(!cur || confirm(''', u'''if(true || confirm(''', TM, "lg"),
+   u'''        if(!confirm("取り込むファイルの物件は「"''', u'''        if(false && !confirm("取り込むファイルの物件は「"''', TM, "lg"),
+  (u"★台帳：別の工事の台帳で「キャンセル」しても取り込む（版175 見直し）",
+   u'''キャンセル＝取り込まない")) return;''', u'''キャンセル＝取り込まない")) {}''', TM, "lg"),
+  (u"台帳：書き方が違うだけ（同じ物件）でも聞く（版175 見直し）",
+   u'''      else if(pjDiffers(fp, cur)){''', u'''      else if(true){''', TM, "lg"),
   (u"台帳：物件名が空でも聞く",
-   u'''if(!cur || confirm(''', u'''if(confirm(''', TM, "lg"),
+   u'''      if(!cur){ _projName = fp; touch(); }
+      else if(pjDiffers(fp, cur)){''', u'''      if(false){ }
+      else if(true){''', TM, "lg"),
   (u"台帳：同じ物件名でも聞く",
    u'''if(fp && fp !== cur){''', u'''if(fp){''', TM, "lg"),
 ]
