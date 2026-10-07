@@ -303,7 +303,9 @@ window.__okKey = () => { try{ return localStorage.getItem('field_saveplace_ok_v1
       ['R8その１', P1, false], ['R8その１', P2, true],
       ['物件A', P1, false], [P1, '物件A', false],
       ['物件A', '物件B', true], ['三沢地区', '三沢地区 北', false],
-      ['', P1, false], [P1, '', false]
+      ['', P1, false], [P1, '', false],
+      ['工事（その十一）', '工事（その十二）', true], ['工事（その二十）', '工事（その二）', true],
+      ['工事（その十一）', '工事（その11）', false]
     ];
     const r0b = await page.evaluate(cs => cs.map(c => (typeof pjDiffers === 'function') ? pjDiffers(c[0], c[1]) : null), cases);
     const bad = cases.filter((c, i) => r0b[i] !== c[2]).map(c => c[0] + ' ／ ' + c[1] + ' → ' + !c[2]);
@@ -839,7 +841,10 @@ window.__okKey = () => { try{ return localStorage.getItem('field_saveplace_ok_v1
   await scene('⑯', { phone:true }, async page => {
     const r = await page.evaluate(async () => {
       const z = id => parseInt(getComputedStyle(document.getElementById(id)).zIndex, 10) || 0;
-      const o = { map: z('map-modal'), pick: z('pick-modal'), type: z('type-modal'), dlg: z('ui-dialog') };
+      const o = { map: z('map-modal'), pick: z('pick-modal'), type: z('type-modal'), dlg: z('ui-dialog'), toast: z('savedhint') };
+      // 「保存中…」の暗幕（#save-ov）の重なり
+      saveOverlayShow('テスト.json'); await __sleep(50);
+      o.ov = z('save-ov'); saveOverlayHide();
       await __imp(__led(__P.P2, __ROWS.P2));
       await __pickHint('自分で書く', 'その２/リスト');
       receptionSaveRows(__led(__P.P1, __ROWS.P1));
@@ -863,6 +868,9 @@ window.__okKey = () => { try{ return localStorage.getItem('field_saveplace_ok_v1
     ok(r.pick > r.map && r.type > r.map && r.dlg > r.map,
        '★聞く窓・知らせの窓が、地図の画面より下にある（地図の裏に隠れる） → ' + JSON.stringify(r));
     ok(r.onTop, '★地図の画面を開いたまま選ぶ窓を出すと、窓が地図の裏に隠れる → ' + JSON.stringify(r));
+    ok(r.ov > 0 && r.pick > r.ov && r.type > r.ov && r.dlg > r.ov,
+       '★聞く窓・知らせの窓が「保存中…」の暗幕より下にある（保存の途中の質問に答えられない） → ' + JSON.stringify(r));
+    ok(r.toast > r.map, '★知らせ（トースト）が地図の画面の裏に隠れる → ' + JSON.stringify(r));
   });
 
   /* ---------- ⑰ PC のまとめて保存：別の物件（その２）のフォルダを選んだら、書く前に確かめる ----------
@@ -910,6 +918,52 @@ window.__okKey = () => { try{ return localStorage.getItem('field_saveplace_ok_v1
     ok(r.said2.some(s => /名前が違います/.test(s)) && r.wrote2.indexOf('2611AAA001.json') >= 0,
        '試験の前提: 確かめで OK なのに書かない → ' + JSON.stringify({ said: r.said2.map(s => s.slice(0, 40)), wrote: r.wrote2 }));
     ok(!r.bar.other, '★確かめで OK（このフォルダにする）と答えたのに、帯に ⚠ が残る → ' + JSON.stringify(r.bar));
+  });
+
+  /* ---------- ⑰b PC のまとめて保存：別の物件のフォルダを断ったら、前に覚えていた保存先へ戻す ----------
+     断ったフォルダを覚えたままだと、次の1件の「保存」が確かめずにそこ（その２）へ書く。 */
+  await scene('⑰b', {}, async page => {
+    const r = await page.evaluate(async () => {
+      const o = {};
+      await __imp(__led(__P.P1, __ROWS.P1));
+      const list1 = __mkdir('リスト', {}, {}); const root1 = __mkdir(__P.P1, {}, { 'リスト': list1 });
+      await saveDirSet(list1, root1); renderSaveBar();
+      o.place0 = saveDirPlace(); o.ep0 = _saveDirEp;
+      /* 試験のにせフォルダは端末の記録（IndexedDB）に入らないので、前の中身と同じに戻るかで見る */
+      let rec0 = null; try{ rec0 = await idbMapGet(SAVEDIR_KEY); }catch(_){}
+      const ls0 = [localStorage.getItem(LS_SAVEDIR), localStorage.getItem(LS_SAVEDIR_PAR)];
+      M = freshModel(); ensureModelShape(M);
+      M.chosho_mgmt_no = '2611AAA001'; M.chosho_cust_name = '現場の 花子'; M.chosho_date = '2026-09-10';
+      M.chosho_photos = [__ph('n1', '#36c')]; M._touched = true; M._viewOnly = false;
+      await persistDraft();
+      M = freshModel(); render();
+      const list2 = __mkdir('リスト', {}, {}); const root2 = __mkdir(__P.P2, {}, { 'リスト': list2 });
+      window.showDirectoryPicker = async () => root2;      // まちがえて その２ を選ぶ
+      window.__cancelIf = /このフォルダでよいですか/;
+      const n0 = __said.length;
+      await __T(saveAllDrafts(), 10000); await __sleep(300);
+      window.__cancelIf = null;
+      o.said = __said.slice(n0);
+      o.place1 = saveDirPlace(); o.ep1 = _saveDirEp;
+      o.same = __same(_saveDir, list1) && __same(saveDirParentOf(_saveDir), root1);
+      let rec = null; try{ rec = await idbMapGet(SAVEDIR_KEY); }catch(_){}
+      o.recSame = rec0 ? !!(rec && rec.ep === rec0.ep && rec.parentName === rec0.parentName) : !(rec && rec.handle);
+      o.ls = [localStorage.getItem(LS_SAVEDIR), localStorage.getItem(LS_SAVEDIR_PAR)];
+      o.lsSame = JSON.stringify(o.ls) === JSON.stringify(ls0);
+      o.wrote = list1.__wrote.concat(root1.__wrote, list2.__wrote, root2.__wrote);
+      o.bar = __bar();
+      return o;
+    });
+    console.log('⑰b断ったフォルダ', JSON.stringify(r));
+    ok(r.place0 === P1 + ' ＞ リスト', '試験の前提: その１ ＞ リスト を覚えていない → ' + r.place0);
+    ok(r.said.some(s => /名前が違います/.test(s)), '試験の前提: その２ のフォルダで確かめが出ない → ' + JSON.stringify(r.said));
+    ok(r.place1 === P1 + ' ＞ リスト' && r.same === true,
+       '★まとめて保存で断ったフォルダ（その２）を、保存先として覚えたまま（次の「保存」がそこへ書く） → ' + JSON.stringify([r.place1, r.same]));
+    ok(r.ep1 === r.ep0, '★断ったあと、保存先の印（ep）が変わった（前の控えが使えなくなる） → ' + JSON.stringify([r.ep0, r.ep1]));
+    ok(r.recSame, '★断ったあと、開き直したときの保存先（端末の記録）が前のフォルダに戻っていない');
+    ok(r.lsSame, '★断ったあと、保存先の名前の控えが前のものに戻っていない → ' + JSON.stringify(r.ls));
+    ok(r.wrote.length === 0, '★断ったのに、どこかへ書いた → ' + JSON.stringify(r.wrote));
+    ok(!r.bar.other, '★前の保存先（その１）に戻ったのに、帯に ⚠ が出る → ' + JSON.stringify(r.bar));
   });
 
   /* ---------- ⑱ 名前1つの入れる場所（「その２」）・物件のフォルダそのものを覚えた PC ----------

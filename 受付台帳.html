@@ -1377,11 +1377,15 @@ function pjNameKey(s){
     .replace(/[\s()\[\]{}「」『』【】〔〕<>・_\-]/g, "").toLowerCase();
 }
 function pjSonoNo(k){
-  const m = /その([0-9]+|[一二三四五六七八九十])/.exec(String(k || ""));
+  /* 漢数字は 九十九 まで読む（「その十一」「その二十」を「その十」「その二」と読み違えない） */
+  const m = /その([0-9]+|[一二三四五六七八九]?十[一二三四五六七八九]?|[一二三四五六七八九])/.exec(String(k || ""));
   if(!m) return "";
   const v = m[1];
   if(/^[0-9]+$/.test(v)) return String(+v);
-  return v === "十" ? "10" : String("一二三四五六七八九".indexOf(v) + 1);
+  const d = c => "一二三四五六七八九".indexOf(c) + 1;
+  const t = v.indexOf("十");
+  if(t < 0) return String(d(v));
+  return String((t > 0 ? d(v[0]) : 1) * 10 + (v.length > t + 1 ? d(v[t + 1]) : 0));
 }
 function pjDiffers(a, b){
   const x = pjNameKey(a), y = pjNameKey(b);
@@ -1411,6 +1415,11 @@ async function importLedgerFile(file){
             + "別の工事の台帳かもしれません。\n\n"
             + "OK＝取り込んで、物件名を「" + fp + "」にする\nキャンセル＝取り込まない")) return;
         _projName = fp; touch();
+      }
+      else if(pjNameKey(fp) !== pjNameKey(cur)){
+        /* 同じ物件か分からない（片方にだけ番号がある など）ときは、物件名を変えるかだけ聞く（行は取り込む） */
+        if(confirm("取り込むファイルの物件は「" + fp + "」です。\nいまの物件名は「" + cur + "」です。\n\n"
+            + "物件名を「" + fp + "」に変えますか？\n（OK＝変える／キャンセル＝いまのまま）")){ _projName = fp; touch(); }
       }
       // 書き方が違うだけ（同じ物件）のときは、いまの物件名のまま
     }

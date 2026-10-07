@@ -251,8 +251,11 @@ async function openMain(label){
       // 開いていた物件で直したばかり（自動保存の待ち時間の中）＋共有ファイルの再接続待ち
       _listRows[0].data.chosho_cust_name = '直したばかり'; projTouch();
       _projPendingHandle = { name: 'その２.json' };
+      lsSet(SFP_PREF_KEY, JSON.stringify({ project: P2N, client: '三沢市', layout: 'x' }));   // 持出明細PDFの見出し（その２）
       await createProjectFlow();
       await new Promise(r => setTimeout(r, 300));
+      const first = await projIdbGet(_currentProject.id);   // 作った直後（何も直していない）
+      const sp = sfpLoadPrefs();
       const h = hkLoad();
       const head = (h && h.head && typeof h.head === 'object') ? h.head : null;
       await projSaveNow();
@@ -267,7 +270,9 @@ async function openMain(label){
                ledgerProj: buildReceptionLedgerPayload().project, rows: _listRows.length,
                oldHk: old && old.hakou && old.hakou.head && old.hakou.head.name,
                oldName: old && old.cases && old.cases[0] && old.cases[0].payload && old.cases[0].payload.chosho_cust_name,
-               handles: [_projFileHandle, _projDirHandle, _projPendingHandle].map(x => x === null) };
+               handles: [_projFileHandle, _projDirHandle, _projPendingHandle].map(x => x === null),
+               firstHk: !!(first && first.hakou && first.hakou.head), firstHkName: first && first.hakou && first.hakou.head && first.hakou.head.name,
+               sfp: [sp.project, sp.client, sp.layout] };
     }, { P2N, NO2, NEWN });
     // 新しい物件で履行報告の画面が開ける（工事名は空・見本は新しい物件名）
     const r3v = await page.evaluate(() => {
@@ -295,6 +300,9 @@ async function openMain(label){
        '★新しい物件で履行報告の画面が開けない（または前の物件の工事名が出る） → ' + JSON.stringify({ err: r3v, view: r3view }));
     ok(r3.oldHk === P2N, '★その２ の物件の履行報告が消える → ' + JSON.stringify(r3.oldHk));
     ok(r3.oldName === '直したばかり', '★新しい物件を作る直前に その２ で直したものが、その２ に保存されない → ' + JSON.stringify(r3.oldName));
+    ok(r3.firstHk && !r3.firstHkName, '★作ったばかりの空の物件に履行報告が入っていない（開き直すと端末の控え＝別の物件の工事名が戻る） → ' + JSON.stringify([r3.firstHk, r3.firstHkName]));
+    ok(r3.sfp[0] === '' && r3.sfp[1] === '三沢市' && r3.sfp[2] === 'x',
+       '★新しい物件の持出明細PDFの見出しに、前の物件（その２）の工事名が残る／ほかの設定まで消えた → ' + JSON.stringify(r3.sfp));
     ok(r3.handles.every(Boolean), '★新しい物件が、前の物件の共有ファイル・フォルダのつながりを持ったまま → ' + JSON.stringify(r3.handles));
     await ctx.close();
   }
@@ -336,6 +344,64 @@ async function openMain(label){
       ok(r.net === 12345678 && r.snap === '2026-08', '物件を作る前に入れていた履行報告（工事名なし）が新しい物件に引き継がれない → ' + JSON.stringify(r));
     }
     ok(r.dev === devName, '★端末の履行報告の控えが消えた／変わった（' + lbl + '） → ' + JSON.stringify(r.dev));
+    await ctx.close();
+  }
+
+  // ---- ③e 前の物件の保存が終わらないうちは、新しい物件に替えない（何も変えずに知らせる） ----
+  {
+    const { ctx, page, said, answers } = await openMain('③e');
+    answers.push('新しい工事（その１）', false);
+    const r = await page.evaluate(async ({ P2N, NO2 }) => {
+      const P2 = __proj('pjE2', P2N, [NO2]); await projIdbPut(P2); await applyProject(P2, { silent: true });
+      _projSaving = true;                        // 前の物件の保存がいつまでも終わらない
+      const t0 = Date.now();
+      await createProjectFlow();
+      const waited = Date.now() - t0;
+      _projSaving = false;
+      const all = await new Promise(res => { projOpenDb().then(db => { const q = db.transaction('projects').objectStore('projects').getAll();
+        q.onsuccess = () => res(q.result.map(x => x.id)); q.onerror = () => res(null); }).catch(() => res(null)); });
+      return { cur: _currentProject && _currentProject.id, waited, ids: all };
+    }, { P2N, NO2 });
+    const al = said.filter(x => x.type === 'alert').map(x => x.msg);
+    console.log('③e保存が終わらない', JSON.stringify({ r, al: al.map(m => m.slice(0, 60)) }));
+    ok(r.cur === 'pjE2', '★前の物件の保存が終わらないのに、新しい物件に替えた（その保存が新しい物件の中身で前の物件を書き替える） → ' + JSON.stringify(r.cur));
+    ok(al.some(m => /まだ終わっていません/.test(m)), '★新しい物件に替えなかった理由を知らせない → ' + JSON.stringify(al));
+    ok(!r.ids || r.ids.filter(id => !/^ls:/.test(String(id))).every(id => id === 'pjE2'), '★新しい物件に替えないのに、新しい物件を保存した → ' + JSON.stringify(r.ids));
+    await ctx.close();
+  }
+
+  // ---- ③f 共有ファイルの取り込み・再接続の途中で物件が替わったら、前の物件へ戻さない・つながない ----
+  {
+    const { ctx, page } = await openMain('③f');
+    const r = await page.evaluate(async ({ P2N, NO2 }) => {
+      const P2 = __proj('pjF2', P2N, [NO2]); await projIdbPut(P2); await applyProject(P2, { silent: true });
+      const slow = (obj) => ({ name: 'その２.json', kind: 'file',
+        getFile: async () => { await new Promise(r => setTimeout(r, 400)); return { text: async () => JSON.stringify(obj) }; } });
+      const o = {};
+      // 取り込み：読んでいる間に別の物件へ
+      _projFileHandle = slow(Object.assign({}, P2, { updatedAt: '2099-01-01T00:00:00Z' }));
+      if(_projSaveTimer){ clearTimeout(_projSaveTimer); _projSaveTimer = null; }
+      _projWriteWarn = ""; try { clearEditedMarks(); } catch(_){}
+      o.ready = !rtHasUnsavedMarks();             // 取り込みの前の保存に回らない（取り込みそのものを通す）
+      const pull = rtPullLatest({ auto: true });
+      await new Promise(r => setTimeout(r, 50));
+      _currentProject = { id: 'pjF1', name: '新しい工事（その１）' }; _projFileHandle = null;
+      await pull;
+      o.pullCur = _currentProject && _currentProject.id;
+      // 再接続：読んでいる間に別の物件へ
+      _currentProject = { id: 'pjF2', name: P2N };
+      const h = slow(P2);
+      const con = connectHandleWithFreshness(h, P2);
+      await new Promise(r => setTimeout(r, 50));
+      _currentProject = { id: 'pjF1', name: '新しい工事（その１）' };
+      o.con = await con;
+      o.fh = (_projFileHandle === h);
+      return o;
+    }, { P2N, NO2 });
+    console.log('③f途中で物件が替わる', JSON.stringify(r));
+    ok(r.ready === true, '試験の前提: 取り込みの前の保存に回ってしまう');
+    ok(r.pullCur === 'pjF1', '★共有ファイルの取り込みの途中で物件を替えると、画面が前の物件（その２）に戻る → ' + JSON.stringify(r.pullCur));
+    ok(r.con === 'stale' && r.fh === false, '★再接続の途中で物件を替えると、新しい物件に前の物件の共有ファイルがつながる → ' + JSON.stringify(r));
     await ctx.close();
   }
 
@@ -505,6 +571,14 @@ async function openMain(label){
       r6.F = Object.assign(await state(page), { said: said.map(x => x.type) });
       await ctx.close();
     }
+    // G. 片方にだけ番号がある（その２ の台帳に、番号の無い物件名のファイル）→ 物件名を変えるかだけ聞く（行は入る）
+    {
+      const { ctx, page, said, answers } = await openLedger('⑥G', P2N);
+      answers.push(true);
+      await importVia(page, '令和８年度戸別受信設備設置工事');
+      r6.G = Object.assign(await state(page), { said: said.map(x => x.type + ':' + x.msg.slice(0, 120)) });
+      await ctx.close();
+    }
     // E. ファイルに物件名が無い → 今の名前のまま・聞かない
     //    つづけて、同じ行の その１ のファイルを取り込む（行は何も変わらない）→ OK → 開き直しても その１（名前だけでも保存する）
     {
@@ -529,6 +603,8 @@ async function openMain(label){
     ok(r6.B.said.join(',') === 'confirm' && r6.B.field === P2N && r6.B.out === P2N, '★「キャンセル＝いまのまま」の道：聞かれない／物件名が変わる → ' + JSON.stringify(r6.B));
     ok(r6.B.rows.length === 0, '★別の工事の台帳で「キャンセル＝取り込まない」を選んだのに、行が混ざった → ' + JSON.stringify(r6.B.rows));
     ok(r6.C.said.length === 0, '★物件名が空の台帳で、聞かなくてよいのに聞く → ' + JSON.stringify(r6.C.said));
+    ok(r6.G.said.length === 1 && /変えますか/.test(r6.G.said[0]) && r6.G.field === '令和８年度戸別受信設備設置工事' && r6.G.rows.join(',') === NO1,
+       '★片方にだけ番号がある物件名のファイルで、物件名を変えるか聞かない（その２ の名前が黙って残る） → ' + JSON.stringify(r6.G));
     ok(r6.F.said.length === 0 && r6.F.field === P1N && r6.F.rows.join(',') === NO1,
        '★書き方が違うだけの同じ物件（その１）で聞く／名前が変わる／行が入らない → ' + JSON.stringify(r6.F));
     ok(r6.C.field === P1N && r6.C.out === P1N, '★物件名が空の台帳に取り込んでも、ファイルの物件名が入らない → ' + JSON.stringify(r6.C));
@@ -577,7 +653,10 @@ async function openMain(label){
         [P1N, '物件A', false],
         ['', P2N, false], [P2N, '', false], [null, undefined, false],
         ['A地区 アンテナ改修工事', 'B地区 アンテナ改修工事', true],
-        ['A地区', 'A地区 アンテナ改修工事', false]   // 片方がもう片方の一部＝同じ物件とみる
+        ['A地区', 'A地区 アンテナ改修工事', false],   // 片方がもう片方の一部＝同じ物件とみる
+        ['工事（その十一）', '工事（その十二）', true],  // 漢数字は 十一・十二 まで読む
+        ['工事（その二十）', '工事（その二）', true],
+        ['工事（その十一）', '工事（その11）', false]
       ];
       return T.map(([a, b, w]) => ({ a, b, w, got: pjDiffers(a, b) })).filter(x => x.got !== x.w);
     }, { P1N, P2N });

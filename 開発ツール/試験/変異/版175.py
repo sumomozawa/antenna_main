@@ -35,7 +35,9 @@ CASES = [
     .replace(''', u'''  return String(s == null ? "" : s)
     .replace(''', TG, "genba"),
   (u"現場：漢数字の「その二」を読まない",
-   u'''  return v === "十" ? "10" : String("一二三四五六七八九".indexOf(v) + 1);''', u'''  return v;''', TG, "genba"),
+   u'''  if(t < 0) return String(d(v));''', u'''  if(t < 0) return v;''', TG, "genba"),
+  (u"現場：漢数字の「その十一」「その二十」を「その十」と読む（版175 見直し）",
+   u'''  return String((t > 0 ? d(v[0]) : 1) * 10 + (v.length > t + 1 ? d(v[t + 1]) : 0));''', u'''  return "10";''', TG, "genba"),
   (u"現場：片方がもう片方の一部でも「違う」と言う",
    u'''  return !(x.indexOf(y) >= 0 || y.indexOf(x) >= 0);  // 片方がもう片方の一部なら同じ物件とみる''',
    u'''  return true;''', TG, "genba"),
@@ -94,11 +96,15 @@ CASES = [
 }''', u'''
 }''', TG, "genba"),
   (u"★現場：まとめて保存で、別の物件のフォルダを選んでも確かめない（版175 見直し）",
-   u'''      if(!(await savePlaceConfirmAfterPick("stop"))){ setBusy(false); return; }
+   u'''      if(!(await savePlaceConfirmAfterPick("stop"))){ await saveDirRestore(keepDir); setBusy(false); return; }
 ''', u'''''', TG, "genba"),
   (u"★現場：まとめて保存の確かめで「キャンセル」しても書く（版175 見直し）",
-   u'''if(!(await savePlaceConfirmAfterPick("stop"))){ setBusy(false); return; }''',
+   u'''if(!(await savePlaceConfirmAfterPick("stop"))){ await saveDirRestore(keepDir); setBusy(false); return; }''',
    u'''if(!(await savePlaceConfirmAfterPick("stop"))){ }''', TG, "genba"),
+  (u"★現場：まとめて保存で断ったフォルダを、保存先として覚えたままにする（版175 2回目の見直し）",
+   u'''{ await saveDirRestore(keepDir); setBusy(false); return; }''', u'''{ setBusy(false); return; }''', TG, "genba"),
+  (u"★現場：断ったあと、保存先の印（ep）を戻さない（前の控えが使えなくなる）（版175 2回目の見直し）",
+   u'''  _saveDir = k.dir; _saveDirPar = k.par; _saveDirEp = k.ep;''', u'''  _saveDir = k.dir; _saveDirPar = k.par;''', TG, "genba"),
   (u"現場：まとめて保存の前の確かめで、前回のフォルダが物件と違うと言わない（版175 見直し）",
    u'''return (m0 && m0.held) ? (''', u'''return false ? (''', TG, "genba"),
   (u"★現場：フォルダの確かめで OK でも答えを覚えない",
@@ -154,8 +160,12 @@ CASES = [
     + (mm ? (''', u'''」フォルダ★\\n（管理番号.json が並んでいるフォルダです）"
     + (false ? (''', TG, "genba"),
   (u"★現場：聞く窓・知らせの窓が地図の画面の裏に隠れる（版175 見直し）",
-   u'''  #pick-modal, #type-modal, #ui-dialog{ z-index:120; }
+   u'''  #pick-modal, #type-modal, #ui-dialog{ z-index:10000; }
 ''', u'''''', TG, "genba"),
+  (u"★現場：聞く窓が「保存中…」の暗幕より下（保存の途中の質問に答えられない）（版175 2回目の見直し）",
+   u'''  #pick-modal, #type-modal, #ui-dialog{ z-index:10000; }''', u'''  #pick-modal, #type-modal, #ui-dialog{ z-index:120; }''', TG, "genba"),
+  (u"現場：知らせ（トースト）が地図の画面の裏に隠れる（版175 2回目の見直し）",
+   u'''opacity:0; z-index:115; pointer-events:none;''', u'''opacity:0; z-index:70; pointer-events:none;''', TG, "genba"),
   (u"★現場：取り込んだあと帯を描き直さない（物件が合っても ⚠ が残る）（版175 見直し）",
    u'''  try{ renderSaveBar(); }catch(_){}   // 物件が替わると ⚠ の有無も変わるので、いつも描き直す（版175）
 ''', u'''''', TG, "genba"),
@@ -212,7 +222,20 @@ CASES = [
     .replace(''', u'''  return String(s == null ? "" : s)
     .replace(''', TM, "main"),
   (u"メイン：漢数字の「その一」「その二」を読まない",
-   u'''  const m = /その([0-9]+|[一二三四五六七八九十])/.exec''', u'''  const m = /その([0-9]+)/.exec''', TM, "main"),
+   u'''  const m = /その([0-9]+|[一二三四五六七八九]?十[一二三四五六七八九]?|[一二三四五六七八九])/.exec''', u'''  const m = /その([0-9]+)/.exec''', TM, "main"),
+  (u"メイン：漢数字の「その十一」「その二十」を「その十」と読む（版175 見直し）",
+   u'''  return String((t > 0 ? d(v[0]) : 1) * 10 + (v.length > t + 1 ? d(v[t + 1]) : 0));''', u'''  return "10";''', TM, "main"),
+  (u"★メイン：前の物件の保存が終わらないうちに、新しい物件に替える（版175 2回目の見直し）",
+   u'''      try { rtJoinForCurrentProject(); } catch(_){}
+      return;''', u'''      try { rtJoinForCurrentProject(); } catch(_){}''', TM, "main"),
+  (u"★メイン：新しい物件の持出明細PDFの見出しに、前の物件の工事名を残す（版175 2回目の見直し）",
+   u'''      if(sp && sp.project){ sp.project = ""; lsSet(SFP_PREF_KEY, JSON.stringify(sp)); }''', u'''''', TM, "main"),
+  (u"★メイン：空の新しい物件に履行報告を入れない（開き直すと端末の控えが戻る）（版175 2回目の見直し）",
+   u'''    try { p.hakou = hkCapture(); } catch(_){}''', u'''''', TM, "main"),
+  (u"★メイン：取り込みの途中で物件が替わっても、前の物件を入れる（画面が その２ に戻る）（版175 2回目の見直し）",
+   u'''    if(!_currentProject || _currentProject.id !== pullPid || _projFileHandle !== fh) return;''', u'''''', TM, "main"),
+  (u"★メイン：再接続の途中で物件が替わっても、前の物件の共有ファイルをつなぐ（版175 2回目の見直し）",
+   u'''  if(loadedProject && loadedProject.id && (!_currentProject || _currentProject.id !== loadedProject.id)) return "stale";''', u'''''', TM, "main"),
   (u"メイン：片方がもう片方の一部でも「違う」と言う",
    u'''  return !(x.indexOf(y) >= 0 || y.indexOf(x) >= 0);  // 片方がもう片方の一部なら同じ物件とみる''',
    u'''  return true;''', TM, "main"),
@@ -299,7 +322,7 @@ CASES = [
    u'''    } finally { window.__mapRestoring = __wasRestoring; }''', TM, "main"),
   # ---- 受付台帳.html ----
   (u"★台帳：取り込んだファイルの物件名を使わない（その２ のまま書き出す）",
-   u'''_projName = fp; touch(); }''', u'''}''', TM, "lg"),
+   u'''      if(!cur){ _projName = fp; touch(); }''', u'''      if(!cur){ }''', TM, "lg"),
   (u"★台帳：物件名を替えても保存しない（開き直すと その２ に戻る）",
    u'''        _projName = fp; touch();
       }''', u'''        _projName = fp;
@@ -308,6 +331,8 @@ CASES = [
    u'''        if(!confirm("取り込むファイルの物件は「"''', u'''        if(false && !confirm("取り込むファイルの物件は「"''', TM, "lg"),
   (u"★台帳：別の工事の台帳で「キャンセル」しても取り込む（版175 見直し）",
    u'''キャンセル＝取り込まない")) return;''', u'''キャンセル＝取り込まない")) {}''', TM, "lg"),
+  (u"★台帳：片方にだけ番号があるとき、物件名を変えるか聞かない（その２ の名前が黙って残る）（版175 2回目の見直し）",
+   u'''      else if(pjNameKey(fp) !== pjNameKey(cur)){''', u'''      else if(false){''', TM, "lg"),
   (u"台帳：書き方が違うだけ（同じ物件）でも聞く（版175 見直し）",
    u'''      else if(pjDiffers(fp, cur)){''', u'''      else if(true){''', TM, "lg"),
   (u"台帳：物件名が空でも聞く",
