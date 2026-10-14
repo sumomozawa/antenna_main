@@ -5,6 +5,7 @@
    ④覚えているフォルダの許可が切れていたら、保存のあとの知らせに書く（窓・共有・ダウンロード）
    ⑤共有で渡した 管理番号.json.txt も、フォルダから読めるようになった
    ⑥まとめて保存で、フォルダを選ぶ窓がやめた以外の理由で開けなければ、そこで止まる
+     （版176：自分で閉じたときも黙らず「📮 まとめて事務所に預ける」「📤 フォルダを覚えるのをやめる」を出す。押すまで何も渡さない）
    ⑦まとめて保存を共有／ダウンロードで渡したら、押すまで消えない知らせが出る
    ⑧特別記録も、書いたあと読み返して確かめる／写真の✕は一度確かめる */
 const { chromium } = require('playwright-core');
@@ -252,7 +253,8 @@ const fails = []; const ok = (c, m) => { if(!c) fails.push(m); };
       let share = 0, dl = 0;
       /* 版176：知らせは「📮 まとめて事務所に預ける」を並べた選ぶ窓で出る。出た文を控えて「やめる」で閉じる */
       const opk = uiPickName;
-      uiPickName = async (t, n) => { window.__alerts.push(String(t || '') + ' ' + String(n || '').replace(/<[^>]+>/g, '')); return null; };
+      uiPickName = async (t, n, items) => { window.__alerts.push(String(t || '') + ' ' + String(n || '').replace(/<[^>]+>/g, '')
+        + ' ［' + (items || []).map(x => x && x.label).join('｜') + '］'); return null; };
       window.showDirectoryPicker = async () => { throw thrown(); };
       saveDirGet = async () => { out.dirGet = true; return null; };
       saveDirOk = async () => true;
@@ -286,7 +288,9 @@ const fails = []; const ok = (c, m) => { if(!c) fails.push(m); };
   ok(r6.err.saved === 0, '★書いていないのに💾を付けている → ' + r6.err.saved);
   ok(r6.abort.share === 0 && r6.abort.dl === 0,
      '★自分で閉じたのに、共有やダウンロードへ落ちている → ' + JSON.stringify(r6.abort));
-  ok(r6.abort.alerts === '', '★自分で閉じただけなのに知らせを出している → ' + JSON.stringify(r6.abort.alerts));
+  /* 版176：Android のタブレットは、フォルダを選ぶ画面に Dropbox が出ないので閉じるのがふつう。黙って終わらない（押すまで何もしない） */
+  ok(/閉じた/.test(r6.abort.alerts) && /📮 まとめて事務所に預ける/.test(r6.abort.alerts) && /📤 フォルダを(覚えるのをやめる|選ばずに)/.test(r6.abort.alerts),
+     '★自分で閉じたとき黙って終わった（「📮 まとめて事務所に預ける」「📤 フォルダを覚えるのをやめる」を出していない） → ' + JSON.stringify(r6.abort.alerts));
   ok(r6.abort.saved === 0, '★書いていないのに💾を付けている（自分で閉じた） → ' + r6.abort.saved);
 
   // ---- ⑦ まとめて保存を共有／ダウンロードで渡したら、押すまで消えない知らせ ----

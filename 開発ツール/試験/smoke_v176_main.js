@@ -34,6 +34,25 @@
         閉じた → 黙る・許可があれば選び直さない・選ぶ画面は書き込み（readwrite）で開く
      ⑱ 閲覧用（antenna_viewer）：ボタンを出さない・知らせを出さない・押しても何もしない／ビューアがメインから作り直してある。
         試験しているメインでも、閲覧専用の印が立っていればフォルダを選ばせない・知らせを出さない
+   （ここから 2回目の直し）
+     ⑲ 物件を開いていて 📁 の一覧が無い（ふつうの状態）：開いている物件の行を、ファイルの中身で置き換えず、
+        預けを同じ合わせ方で入れる（物件だけの備考・工事の種類・工事完了は残る・現場で直した欄・まとめた印・
+        済みの印（受付台帳）は入る・写真は行のまま）。「まだ前の中身」とは言わない。
+        b) 現場の工事完了が行に入り、そのあと物件から開いて「物件に保存」しても、戸別ファイルの工事完了・印が消えない
+        c) 開いている物件（その１）と違う物件（その２）へまとめた預けは、その１ の同じ管理番号の行に入れない
+     ⑳ 新しく置く前に、行き先の物件フォルダの中を全部探す：a) 完了 フォルダ・物件のすぐ下（_数字 の名前）にあれば置かない
+        （0KB は数えない・名前の変わった預け自身は数えない・「エクスプローラで … へ移して」と、できる手順を言う）
+        b) リストに 管理番号.json.txt があれば置かない
+        （預けの物件は現場の書くとおりの長い名前＝①で決まる）　c) リストの中のフォルダにあるものも迷子に並べ、どちらとも決めない
+     ㉑ 預けの台帳の「その」の番号：a) 物件フォルダ その１ だけを選び、預けが その２ → 紛れた その１ の写しへまとめない・
+        上のフォルダを選ぶよう言う　b) 預けの物件が長い名前（…（その１））でも ① で その１ へ（両方のリストにあっても）
+        「リスト」だけを選んだとき：c) 上が分からない その２/リスト（紛れた写し）→ その１ の預けをまとめない・どうするか言う
+        d) 上が分からない その１/リスト → 自動では決めない → 行き先で（選んだ「リスト」）を選ぶとまとめる
+        e) 📁 の その１ の中の リスト → その１ と分かって自動でまとめる　f) 📁 の 物件情報_調書 の中の その２/リスト → まとめない
+     ㉒ 振り分けたあと一覧を読み直そうとして断られた（受付台帳で直したまま）→ 知らせで「まだ前の中身」と言う。読み直せたときは言わない
+     ㉓ 📥 現場取込で預けを選ぶ：現場の台帳を見せる。別の物件の預け・台帳に無い戸別は注意を出して「スキップ」を選んでおく
+        （「残りも確かめなしで」を選んでいても、その預けは窓を出す）。同じ物件の預けはいつもどおり
+     ㉔ 行き先を手で選ぶ：その番号の違う物件は自動では決めない → 手で選んだ先に 管理番号.json があればまとめる
    ★場面ごとに新しいブラウザの入れ物（newContext）を使う★ 前の場面の覚え書き（localStorage・IndexedDB）を持ち越さない。
    フォルダは試験の中で作る作り物（getDirectoryHandle／getFileHandle／removeEntry／entries／values を持つ）。
    「📮 預かりを振り分ける」のフォルダを選ぶ画面は window.showDirectoryPicker を差し替える。
@@ -948,6 +967,453 @@ const brief = o => JSON.stringify(o === undefined ? null : o).slice(0, 260);   /
     ok(py.status === 0, '★ビューア（antenna_viewer）がメインから作り直されていない → ' + String(py.stdout || '').split('\n').slice(-3).join(' ') + String(py.stderr || '').slice(0, 300));
     ok(r18 && !r18.error && r18.viewer && r18.has && r18.disp === 'none', '★閲覧用で「📮 預かりを振り分ける」が出る → ' + short(r18));
     ok(r18 && r18.note === '' && r18.picks === 0, '★閲覧用で振り分けの知らせを出す／フォルダを選ばせる → ' + short(r18));
+  }
+
+  // ---- ⑲ 物件を開いていて 📁 の一覧が無い：開いている物件の行にも、同じ合わせ方で入れる ----
+  //   a) 行の 物件だけの直し（備考・工事の種類）と工事完了は残る・現場で直した欄とまとめた印は入る・写真は行のまま
+  //   b) 現場の工事完了が行に入り、そのあと物件から開いて「物件に保存」しても戸別ファイルの工事完了・印が消えない
+  for(const mode of ['a', 'b'].filter(m => want('⑲' + m))){
+    const { ctx, page, said } = await openMain('⑲' + mode);
+    // b は戸別を開いて保存するので、画面の選ぶ欄にある値を使う（無い値は開いたときに空になる）
+    const WT = (mode === 'a') ? 'bs_new' : 'replace', AMP = (mode === 'a') ? 'genbaAmp' : 'amp_1u45';
+    const r19 = await run(page, async ({ NO, SIDE, P1N, mode, WT, AMP }) => {
+      await __fresh();
+      const D = Object.assign(__D(NO), { work_done: false, chosho_status: 'in_progress' });   // ファイルはまだ工事完了でない
+      delete D.work_done_at;
+      if(mode === 'b') D.amplifier = 'amp_3u43';
+      const S = (mode === 'a') ? __S(NO)
+        : Object.assign(__S(NO, { proj: P1N, ledger: P1N,
+            touched: ['amplifier', 'line_booster', 'work_done', 'chosho_status', 'asbestos', 'chosho_cust_tel'] }),
+            { amplifier: AMP, work_done: true, work_done_at: '2026-10-14', chosho_status: 'completed' });
+      const l1 = __mk('リスト', { [NO + '.json']: JSON.stringify(D, null, 2) });
+      const l2 = __mk('リスト', { [SIDE]: JSON.stringify(S) });
+      const p1 = __mk('その１', {}, { 'リスト': l1 });
+      const root = __mk('物件情報_調書', {}, { 'その１': p1, 'その２': __mk('その２', {}, { 'リスト': l2 }) });
+      // 物件の行：物件だけの直し（まだファイルに無い備考・工事の種類）。a は工事完了も物件だけ。b は工事完了でない
+      const rd = (mode === 'a')
+        ? Object.assign(__D(NO), { chosho_note: '物件だけの備考（まだファイルに無い）', work_type: WT,
+                                   work_done: true, chosho_status: 'completed', chosho_photos: null, chosho_photo_count: 6 })
+        : Object.assign({}, D, { chosho_note: '物件だけの備考（まだファイルに無い）', work_type: WT, chosho_photos: null, chosho_photo_count: 6 });
+      const row = { file: 'リスト/' + NO + '.json', data: rd, fileType: 'plain', _fromProject: true, _slim: true, _photoCount: 6 };
+      _listRows = [row];
+      _currentProject = { id: 'pj176r2' + mode, name: P1N, cases: [] };
+      window.showDirectoryPicker = async () => root;
+      const o = { run: await __sortRun('sort-ok') };
+      const g = row.data;
+      o.row = { note: g.chosho_note, wd: g.work_done, wt: g.work_type, st: g.chosho_status, amp: g.amplifier, tel: g.chosho_cust_tel,
+                sm: g._sideMerged, ph: g.chosho_photos, cnt: g.chosho_photo_count, pc: row._photoCount, side: ('_side' in g),
+                lgFlyer: !!(getLedger(subCaseKey(row)) || {}).flyer };
+      const f = l1.__files[NO + '.json'];
+      o.file = __pids(f); o.fileAmp = JSON.parse(f).amplifier; o.sideLeft = SIDE in l2.__files;
+      if(mode === 'b'){
+        // 物件から開いて「物件に保存」（工事フォルダはリンク済み）→ 戸別ファイルも書き直される
+        _projDirHandle = p1;
+        try { await openCaseInEditor(row); } catch(e){ o.openErr = String(e && e.message || e); }
+        try { await overwriteSaveCurrentToProject(); } catch(e){ o.saveErr = String(e && e.message || e); }
+        const f2 = JSON.parse(l1.__files[NO + '.json']);
+        o.saved = { wd: f2.work_done, st: f2.chosho_status, amp: f2.amplifier, tel: f2.chosho_cust_tel, note: f2.chosho_note,
+                    wt: f2.work_type, sm: f2._sideMerged, ph: __pids(f2), side: ('_side' in f2) };
+        o.rewrote = l1.__writes.length;
+      }
+      _currentProject = null; _listRows = []; _projDirHandle = null;
+      return o;
+    }, { NO, SIDE, P1N, mode, WT, AMP });
+    const a19 = alerts(said);
+    console.log('⑲' + mode + '物件を開いている', brief(r19), brief(a19));
+    ok(!r19.error, '⑲' + mode + '止まった → ' + r19.error);
+    if(r19.error){ await ctx.close(); continue; }
+    const fin = a19.filter(m => /振り分け終わりました/.test(m));
+    ok(r19.file === 'p1,p2,p3,p4,p5,p6,t1' && r19.fileAmp === AMP && !r19.sideLeft && fin.length === 1,
+       '⑲' + mode + '試験の前提: 戸別ファイルへはまとまる → ' + short({ r19, fin }));
+    const R = r19.row || {};
+    ok(R.note === '物件だけの備考（まだファイルに無い）' && R.wt === WT,
+       '★⑲' + mode + '開いている物件の行の、物件だけの直し（備考・工事の種類）が消えた → ' + short(R));
+    ok(R.amp === AMP && Array.isArray(R.sm) && R.sm.indexOf(STAMP) >= 0 && R.side === false,
+       '★⑲' + mode + '開いている物件の行に、現場で直した欄・まとめた印が入らない（あとの「物件に保存」で消える） → ' + short(R));
+    ok(R.lgFlyer === true, '★⑲' + mode + '現場で済みにした印（ビラ）が、受付台帳に入らない → ' + short(R));
+    ok(R.ph === null && R.cnt === 7 && R.pc === 7, '★⑲' + mode + '行の写真の扱いが違う（常駐させない・枚数は多い方） → ' + short(R));
+    ok(fin.length === 1 && !/まだ振り分ける前の中身/.test(fin[0]),
+       '★⑲' + mode + '行に入れたのに「まだ振り分ける前の中身のまま」と言う → ' + short(fin));
+    if(mode === 'a'){
+      ok(R.wd === true && R.st === 'completed', '★⑲a 物件だけの工事完了が外れた → ' + short(R));
+    }
+    if(mode === 'b'){
+      ok(R.wd === true && R.st === 'completed' && R.tel === '0176-11-2222',
+         '★⑲b 現場の工事完了・直した欄が、開いている物件の行に入らない → ' + short(R));
+      const V = r19.saved || {};
+      ok(!r19.openErr && !r19.saveErr && r19.rewrote >= 2, '⑲b試験の前提: 物件から開いて保存すると戸別ファイルも書く → ' + short(r19));
+      ok(V.wd === true && V.st === 'completed' && V.amp === AMP && V.tel === '0176-11-2222' && Array.isArray(V.sm) && V.sm.indexOf(STAMP) >= 0
+         && V.note === '物件だけの備考（まだファイルに無い）' && V.wt === WT && V.ph === 'p1,p2,p3,p4,p5,p6,t1' && V.side === false,
+         '★⑲b 振り分けたあと「物件に保存」すると、戸別ファイルの工事完了・現場の入力・まとめた印が消える → ' + short(V));
+    }
+    await ctx.close();
+  }
+  // ---- ⑲c 開いている物件（その１）と違う物件（その２）へまとめた預けは、開いている物件の同じ管理番号の行に入れない ----
+  if(want('⑲c')){
+    const { ctx, page } = await openMain('⑲c');
+    const r = await run(page, async ({ NO, SIDE, P1N, P2N }) => {
+      await __fresh();
+      const T1 = JSON.stringify(__D(NO), null, 2);
+      const T2 = JSON.stringify(Object.assign(__D(NO), { chosho_note: 'その２に紛れた写し' }), null, 2);
+      const l1 = __mk('リスト', { [NO + '.json']: T1 });
+      const l2 = __mk('リスト', { [NO + '.json']: T2, [SIDE]: JSON.stringify(__S(NO, { proj: P2N })) });
+      const root = __mk('物件情報_調書', {}, { 'その１': __mk('その１', {}, { 'リスト': l1 }), 'その２': __mk('その２', {}, { 'リスト': l2 }) });
+      const rd = Object.assign(__D(NO), { chosho_photos: null, chosho_photo_count: 6 });
+      const before = JSON.stringify(rd);
+      const row = { file: 'リスト/' + NO + '.json', data: rd, fileType: 'plain', _fromProject: true, _slim: true, _photoCount: 6 };
+      _listRows = [row];
+      _currentProject = { id: 'pj176r2c', name: P1N, cases: [] };
+      window.showDirectoryPicker = async () => root;
+      const o = { run: await __sortRun('sort-ok') };
+      o.same = (row.data === rd) && JSON.stringify(row.data) === before; o.amp = row.data.amplifier;
+      o.f2amp = JSON.parse(l2.__files[NO + '.json']).amplifier; o.f1same = l1.__files[NO + '.json'] === T1;
+      _currentProject = null; _listRows = [];
+      return o;
+    }, { NO, SIDE, P1N, P2N });
+    console.log('⑲c別の物件へまとめた', brief(r));
+    ok(!r.error, '⑲c止まった → ' + r.error);
+    if(!r.error){
+      ok(r.f2amp === 'genbaAmp' && r.f1same, '⑲c試験の前提: その２ のファイルへまとまり、その１ のファイルは触らない → ' + short(r));
+      ok(r.same && r.amp === 'pcAmp', '★⑲c 別の物件（その２）へまとめた預けを、開いている物件（その１）の行に入れた → ' + short({ same: r.same, amp: r.amp }));
+    }
+    await ctx.close();
+  }
+
+  // ---- ⑳ 新しく置く前に、行き先の物件フォルダの中を全部探す ----
+  for(const mode of ['a', 'b', 'c'].filter(m => want('⑳' + m))){
+    const { ctx, page, said } = await openMain('⑳' + mode);
+    const r = await run(page, async ({ NO, P1N, mode }) => {
+      await __fresh();
+      const nm = no => no + '_現場預け_20261014-1' + ('00000' + no.slice(-3)).slice(-5) + '.json';
+      const mk = (no, side) => JSON.stringify(__S(no, Object.assign({ at: '2026-10-14T02:' + no.slice(-2) + ':00.000Z' }, side || {})));
+      const D = no => JSON.stringify(__D(no), null, 2);
+      let root, l1, l2;
+      if(mode === 'a'){
+        // その１/完了/NO.json・その１/W2X001_数字.json（物件のすぐ下）・その１/完了/W3X003.json（0KB）・その１/リスト/W4X004 (1).json（名前の変わった預け）
+        l1 = __mk('リスト', { 'W4X004 (1).json': mk('W4X004', { proj: 'その１' }) });
+        const p1 = __mk('その１', { 'W2X001_1758000000000.json': D('W2X001') },
+                        { 'リスト': l1, '完了': __mk('完了', { [NO + '.json']: D(NO), 'W3X003.json': '' }) });
+        l2 = __mk('リスト', { [nm(NO)]: mk(NO, { proj: 'その１' }), [nm('W2X001')]: mk('W2X001', { proj: 'その１' }),
+                              [nm('W3X003')]: mk('W3X003', { proj: 'その１' }) });
+        root = __mk('物件情報_調書', {}, { 'その１': p1, 'その２': __mk('その２', {}, { 'リスト': l2 }) });
+      }
+      if(mode === 'b'){
+        l1 = __mk('リスト', { [NO + '.json.txt']: D(NO) });                     // Android の共有で付いた名前のまま
+        l2 = __mk('リスト', { [nm(NO)]: mk(NO, { proj: P1N }) });                 // 現場の書くとおりの長い物件名
+        root = __mk('物件情報_調書', {}, { 'その１': __mk('その１', {}, { 'リスト': l1 }), 'その２': __mk('その２', {}, { 'リスト': l2 }) });
+      }
+      if(mode === 'c'){
+        l1 = __mk('リスト', {}, { '完了': __mk('完了', { [NO + '.json']: D(NO) }) });   // その１/リスト/完了/NO.json
+        l2 = __mk('リスト', { [NO + '.json']: D(NO).replace('PCの備考', 'その２に紛れた写し'), [nm(NO)]: mk(NO) });
+        root = __mk('物件情報_調書', {}, { 'その１': __mk('その１', {}, { 'リスト': l1 }), 'その２': __mk('その２', {}, { 'リスト': l2 }) });
+      }
+      window.showDirectoryPicker = async () => root;
+      const before = __tree(root);
+      const o = { run: await __sortRun('sort-ok') };
+      o.diff = __diff(before, __tree(root));
+      o.names = { NO: nm(NO), W2: nm('W2X001'), W3: nm('W3X003') };
+      if(mode === 'a'){
+        const t3 = l1.__files['W3X003.json'], t4 = l1.__files['W4X004.json'];
+        o.put3 = t3 ? __pids(t3) : null; o.put4 = t4 ? JSON.parse(t4)._sideMerged : null;
+      }
+      return o;
+    }, { NO, P1N, mode });
+    const a = alerts(said);
+    console.log('⑳' + mode, brief(r), brief(a));
+    ok(!r.error, '⑳' + mode + '止まった → ' + r.error);
+    if(r.error){ await ctx.close(); continue; }
+    const t = r.run.text || '';
+    if(mode === 'a'){
+      ok(/この戸別のファイルが リスト の外（その１\/完了\/2612MKM013\.json）にあります/.test(t),
+         '★⑳a その１/完了 に戸別のファイルがあるのに、リストに新しく置こうとする（同じ戸別が2つになる） → ' + t.slice(0, 900));
+      /* 「📂 1つのフォルダにそろえる」「🧩 重複をまとめる」は 📁 の一覧（ふつうは その１/リスト）しか見ないので、できる手順を言う */
+      ok(/エクスプローラで その１\/完了\/2612MKM013\.json を その１\/リスト へ移してから、もう一度押してください/.test(t)
+         && !/リスト の外（その１\/完了\/2612MKM013\.json）にあります[^：]*「📂 1つのフォルダにそろえる」/.test(t),
+         '★⑳a リストの外にあるとき、できない手順（📂・🧩）を言う → ' + t.slice(0, 900));
+      ok(/この戸別のファイルが リスト の外（その１\/W2X001_1758000000000\.json）にあります/.test(t),
+         '★⑳a 物件のすぐ下に「管理番号_数字.json」があるのに、新しく置こうとする → ' + t.slice(0, 900));
+      ok(/新しく置く（W3X003\.json）/.test(t) && r.put3 === 'p1,t1', '★⑳a 0KB のファイルを「ある」と数えて、置くのをやめた → ' + short({ put3: r.put3 }));
+      ok(/新しく置く（W4X004\.json）/.test(t) && Array.isArray(r.put4) && r.put4.length === 1,
+         '★⑳a 名前の変わった預け（中に _side）自身を「その戸別のファイル」と数えた → ' + short({ put4: r.put4 }));
+      const want = ['+その１/リスト/W3X003.json', '+その１/リスト/W4X004.json', '-その１/リスト/W4X004 (1).json',
+                    '+その１/リスト/_整理前の控え/W4X004 (1).json', '-その２/リスト/' + r.names.W3,
+                    '+その２/リスト/_整理前の控え/' + r.names.W3].sort().join();
+      ok(r.diff.slice().sort().join() === want, '★⑳a 変わったファイルが決まりと違う（リストの外にある戸別を新しく置いた等） → ' + short(r.diff));
+      ok(a.some(m => /新しく置いた 2件/.test(m) && /そのまま 2件/.test(m) && /リスト の外/.test(m)), '★⑳a 終わりの知らせに件数・理由が無い → ' + short(a));
+    }
+    if(mode === 'b'){
+      ok(/その１（決まった物件）/.test(t), '★⑳b 預けの物件が現場の書く長い名前（…（その１））だと、その１ に決まらない → ' + t.slice(0, 700));
+      ok(/この戸別のファイルが 別の名前（その１\/リスト\/2612MKM013\.json\.txt）で リスト にあります/.test(t) && r.run.okDisabled === true,
+         '★⑳b リストに 2612MKM013.json.txt があるのに、新しく置こうとする → ' + t.slice(0, 900));
+      ok(r.diff.length === 0, '★⑳b 何か書いた・消した → ' + short(r.diff));
+    }
+    if(mode === 'c'){
+      ok(/別の物件のリストにも同じ管理番号のファイルがあります/.test(t) && /その２ にも その１\/リスト\/完了 にも 2612MKM013\.json/.test(t),
+         '★⑳c リストの中のフォルダにある同じ戸別を、迷子として並べない → ' + t.slice(0, 900));
+      ok(/どこの物件か分かりません/.test(t) && r.run.okDisabled === true && r.diff.length === 0,
+         '★⑳c 2つの物件に同じ戸別のファイルがあるのに、片方へまとめた → ' + short({ dis: r.run.okDisabled, diff: r.diff }));
+    }
+    await ctx.close();
+  }
+
+  // ---- ㉑ 預けの台帳の「その」の番号 ----
+  if(want('㉑')){
+    const { ctx, page, said } = await openMain('㉑');
+    const r21 = await run(page, async ({ NO, SIDE, P1N, P2N }) => {
+      await __fresh();
+      const o = {};
+      // a) 物件フォルダ その１ だけを選んだ。その１/リスト に紛れた古い写しと、その２ の台帳の預け
+      { const T1 = JSON.stringify(__D(NO), null, 2), ST = JSON.stringify(__S(NO, { proj: P2N }));
+        const l1 = __mk('リスト', { [NO + '.json']: T1, [SIDE]: ST });
+        const p1 = __mk('その１', {}, { 'リスト': l1 });
+        window.showDirectoryPicker = async () => p1;
+        const before = __tree(p1);
+        o.a = await __sortRun('sort-ok');
+        o.aDiff = __diff(before, __tree(p1)); }
+      // b) 上のフォルダを選んだ。両方のリストに同じ戸別があっても、預けの物件（長い名前・その１）で決まる
+      { await __fresh();
+        const T1 = JSON.stringify(__D(NO), null, 2);
+        const T2 = JSON.stringify(Object.assign(__D(NO), { chosho_note: 'その２に紛れた写し' }), null, 2);
+        const l1 = __mk('リスト', { [NO + '.json']: T1 });
+        const l2 = __mk('リスト', { [NO + '.json']: T2, [SIDE]: JSON.stringify(__S(NO, { proj: P1N })) });
+        const root = __mk('物件情報_調書', {}, { 'その１': __mk('その１', {}, { 'リスト': l1 }), 'その２': __mk('その２', {}, { 'リスト': l2 }) });
+        window.showDirectoryPicker = async () => root;
+        o.b = await __sortRun('sort-ok');
+        o.bP1 = __pids(l1.__files[NO + '.json']); o.bAmp = JSON.parse(l1.__files[NO + '.json']).amplifier;
+        o.bP2same = l2.__files[NO + '.json'] === T2; o.bSideLeft = SIDE in l2.__files; }
+      return o;
+    }, { NO, SIDE, P1N, P2N });
+    console.log('㉑その番号', brief(r21));
+    ok(!r21.error, '㉑止まった → ' + r21.error);
+    if(!r21.error){
+      ok(/どこの物件か分かりません（現場の台帳: 令和８年度戸別受信設備設置工事（その２））/.test(r21.a.text) && r21.a.okDisabled === true && r21.aDiff.length === 0,
+         '★㉑a 預けの台帳が その２ なのに、その１ に紛れた写しへまとめた → ' + short({ t: r21.a.text.slice(0, 600), diff: r21.aDiff }));
+      ok(/預けの台帳は その２ です。物件情報_調書（上のフォルダ）を選ぶと見つかります/.test(r21.a.text),
+         '★㉑a 物件フォルダ1つだけを選んだとき、上のフォルダを選ぶよう言わない → ' + r21.a.text.slice(0, 600));
+      ok(/その１（決まった物件）/.test(r21.b.text) && /まとめる（2612MKM013\.json に入れる）/.test(r21.b.text),
+         '★㉑b 預けの物件が長い名前（…（その１））なのに その１ に決まらない → ' + r21.b.text.slice(0, 600));
+      ok(r21.bP1 === 'p1,p2,p3,p4,p5,p6,t1' && r21.bAmp === 'genbaAmp' && r21.bP2same && !r21.bSideLeft,
+         '★㉑b その１ へまとまらない／その２ の写しを触った → ' + short(r21));
+    }
+    await ctx.close();
+  }
+
+  // ---- ㉑c〜f 「リスト」だけを選んだ（どの物件のリストか）----
+  //   c) その２/リスト だけ（上が分からない）・紛れた写し・預けは その１ → まとめない・「「リスト」だけを選んだので」
+  //   d) その１/リスト だけ（上が分からない）・預けは その１ → 自動ではまとめない → 行き先で（選んだ「リスト」）を選ぶとまとめる
+  //   e) 📁 で その１（物件のフォルダ）を読んでいて、その中の リスト を選んだ → その１ と分かって自動でまとめる
+  //   f) 📁 で 物件情報_調書 を読んでいて、その２/リスト を選んだ → その２ と分かる・まとめない・上のフォルダを選ぶよう言う
+  for(const mode of ['c', 'd', 'e', 'f'].filter(m => want('㉑' + m))){
+    const { ctx, page, said } = await openMain('㉑' + mode);
+    const r = await run(page, async ({ NO, SIDE, P1N, mode }) => {
+      await __fresh();
+      const T1 = JSON.stringify(__D(NO), null, 2);
+      const T2 = JSON.stringify(Object.assign(__D(NO), { chosho_note: 'その２に紛れた写し' }), null, 2);
+      const ST = JSON.stringify(__S(NO, { proj: P1N, ledger: P1N }));
+      const l = (mode === 'c' || mode === 'f') ? __mk('リスト', { [NO + '.json']: T2, [SIDE]: ST })
+                                               : __mk('リスト', { [NO + '.json']: T1, [SIDE]: ST });
+      if(mode === 'e'){
+        const p1 = __mk('その１', {}, { 'リスト': l });
+        p1.resolve = async o => (o === l) ? ['リスト'] : ((o === p1) ? [] : null);
+        _listDirHandle = p1;
+      }
+      if(mode === 'f'){
+        const top = __mk('物件情報_調書', {}, { 'その２': __mk('その２', {}, { 'リスト': l }) });
+        top.resolve = async o => (o === l) ? ['その２', 'リスト'] : ((o === top) ? [] : null);
+        _listDirHandle = top;
+      }
+      window.showDirectoryPicker = async () => l;
+      const before = __tree(l);
+      const o = { run: await __sortRun('sort-ok', mode === 'd' ? (m => __pickDest(m, NO, '選んだ')) : null) };
+      await new Promise(res => setTimeout(res, 300));
+      o.diff = __diff(before, __tree(l));
+      const f = l.__files[NO + '.json'];
+      o.amp = f ? JSON.parse(f).amplifier : null; o.sm = f ? JSON.parse(f)._sideMerged : null; o.ph = f ? __pids(f) : '';
+      o.sideLeft = SIDE in l.__files;
+      _listDirHandle = null; _listRows = [];
+      return o;
+    }, { NO, SIDE, P1N, mode });
+    console.log('㉑' + mode + '「リスト」だけ', brief(r));
+    ok(!r.error, '㉑' + mode + '止まった → ' + r.error);
+    if(r.error){ await ctx.close(); continue; }
+    const t = r.run.text || '';
+    const merged = r.amp === 'genbaAmp' && Array.isArray(r.sm) && r.sm.join() === STAMP && r.ph === 'p1,p2,p3,p4,p5,p6,t1' && !r.sideLeft
+      && r.diff.slice().sort().join() === ['~' + NO + '.json', '+_整理前の控え/' + NO + '.json', '-' + SIDE, '+_整理前の控え/' + SIDE].sort().join();
+    if(mode === 'c'){
+      ok(/どこの物件か分かりません/.test(t) && !/（決まった物件）/.test(t) && r.run.okDisabled === true && r.diff.length === 0 && r.sideLeft,
+         '★㉑c その２/リスト だけを選ぶと、その１ の預けを紛れた写しへまとめる → ' + short({ t: t.slice(0, 900), diff: r.diff }));
+      ok(/「リスト」だけを選んだので、どの物件のリストか分かりません（預けの台帳は その１）/.test(t)
+         && /その１ のリストなら「行き先」で（選んだ「リスト」）を選んでください/.test(t),
+         '★㉑c 「リスト」だけを選んだとき、どうすればよいか言わない → ' + t.slice(0, 900));
+    }
+    if(mode === 'd'){
+      ok(/「リスト」だけを選んだので、どの物件のリストか分かりません/.test(t) && !/（決まった物件）/.test(t),
+         '★㉑d 上の分からない「リスト」を、預けの物件と決めた → ' + t.slice(0, 900));
+      ok(/まとめる（2612MKM013\.json に入れる）/.test(r.run.after) && merged,
+         '★㉑d 行き先で（選んだ「リスト」）を選んでも、まとめない → ' + short({ after: r.run.after.slice(0, 600), r }));
+    }
+    if(mode === 'e'){
+      ok(/その１（選んだ「リスト」）（決まった物件）/.test(t) && /まとめる（2612MKM013\.json に入れる）/.test(t) && merged,
+         '★㉑e 📁 で読んでいる その１ の中の リスト なのに、その１ と分からない／まとめない → ' + short({ t: t.slice(0, 900), r }));
+    }
+    if(mode === 'f'){
+      ok(/その２（選んだ「リスト」）/.test(t) && !/（決まった物件）/.test(t) && r.run.okDisabled === true && r.diff.length === 0
+         && /預けの台帳は その１ です。物件情報_調書（上のフォルダ）を選ぶと見つかります/.test(t),
+         '★㉑f 📁 で読んでいる上のフォルダから その２ と分かるのに、その１ の預けをまとめる／上のフォルダを選ぶよう言わない → ' + short({ t: t.slice(0, 900), diff: r.diff }));
+    }
+    await ctx.close();
+  }
+
+  // ---- ㉒ 振り分けたあと一覧を読み直せなかった → 知らせで言う ----
+  if(want('㉒')){
+    const { ctx, page, said } = await openMain('㉒');
+    const r22 = await run(page, async ({ NO, SIDE }) => {
+      await __fresh();
+      const T0 = JSON.stringify(__D(NO), null, 2);
+      const l1 = __mk('リスト', { [NO + '.json']: T0, 'W1A001.json': JSON.stringify({ chosho_mgmt_no: 'W1A001', work_type: 'uhf_new', chosho_status: 'in_progress' }) });
+      const l2 = __mk('リスト', { [SIDE]: JSON.stringify(__S(NO)) });
+      const root = __mk('物件情報_調書', {}, { 'その１': __mk('その１', {}, { 'リスト': l1 }), 'その２': __mk('その２', {}, { 'リスト': l2 }) });
+      _listDirHandle = l1;
+      await listReloadFolder();
+      const other = (_listRows || []).filter(r => r._name === 'W1A001.json')[0];
+      if(other) other._lgEdited = true;           // ほかの戸別を受付台帳で直したまま
+      window.showDirectoryPicker = async () => root;
+      const ampOf = () => ((_listRows || []).filter(r => r._name === NO + '.json')[0] || { data: {} }).data.amplifier;
+      const o = { other: !!other };
+      o.run1 = await __sortRun('sort-ok');
+      await new Promise(r => setTimeout(r, 300));
+      o.amp1 = ampOf(); o.merged = __pids(l1.__files[NO + '.json']);
+      // 2回目：台帳の直しを反映した（直したままの戸別が無い）→ 読み直す → 「まだ前の中身」と言わない
+      (_listRows || []).forEach(r => { delete r._lgEdited; });
+      l2.__files[NO + '_現場預け_20261014-120000.json'] = JSON.stringify(__S(NO, { at: '2026-10-14T03:00:00.000Z' }));
+      o.run2 = await __sortRun('sort-ok');
+      await new Promise(r => setTimeout(r, 300));
+      o.amp2 = ampOf();
+      return o;
+    }, { NO, SIDE });
+    const fin = said.map((s, i) => ({ i, s })).filter(x => x.s.type === 'alert' && /振り分け終わりました/.test(x.s.msg));
+    const conf = said.map((s, i) => ({ i, s })).filter(x => x.s.type === 'confirm' && /読み直す/.test(x.s.msg));
+    console.log('㉒読み直しを断る', brief(r22), brief(said.map(s => s.type + ':' + s.msg.slice(0, 80))));
+    ok(!r22.error, '㉒止まった → ' + r22.error);
+    if(!r22.error){
+      ok(r22.other && r22.merged === 'p1,p2,p3,p4,p5,p6,t1' && conf.length === 1 && r22.amp1 === 'pcAmp',
+         '㉒試験の前提: まとまる・読み直しの確かめが出て断る（一覧は前の中身） → ' + short({ r22, conf: conf.length }));
+      ok(fin.length === 2 && conf.length && fin[0].i > conf[0].i && /一覧は、まだ振り分ける前の中身のままです/.test(fin[0].s.msg)
+         && /「💾 戸別ファイルへ反映」/.test(fin[0].s.msg) && /「📁 フォルダ」で読み直してください/.test(fin[0].s.msg),
+         '★㉒読み直しを断られたのに、一覧がまだ前の中身だと言わない → ' + short(fin.map(x => x.s.msg)));
+      ok(fin.length === 2 && !/まだ振り分ける前の中身/.test(fin[1].s.msg) && r22.amp2 === 'genbaAmp',
+         '★㉒読み直せたのに「まだ前の中身」と言う／読み直さない → ' + short({ msg: fin[1] && fin[1].s.msg, amp2: r22.amp2 }));
+    }
+    await ctx.close();
+  }
+
+  // ---- ㉓ 📥 現場取込：別の物件の預け・台帳に無い戸別は「スキップ」を選んでおく ----
+  if(want('㉓')){
+    const { ctx, page, said } = await openMain('㉓');
+    const r0 = await run(page, async ({ NO, P1N }) => {
+      await __fresh();
+      _listRows = [ { file: NO + '.json', data: __D(NO), fileType: 'plain' },
+                    { file: 'W6X006.json', data: __D('W6X006'), fileType: 'plain' } ];
+      _currentProject = { id: 'pj176r2i', name: P1N };
+      window.__origPick = window.pickFile;
+      window.__giLog = []; window.__giPlan = [];
+      window.__giT = setInterval(() => { const m = document.getElementById('genba-import-modal');
+        if(!(m && m.classList.contains('open'))) return;
+        const a = document.activeElement, wrap = document.getElementById('gi-apply-all-wrap');
+        window.__giLog.push({ text: (m.innerText || '').replace(/\s+/g, ' '), active: a ? a.id : '',
+          imp: document.getElementById('gi-import').textContent, skip: document.getElementById('gi-skip').textContent,
+          all: wrap ? getComputedStyle(wrap).display : '' });
+        const plan = window.__giPlan.shift() || 'active';
+        if(plan === 'import+all'){ document.getElementById('gi-apply-all').checked = true; document.getElementById('gi-import').click(); return; }
+        if(a && /^gi-(import|skip|cancel)$/.test(a.id)) a.click();          // 選んであるボタン（Enter と同じ）
+        else document.getElementById('gi-cancel').click();
+      }, 25);
+      window.__giRun = (list, plan) => {
+        const files = list.map(x => new File([JSON.stringify(__S(x.no, { proj: x.proj, ledger: x.proj }))],
+                                              x.no + '_現場預け_20261014-091812.json', { type: 'application/json' }));
+        window.__giPlan = plan.slice(); window.pickFile = (o, cb) => { cb(files); }; genbaImportFlow(); return true; };
+      return true;
+    }, { NO, P1N });
+    const nDone = () => alerts(said).filter(m => /現場データ取込 完了/.test(m)).length;
+    const waitDone = async n => { for(let i = 0; i < 120; i++){ if(nDone() >= n) return true; await sleep(100); } return false; };
+    const parts = [
+      ['a', [{ no: NO, proj: P2N }], []],                                         // 別の物件（その２）の預け・台帳にある戸別
+      ['b', [{ no: 'W5N005', proj: P1N }], []],                                   // 同じ物件の預けだが、台帳に無い戸別
+      ['c', [{ no: NO, proj: P1N }], []],                                         // 同じ物件・台帳にある → いつもどおり
+      ['d', [{ no: NO, proj: P1N }, { no: 'W6X006', proj: P2N }], ['import+all']] // 「残りも確かめなしで」でも、別の物件の預けは窓を出す
+    ];
+    const r23 = { log: {} };
+    for(const [k, list, plan] of parts){
+      const n0 = nDone();
+      const st = await run(page, ({ list, plan }) => { const n = window.__giLog.length; window.__giRun(list, plan); return n; }, { list, plan });
+      const done = await waitDone(n0 + 1);
+      r23.log[k] = await run(page, n => window.__giLog.slice(n), st);
+      r23['done' + k] = done;
+    }
+    const after = await run(page, ({ NO }) => {
+      clearInterval(window.__giT); window.pickFile = window.__origPick;
+      const amp = no => ((_listRows || []).filter(r => r.data && r.data.chosho_mgmt_no === no)[0] || { data: {} }).data.amplifier;
+      const o = { rows: (_listRows || []).map(r => r.data && r.data.chosho_mgmt_no).join(), ampNO: amp(NO), ampW6: amp('W6X006') };
+      _currentProject = null; _listRows = [];
+      return o;
+    }, { NO });
+    const fins = alerts(said).filter(m => /現場データ取込 完了/.test(m));
+    console.log('㉓📥 別の物件の預け', brief(r23), brief(after), brief(fins));
+    ok(!after.error && ['a', 'b', 'c', 'd'].every(k => r23['done' + k]), '㉓止まった／取り込みが終わらない → ' + short({ r23, after }));
+    if(!after.error){
+      const A = (r23.log.a || [])[0] || {}, B = (r23.log.b || [])[0] || {}, C = (r23.log.c || [])[0] || {}, Dl = r23.log.d || [];
+      ok(/現場の台帳: 令和８年度戸別受信設備設置工事（その２）/.test(A.text || ''), '★㉓a 📥 の窓に「現場の台帳」が出ない → ' + String(A.text || '').slice(0, 500));
+      ok(/開いている物件（令和８年度戸別受信設備設置工事（その１））とは違います/.test(A.text || '') && /「📮 預かりを振り分ける」/.test(A.text || ''),
+         '★㉓a 別の物件の預けなのに注意が無い／振り分けの道を言わない → ' + String(A.text || '').slice(0, 600));
+      ok(A.active === 'gi-skip' && A.all === 'none' && /それでも/.test(A.imp || ''), '★㉓a 別の物件の預けで「スキップ」を選んでいない → ' + short(A));
+      ok(/にありません/.test(B.text || '') && /「📮 預かりを振り分ける」/.test(B.text || '') && B.active === 'gi-skip',
+         '★㉓b 台帳に無い戸別の預けで注意が無い／「スキップ」を選んでいない → ' + short(B));
+      ok(C.text !== undefined && !/「📮 預かりを振り分ける」/.test(C.text || '') && C.active !== 'gi-skip' && C.imp === '🔀 取り込む' && C.all !== 'none'
+         && /現場の台帳: 令和８年度戸別受信設備設置工事（その１）/.test(C.text || ''),
+         '★㉓c 同じ物件の預けにまで注意を出す／ボタンが元に戻らない → ' + short(C));
+      ok(Dl.length === 2 && Dl[1].active === 'gi-skip' && /とは違います/.test(Dl[1].text || ''),
+         '★㉓d 「残りも確かめなしで」を選ぶと、別の物件の預けまで窓を出さずに取り込む → ' + short(Dl.map(x => ({ a: x.active, t: String(x.text).slice(0, 80) }))));
+      ok(after.rows === NO + ',W6X006' && after.ampW6 === 'pcAmp' && after.ampNO === 'genbaAmp',
+         '★㉓ スキップしたはずの預けが入った／台帳に無い戸別の行が残った → ' + short(after));
+      ok(fins.length === 4 && /取込: 0 件/.test(fins[0]) && /取込: 0 件/.test(fins[1]) && /取込: 1 件/.test(fins[3]) && /スキップ: 1 件/.test(fins[3]),
+         '★㉓ 取込の件数が違う → ' + short(fins));
+    }
+    await ctx.close();
+  }
+
+  // ---- ㉔ 行き先を手で選ぶ：その番号の違う物件は自動で決めない → 手で選んだ先に 管理番号.json があればまとめる ----
+  if(want('㉔')){
+    const { ctx, page, said } = await openMain('㉔');
+    const r24 = await run(page, async ({ NO, SIDE }) => {
+      await __fresh();
+      const T1 = JSON.stringify(__D(NO), null, 2), ST = JSON.stringify(__S(NO, { proj: 'その２' }));
+      const l1 = __mk('リスト', { [NO + '.json']: T1 });
+      const l3 = __mk('リスト', { [SIDE]: ST });
+      const root = __mk('物件情報_調書', {}, { 'その１': __mk('その１', {}, { 'リスト': l1 }), 'その３': __mk('その３', {}, { 'リスト': l3 }) });
+      window.showDirectoryPicker = async () => root;
+      const before = __tree(root);
+      const o = { run: await __sortRun('sort-ok', m => __pickDest(m, NO, 'その１')) };
+      o.diff = __diff(before, __tree(root));
+      const j = JSON.parse(l1.__files[NO + '.json']);
+      o.ph = __pids(j); o.amp = j.amplifier; o.wd = j.work_done; o.sm = j._sideMerged;
+      o.bk = (l1.__subs['_整理前の控え'] || { __files: {} }).__files[NO + '.json'] === T1;
+      return o;
+    }, { NO, SIDE });
+    const a24 = alerts(said);
+    console.log('㉔手で選ぶ', brief(r24), brief(a24));
+    ok(!r24.error, '㉔止まった → ' + r24.error);
+    if(!r24.error){
+      ok(/どこの物件か分かりません（現場の台帳: 令和８年度戸別受信設備設置工事（その２））/.test(r24.run.text) && !/（決まった物件）/.test(r24.run.text),
+         '★㉔預けの台帳（その２）と番号の違う その１ を、ファイルがあるからと自動で決めた → ' + r24.run.text.slice(0, 600));
+      ok(/まとめる（2612MKM013\.json に入れる）/.test(r24.run.after) && r24.run.okText === 'この内容で振り分ける（1 件）',
+         '★㉔手で選んだ行き先に 管理番号.json があるのに、まとめる にならない → ' + r24.run.after.slice(0, 600));
+      ok(r24.ph === 'p1,p2,p3,p4,p5,p6,t1' && r24.amp === 'genbaAmp' && r24.wd === true && Array.isArray(r24.sm) && r24.sm.join() === STAMP && r24.bk,
+         '★㉔手で選んだ先へのまとめ方（写真・直した欄・印・控え） → ' + short(r24));
+      ok(r24.diff.slice().sort().join() === ['~その１/リスト/' + NO + '.json', '+その１/リスト/_整理前の控え/' + NO + '.json',
+                                             '-その３/リスト/' + SIDE, '+その３/リスト/_整理前の控え/' + SIDE].sort().join(),
+         '★㉔変わったファイルが決まりと違う → ' + short(r24.diff));
+    }
+    await ctx.close();
   }
 
   await browser.close();
