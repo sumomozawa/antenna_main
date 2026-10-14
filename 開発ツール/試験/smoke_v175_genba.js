@@ -338,9 +338,10 @@ window.__okKey = () => { try{ return localStorage.getItem('field_saveplace_ok_v1
     ok(/前に取り込んでいた物件から替わりました/.test(r.alert), '★物件が替わったことを知らせない → ' + r.alert);
     ok(r.alert.indexOf('物件：' + P1) >= 0, '★知らせに物件名が出ない → ' + r.alert);
     ok(!SONO2.test(r.alert), '★その１ を取り込んだ知らせに「その２」が出た → ' + r.alert);
-    ok(!SONO2.test(r.bar.text) && !SONO2.test(r.bar.title) && r.bar.text.indexOf(P1) >= 0 && !r.bar.other,
+    /* 版176 から、入れる場所は Dropbox で見つかる名前（その１ ＞ リスト）で出す（物件の正式名は Dropbox に無い）。どちらでも「その１」が入る */
+    ok(!SONO2.test(r.bar.text) && !SONO2.test(r.bar.title) && /その[１1]/.test(r.bar.text) && !r.bar.other,
        '★保存バーに「その２」が出た／その１ が出ない → ' + JSON.stringify(r.bar));
-    ok(!SONO2.test(r.line) && r.line.indexOf(P1) >= 0, '★保存のあとの案内に「その２」が出た → ' + r.line);
+    ok(!SONO2.test(r.line) && /その[１1]/.test(r.line), '★保存のあとの案内に「その２」が出た → ' + r.line);
     ok(!SONO2.test(r.body), '★画面に「その２」が残っている → ' + ((r.body.match(/.{0,30}その[２2二].{0,30}/) || [''])[0]));
   });
 
@@ -430,7 +431,7 @@ window.__okKey = () => { try{ return localStorage.getItem('field_saveplace_ok_v1
        '★選ぶ窓のいちばん上が「その１ ＞ リスト」でない／「いまのまま」が無い → ' + JSON.stringify(r.pick.rows));
     ok(r.chose === P1 + ' ＞ リスト' && r.hint === P1 + '/リスト', '★おすすめを選んでも入れる場所が変わらない → ' + r.hint);
     ok(r.auto === P1 + '/リスト', '★おすすめを選んだのに、次に物件が変わったとき追いかける印が付かない → ' + r.auto);
-    ok(!r.bar.other && r.bar.tag === '変更' && r.bar.text.indexOf(P1) >= 0, '★おすすめを選んだのに保存バーに ⚠ が残る → ' + JSON.stringify(r.bar));
+    ok(!r.bar.other && r.bar.tag === '変更' && /その[１1]/.test(r.bar.text), '★おすすめを選んだのに保存バーに ⚠ が残る → ' + JSON.stringify(r.bar));   // 版176：その１ ＞ リスト
     // ⑮
     ok(!r.re.pick, '★直したあと、同じ物件をもう一度取り込むと、また選ぶ窓が出た');
     ok(r.listOpen && r.list.length > 0, '試験の前提: 📁 の名前の一覧が出ない');

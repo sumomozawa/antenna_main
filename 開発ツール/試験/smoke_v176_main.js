@@ -53,6 +53,36 @@
      ㉓ 📥 現場取込で預けを選ぶ：現場の台帳を見せる。別の物件の預け・台帳に無い戸別は注意を出して「スキップ」を選んでおく
         （「残りも確かめなしで」を選んでいても、その預けは窓を出す）。同じ物件の預けはいつもどおり
      ㉔ 行き先を手で選ぶ：その番号の違う物件は自動では決めない → 手で選んだ先に 管理番号.json があればまとめる
+   （ここから 3回目の直し）
+     ㉕ 物件を開いていて「リスト」だけを選んだ：a) 物件の工事フォルダが そのリスト（物件に取り込んだ 📁）→ 開いている物件の
+        リストと分かって自動でまとめる・行に入る・「物件に保存」しても工事完了・直した欄・印が消えない
+        （a2: 物件を開き直して、工事フォルダは覚えてあるだけのときも同じ）
+        （リストの中の 完了 にあるものは「リスト の中のフォルダ（リスト/完了/…）」・物件の名前をフォルダの名前のように書かない）
+        b) 工事フォルダが無い・名前の分からないリストを手で選ぶ → 預けの物件が開いている物件なら行にも入る
+        （a の始めに）📁 で読んだだけのリスト（工事フォルダではない）は、開いている物件のリストと決めない
+     ㉖ 振り分けたあと行から開いて保存しても、戸別ファイルの写真が減らない：a) 台帳で作って保存した戸別（写真なし・行の写真を当てにする）
+        b) 行にしか無い写真がある戸別　c) 図面のまだ無い戸別（新しく置く）　d) アパートの2世帯（同じ建物・混ざらない）
+        e) 📁 の一覧で読み直しを断った（写真の無かった戸別・常駐させない戸別）→ 行にも入れる・新しく置いた分は「まだ前の中身」と言う・
+           片付けた預けを一覧の外の覚えから外す　f) 物件を開いて 📁 も読んでいる・図面の無い戸別（写真は戸別ファイルだけ）→ 開くと写真が出る・保存しても消えない
+     ㉗ 言い方：a) 名前の分からない「リスト」で新しい戸別を手で選ぶ → どうすれば置けるか言う（上のフォルダを選んでいて手で選んだときは言わない）
+        b) 保存して一覧に戻った戸別 → できる手順を言う
+        c) 「リスト」を選んで、リストの中の 完了 にある → 「リスト の中のフォルダ（その１/リスト/完了/…）」（名前が分からなければ リスト/完了/…）
+   （ここから 4回目の直し）
+     ㉕ d) 預けの物件の名前が空（現場の受付台帳にその戸別が無い）・現場の台帳は その１・工事フォルダ無し → 名前の分からないリストへ
+        自動でまとめても、開いている物件の行に入る・「物件に保存」しても工事完了・直した欄・印が消えない
+        d2) 現場の台帳が その２（Android で その２ を開いたまま その１ の戸別を預けた）でも同じ
+        e) 預けの物件が その２ とはっきり分かる → 名前の分からないリストへ手で選んでまとめても、その１ の行には入れない。
+           それでも「物件に保存」で、戸別ファイルの工事完了・状態・まとめた印・写真は消えない（最後の歯止め）
+        （a に）開いている物件のリストへ新しい戸別を置いた知らせで、物件の名前をフォルダの名前のように書かない（選んだ「リスト」）
+     ㉘ 物件を開いていて 📁 のフォルダも覚えている（行は物件の行）：振り分けたあと、そのフォルダを読み直して物件の行を置き換えない
+        （リストの外にある物件の戸別・まだ戸別ファイルに入っていない物件だけの直しが残る・物件の保存にも残る）
+        a) 物件のリストを選ぶ（台帳で作って「💾 戸別ファイルへ反映」でファイルのできた行もある）　b) 上のフォルダ（物件情報_調書）を選ぶ
+        c) 物件に 📁 を取り込んでいる（台帳で作った行のほかは、行がファイルを持つ）→ これまでどおり読み直す（新しく置いた戸別が一覧に出る）
+        d) 台帳で作った行しか無い物件（その２）で、覚えているのは その１ のリスト → その１ の戸別をこの物件に入れない
+     ㉙ 物件に保存：戸別ファイルに、行のまだ知らない預けがまとめてある（ほかのPCで振り分けた）→ 工事完了・日付・状態・まとめた印を
+        落とさない（行と開いている画面にも入れる＝開いたままもう一度保存しても外れない）。
+        行が知っている印だけのファイルは、事務所が外した工事完了をそのまま書く
+     ㉚ 📁 の一覧で、預けの印を外しただけ（一覧に行の無い戸別）で読み直しを断った → 「まだ振り分ける前の中身」と言う
    ★場面ごとに新しいブラウザの入れ物（newContext）を使う★ 前の場面の覚え書き（localStorage・IndexedDB）を持ち越さない。
    フォルダは試験の中で作る作り物（getDirectoryHandle／getFileHandle／removeEntry／entries／values を持つ）。
    「📮 預かりを振り分ける」のフォルダを選ぶ画面は window.showDirectoryPicker を差し替える。
@@ -732,7 +762,8 @@ const brief = o => JSON.stringify(o === undefined ? null : o).slice(0, 260);   /
     ok(!r12.error, '⑫' + mode + '止まった → ' + r12.error);
     if(r12.error){ await ctx.close(); continue; }
     ok(r12.run.okDisabled === true && r12.diff.length === 0, '★⑫' + mode + ' 直している途中の戸別をまとめた（あとの保存で戻ってしまう） → ' + short(r12));
-    ok(mode === 'lg' ? /受付台帳で直したまま/.test(r12.run.text) : /いま開いて直している途中/.test(r12.run.text),
+    ok(mode === 'lg' ? /受付台帳で直したまま/.test(r12.run.text)
+       : /この戸別は いま開いたままです。まだ保存していなければ 💾 で保存し、ほかの戸別を開くか ページを読み込み直してから、もう一度押してください/.test(r12.run.text),
        '★⑫' + mode + ' 触らない理由が出ない → ' + r12.run.text.slice(0, 500));
     await ctx.close();
   }
@@ -1296,12 +1327,14 @@ const brief = o => JSON.stringify(o === undefined ? null : o).slice(0, 260);   /
     console.log('㉒読み直しを断る', brief(r22), brief(said.map(s => s.type + ':' + s.msg.slice(0, 80))));
     ok(!r22.error, '㉒止まった → ' + r22.error);
     if(!r22.error){
-      ok(r22.other && r22.merged === 'p1,p2,p3,p4,p5,p6,t1' && conf.length === 1 && r22.amp1 === 'pcAmp',
-         '㉒試験の前提: まとまる・読み直しの確かめが出て断る（一覧は前の中身） → ' + short({ r22, conf: conf.length }));
-      ok(fin.length === 2 && conf.length && fin[0].i > conf[0].i && /一覧は、まだ振り分ける前の中身のままです/.test(fin[0].s.msg)
+      ok(r22.other && r22.merged === 'p1,p2,p3,p4,p5,p6,t1' && conf.length === 1,
+         '㉒試験の前提: まとまる・読み直しの確かめが出て断る → ' + short({ r22, conf: conf.length }));
+      /* 読み直しを断られても、その戸別ファイルの行には同じ合わせ方で入れる（前の中身のまま保存すると戻ってしまう。3回目） */
+      ok(r22.amp1 === 'genbaAmp', '★㉒読み直しを断られたとき、まとめた戸別の行に入れない（あとの保存で戻ってしまう） → ' + short({ amp1: r22.amp1 }));
+      ok(fin.length === 2 && conf.length && fin[0].i > conf[0].i && /一覧は読み直していません（振り分けた戸別の行には、同じ中身を入れました）/.test(fin[0].s.msg)
          && /「💾 戸別ファイルへ反映」/.test(fin[0].s.msg) && /「📁 フォルダ」で読み直してください/.test(fin[0].s.msg),
-         '★㉒読み直しを断られたのに、一覧がまだ前の中身だと言わない → ' + short(fin.map(x => x.s.msg)));
-      ok(fin.length === 2 && !/まだ振り分ける前の中身/.test(fin[1].s.msg) && r22.amp2 === 'genbaAmp',
+         '★㉒読み直しを断られたのに、一覧を読み直していないと言わない → ' + short(fin.map(x => x.s.msg)));
+      ok(fin.length === 2 && !/まだ振り分ける前の中身|読み直していません/.test(fin[1].s.msg) && r22.amp2 === 'genbaAmp',
          '★㉒読み直せたのに「まだ前の中身」と言う／読み直さない → ' + short({ msg: fin[1] && fin[1].s.msg, amp2: r22.amp2 }));
     }
     await ctx.close();
@@ -1412,6 +1445,586 @@ const brief = o => JSON.stringify(o === undefined ? null : o).slice(0, 260);   /
       ok(r24.diff.slice().sort().join() === ['~その１/リスト/' + NO + '.json', '+その１/リスト/_整理前の控え/' + NO + '.json',
                                              '-その３/リスト/' + SIDE, '+その３/リスト/_整理前の控え/' + SIDE].sort().join(),
          '★㉔変わったファイルが決まりと違う → ' + short(r24.diff));
+    }
+    await ctx.close();
+  }
+
+  // ---- ㉕ 物件を開いていて「リスト」だけを選んだ（3回目） ----
+  //   a) 工事フォルダ＝選んだリスト そのもの（resolve が [] を返す）→ 開いている物件のリスト → 自動でまとめる・行に入る・保存しても消えない
+  //   a2) a と同じ。工事フォルダは覚えてある（物件を開き直したとき：IndexedDB の :dir）だけ
+  //   b) 工事フォルダ無し → 手で（選んだ「リスト」）→ 預けの物件が開いている物件なら行に入る → 保存しても消えない
+  //   （a の始めに）📁 で読んだだけのリスト（工事フォルダは別）→ 開いている物件のリストと決めない
+  const sc25 = async ({ NO, SIDE, P1N, P2N, mode }) => {
+      await __fresh();
+      const D = Object.assign(__D(NO), { work_done: false, chosho_status: 'in_progress', amplifier: 'amp_3u43' });
+      delete D.work_done_at;
+      // 預けの物件の名前（proj）・現場で開いていた台帳（ledger）。d/d2 は proj が空（現場の台帳にその戸別が無い。4回目）
+      const sideOf = { d: { proj: '', ledger: P1N }, d2: { proj: '', ledger: P2N }, e: { proj: P2N, ledger: P2N } }[mode] || { proj: P1N, ledger: P1N };
+      const S = Object.assign(__S(NO, Object.assign({}, sideOf,
+          { touched: ['amplifier', 'work_done', 'chosho_status', 'chosho_cust_tel'] })),
+          { amplifier: 'amp_1u45', work_done: true, work_done_at: '2026-10-14', chosho_status: 'completed' });
+      const files = { [NO + '.json']: JSON.stringify(D, null, 2), [SIDE]: JSON.stringify(S) };
+      const W7 = 'W7X007';
+      if(mode === 'a') files[W7 + '_現場預け_20261014-100000.json'] = JSON.stringify(__S(W7, { proj: P1N, ledger: P1N, at: '2026-10-14T01:00:00.000Z' }));
+      // a：新しい戸別（物件にもリストにも無い）の預け → 開いている物件のリストへ置く（知らせの場所の書き方を見る。4回目）
+      if(mode === 'a') files['W6N006_現場預け_20261014-110000.json'] = JSON.stringify(__S('W6N006', { proj: P1N, ledger: P1N, at: '2026-10-14T02:00:00.000Z' }));
+      const l = __mk('リスト', files, (mode === 'a') ? { '完了': __mk('完了', { [W7 + '.json']: JSON.stringify(__D(W7), null, 2) }) } : {});
+      l.resolve = async o => (o === l) ? [] : null;          // 本物と同じ：同じフォルダなら []
+      const rd = Object.assign({}, D, { chosho_note: '物件だけの備考', chosho_photos: null, chosho_photo_count: 6 });
+      const row = { file: NO + '.json', data: rd, fileType: 'plain', _fromProject: true, _slim: true, _photoCount: 6 };
+      _listRows = [row];
+      _currentProject = { id: 'pj176r3' + mode, name: P1N, cases: [] };
+      if(mode === 'a') _projDirHandle = l;                    // 物件に取り込んだ 📁（その１/リスト）が工事フォルダ
+      if(mode === 'a2'){                                      // 開き直した物件：工事フォルダは覚えてある（:dir）だけ
+        window.__phg = projHandleGet;
+        const key = _currentProject.id + ':dir';
+        projHandleGet = async k => (k === key) ? l : window.__phg(k);
+      }
+      if(mode === 'c'){
+        const l1 = __mk('リスト', {}); l1.resolve = async o => (o === l1) ? [] : null;
+        _projDirHandle = l1;                                  // 開いている物件の工事フォルダは別のリスト
+        _listDirHandle = l;                                   // 📁 で読んでいるのが、選んだ「リスト」そのもの
+      }
+      window.showDirectoryPicker = async () => l;
+      const before = __tree(l);
+      const o = { run: await __sortRun('sort-ok', (mode === 'b' || mode === 'e') ? (m => __pickDest(m, NO, '選んだ')) : null) };
+      await new Promise(res => setTimeout(res, 300));
+      o.diff = __diff(before, __tree(l));
+      o.placedNew = !!l.__files['W6N006.json'];
+      const f = JSON.parse(l.__files[NO + '.json']);
+      o.file = { wd: f.work_done, st: f.chosho_status, amp: f.amplifier, sm: f._sideMerged };
+      o.row = { wd: row.data.work_done, st: row.data.chosho_status, amp: row.data.amplifier, sm: row.data._sideMerged, note: row.data.chosho_note };
+      if(mode !== 'c'){
+        // 物件から開いて「物件に保存」（b は工事フォルダを聞かれて その リスト を選ぶ）
+        try { await openCaseInEditor(row); } catch(e){ o.openErr = String(e && e.message || e); }
+        try { await overwriteSaveCurrentToProject(); } catch(e){ o.saveErr = String(e && e.message || e); }
+        const f2 = JSON.parse(l.__files[NO + '.json']);
+        o.saved = { wd: f2.work_done, st: f2.chosho_status, amp: f2.amplifier, tel: f2.chosho_cust_tel, sm: f2._sideMerged, ph: __pids(f2) };
+        o.linked = (_projDirHandle === l);
+      }
+      _currentProject = null; _listRows = []; _projDirHandle = null; _listDirHandle = null;
+      if(window.__phg){ projHandleGet = window.__phg; window.__phg = null; }
+      return o;
+  };
+  for(const mode of ['a', 'a2', 'b', 'd', 'd2', 'e'].filter(m => want('㉕' + m))){
+    const { ctx, page, said } = await openMain('㉕' + mode);
+    if(mode === 'a'){
+      // 📁 で読んだだけの「リスト」そのもの（開いている物件の工事フォルダは別のリスト）は、開いている物件のリストと決めない
+      const rc = await run(page, sc25, { NO, SIDE, P1N, P2N, mode: 'c' });
+      const tc = (rc.run && rc.run.text) || '', Rc = rc.row || {};
+      ok(!rc.error && /「リスト」だけを選んだので、どの物件のリストか分かりません/.test(tc) && !/（決まった物件）/.test(tc) && rc.run.okDisabled === true
+         && rc.diff.length === 0 && Rc.amp === 'amp_3u43',
+         '★㉕a 📁 で読んだだけの「リスト」を、開いている物件のリストと決めた（紛れた写しへまとめてしまう） → ' + short({ e: rc.error, t: tc.slice(0, 900), diff: rc.diff, Rc }));
+      said.length = 0;
+    }
+    const r = await run(page, sc25, { NO, SIDE, P1N, P2N, mode });
+    const a = alerts(said);
+    const fin25 = a.filter(m => /振り分け終わりました/.test(m));
+    console.log('㉕' + mode + '「リスト」だけ・物件を開いている', brief(r), brief(a));
+    ok(!r.error, '㉕' + mode + '止まった → ' + r.error);
+    if(r.error){ await ctx.close(); continue; }
+    const t = r.run.text || '', F = r.file || {}, R = r.row || {}, V = r.saved || {};
+    const fileMerged = F.wd === true && F.st === 'completed' && F.amp === 'amp_1u45' && Array.isArray(F.sm) && F.sm.indexOf(STAMP) >= 0;
+    if(mode === 'a' || mode === 'a2'){
+      ok(/令和８年度戸別受信設備設置工事（その１）（選んだ「リスト」）（決まった物件）/.test(t) && /まとめる（2612MKM013\.json に入れる）/.test(t) && fileMerged,
+         '★㉕' + mode + ' 工事フォルダが選んだ「リスト」そのものなのに、開いている物件のリストと分からない／まとめない → ' + short({ t: t.slice(0, 900), F }));
+    }
+    if(mode === 'a'){
+      ok(/この戸別のファイルが リスト の中のフォルダ（リスト\/完了\/W7X007\.json）にあります/.test(t)
+         && /エクスプローラで リスト\/完了\/W7X007\.json を リスト へ移してから/.test(t) && !/工事（その１）\//.test(t),
+         '★㉕a リストの中の 完了 にあるものの場所の書き方が違う（物件の名前をフォルダのように書く・リスト の外と言う） → ' + t.slice(0, 1400));
+      /* 新しい戸別を開いている物件のリストへ置いた：知らせで物件の名前をフォルダの名前のように書かない（4回目） */
+      ok(r.placedNew && fin25.length === 1
+         && /開いている物件「令和８年度戸別受信設備設置工事（その１）」の一覧は、まだ振り分ける前の中身のままです（1件）。「📁 フォルダ」で 選んだ「リスト」 を読み込むと入ります/.test(fin25[0])
+         && !/工事（その１） ＞ リスト/.test(fin25[0]),
+         '★㉕a 新しい戸別を置いた知らせで、物件の名前をフォルダの名前のように書く（無いフォルダを読み込ませる） → ' + short({ placed: r.placedNew, fin25 }));
+    }
+    if(mode === 'b' || mode === 'e'){
+      ok(!/（決まった物件）/.test(t) && /まとめる（2612MKM013\.json に入れる）/.test(r.run.after) && fileMerged,
+         '㉕' + mode + '試験の前提: 名前の分からないリストを手で選ぶとまとめる → ' + short({ after: (r.run.after || '').slice(0, 700), F }));
+    }
+    if(mode === 'd' || mode === 'd2'){
+      ok(/（選んだ「リスト」）（決まった物件）/.test(t) && /まとめる（2612MKM013\.json に入れる）/.test(t) && fileMerged,
+         '㉕' + mode + '試験の前提: 名前の分からないリスト・預けの物件の名前が空 → ファイルがあるので自動でまとめる → ' + short({ t: t.slice(0, 900), F }));
+      ok(fin25.length === 1 && !/まだ振り分ける前の中身/.test(fin25[0]),
+         '★㉕' + mode + ' 預けの物件の名前が空だと、開いている物件の行に入れず「まだ前の中身」と言う → ' + short(fin25));
+    }
+    if(mode === 'e'){
+      /* その２ とはっきり分かる預けは、その１ の行に入れない。それでも保存で戸別ファイルの済みの印・状態は消さない（4回目） */
+      ok(R.wd === false && R.st === 'in_progress' && R.amp === 'amp_3u43' && !(Array.isArray(R.sm) && R.sm.length),
+         '★㉕e 預けの物件が その２ とはっきり分かるのに、開いている その１ の行に入れた（別の物件の工事完了が付く） → ' + short(R));
+      ok(!r.openErr && !r.saveErr && r.linked && V.wd === true && V.st === 'completed' && Array.isArray(V.sm) && V.sm.indexOf(STAMP) >= 0
+         && V.ph === 'p1,p2,p3,p4,p5,p6,t1' && a.some(m => /済みの印・状態は消さずに残しました/.test(m)),
+         '★㉕e 行に入れなかった預けの工事完了・状態・まとめた印が、「物件に保存」で戸別ファイルから消える → ' + short({ V, a }));
+    } else {
+      ok(R.wd === true && R.st === 'completed' && R.amp === 'amp_1u45' && Array.isArray(R.sm) && R.sm.indexOf(STAMP) >= 0 && R.note === '物件だけの備考',
+         '★㉕' + mode + ' 開いている物件の行に、まとめた預けが入らない（あとの「物件に保存」で工事完了が外れる） → ' + short(R));
+      ok(!r.openErr && !r.saveErr && r.linked && V.wd === true && V.st === 'completed' && V.amp === 'amp_1u45' && V.tel === '0176-11-2222'
+         && Array.isArray(V.sm) && V.sm.indexOf(STAMP) >= 0 && V.ph === 'p1,p2,p3,p4,p5,p6,t1',
+         '★㉕' + mode + ' 振り分けたあと「物件に保存」すると、戸別ファイルの工事完了・現場の入力・まとめた印・写真が消える → ' + short(r));
+    }
+    await ctx.close();
+  }
+
+  // ---- ㉖ 振り分けたあと、行から開いて保存しても、戸別ファイルの写真が減らない（3回目） ----
+  for(const mode of ['a', 'b', 'c', 'd'].filter(m => want('㉖' + m))){
+    const { ctx, page, said } = await openMain('㉖' + mode);
+    const r = await run(page, async ({ NO, P1N, mode }) => {
+      await __fresh();
+      const l1 = __mk('リスト', {}), l2 = __mk('リスト', {});
+      const root = __mk('物件情報_調書', {}, { 'その１': __mk('その１', {}, { 'リスト': l1 }), 'その２': __mk('その２', {}, { 'リスト': l2 }) });
+      _currentProject = { id: 'pj176r3p' + mode, name: P1N, cases: [] };
+      _projDirHandle = l1;
+      const nos = (mode === 'd') ? ['W8A008-01', 'W8A008-02'] : [NO];
+      const o = { rowPh: {}, file: {}, saved: {} };
+      const rows = {};
+      for(const no of nos){
+        const f = { chosho_mgmt_no: no, chosho_cust_name: '三沢 太郎' };
+        if(mode !== 'c') f.amplifier = 'amp_3u43';                     // 図面あり（開くと行の中身を出す）
+        if(mode === 'b') f.chosho_photos = [__ph('f1', '#c33')];
+        if(mode === 'd') Object.assign(f, { apt_units: '2', apt_idx: no.slice(-1), apt_bldg: 'B-W8A008', apt_name: 'みさわ荘', apt_room: '10' + no.slice(-1) });
+        rows[no] = createManualRow(f, 'manual');                        // 受付台帳で作った戸別（物件の外から来ていない）
+        if(mode !== 'c'){                                               // いちど開いて「物件に保存」（戸別ファイルができる）
+          try { await openCaseInEditor(rows[no]); } catch(e){ o.open1Err = String(e && e.message || e); }
+          try { await overwriteSaveCurrentToProject(); } catch(e){ o.save1Err = String(e && e.message || e); }
+          o.file1 = Object.assign(o.file1 || {}, { [no]: __pids(l1.__files[no + '.json'] || '{}') });
+          o.known = Object.assign(o.known || {}, { [no]: !!rows[no]._photosKnown });
+        }
+      }
+      if(mode === 'b'){   // もう一度開いて写真 m1 を足し、一覧へ戻った（行には入ったが、まだ戸別ファイルに入っていない）
+        try { await openCaseInEditor(rows[NO]); } catch(e){ o.open1Err = String(e && e.message || e); }
+        STATE.photos = (Array.isArray(STATE.photos) ? STATE.photos : []).concat([__ph('m1', '#c3c')]);
+        syncEditorToRowData(true);
+        o.rowM1 = { ph: __pids(rows[NO].data), thumb: !!rows[NO].data.chosho_photos_thumb, known: !!rows[NO]._photosKnown };
+      }
+      // ほかの戸別を開いた（開いた戸別とのつながりが切れる）
+      const other = createManualRow({ chosho_mgmt_no: 'W0Z000', chosho_cust_name: '別の家', amplifier: 'amp_3u43' }, 'manual');
+      try { await openCaseInEditor(other); } catch(e){ o.openOtherErr = String(e && e.message || e); }
+      // 現場の預け（その２ に落ちた。写真あり）
+      const G = { [NO]: ['g1', 'g2'], 'W8A008-01': ['g1'], 'W8A008-02': ['g2', 'g3'] };
+      nos.forEach((no, i) => {
+        const S = __S(no, { proj: P1N, ledger: P1N, at: '2026-10-14T0' + (i + 1) + ':00:00.000Z',
+          touched: (mode === 'c') ? ['chosho_cust_tel', 'work_done'] : ['amplifier', 'work_done'] });
+        S.chosho_photos = G[no].map((id, k) => __ph(id, __COL[k + 2]));
+        if(mode !== 'c') S.amplifier = 'amp_1u45';
+        l2.__files[no + '_現場預け_20261014-0' + (i + 1) + '0000.json'] = JSON.stringify(S);
+      });
+      window.showDirectoryPicker = async () => root;
+      o.run = await __sortRun('sort-ok');
+      await new Promise(res => setTimeout(res, 300));
+      for(const no of nos){
+        o.file[no] = __pids(l1.__files[no + '.json'] || '{}');
+        o.rowPh[no] = __pids(rows[no].data);
+      }
+      // 物件の自動保存が先に走った（物件に入れるサムネを作り、ファイルを持たない行の写真はサムネに替わる）
+      try { await projSaveNow(); } catch(e){ o.autoErr = String(e && e.message || e); }
+      o.thumbed = nos.map(no => !!rows[no].data.chosho_photos_thumb);
+      // 振り分けたあと、その戸別を開いて「物件に保存」
+      for(const no of nos){
+        try { await openCaseInEditor(rows[no]); } catch(e){ o.open2Err = String(e && e.message || e); }
+        try { await overwriteSaveCurrentToProject(); } catch(e){ o.save2Err = String(e && e.message || e); }
+        o.saved[no] = __pids(l1.__files[no + '.json'] || '{}');
+      }
+      o.left = Object.keys(l2.__files).filter(n => /現場預け/.test(n));
+      _currentProject = null; _listRows = []; _projDirHandle = null; _editingRow = null;
+      return o;
+    }, { NO, P1N, mode });
+    const a = alerts(said);
+    console.log('㉖' + mode + '振り分けたあと開いて保存', brief(r), brief(a.filter(m => /振り分け終わりました/.test(m))));
+    ok(!r.error, '㉖' + mode + '止まった → ' + r.error);
+    if(r.error){ await ctx.close(); continue; }
+    const wantF = { a: { [NO]: 'g1,g2' }, b: { [NO]: 'f1,g1,g2' }, c: { [NO]: 'g1,g2' },
+                   d: { 'W8A008-01': 'g1', 'W8A008-02': 'g2,g3' } }[mode];
+    const wantSaved = { a: { [NO]: 'g1,g2' }, b: { [NO]: 'f1,g1,g2,m1' }, c: { [NO]: 'g1,g2' },
+                        d: { 'W8A008-01': 'g1', 'W8A008-02': 'g2,g3' } }[mode];
+    const pre = Object.keys(wantF).every(no => r.file[no] === wantF[no]) && !(r.left || []).length && !r.open1Err && !r.save1Err
+      && (mode !== 'b' || (r.rowM1 && r.rowM1.ph === 'f1,m1' && !r.rowM1.thumb && r.rowM1.known)) && !r.autoErr
+      && (mode !== 'c' || (r.thumbed && r.thumbed[0] === true))
+      && (mode === 'c' || Object.keys(wantF).every(no => r.known[no] === true && r.file1[no] === (mode === 'b' ? 'f1' : '')));
+    ok(pre, '㉖' + mode + '試験の前提: いちど保存した戸別ファイル・振り分けで写真が戸別ファイルへ入る → ' + short(r));
+    ok(Object.keys(wantF).every(no => wantF[no].split(',').every(id => (r.rowPh[no] || '').split(',').indexOf(id) >= 0))
+       && (mode !== 'b' || (r.rowPh[NO] || '').split(',').indexOf('m1') >= 0),
+       '★㉖' + mode + ' 振り分けで戸別ファイルに入れた写真を、行に持たせない（開くと画面に出ず、保存で消える） → ' + short(r.rowPh));
+    ok(!r.open2Err && !r.save2Err && Object.keys(wantSaved).every(no => r.saved[no] === wantSaved[no]),
+       '★㉖' + mode + ' 振り分けたあと開いて「物件に保存」すると、戸別ファイルの写真が減る（行にしか無い写真も入らない） → ' + short({ saved: r.saved, want: wantSaved, e: [r.open2Err, r.save2Err] }));
+    await ctx.close();
+  }
+  // ---- ㉖e 📁 の一覧で、振り分けたあと読み直しを断った（受付台帳で直したままの戸別がある）----
+  if(want('㉖e')){
+    const { ctx, page, said } = await openMain('㉖e');
+    const r = await run(page, async ({ NO, SIDE, P1N }) => {
+      await __fresh();
+      const W9 = 'W9B009';
+      const D0 = Object.assign(__D(NO), { chosho_photos: null });           // 写真の無い戸別（行が写真を持つ扱い）
+      const S1 = __S(NO, { proj: P1N }); S1.chosho_photos = [__ph('g1', '#c33'), __ph('g2', '#3c3')];
+      const S9 = __S(W9, { proj: P1N, at: '2026-10-14T01:00:00.000Z' }); S9.chosho_photos = [__ph('g9', '#33c')];
+      const SN = __S('W1N001', { proj: P1N, at: '2026-10-14T02:00:00.000Z' });     // 一覧に行の無い、新しい戸別
+      // W9 の預けは 📁 で読んでいるリストの中（読むと一覧の外の覚え _sideFiles に入る）
+      const l1 = __mk('リスト', { [NO + '.json']: JSON.stringify(D0, null, 2), [W9 + '.json']: JSON.stringify(__D(W9), null, 2),
+                                  'W1A001.json': JSON.stringify({ chosho_mgmt_no: 'W1A001', work_type: 'uhf_new', chosho_status: 'in_progress' }),
+                                  [W9 + '_現場預け_20261014-100000.json']: JSON.stringify(S9) });
+      const l2 = __mk('リスト', { [SIDE]: JSON.stringify(S1), 'W1N001_現場預け_20261014-110000.json': JSON.stringify(SN) });
+      const root = __mk('物件情報_調書', {}, { 'その１': __mk('その１', {}, { 'リスト': l1 }), 'その２': __mk('その２', {}, { 'リスト': l2 }) });
+      _listDirHandle = l1;
+      await listReloadFolder();
+      const byName = n => (_listRows || []).filter(x => x._name === n)[0];
+      const other = byName('W1A001.json'); if(other) other._lgEdited = true;   // ほかの戸別を受付台帳で直したまま
+      const rNo = byName(NO + '.json'), r9 = byName(W9 + '.json');
+      const o = { pre: { other: !!other, noSlim: !!(rNo && rNo._slim), w9Slim: !!(r9 && r9._slim), sf: (_sideFiles || []).length } };
+      window.showDirectoryPicker = async () => root;
+      o.run = await __sortRun('sort-ok');
+      await new Promise(res => setTimeout(res, 300));
+      o.file = { no: __pids(l1.__files[NO + '.json']), w9: __pids(l1.__files[W9 + '.json']), n1: !!l1.__files['W1N001.json'] };
+      o.row = rNo ? { amp: rNo.data.amplifier, ph: __pids(rNo.data), sm: rNo.data._sideMerged } : null;
+      o.row9 = r9 ? { amp: r9.data.amplifier, sm: r9.data._sideMerged } : null;
+      o.sfAfter = (_sideFiles || []).map(s => s.name);
+      // 開いて「💾 上書き保存」（📁 の戸別は、その戸別ファイルへ書く）
+      for(const [k, rr, fn] of [['no', rNo, NO + '.json'], ['w9', r9, W9 + '.json']]){
+        try { await openCaseInEditor(rr); } catch(e){ o[k + 'OpenErr'] = String(e && e.message || e); }
+        try { await overwriteSaveCurrent(); } catch(e){ o[k + 'SaveErr'] = String(e && e.message || e); }
+        o['saved_' + k] = __pids(l1.__files[fn]);
+      }
+      _listDirHandle = null; _listRows = []; _editingRow = null;
+      return o;
+    }, { NO, SIDE, P1N });
+    const fin = alerts(said).filter(m => /振り分け終わりました/.test(m));
+    console.log('㉖e読み直しを断った', brief(r), brief(fin));
+    ok(!r.error, '㉖e止まった → ' + r.error);
+    if(!r.error){
+      ok(r.pre.other && !r.pre.noSlim && r.pre.w9Slim && r.pre.sf === 1 && r.file.no === 'g1,g2' && r.file.w9 === 'g9,p1,p2,p3,p4,p5,p6' && r.file.n1,
+         '㉖e試験の前提: 写真の無い戸別・常駐させない戸別・新しい戸別へ振り分ける → ' + short(r));
+      ok(r.row && r.row.amp === 'genbaAmp' && r.row.ph === 'g1,g2' && Array.isArray(r.row.sm) && r.row.sm.indexOf(STAMP) >= 0
+         && r.row9 && r.row9.amp === 'genbaAmp',
+         '★㉖e 読み直しを断られたとき、その戸別ファイルの行に預け（直した欄・写真・印）を入れない → ' + short({ row: r.row, row9: r.row9 }));
+      ok(!r.noSaveErr && !r.w9SaveErr && r.saved_no === 'g1,g2' && r.saved_w9 === 'g9,p1,p2,p3,p4,p5,p6',
+         '★㉖e 読み直しを断ったあと開いて「💾 上書き保存」すると、戸別ファイルの写真が減る → ' + short(r));
+      ok(fin.length === 1 && /一覧は、まだ振り分ける前の中身のままです（読み直していません。1件）/.test(fin[0]),
+         '★㉖e 行の無い戸別（新しく置いた）があるのに、一覧がまだ前の中身だと言わない → ' + short(fin));
+      ok(Array.isArray(r.sfAfter) && r.sfAfter.length === 0,
+         '★㉖e 片付けた預けを、一覧の外の覚え（_sideFiles）に残す（次に押すと、もう無いファイルを読みに行く） → ' + short(r.sfAfter));
+    }
+    await ctx.close();
+  }
+
+  // ---- ㉖f 物件を開いて 📁 の一覧も読んでいる・図面のまだ無い戸別（写真は戸別ファイルにだけある）→ 振り分け → 開いて保存 ----
+  if(want('㉖f')){
+    const { ctx, page, said } = await openMain('㉖f');
+    const r = await run(page, async ({ NO, SIDE, P1N }) => {
+      await __fresh();
+      const D = Object.assign(__D(NO), { amplifier: '' });              // 図面のまだ無い戸別（写真だけある）
+      const l1 = __mk('リスト', { [NO + '.json']: JSON.stringify(D, null, 2) });
+      const S = __S(NO, { proj: P1N, touched: ['chosho_cust_tel'] }); S.chosho_photos = [__ph('g1', '#cc3')];
+      const l2 = __mk('リスト', { [SIDE]: JSON.stringify(S) });
+      const root = __mk('物件情報_調書', {}, { 'その１': __mk('その１', {}, { 'リスト': l1 }), 'その２': __mk('その２', {}, { 'リスト': l2 }) });
+      _currentProject = { id: 'pj176r3f', name: P1N, cases: [] };
+      _projDirHandle = l1; _listDirHandle = l1;
+      await listReloadFolder();
+      window.showDirectoryPicker = async () => root;
+      const o = { run: await __sortRun('sort-ok') };
+      await new Promise(res => setTimeout(res, 300));
+      o.file = __pids(l1.__files[NO + '.json']);
+      const row = (_listRows || []).filter(x => x._name === NO + '.json')[0];
+      o.pre = row ? { slim: !!row._slim, fh: !!row.fileHandle, amp: String(row.data.amplifier || '') } : null;
+      try { await openCaseInEditor(row); } catch(e){ o.openErr = String(e && e.message || e); }
+      o.editorPh = (Array.isArray(STATE.photos) ? STATE.photos : []).filter(p => p && p.dataUri).map(p => p.id).sort().join(',');
+      try { await overwriteSaveCurrent(); } catch(e){ o.saveErr = String(e && e.message || e); }
+      o.saved = __pids(l1.__files[NO + '.json']);
+      _currentProject = null; _listRows = []; _projDirHandle = null; _listDirHandle = null; _editingRow = null;
+      return o;
+    }, { NO, SIDE, P1N });
+    console.log('㉖f図面の無い戸別', brief(r));
+    ok(!r.error, '㉖f止まった → ' + r.error);
+    if(!r.error){
+      const all = 'g1,p1,p2,p3,p4,p5,p6';
+      ok(r.file === all && r.pre && r.pre.slim && r.pre.fh && r.pre.amp === '', '㉖f試験の前提: 写真を常駐させない・図面の無い戸別へ振り分ける → ' + short(r));
+      ok(!r.openErr && r.editorPh === all, '★㉖f 図面の無い戸別を開くと、戸別ファイルの写真が画面に出ない（保存で消える） → ' + short(r));
+      ok(!r.saveErr && r.saved === all, '★㉖f 図面の無い戸別を開いて保存すると、戸別ファイルの写真が消える → ' + short(r));
+    }
+    await ctx.close();
+  }
+
+  // ---- ㉗ 言い方（3回目） ----
+  const sc27 = async ({ NO, SIDE, P1N, mode }) => {
+      await __fresh();
+      const o = {};
+      if(mode === 'a'){        // 名前の分からない その１/リスト・新しい戸別・手で（選んだ「リスト」）
+        const l = __mk('リスト', { [SIDE]: JSON.stringify(__S(NO, { proj: P1N, ledger: P1N })) });
+        window.showDirectoryPicker = async () => l;
+        const before = __tree(l);
+        o.run = await __sortRun('sort-ok', m => __pickDest(m, NO, '選んだ'));
+        o.diff = __diff(before, __tree(l));
+      }
+      if(mode === 'b'){        // 上のフォルダを選んだ・預けの物件（その２）は無い・手で その１（ファイル無し）
+        const l1 = __mk('リスト', {}), l3 = __mk('リスト', { [SIDE]: JSON.stringify(__S(NO, { proj: 'その２' })) });
+        const root = __mk('物件情報_調書', {}, { 'その１': __mk('その１', {}, { 'リスト': l1 }), 'その３': __mk('その３', {}, { 'リスト': l3 }) });
+        window.showDirectoryPicker = async () => root;
+        const before = __tree(root);
+        o.run = await __sortRun('sort-ok', m => __pickDest(m, NO, 'その１'));
+        o.diff = __diff(before, __tree(root));
+      }
+      if(mode === 'c'){        // 物件の戸別を開いて保存 → 一覧へ戻った → 振り分け
+        const D = __D(NO);
+        const l1 = __mk('リスト', { [NO + '.json']: JSON.stringify(D, null, 2) });
+        const l2 = __mk('リスト', { [SIDE]: JSON.stringify(__S(NO, { proj: P1N, ledger: P1N })) });
+        const root = __mk('物件情報_調書', {}, { 'その１': __mk('その１', {}, { 'リスト': l1 }), 'その２': __mk('その２', {}, { 'リスト': l2 }) });
+        const row = { file: 'リスト/' + NO + '.json', data: Object.assign({}, D, { chosho_photos: null, chosho_photo_count: 6 }),
+                      fileType: 'plain', _fromProject: true, _slim: true, _photoCount: 6 };
+        _listRows = [row];
+        _currentProject = { id: 'pj176r3c', name: P1N, cases: [] };
+        _projDirHandle = root.__subs['その１'];
+        try { await openCaseInEditor(row); } catch(e){ o.openErr = String(e && e.message || e); }
+        try { await overwriteSaveCurrentToProject(); } catch(e){ o.saveErr = String(e && e.message || e); }
+        try { openListView(); } catch(_){}
+        o.still = (_editingRow === row);
+        window.showDirectoryPicker = async () => root;
+        const before = __tree(root);
+        o.run = await __sortRun('sort-ok');
+        o.diff = __diff(before, __tree(root));
+        _currentProject = null; _listRows = []; _projDirHandle = null; _editingRow = null;
+      }
+      if(mode === 'd'){        // 「リスト」を選んだ。リストの中の 完了 に 管理番号.json（新しい戸別の預け）
+        const mk = () => __mk('リスト', { [SIDE]: JSON.stringify(__S(NO, { proj: P1N, ledger: P1N })) },
+                              { '完了': __mk('完了', { [NO + '.json']: JSON.stringify(__D(NO), null, 2) }) });
+        const l = mk();
+        const p1 = __mk('その１', {}, { 'リスト': l });
+        p1.resolve = async x => (x === l) ? ['リスト'] : ((x === p1) ? [] : null);
+        _listDirHandle = p1;                                  // 📁 で その１ を読んでいる → その１ と分かる
+        window.showDirectoryPicker = async () => l;
+        o.run = await __sortRun('sort-ok');
+        _listDirHandle = null;
+        const l2 = mk();                                      // 名前の分からない「リスト」→ 手で（選んだ「リスト」）
+        window.showDirectoryPicker = async () => l2;
+        await __fresh();
+        o.run2 = await __sortRun('sort-ok', m => __pickDest(m, NO, '選んだ'));
+        await __fresh();                                      // 物件のフォルダ（その１）を選んだ。リストの中の 完了 にある
+        const p1b = __mk('その１', {}, { 'リスト': mk() });
+        window.showDirectoryPicker = async () => p1b;
+        o.run3 = await __sortRun('sort-ok');
+      }
+      return o;
+  };
+  const PH27 = { a: ['a', 'b'], b: ['c'], c: ['d'] };    // a は「言う」ときと「言わない」ときを続けて確かめる
+  for(const sc of ['a', 'b', 'c'].filter(m => want('㉗' + m))){
+    const { ctx, page, said } = await openMain('㉗' + sc);
+    for(const mode of PH27[sc]){
+      const r = await run(page, sc27, { NO, SIDE, P1N, mode });
+      console.log('㉗' + sc + '（' + mode + '）言い方', brief(r));
+      ok(!r.error, '㉗' + sc + '止まった → ' + r.error);
+      if(r.error) continue;
+      const t = (r.run && (r.run.after || r.run.text)) || '';
+      if(mode === 'a'){
+        ok(/行き先に この戸別のファイル（2612MKM013\.json）がありません。新しく置くのは、行き先がはっきり分かるときだけです。「📁 別のフォルダを選ぶ」で 物件のフォルダ（その１）か 物件情報_調書（上のフォルダ）を選ぶと、新しく置けます/.test(t)
+           && r.run.okDisabled === true && r.diff.length === 0,
+           '★㉗a 名前の分からない「リスト」で新しい戸別を手で選ぶと、どうすれば置けるか言わない → ' + t.slice(0, 900));
+      }
+      if(mode === 'b'){
+        ok(/行き先に この戸別のファイル（2612MKM013\.json）がありません。新しく置くのは、行き先がはっきり分かるときだけです/.test(t)
+           && !/「📁 別のフォルダを選ぶ」で 物件のフォルダ/.test(t) && r.run.okDisabled === true && r.diff.length === 0,
+           '★㉗a 上のフォルダを選んでいるのに「上のフォルダを選ぶと置けます」と言う（選んでも置けない） → ' + t.slice(0, 900));
+      }
+      if(mode === 'c'){
+        ok(!r.openErr && !r.saveErr && r.still === true, '㉗b試験の前提: 保存して一覧へ戻っても、開いた戸別とつながったまま → ' + short(r));
+        ok(/この戸別は いま開いたままです。まだ保存していなければ 💾 で保存し、ほかの戸別を開くか ページを読み込み直してから、もう一度押してください/.test(t)
+           && !/先に保存して閉じてください/.test(t) && r.run.okDisabled === true && r.diff.length === 0,
+           '★㉗b 保存して一覧に戻った戸別に「保存して閉じてください」（閉じる操作が無い）と言う → ' + t.slice(0, 900));
+      }
+      if(mode === 'd'){
+        const t2 = (r.run2 && r.run2.after) || '';
+        ok(/この戸別のファイルが リスト の中のフォルダ（その１\/リスト\/完了\/2612MKM013\.json）にあります/.test(t)
+           && /エクスプローラで その１\/リスト\/完了\/2612MKM013\.json を その１\/リスト へ移してから/.test(t),
+           '★㉗c 「リスト」を選んだとき、リストの中の 完了 を「リスト の外（その１/完了/…）」と言う（無いフォルダを探させる） → ' + t.slice(0, 1200));
+        ok(/この戸別のファイルが リスト の中のフォルダ（リスト\/完了\/2612MKM013\.json）にあります/.test(t2)
+           && /エクスプローラで リスト\/完了\/2612MKM013\.json を リスト へ移してから/.test(t2),
+           '★㉗c 名前の分からない「リスト」で、リストの中の 完了 の場所の書き方が違う → ' + t2.slice(0, 1200));
+        const t3 = (r.run3 && r.run3.text) || '';
+        ok(/この戸別のファイルが リスト の中のフォルダ（その１\/リスト\/完了\/2612MKM013\.json）にあります/.test(t3)
+           && /エクスプローラで その１\/リスト\/完了\/2612MKM013\.json を その１\/リスト へ移してから/.test(t3),
+           '★㉗c 物件のフォルダを選んだとき、リストの中の 完了 を「リスト の外」と言う → ' + t3.slice(0, 1200));
+      }
+    }
+    await ctx.close();
+  }
+
+  // ---- ㉘ 物件を開いていて 📁 のフォルダも覚えている：読み直して物件の行を置き換えない（4回目） ----
+  for(const mode of ['a', 'b', 'c', 'd'].filter(m => want('㉘' + m))){
+    const { ctx, page, said } = await openMain('㉘' + mode);
+    const r = await run(page, async ({ NO, SIDE, P1N, P2N, mode }) => {
+      await __fresh();
+      const D = Object.assign(__D(NO), { amplifier: 'amp_3u43' });
+      const N6 = 'W6N006';
+      const l1 = __mk('リスト', { [NO + '.json']: JSON.stringify(D, null, 2),
+        [SIDE]: JSON.stringify(__S(NO, { proj: P1N, ledger: P1N, touched: ['chosho_cust_tel'] })),
+        [N6 + '_現場預け_20261014-110000.json']: JSON.stringify(__S(N6, { proj: P1N, ledger: P1N, at: '2026-10-14T02:00:00.000Z' })) });
+      l1.resolve = async x => (x === l1) ? [] : null;
+      const top = __mk('物件情報_調書', {}, { 'その１': __mk('その１', {}, { 'リスト': l1 }) });
+      const pid = 'pj176r4' + mode;
+      const pname = (mode === 'd') ? P2N : P1N;
+      _currentProject = { id: pid, name: pname, cases: [] };
+      _projDirHandle = (mode === 'd') ? null : l1;            // 物件の工事フォルダ＝その１/リスト（d は無し）
+      const o = {};
+      if(mode === 'd'){                                       // その２：台帳で作った行だけ（ファイルはまだ無い）
+        _listRows = [createManualRow({ chosho_mgmt_no: 'W8M008', chosho_cust_name: '八戸', amplifier: 'amp_3u43' }, 'manual')];
+        await projIdbPut(Object.assign(__proj(pid, pname, []), { cases: [] }));
+        try { await projSaveNow(); } catch(e){ o.save0Err = String(e && e.message || e); }
+        const p0 = await projIdbGet(pid);
+        o.idb0 = ((p0 && p0.cases) || []).map(c => c.payload && (c.payload.chosho_mgmt_no + ':' + c.payload.amplifier)).sort().join();
+        _listDirHandle = l1;                                  // 覚えている 📁 は その１/リスト
+      } else if(mode === 'c'){                                       // 物件に 📁 を取り込んだ（行がファイルを持つ）
+        _listDirHandle = l1;
+        await listReloadFolder();
+        o.pre = (_listRows || []).map(x => x._name + ':' + !!x.fileHandle).join();
+        // 台帳で作った行（ファイルはまだ無い）もある。フォルダの行の証拠にも、物件だけの行にも数えない
+        createManualRow({ chosho_mgmt_no: 'W9M009', chosho_cust_name: '九戸', amplifier: 'amp_3u43' }, 'manual');   // 一覧に入る
+      } else {
+        // 物件の行：NO は事務所が図面を直して一覧へ戻った（物件には保存・戸別ファイルはまだ前のまま）
+        //          W5E005 は物件の戸別（ファイルは このリストの外。完了 など）
+        const rd = Object.assign({}, D, { amplifier: 'officeAmp', chosho_note: 'PCの備考', chosho_photos: null, chosho_photo_count: 6 });
+        const row = { file: NO + '.json', data: rd, fileType: 'plain', _fromProject: true, _slim: true, _photoCount: 6, _caseId: 'c1' };
+        const r5 = { file: 'W5E005.json', data: { chosho_mgmt_no: 'W5E005', chosho_cust_name: '五戸', amplifier: 'amp_3u43', chosho_status: 'in_progress' },
+                     fileType: 'plain', _fromProject: true, _caseId: 'c5' };
+        _listRows = [row, r5];
+        if(mode === 'a'){        // 台帳で作り、「💾 戸別ファイルへ反映」でファイルができた行（ファイルを持つが、フォルダの行ではない）
+          l1.__files['W7M007.json'] = JSON.stringify({ chosho_mgmt_no: 'W7M007', chosho_cust_name: '七戸', amplifier: 'amp_3u43' }, null, 2);
+          const m7 = createManualRow({ chosho_mgmt_no: 'W7M007', chosho_cust_name: '七戸', amplifier: 'officeAmp7' }, 'manual');
+          m7.fileHandle = await l1.getFileHandle('W7M007.json'); m7._dir = l1; m7._name = 'W7M007.json'; m7.file = 'W7M007.json';
+          _listRows = [row, r5, m7];
+        }
+        await projIdbPut(Object.assign(__proj(pid, P1N, []), { cases: [] }));
+        try { await projSaveNow(); } catch(e){ o.save0Err = String(e && e.message || e); }
+        const p0 = await projIdbGet(pid);
+        o.idb0 = ((p0 && p0.cases) || []).map(c => c.payload && (c.payload.chosho_mgmt_no + ':' + c.payload.amplifier)).sort().join();
+        _listDirHandle = l1;                                  // 📁 のフォルダを覚えている（「💾 戸別ファイルへ反映」など）
+        // 前に 📁 で読んだときの預けの覚え（一覧の外）。片付けたら外す
+        _sideFiles = [{ name: SIDE, file: SIDE, dirPath: '', dir: l1, fileHandle: await l1.getFileHandle(SIDE) }];
+      }
+      window.showDirectoryPicker = async () => (mode === 'b' || mode === 'd') ? top : l1;
+      o.run = await __sortRun('sort-ok');
+      await new Promise(res => setTimeout(res, 500));
+      o.rows = (_listRows || []).map(x => x.data && [x.data.chosho_mgmt_no, x.data.amplifier, x.data.chosho_cust_tel || '',
+        (Array.isArray(x.data._sideMerged) && x.data._sideMerged.length) ? 'sm' : ''].join(':')).sort().join();
+      if(mode !== 'c'){
+        try { await projSaveNow(); } catch(e){ o.saveErr = String(e && e.message || e); }
+        const p = await projIdbGet(pid);
+        o.idb = ((p && p.cases) || []).map(c => c.payload && (c.payload.chosho_mgmt_no + ':' + c.payload.amplifier)).sort().join();
+      }
+      o.placed = !!l1.__files[N6 + '.json'];
+      o.merged = JSON.parse(l1.__files[NO + '.json']).chosho_cust_tel;
+      o.sf = (_sideFiles || []).map(s => s.name).join();
+      _currentProject = null; _listRows = []; _projDirHandle = null; _listDirHandle = null;
+      return o;
+    }, { NO, SIDE, P1N, P2N, mode });
+    console.log('㉘' + mode + '物件を開いて 📁 も覚えている', brief(r));
+    ok(!r.error, '㉘' + mode + '止まった → ' + r.error);
+    if(r.error){ await ctx.close(); continue; }
+    const idbWant = { a: '2612MKM013:officeAmp,W5E005:amp_3u43,W7M007:officeAmp7', b: '2612MKM013:officeAmp,W5E005:amp_3u43', d: 'W8M008:amp_3u43' }[mode];
+    const rowsWant = { a: '2612MKM013:officeAmp:0176-11-2222:sm,W5E005:amp_3u43::,W7M007:officeAmp7::',
+                       b: '2612MKM013:officeAmp:0176-11-2222:sm,W5E005:amp_3u43::', d: 'W8M008:amp_3u43::' }[mode];
+    ok(r.placed && r.merged === '0176-11-2222' && (mode === 'c' || r.idb0 === idbWant)
+       && (mode !== 'c' || r.pre === '2612MKM013.json:true'),
+       '㉘' + mode + '試験の前提: 物件を保存してある・まとめる・新しく置く → ' + short(r));
+    if(mode !== 'c'){
+      ok(r.rows === rowsWant,
+         '★㉘' + mode + ' 振り分けたあと 📁 のフォルダを読み直して、物件の行を置き換えた（物件の戸別・物件だけの直しが消える・別の物件の戸別が入る） → ' + short(r.rows));
+      ok(!r.saveErr && r.idb === idbWant,
+         '★㉘' + mode + ' 物件の保存から、物件の戸別・物件だけの直しが消えた（別の物件の戸別が入った） → ' + short({ idb: r.idb, e: r.saveErr }));
+      ok(r.sf === '', '★㉘' + mode + ' 読み直さないとき、片付けた預けを一覧の外の覚え（_sideFiles）に残す（次に押すと、もう無いファイルを読みに行く） → ' + short(r.sf));
+    } else {
+      ok(/^2612MKM013:amp_3u43:0176-11-2222:sm,W6N006:genbaAmp:0176-11-2222:sm,W9M009:amp_3u43::$/.test(r.rows),
+         '★㉘c 物件に 📁 を取り込んでいるのに、振り分けたあと読み直さない（新しく置いた戸別が一覧に出ない） → ' + short(r.rows));
+    }
+    await ctx.close();
+  }
+
+  // ---- ㉙ 物件に保存：戸別ファイルに、行のまだ知らない預けがまとめてある（ほかのPCで振り分けた。4回目） ----
+  if(want('㉙')){
+    const { ctx, page, said } = await openMain('㉙');
+    const r = await run(page, async ({ NO, P1N, STAMP }) => {
+      await __fresh();
+      const W2 = 'W2B002', S2 = '2026-10-10T00:00:00.000Z|W2B002';
+      // 戸別ファイル：ほかのPCで現場の預けをまとめた（工事完了・状態・まとめた印）
+      const F = Object.assign(__D(NO), { amplifier: 'amp_1u45', work_done: true, work_done_at: '2026-10-14', chosho_status: 'completed', _sideMerged: [STAMP] });
+      // W2：まとめた印は行も知っている。このPCで事務所が工事完了を外した
+      const F2 = Object.assign(__D(W2), { work_done: true, work_done_at: '2026-10-10', chosho_status: 'completed', _sideMerged: [S2] });
+      const l = __mk('リスト', { [NO + '.json']: JSON.stringify(F, null, 2), [W2 + '.json']: JSON.stringify(F2, null, 2) });
+      const stale = Object.assign({}, F, { amplifier: 'amp_3u43', work_done: false, chosho_status: 'in_progress', chosho_photos: null, chosho_photo_count: 6 });
+      delete stale.work_done_at; delete stale._sideMerged;
+      const row = { file: NO + '.json', data: stale, fileType: 'plain', _fromProject: true, _slim: true, _photoCount: 6 };
+      const d2 = Object.assign({}, F2, { work_done: false, chosho_status: 'in_progress', chosho_photos: null, chosho_photo_count: 6 });
+      delete d2.work_done_at;
+      const row2 = { file: W2 + '.json', data: d2, fileType: 'plain', _fromProject: true, _slim: true, _photoCount: 6 };
+      _listRows = [row, row2];
+      _currentProject = { id: 'pj176r4k', name: P1N, cases: [] };
+      _projDirHandle = l;
+      const o = {};
+      try { await openCaseInEditor(row); } catch(e){ o.openErr = String(e && e.message || e); }
+      try { await overwriteSaveCurrentToProject(); } catch(e){ o.saveErr = String(e && e.message || e); }
+      const f1 = JSON.parse(l.__files[NO + '.json']);
+      o.saved = { wd: f1.work_done, at: f1.work_done_at, st: f1.chosho_status, sm: f1._sideMerged, ph: __pids(f1) };
+      o.row = { wd: row.data.work_done, st: row.data.chosho_status, sm: row.data._sideMerged };
+      o.sel = (document.getElementById('chosho_status') || {}).value;
+      // 開いたまま、もう一度「物件に保存」
+      try { await overwriteSaveCurrentToProject(); } catch(e){ o.save2Err = String(e && e.message || e); }
+      const f1b = JSON.parse(l.__files[NO + '.json']);
+      o.saved2 = { wd: f1b.work_done, st: f1b.chosho_status, sm: f1b._sideMerged };
+      try { await openCaseInEditor(row2); } catch(e){ o.open3Err = String(e && e.message || e); }
+      try { await overwriteSaveCurrentToProject(); } catch(e){ o.save3Err = String(e && e.message || e); }
+      const f2 = JSON.parse(l.__files[W2 + '.json']);
+      o.saved3 = { wd: f2.work_done, st: f2.chosho_status, sm: f2._sideMerged };
+      _currentProject = null; _listRows = []; _projDirHandle = null; _editingRow = null;
+      return o;
+    }, { NO, P1N, STAMP });
+    const a = alerts(said);
+    console.log('㉙行の知らない預けがまとめてある', brief(r), brief(a));
+    ok(!r.error, '㉙止まった → ' + r.error);
+    if(!r.error){
+      const S = r.saved || {}, S2 = r.saved2 || {}, S3 = r.saved3 || {}, R = r.row || {};
+      ok(!r.openErr && !r.saveErr && S.wd === true && S.at === '2026-10-14' && S.st === 'completed' && Array.isArray(S.sm) && S.sm.indexOf(STAMP) >= 0
+         && S.ph === 'p1,p2,p3,p4,p5,p6',
+         '★㉙ 行の知らない預けがまとめてある戸別ファイルへ「物件に保存」すると、工事完了・状態・まとめた印が消える → ' + short(r));
+      ok(R.wd === true && R.st === 'completed' && Array.isArray(R.sm) && R.sm.indexOf(STAMP) >= 0 && r.sel === 'completed',
+         '★㉙ 戸別ファイルから引き継いだ工事完了・状態・まとめた印を、行と開いている画面に入れない → ' + short({ R, sel: r.sel }));
+      ok(!r.save2Err && S2.wd === true && S2.st === 'completed' && Array.isArray(S2.sm) && S2.sm.indexOf(STAMP) >= 0,
+         '★㉙ 開いたままもう一度「物件に保存」すると、工事完了・状態が外れる → ' + short(S2));
+      ok(a.length >= 1 && /済みの印・状態は消さずに残しました/.test(a[0]),
+         '★㉙ 戸別ファイルから済みの印・状態を引き継いだことを知らせない → ' + short(a[0]));
+      ok(!r.open3Err && !r.save3Err && S3.wd === false && S3.st === 'in_progress' && Array.isArray(S3.sm) && S3.sm.join() === '2026-10-10T00:00:00.000Z|W2B002'
+         && a.length >= 3 && !/済みの印・状態は消さずに残しました/.test(a[2]),
+         '★㉙ 行の知っている印だけの戸別ファイルで、事務所が外した工事完了を戻す → ' + short({ S3, a2: a[2] }));
+    }
+    await ctx.close();
+  }
+
+  // ---- ㉚ 📁 の一覧で、預けの印を外しただけ（行の無い戸別）で読み直しを断った（4回目） ----
+  if(want('㉚')){
+    const { ctx, page, said } = await openMain('㉚');
+    const r = await run(page, async ({ NO, P1N }) => {
+      await __fresh();
+      // いつもの名前の 管理番号.json に _side が入ってしまっている（一覧の行にならない）
+      const l1 = __mk('リスト', { [NO + '.json']: JSON.stringify(__S(NO, { proj: P1N }), null, 2),
+                                  'W1A001.json': JSON.stringify({ chosho_mgmt_no: 'W1A001', work_type: 'uhf_new', chosho_status: 'in_progress' }) });
+      const root = __mk('物件情報_調書', {}, { 'その１': __mk('その１', {}, { 'リスト': l1 }) });
+      _listDirHandle = l1;
+      await listReloadFolder();
+      const other = (_listRows || []).filter(x => x._name === 'W1A001.json')[0];
+      if(other) other._lgEdited = true;                       // ほかの戸別を受付台帳で直したまま
+      const o = { pre: { rows: (_listRows || []).map(x => x._name).join(), sf: (_sideFiles || []).map(s => s.name).join() } };
+      window.showDirectoryPicker = async () => root;
+      o.run = await __sortRun('sort-ok');
+      await new Promise(res => setTimeout(res, 300));
+      o.fileHasSide = !!JSON.parse(l1.__files[NO + '.json'])._side;
+      o.rowForNo = (_listRows || []).some(x => x && x.data && x.data.chosho_mgmt_no === NO);
+      _listDirHandle = null; _listRows = [];
+      return o;
+    }, { NO, P1N });
+    const fin = alerts(said).filter(m => /振り分け終わりました/.test(m));
+    console.log('㉚印を外して読み直しを断った', brief(r), brief(fin));
+    ok(!r.error, '㉚止まった → ' + r.error);
+    if(!r.error){
+      ok(r.pre.rows === 'W1A001.json' && r.pre.sf === NO + '.json' && !r.fileHasSide && !r.rowForNo && fin.length === 1 && /預けの印を外した 1件/.test(fin[0]),
+         '㉚試験の前提: 印を外す・行が無い・読み直しを断る → ' + short({ r, fin }));
+      ok(fin.length === 1 && /一覧は、まだ振り分ける前の中身のままです（読み直していません。1件）/.test(fin[0])
+         && !/振り分けた戸別の行には、同じ中身を入れました/.test(fin[0]),
+         '★㉚ 行の無い戸別があるのに「振り分けた戸別の行には、同じ中身を入れました」と言う → ' + short(fin));
     }
     await ctx.close();
   }

@@ -56,8 +56,28 @@
      ㊴ 端末の中だけかもしれないフォルダ（その2）への いつもの保存 → 勝手に閉じず ⚠＋「📮 事務所にも届ける」（まとめて保存も）
         まとめて保存の「あとで」は、「まとめて保存」ではなく 履歴 の「📮 選んで事務所に預ける」を言う（書いた戸別は保存済みになる）
      ㊵ 同じ戸別の別名ファイル（「2612MKM013 2.json」）に写真・完了があれば、本物のPCのファイルとして読む（1件・まとめて）
+     ── 第3回の直し ──
+     ㊶ PC版のサイトを開いている Android タブレット（名前は「X11; Linux x86_64」・指で触れる）も Android と見る
+        （「リスト」に書いても ⚠＋「📮 事務所にも届ける」。まとめて保存も）・Windows／Mac／Linux のPC・Chromebook は今までどおり
+     ㊷ 書いたあとの控えを当てにするのは、今の保存先そのもの（印が同じ）で、端末の中だけかもしれないフォルダでないときだけ
+        （Android の「リスト」に書いた → 許可が取れない → 📮 の直した欄に、前に入れた欄も入る／PCで別の「リスト」を選び直したあとも）
+     ㊸ 📂・PCのフォルダから読んだファイルが PCのファイルらしくない（写真が台帳より少ない）ときは、PCのファイルを読んだことにしない
+        （共有で渡す道で いつもの名前にしない）。別名ファイルにしかない写真も写真の歯止めに入れる
+     ㊹ フォルダに書いたときに足した「事務所でまとめた覚え」（_sideMerged）を、そのあと共有で渡すファイルにも残す
+     ㊺ 共有で渡す道の案内（保存バー・フォルダを覚えるのをやめた知らせ・保存のあとの案内・取り込みのあとの窓）は Dropbox で見つかる名前（その１ ＞ リスト）
+     ㊻ 共有の画面が出ているあいだに中身が変わった（写真の取り込みが終わった）いま開いている戸別は「保存済」にしない（まとめて保存・1件の保存）
+     ── 第4回の直し ──
+     ㊼ 1件の保存（共有）：保存が下書きを書いているあいだ（渡す中身を作ったあと）に入った写真も「渡した」にしない（渡す中身の指紋は作ったときに取る）
+     ㊽ 保存の途中で入った写真（書いた・入れたファイルに無い）があれば「保存済」にしない・そう言う。もう一度押せば渡る
+        ㊽a PCの「その１ ＞ リスト」に書く道 ㊽b 保存先を選ぶ画面の道 ㊽c ダウンロードの道 ㊽d まとめて保存（フォルダ）
+     ㊾ iPhone（フォルダを選べない・保存はいつも共有）も、入れる場所は Dropbox で見つかる名前（その１ ＞ リスト）で言う
+        （保存バー・保存中の「入れる所」・保存のあとの★入れる場所★・📮 の説明が同じ名前）
    ★場面ごとに新しいブラウザの入れ物（newContext）を使う★ 前の場面の覚え書き（localStorage・IndexedDB）を持ち越さない。
    端末＝Android のタブレット（フォルダを選ぶ窓はあるが閉じる＝Dropbox が出ない・共有はできる・保存先を選ぶ窓は無い）。
+   ★場面ごとに、PC か タブレットかを はっきりさせる★（第3回）既定＝PC版のサイトを開いた Android タブレット
+   （名前は「X11; Linux x86_64」・指で触れる＝isAndroidLike）。{ ua:'android' } … 名前に Android。
+   { pc:true } … Windows のPC（指で触れない）。PCの「リスト」に書いたときの動き（⚠ を出さない・控えを当てにする）はこちらで見る。
+   { ua:'iphone' } … iPhone（フォルダを選ぶ窓が無い・共有はできる）（第4回）。
    使い方: node smoke_v176_genba.js [index.html の file:// URL]
            SCENE=①,⑰ node smoke_v176_genba.js   … 名前にその字が入る場面だけ（⓪ はいつも走る） */
 const { chromium } = require('playwright-core');
@@ -85,6 +105,12 @@ const P1 = '令和８年度戸別受信設備設置工事（その１）';
 /* 預けの名前（2612MKM013_現場預け_20261014-091812.json） */
 const SIDE13 = /^2612MKM013_現場預け_\d{8}-\d{6}\.json$/;
 const SIDE14 = /^2612MKM014_現場預け_\d{8}-\d{6}\.json$/;
+/* 端末の名前（userAgent）。既定＝PC版のサイトを開いた Android タブレット（10インチくらいより大きい Chrome の既定）。
+   UA_PC は Windows のPC（入れ物も指で触れない＝maxTouchPoints 0） */
+const UA_TAB = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
+const UA_ANDROID = 'Mozilla/5.0 (Linux; Android 14; SM-X210) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
+const UA_PC = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
+const UA_IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
 
 /* Android のタブレット：フォルダを選ぶ窓は出るが閉じる（Dropbox が出ない）。保存先を選ぶ窓は無い。共有はできる。
    cfg.savePicker … 保存先を選ぶ窓がある端末（閉じる）／cfg.noShare … 共有できない端末 */
@@ -92,7 +118,11 @@ const ANDROID_INIT = (cfg) => {
   cfg = cfg || {};
   window.__pickerCalls = 0; window.__savePickerCalls = 0; window.__shared = 0; window.__sharedNames = []; window.__sharedTexts = [];
   window.__shareCalls = 0; window.__dl = [];
-  window.__pickerMode = 'abort'; window.__pickerRet = null; window.__shareMode = 'ok';
+  window.__pickerMode = 'abort'; window.__pickerRet = null; window.__shareMode = 'ok'; window.__dlHref = [];
+  if(cfg.ua === 'iphone'){
+    try{ delete window.showDirectoryPicker; }catch(_){}
+    if(window.showDirectoryPicker) window.showDirectoryPicker = undefined;
+  } else
   window.showDirectoryPicker = async function(){
     window.__pickerCalls++;
     if(window.__pickerMode === 'return') return window.__pickerRet;
@@ -120,7 +150,7 @@ const ANDROID_INIT = (cfg) => {
     try{ navigator.canShare = undefined; navigator.share = undefined; }catch(_){}
   }
   const oc = HTMLAnchorElement.prototype.click;
-  HTMLAnchorElement.prototype.click = function(){ if(this.download){ window.__dl.push(this.download); return; } return oc.call(this); };
+  HTMLAnchorElement.prototype.click = function(){ if(this.download){ window.__dl.push(this.download); window.__dlHref.push(this.href); return; } return oc.call(this); };
 };
 
 /* 画面の中に作る道具。smoke_v172_genba.js / smoke_v175_genba.js の __mkdir と同じ形に、壊し方を足したもの。
@@ -295,6 +325,21 @@ window.__import = async function(obj, name){
   await __sleep(400);
 };
 window.__pids = j => ((j && j.chosho_photos) || []).filter(p => p && p.dataUri).map(p => String(p.id)).sort().join(',');
+/* 保存の途中で写真が入る（何枚も選んだ写真の取り込みの、最後の1枚）（第4回）。
+   保存が下書きを書いた直後（＝渡す・書く中身を作ったあと）に、handlePhotoFiles と同じように
+   画面の戸別へ足して（push）、photoKeepInto(M) で下書きへ控える。1回だけ。
+   ★下書きにもすぐ確定する★ 本当は、保存先を選ぶ画面・共有の画面で選んでいる数秒のあいだに確定する（試験の窓はすぐ閉じるので、ここで確定する） */
+window.__lateArm = function(id){
+  const op = persistDraft; let armed = true; window.__lateFired = 0;
+  window.__lateOff = () => { persistDraft = op; };
+  persistDraft = async function(){
+    const ret = await op.apply(this, arguments);
+    if(armed){ armed = false; window.__lateFired++;
+      M.chosho_photos.push({ label: suggestLabel(M.chosho_photos.length), dataUri: __png('#0a0'), id: id || 'late' });
+      await photoKeepInto(M); await op(); }
+    return ret;
+  };
+};
 window.__fileOf = (d, n) => { try{ return JSON.parse(d.__files[n]); }catch(_){ return null; } };
 window.__sideNames = d => Object.keys(d.__files).filter(n => /_現場預け_\\d{8}-\\d{6}/.test(n));
 window.__overlay = () => { const s = document.getElementById('save-ov-side'); return s ? s.textContent.trim() : ''; };
@@ -309,7 +354,10 @@ window.__tagOf = iso => { const d = new Date(iso); const p = n => String(n).padS
   /* 場面ごとに新しい入れ物で開く（覚え書きを持ち越さない） */
   async function fresh(name, cfg){
     cfg = cfg || {};
-    const ctx = await b.newContext({ viewport:{ width: cfg.width || 800, height: cfg.height || 1200 }, deviceScaleFactor:1.5, isMobile:true, hasTouch:true });
+    const ctx = await b.newContext(cfg.pc
+      ? { viewport:{ width: cfg.width || 1280, height: cfg.height || 900 }, deviceScaleFactor:1, isMobile:false, hasTouch:false, userAgent: UA_PC }
+      : { viewport:{ width: cfg.width || 800, height: cfg.height || 1200 }, deviceScaleFactor:1.5, isMobile:true, hasTouch:true,
+          userAgent: cfg.ua === 'android' ? UA_ANDROID : cfg.ua === 'iphone' ? UA_IPHONE : UA_TAB });
     await ctx.addInitScript(ANDROID_INIT, cfg);
     const page = await ctx.newPage();
     page.on('pageerror', e => errs.push('pageerror(' + name + '): ' + e.message));
@@ -345,12 +393,15 @@ window.__tagOf = iso => { const d = new Date(iso); const p = n => String(n).padS
              'sideShareChunks','sideAskDeliver','sideSaveFlow','sideShowResult','sideEscapeRun','saveCancelInfo','markDraftSidedFor',
              'saveRoute','saveRouteSet','saveDirForget','saveDirAfterBack','pcHitLooksPc','pcGuardSideMode','sideModeTryReturn',
              'pcGuardDirUseful','pcGuardLoadMissAsk','bulkSideOffer','saveShareAsSide'].filter(n => typeof window[n] !== 'function'),
+      f176c: ['isAndroidLike','saveDirMaybeDevice','sideBaseTrusted','saveHintShowParts','saveHintShowLabel','saveStale','photosMissing']
+             .filter(n => typeof window[n] !== 'function'),
       re: (typeof SIDE_NAME_RE !== 'undefined') ? [SIDE_NAME_RE.source, SIDE_NAME_RE.flags] : null
     }));
     console.log('⓪前提', JSON.stringify(r0));
     ok(r0.f.length === 0, '試験の前提: 無い関数がある → ' + r0.f.join(' / '));
     ok(!!WANT_VER && r0.ver === WANT_VER, '★画面の版番号がファイルの APP_VERSION と違う → 画面 ' + r0.ver + ' ／ ファイル ' + WANT_VER);
     ok(r0.f176.length === 0, '★版176 の関数が無い → ' + r0.f176.join(' / '));
+    ok(r0.f176c.length === 0, '★版176（第3回）の関数が無い → ' + r0.f176c.join(' / '));
     if(r0.f.length){ console.log('FAIL\n- ' + fails.join('\n- ')); await b.close(); process.exit(1); }
     /* ★メインと取り決めた預けの名前★ 先頭・末尾に固定しない（Android の「_1」・Dropbox の「 (1)」・共有の「.json.txt」） */
     ok(r0.re && r0.re[0] === '_(現場預け|振り分け)_\\d{8}-\\d{6}' && r0.re[1] === '',
@@ -1181,7 +1232,7 @@ window.__tagOf = iso => { const d = new Date(iso); const p = n => String(n).padS
        '★PCのファイルを読んだあとの預けの touched が「この端末で直した欄（電話・備考）」だけでない（PCの値＝工事のしかた などが入る）→ ' + J(r));
     ok(r.photos === 7 && r.proj === P1, '★預けに写真7枚・物件名が入っていない → ' + J(r));
   });
-  await scene('㉘b', {}, async page => {
+  await scene('㉘b', { pc:true }, async page => {      // PC（「リスト」は Dropbox のフォルダ）
     const r = await page.evaluate(async () => {
       const run = async (dirName) => {
         receptionSaveRows(__ledgerP1());
@@ -1693,7 +1744,7 @@ window.__tagOf = iso => { const d = new Date(iso); const p = n => String(n).padS
     ok(r.w2.shared === 1 && SIDE14.test(r.w2.names[0] || '') && r.why === 'resend' && r.photos === 't1' && r.len === '12' && r.w2.wrote.length === 0,
        '★「📮 事務所にも届ける」で、同じ戸別を別の名前で渡せない → ' + J([r.w2, r.why]));
   });
-  await scene('㊴b', {}, async page => {
+  await scene('㊴b', { pc:true }, async page => {      // PC（「リスト」は Dropbox のフォルダ）
     const r = await page.evaluate(async () => {
       await __state({ no:'2612MKM014', dirName:'リスト' });
       M.cable_main_len = '12'; M._touched = true; saveDraft();
@@ -1701,7 +1752,7 @@ window.__tagOf = iso => { const d = new Date(iso); const p = n => String(n).padS
       await __sleep(2600);
       return { w: { wrote: w.wrote, ov: w.ov }, still: !!document.getElementById('save-ov') };
     });
-    console.log('㊴bリストにいつもの保存', J(r));
+    console.log('㊴b(PC)リストにいつもの保存', J(r));
     const ov = last(r.w.ov);
     ok(r.w.wrote.indexOf('2612MKM014.json') >= 0 && /^保存しました/.test(ov.title || '') && !ov.escape && !r.still,
        '★PCの読む「リスト」に書いたのに、⚠・📮 を出した（または緑の知らせが閉じない）→ ' + J(r));
@@ -1779,6 +1830,518 @@ window.__tagOf = iso => { const d = new Date(iso); const p = n => String(n).padS
     ok(r.st.viewOnly === true, '試験の前提: 見るだけになっていない');
     ok(r.w.wrote.indexOf('2612MKM013.json') >= 0 && r.file && r.file.photos === 'pc1,pc2,pc3,pc4,pc5,pc6,t1' && !r.w.picks.some(t => /書けなかった/.test(t)),
        '★まとめて保存で、別名ファイルに写真6枚・工事完了があるのに書かない（預けに回した）／写真が欠けた → ' + J([r.w, r.file]));
+  });
+
+
+  /* ======== 版176 第3回の直し ======== */
+  /* ---------- ㊶ PC版のサイトを開いている Android タブレットも Android と見る ---------- */
+  await scene('㊶a', {}, async page => {
+    const r = await page.evaluate(async () => {
+      const env = { ua: navigator.userAgent, touch: navigator.maxTouchPoints | 0,
+                    android: (typeof isAndroidLike === 'function') ? isAndroidLike() : null };
+      await __state({ no:'2612MKM014', dirName:'リスト' });
+      M.cable_main_len = '12'; M._touched = true; saveDraft();
+      const w = await __watch(() => __press('btn-save'), 15000);
+      await __sleep(2600);                                   // 緑の知らせは 2.2秒で勝手に閉じる。閉じないこと
+      const still = !!document.getElementById('save-ov'), btn = __overlay();
+      try{ saveOverlayHide(); }catch(_){}
+      /* まとめて保存も：書いた戸別を「📮 書いた N件を事務所にも届ける」で渡せる */
+      M.cable_main_len = '13'; M._touched = true; await persistDraft();
+      __pickerMode = 'return'; __pickerRet = __copyDir(__D); __plan = [null];
+      const w2 = await __watch(async () => { await saveAllDrafts('unsaved'); await __sleep(1500); }, 20000);
+      return { env, w: { wrote: w.wrote, ov: w.ov }, still, btn, w2: { wrote: w2.wrote, picks: w2.picks.map(p => ({ title: p.title, rows: p.rows })) } };
+    });
+    console.log('㊶aPC版のサイトのタブレットでリストに保存', J(r));
+    ok(/X11; Linux x86_64/.test(r.env.ua) && !/Android/.test(r.env.ua) && r.env.touch > 0,
+       '試験の前提: PC版のサイトを開いたタブレット（名前は Linux・指で触れる）になっていない → ' + J(r.env));
+    ok(r.env.android === true, '★PC版のサイトを開いた Android タブレット（名前は「X11; Linux x86_64」）を Android と見ない → ' + J(r.env));
+    const ov = last(r.w.ov);
+    ok(r.w.wrote.indexOf('2612MKM014.json') >= 0 && /^保存しました/.test(ov.title || ''), '試験の前提: リスト に いつもの名前で書けていない → ' + J(r.w));
+    ok(r.still && ov.escape === 'resend' && /この端末の中だけのフォルダなら、事務所には届きません/.test(ov.msg || '') && /^📮 事務所にも届ける/.test(r.btn),
+       '★PC版のサイトを開いたタブレットで「リスト」に書いたのに、緑の「保存しました」が勝手に閉じた（⚠・「📮 事務所にも届ける」が無い）→ ' + J([r.still, ov, r.btn]));
+    ok(r.w2.wrote.indexOf('2612MKM014.json') >= 0 && r.w2.picks.some(p => (p.rows || []).some(t => /^📮 書いた 1件を事務所にも届ける/.test(t))),
+       '★PC版のサイトを開いたタブレットのまとめて保存で、「リスト」に書いたあと「📮 書いた N件を事務所にも届ける」を出さない → ' + J(r.w2));
+  });
+  await scene('㊶b', { pc:true }, async page => {
+    const r = await page.evaluate(() => {
+      if(typeof isAndroidLike !== 'function') return null;
+      const pc0 = isAndroidLike();                           // この入れ物そのもの（Windows・指で触れない）
+      const dev0 = saveDirMaybeDevice({ name:'リスト' });
+      const set = (ua, touch, plat) => {
+        Object.defineProperty(navigator, 'userAgent', { configurable:true, get: () => ua });
+        Object.defineProperty(navigator, 'maxTouchPoints', { configurable:true, get: () => touch });
+        Object.defineProperty(navigator, 'userAgentData', { configurable:true, get: () => (plat == null ? undefined : { platform: plat }) });
+        return isAndroidLike();
+      };
+      const W = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
+      const L = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
+      const out = {
+        win: set(W, 0, 'Windows'), winTouch: set(W, 10, 'Windows'),
+        mac: set('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 0, 'macOS'),
+        linuxPc: set(L, 0, 'Linux'),
+        cros: set('Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 10, 'Chrome OS'),
+        tabDesktop: set(L, 5, 'Linux'), tabNoData: set(L, 5, null),
+        android: set('Mozilla/5.0 (Linux; Android 14; SM-X210) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36', 5, 'Android'),
+        plat: set(L, 0, 'Android')
+      };
+      const dev1 = saveDirMaybeDevice({ name:'リスト' });     // 最後は Android（platform）
+      return Object.assign({ pc0, dev0, dev1 }, out);
+    });
+    console.log('㊶bAndroidの見分け', J(r));
+    ok(r && r.pc0 === false && r.dev0 === false, '試験の前提: Windows のPCの入れ物なのに Android と見た／PCの「リスト」を端末の中と見た → ' + J(r));
+    ok(r && r.win === false && r.winTouch === false && r.mac === false && r.linuxPc === false && r.cros === false,
+       '★Windows（指で触れるものも）・Mac・Linux のPC・Chromebook を Android と見た（PCの保存に ⚠ が出る）→ ' + J(r));
+    ok(r && r.tabDesktop === true && r.tabNoData === true && r.android === true && r.plat === true && r.dev1 === true,
+       '★PC版のサイトを開いた Android タブレット（Linux＋指で触れる／platform が Android）を Android と見ない → ' + J(r));
+  });
+
+  /* ---------- ㊷ 書いたあとの控えを当てにするのは、今の保存先そのもので、端末の中だけかもしれないフォルダでないときだけ ---------- */
+  await scene('㊷a', { ua:'android' }, async page => {
+    const r = await page.evaluate(async () => {
+      await __state({ no:'2612MKM014', dirName:'リスト' });  // Android：端末の中の「リスト」（親なし）
+      M.cable_main_len = '12'; M._touched = true; saveDraft();
+      const w1 = await __watch(() => __press('btn-save'), 15000);
+      const o1 = w1.ov[w1.ov.length - 1] || {};
+      try{ saveOverlayHide(); }catch(_){}
+      /* 次の日：備考を直して保存 → 書く許可が取れない → 📮 → 📤 */
+      M.chosho_note = '二日目の備考'; M._touched = true; saveDraft();
+      __D.__perm = 'prompt'; __D.__req = 'denied';
+      const w2 = await __watch(() => __press('btn-save'), 15000);
+      const o2 = w2.ov[w2.ov.length - 1] || {};
+      const btn = __overlay();
+      __plan = ['📤'];
+      const w3 = await __watch(async () => { __click('save-ov-side'); await __sleep(1500); }, 15000);
+      const j = w3.sharedTexts[0] ? JSON.parse(w3.sharedTexts[0]) : null;
+      return { ua: navigator.userAgent, wrote1: w1.wrote, esc1: o1.escape || '', esc2: o2.escape || '', btn, names: w3.sharedNames,
+               side: j && j._side, len: j && j.cable_main_len, note: j && j.chosho_note };
+    });
+    console.log('㊷aAndroidのリストに書いたあと📮', J(r));
+    ok(/Android/.test(r.ua) && r.wrote1.indexOf('2612MKM014.json') >= 0 && r.esc1 === 'resend' && r.esc2 === 'perm' && /事務所に預ける/.test(r.btn),
+       '試験の前提: Android の「リスト」に書けていない／許可が取れないときの 📮 が出ない → ' + J(r));
+    ok(r.names.length === 1 && SIDE14.test(r.names[0] || '') && r.side && r.side.why === 'perm' && r.len === '12' && r.note === '二日目の備考',
+       '試験の前提: 📮 で預けられない → ' + J([r.names, r.side, r.len]));
+    ok(r.side && Array.isArray(r.side.touched) && r.side.touched.indexOf('cable_main_len') >= 0 && r.side.touched.indexOf('chosho_note') >= 0,
+       '★Android の「リスト」（端末の中）に書いた控えを当てにして、前の日に入れた欄（主線の長さ）を直した欄（touched）から落とした（事務所で採られない）→ ' + J(r.side && r.side.touched));
+  });
+  await scene('㊷b', { pc:true }, async page => {
+    const r = await page.evaluate(async () => {
+      await __state({ no:'2612MKM014', dirName:'リスト' });  // PC：「リスト」
+      M.cable_main_len = '12'; M._touched = true; saveDraft();
+      const w1 = await __watch(() => __press('btn-save'), 15000);
+      try{ saveOverlayHide(); }catch(_){}
+      const b1 = fileBaseGet(M);
+      const it1 = await sideBuild(M, 'write');              // 同じ「リスト」のまま（書いたあとの控えを当てにしてよい）
+      /* 別の「リスト」（端末の中に作ったものなど）を選び直した → 前の「リスト」に書いた控えは、もう当てにしない */
+      const B = __mkdir('リスト', {}, {}); await saveDirSet(B, null); window.__D = B;
+      M.chosho_note = '選び直したあと'; M._touched = true; saveDraft();
+      const it2 = await sideBuild(M, 'write');
+      return { wrote: w1.wrote, base1: b1 && { from: b1.from, ep: !!b1.ep, rd: !!b1.rd }, t1: it1.state._side.touched, t2: it2.state._side.touched };
+    });
+    console.log('㊷bPCでリストを選び直したあと', J(r));
+    ok(r.wrote.indexOf('2612MKM014.json') >= 0 && r.base1 && r.base1.from === 'list' && r.base1.ep && !r.base1.rd,
+       '試験の前提: PCの「リスト」に書いた控えになっていない → ' + J(r));
+    ok(Array.isArray(r.t1) && r.t1.indexOf('cable_main_len') < 0, '★PCの「リスト」に書いた控え（同じフォルダのまま）を当てにしない → ' + J(r.t1));
+    ok(Array.isArray(r.t2) && r.t2.indexOf('cable_main_len') >= 0 && r.t2.indexOf('chosho_note') >= 0,
+       '★別の「リスト」を選び直したあとも、前のフォルダに書いた控えを当てにして、前に入れた欄を直した欄（touched）から落とした → ' + J(r.t2));
+  });
+
+  /* ---------- ㊸ PCのファイルらしくないファイルを読んでも、PCのファイルを読んだことにしない ---------- */
+  await scene('㊸a', {}, async page => {
+    const r = await page.evaluate(async () => {
+      const st = await __state({ no:'2612MKM013' });
+      /* この端末が前に「その2」へ書いた写し（写真 t1 だけ・未完了）を 📂 で読む（台帳は PCに写真6枚・工事完了） */
+      const own = { chosho_mgmt_no:'2612MKM013', chosho_cust_name:'工藤 一', work_type:'detached', chosho_note:'現場メモ',
+                    chosho_photos:[ __ph('t1', '#c33') ], editedAt:'2026-09-23T00:00:00.000Z' };
+      await __import(own, '2612MKM013.json');
+      const b = fileBaseGet(M);
+      const after = { base: !!b, rd: !!(b && b.rd) };
+      await saveDirForget();
+      M.chosho_note = '共有で直した'; M._touched = true; saveDraft();
+      const w = await __watch(() => __press('btn-save'), 15000);
+      const j = w.sharedTexts[0] ? JSON.parse(w.sharedTexts[0]) : null;
+      return { st, after, names: w.sharedNames, side: j && j._side, photos: __pids(j), ov: w.ov.map(o => o && o.title) };
+    });
+    console.log('㊸a薄い写しを📂で読んで共有', J(r));
+    ok(r.st.viewOnly === true && r.after.base, '試験の前提: 見るだけになっていない／📂 で読めていない → ' + J(r));
+    ok(!r.after.rd, '★台帳は PCに写真6枚・工事完了なのに、写真1枚の写しを 📂 で読んだだけで「PCのファイルを読んだ」ことにした → ' + J(r.after));
+    ok(r.names.length === 1 && SIDE13.test(r.names[0] || '') && r.side && r.side.why === 'share' && r.photos === 't1',
+       '★薄い写しを読んだだけの戸別を、共有で いつもの名前（2612MKM013.json）で渡した（事務所が Dropbox で「置き換え」ると PCの写真6枚が消える）→ ' + J(r));
+  });
+  await scene('㊸b', {}, async page => {
+    const r = await page.evaluate(async () => {
+      const dup = Object.assign(__pcFull(), { editedAt:'2026-10-12T00:00:00.000Z' });
+      const st = await __state({ dirName:'リスト', files: { '2612MKM013.json': JSON.stringify(__pcFile()), '2612MKM013 2.json': JSON.stringify(dup) } });
+      const b = fileBaseGet(M);
+      const base = b && { rd: !!b.rd, photos: b.photos.map(p => p.id).sort().join(',') };
+      const pb = (await pbaseIds('2612MKM013')).slice().sort().join(',');
+      const mine = __pids({ chosho_photos: M.chosho_photos });
+      const miss = await photosMissing(M, buildStateOf(M));   // 別名ファイルにしかない写真（pc4〜pc6）
+      await saveDirForget();
+      M.chosho_note = '共有で直した'; M._touched = true; saveDraft();
+      const w = await __watch(() => __press('btn-save'), 15000);
+      const j = w.sharedTexts[0] ? JSON.parse(w.sharedTexts[0]) : null;
+      return { st, base, pb, mine, miss, names: w.sharedNames, side: j && j._side, photos: __pids(j) };
+    });
+    console.log('㊸b薄いファイル＋別名ファイル', J(r));
+    ok(r.st.viewOnly === false && r.st.fromCase === true && r.base && r.mine === 'pc1,pc2,pc3,t1', '試験の前提: 別名ファイルで見るだけが外れていない → ' + J(r));
+    ok(r.base && !r.base.rd, '★読み込んだのは写真3枚のファイルなのに（6枚は別名ファイル）、「PCのファイルを読んだ」ことにした → ' + J(r.base));
+    ok(r.pb === 'pc1,pc2,pc3,pc4,pc5,pc6' && r.miss === 3,
+       '★別名ファイルにしかない写真（pc4〜pc6）を写真の歯止めに入れていない（その写真の無いファイルを いつもの名前で渡せる）→ ' + J([r.pb, r.miss]));
+    ok(r.names.length === 1 && SIDE13.test(r.names[0] || '') && r.side && r.side.why === 'share' && r.side.lacks === 3,
+       '★写真3枚のファイルを読んだだけの戸別を、共有で いつもの名前（2612MKM013.json）で渡した（PCの写真 pc4〜pc6 が抜ける）→ ' + J([r.names, r.side, r.photos]));
+  });
+
+  /* ---------- ㊹ フォルダに書いたときに足した _sideMerged を、そのあと共有で渡すファイルにも残す ---------- */
+  await scene('㊹', {}, async page => {
+    const r = await page.evaluate(async () => {
+      await __state({ no:'2612MKM014' });
+      savePlaceOkSet(__P1);
+      const A = '2026-10-01T00:00:00.000Z|2612MKM014', B = '2026-10-13T00:00:00.000Z|2612MKM014';
+      await __import(__pc14({ _sideMerged:[A] }), '2612MKM014.json');
+      /* そのあと事務所が別の預け（B）をまとめた → フォルダのファイルは [A, B] */
+      __D.__files['2612MKM014.json'] = JSON.stringify(__pc14({ _sideMerged:[A, B], editedAt:'2026-10-13T01:00:00.000Z' }));
+      M.cable_main_len = '12'; M._touched = true; saveDraft();
+      const w1 = await __watch(() => __press('btn-save'), 15000);
+      const f1 = __fileOf(__D, '2612MKM014.json');
+      try{ saveOverlayHide(); }catch(_){}
+      const pt = ((M._passthrough || {})._sideMerged || []).slice();
+      await saveDirForget();
+      M.chosho_note = '共有で直した'; M._touched = true; saveDraft();
+      const w2 = await __watch(() => __press('btn-save'), 15000);
+      const j = w2.sharedTexts[0] ? JSON.parse(w2.sharedTexts[0]) : null;
+      return { A, B, wrote: w1.wrote, fileStamps: f1 && f1._sideMerged, modelStamps: pt, names: w2.sharedNames, side: !!(j && j._side), sharedStamps: j && j._sideMerged };
+    });
+    console.log('㊹まとめた覚えを共有にも', J(r));
+    ok(r.wrote.indexOf('2612MKM014.json') >= 0 && JSON.stringify(r.fileStamps) === JSON.stringify([r.A, r.B]),
+       '試験の前提: フォルダのファイルに まとめた覚え [A, B] が入っていない → ' + J(r));
+    ok(r.names[0] === '2612MKM014.json' && !r.side, '試験の前提: PCのファイルを読んだ戸別を いつもの名前で渡せていない → ' + J(r.names));
+    ok(JSON.stringify(r.modelStamps) === JSON.stringify([r.A, r.B]) && JSON.stringify(r.sharedStamps) === JSON.stringify([r.A, r.B]),
+       '★フォルダに書いたときの まとめた覚え（事務所の新しい B）を画面の中身に入れず、そのあと共有で渡したファイルから落とした（同じ預けをもう一度まとめてしまう）→ ' + J([r.modelStamps, r.sharedStamps]));
+  });
+
+  /* ---------- ㊺ 共有で渡す道の案内は、Dropbox で見つかる名前（その１ ＞ リスト） ---------- */
+  await scene('㊺', {}, async page => {
+    const r = await page.evaluate(async () => {
+      await __state({ no:'2612MKM014' });                    // 端末の中の「その2」（受付台帳の物件と違う）
+      __plan = [null];
+      const w0 = await __watch(async () => { await savePlaceCheckAfterImport(); await __sleep(300); }, 10000);
+      await saveDirForget(); renderSaveBar(); await __sleep(100);
+      const sb = document.getElementById('sb-dest');
+      const bar = { text: sb ? sb.textContent.replace(/\s+/g, ' ').trim() : '', title: sb ? (sb.getAttribute('title') || '') : '' };
+      const forget = saveForgetDoneText();
+      const line = saveHintLine();
+      saveOverlayShow('2612MKM014.json');
+      const ovs = ((document.getElementById('save-ov') || {}).innerText || '').replace(/\s+/g, ' ');
+      try{ saveOverlayHide(); }catch(_){}
+      return { pick: w0.picks[0] || null, bar, forget, line, ovs, hint: saveHintName(), route: saveRoute() };
+    });
+    console.log('㊺共有の案内の名前', J(r));
+    const p = r.pick || {};
+    const i = (p.rows || []).findIndex(t => /^📤/.test(t));
+    const sub = i >= 0 ? (p.subs || [])[i] : '';
+    ok(r.hint === P1 + '/リスト' && r.route === 'share', '試験の前提: フォルダを覚えるのをやめたあと、入れる場所が「その１ の物件/リスト」になっていない → ' + J([r.hint, r.route]));
+    ok(/「その１ ＞ リスト」/.test(sub) && sub.indexOf(P1) < 0,
+       '★取り込みのあとの窓の「📤 フォルダを覚えるのをやめて、共有で渡す」の説明が、Dropbox に無い物件の正式名で言う → ' + sub);
+    ok(/その１/.test(r.bar.text) && r.bar.text.indexOf(P1) < 0 && /「その１ ＞ リスト」/.test(r.bar.title) && r.bar.title.indexOf(P1) < 0,
+       '★保存バーの「📤 共有で渡す（…）」が、Dropbox に無い物件の正式名で言う → ' + J(r.bar));
+    ok(/「その１ ＞ リスト」/.test(r.forget) && r.forget.indexOf(P1) < 0,
+       '★「フォルダを覚えるのをやめました」の知らせが、Dropbox に無い物件の正式名で言う → ' + r.forget);
+    ok(/「その１」フォルダの中の「リスト」/.test(r.line) && r.line.indexOf(P1) < 0,
+       '★共有で渡したあとの案内（★入れる場所★）が、Dropbox に無い物件の正式名で言う → ' + r.line);
+    ok(/入れる所：その１ ＞ リスト/.test(r.ovs) && r.ovs.indexOf(P1) < 0, '★保存中の「入れる所」が、Dropbox に無い物件の正式名で言う → ' + r.ovs);
+  });
+
+  /* ---------- ㊻ 共有の画面が出ているあいだに中身が変わったら、いま開いている戸別を「保存済」にしない ---------- */
+  await scene('㊻a', {}, async page => {
+    const r = await page.evaluate(async () => {
+      await __state({ no:'2612MKM014' });
+      await __import(__pc14(), '2612MKM014.json');
+      await saveDirForget();
+      M.chosho_note = '共有で直した'; M._touched = true; saveDraft();
+      await __sleep(600);
+      const os = navigator.share; let n = 0;
+      navigator.share = async d => {
+        await os(d);
+        if(!n++){ M.chosho_photos.push(__ph('late', '#0a0')); saveDraft(); await persistDraft(); }   // 共有の画面が出ているあいだに写真の取り込みが終わった（下書きにも入った）
+        await __sleep(700);
+      };
+      const w = await __watch(async () => { await saveAllDrafts('unsaved'); await __sleep(800); }, 20000);
+      const j = w.sharedTexts[0] ? JSON.parse(w.sharedTexts[0]) : null;
+      await __sleep(800);
+      const rec = await idbGet(M._lastDraftKey);
+      await refreshDraftInfo(true);
+      const r1 = { names: w.sharedNames, sent: __pids(j), m: __pids({ chosho_photos: M.chosho_photos }), rev: rec.rev | 0, fileRev: rec.fileRev | 0,
+                   stale: saveStale(), h: handoverOf(draftInfoOf('2612MKM014')) };
+      /* もう一度まとめて保存（中身は変わらない）→ 保存済になる */
+      navigator.share = os;
+      const w2 = await __watch(async () => { await saveAllDrafts('unsaved'); await __sleep(800); }, 20000);
+      const j2 = w2.sharedTexts[0] ? JSON.parse(w2.sharedTexts[0]) : null;
+      await __sleep(800);
+      const rec2 = await idbGet(M._lastDraftKey);
+      return { r1, r2: { names: w2.sharedNames, sent: __pids(j2), rev: rec2.rev | 0, fileRev: rec2.fileRev | 0, stale: saveStale() } };
+    });
+    console.log('㊻aまとめて保存（共有）のあいだに写真', J(r));
+    ok(r.r1.names.length === 1 && r.r1.names[0] === '2612MKM014.json' && r.r1.sent === 'q1,t1' && r.r1.m === 'late,q1,t1',
+       '試験の前提: いつもの名前で渡せていない／あとから入った写真が画面に無い → ' + J(r.r1));
+    ok(r.r1.fileRev < r.r1.rev && r.r1.stale === true && r.r1.h !== 'ok',
+       '★共有の画面が出ているあいだに入った写真（渡したファイルには無い）まで「保存済」にした（まとめて保存から外れ、その写真が渡らない）→ ' + J(r.r1));
+    ok(r.r2.names[0] === '2612MKM014.json' && r.r2.sent === 'late,q1,t1' && r.r2.fileRev === r.r2.rev && r.r2.stale === false,
+       '★中身が変わっていない2回目のまとめて保存で「保存済」にならない → ' + J(r.r2));
+  });
+  await scene('㊻b', {}, async page => {
+    const r = await page.evaluate(async () => {
+      await __state({ no:'2612MKM014' });
+      await __import(__pc14(), '2612MKM014.json');
+      await saveDirForget();
+      M.chosho_note = '共有で直した'; M._touched = true; saveDraft();
+      await __sleep(600);
+      const os = navigator.share; let n = 0;
+      navigator.share = async d => {
+        await os(d);
+        if(!n++){ M.chosho_photos.push(__ph('late', '#0a0')); saveDraft(); await persistDraft(); }   // 同じ（下書きにも入った）
+        await __sleep(300);
+      };
+      const w = await __watch(() => __press('btn-save'), 15000);
+      const j = w.sharedTexts[0] ? JSON.parse(w.sharedTexts[0]) : null;
+      await __sleep(800);
+      const rec = await idbGet(M._lastDraftKey);
+      const o = w.ov[w.ov.length - 1] || {};
+      const r1 = { names: w.sharedNames, sent: __pids(j), m: __pids({ chosho_photos: M.chosho_photos }), rev: rec.rev | 0, fileRev: rec.fileRev | 0,
+                   stale: saveStale(), title: o.title || '', msg: o.msg || '' };
+      try{ saveOverlayHide(); }catch(_){}
+      navigator.share = os;
+      const w2 = await __watch(() => __press('btn-save'), 15000);
+      const j2 = w2.sharedTexts[0] ? JSON.parse(w2.sharedTexts[0]) : null;
+      await __sleep(800);
+      const rec2 = await idbGet(M._lastDraftKey);
+      return { r1, r2: { names: w2.sharedNames, sent: __pids(j2), rev: rec2.rev | 0, fileRev: rec2.fileRev | 0, stale: saveStale() } };
+    });
+    console.log('㊻b1件の保存（共有）のあいだに写真', J(r));
+    ok(r.r1.names.length === 1 && r.r1.names[0] === '2612MKM014.json' && r.r1.sent === 'q1,t1' && r.r1.m === 'late,q1,t1' && /共有で渡しました/.test(r.r1.title),
+       '試験の前提: いつもの名前で渡せていない／あとから入った写真が画面に無い → ' + J(r.r1));
+    ok(r.r1.fileRev < r.r1.rev && r.r1.stale === true && /まだ渡していません/.test(r.r1.msg),
+       '★1件の保存（共有）で、共有の画面が出ているあいだに入った写真まで「保存済」にした（またはそのことを言わない）→ ' + J(r.r1));
+    ok(r.r2.names[0] === '2612MKM014.json' && r.r2.sent === 'late,q1,t1' && r.r2.fileRev === r.r2.rev && r.r2.stale === false,
+       '★中身が変わっていない2回目の保存で「保存済」にならない → ' + J(r.r2));
+  });
+
+  /* ---------- ㊼ 1件の保存（共有）：保存が下書きを書いているあいだに入った写真も「渡した」にしない ---------- */
+  await scene('㊼', {}, async page => {
+    const r = await page.evaluate(async () => {
+      await __state({ no:'2612MKM014' });
+      await __import(__pc14(), '2612MKM014.json');           // PCのファイルを読んだ＝いつもの名前で渡す
+      await saveDirForget();
+      M.chosho_note = '共有で直した'; M._touched = true; saveDraft();
+      await __sleep(800);
+      __lateArm();
+      const os = navigator.share;
+      navigator.share = async d => { await os(d); await __sleep(1200); };   // 共有の画面で Dropbox を選ぶのに1秒ほど
+      const w = await __watch(() => __press('btn-save'), 15000);
+      __lateOff(); navigator.share = os;
+      await __sleep(1200);
+      const j = w.sharedTexts[0] ? JSON.parse(w.sharedTexts[0]) : null;
+      const rec = await idbGet(M._lastDraftKey);
+      const o = w.ov[w.ov.length - 1] || {};
+      await refreshDraftInfo(true);
+      const r1 = { fired: __lateFired, names: w.sharedNames, sent: __pids(j), m: __pids(M), rev: rec.rev | 0, fileRev: rec.fileRev | 0,
+                   stale: saveStale(), h: handoverOf(draftInfoOf('2612MKM014')), title: o.title || '', msg: o.msg || '' };
+      try{ saveOverlayHide(); }catch(_){}
+      const w2 = await __watch(() => __press('btn-save'), 15000);
+      const j2 = w2.sharedTexts[0] ? JSON.parse(w2.sharedTexts[0]) : null;
+      await __sleep(800);
+      const rec2 = await idbGet(M._lastDraftKey);
+      return { r1, r2: { names: w2.sharedNames, sent: __pids(j2), rev: rec2.rev | 0, fileRev: rec2.fileRev | 0, stale: saveStale() } };
+    });
+    console.log('㊼1件の保存（共有）：下書きを書くあいだに写真', J(r));
+    ok(r.r1.fired === 1 && r.r1.names.length === 1 && r.r1.names[0] === '2612MKM014.json' && r.r1.sent === 'q1,t1' && r.r1.m === 'late,q1,t1'
+       && /共有で渡しました/.test(r.r1.title),
+       '試験の前提: いつもの名前で渡せていない／保存の途中で写真が入っていない（渡す中身を作ったあとに入っていない）→ ' + J(r.r1));
+    ok(r.r1.fileRev < r.r1.rev && r.r1.stale === true && r.r1.h !== 'ok' && /まだ渡していません/.test(r.r1.msg),
+       '★1件の保存（共有）で、下書きを書いているあいだに入った写真（渡したファイルには無い）まで「保存済」にした（またはそのことを言わない）→ ' + J(r.r1));
+    ok(r.r2.names[0] === '2612MKM014.json' && r.r2.sent === 'late,q1,t1' && r.r2.fileRev === r.r2.rev && r.r2.stale === false,
+       '★もう一度「保存」を押しても、その写真が渡らない／「保存済」にならない → ' + J(r.r2));
+  });
+
+  /* ---------- ㊽ 保存の途中で入った写真があれば「保存済」にしない（フォルダ・保存先を選ぶ画面・ダウンロード・まとめて保存） ---------- */
+  await scene('㊽a', { pc:true }, async page => {
+    const r = await page.evaluate(async () => {
+      await __state({ no:'2612MKM014', dirName:'リスト', files: { '2612MKM014.json': JSON.stringify(__pc14()) } });
+      const parent = __mkdir('その１', {}, { 'リスト': __D });
+      await saveDirSet(__D, parent);                         // PCの Dropbox「その１ ＞ リスト」
+      savePlaceOkSet(__P1);
+      M.cable_main_len = '12'; M._touched = true; saveDraft();
+      await __sleep(800);
+      __lateArm();
+      const w = await __watch(() => __press('btn-save'), 15000);
+      __lateOff();
+      await __sleep(1200);
+      const f = __fileOf(__D, '2612MKM014.json');
+      const rec = await idbGet(M._lastDraftKey);
+      const o = w.ov[w.ov.length - 1] || {};
+      await refreshDraftInfo(true);
+      const r1 = { fired: __lateFired, wrote: w.wrote, title: o.title || '', warn: !!o.warn, msg: o.msg || '', written: __pids(f), m: __pids(M),
+                   rev: rec.rev | 0, fileRev: rec.fileRev | 0, stale: saveStale(), h: handoverOf(draftInfoOf('2612MKM014')) };
+      try{ saveOverlayHide(); }catch(_){}
+      const w2 = await __watch(() => __press('btn-save'), 15000);
+      await __sleep(800);
+      const f2 = __fileOf(__D, '2612MKM014.json');
+      const rec2 = await idbGet(M._lastDraftKey);
+      const o2 = w2.ov[w2.ov.length - 1] || {};
+      return { r1, r2: { wrote: w2.wrote, written: __pids(f2), title: o2.title || '', warn: !!o2.warn, rev: rec2.rev | 0, fileRev: rec2.fileRev | 0, stale: saveStale() } };
+    });
+    console.log('㊽aフォルダに書く道：保存の途中で写真', J(r));
+    ok(r.r1.fired === 1 && r.r1.wrote.length === 1 && r.r1.written === 'q1,t1' && /late/.test(r.r1.m) && /保存しました/.test(r.r1.title),
+       '試験の前提: 「その１ ＞ リスト」に書けていない／保存の途中で写真が入っていない → ' + J(r.r1));
+    ok(r.r1.fileRev < r.r1.rev && r.r1.stale === true && r.r1.h !== 'ok',
+       '★フォルダに書いた保存で、書いたファイルに入っていない写真（保存の途中で入った）まで「保存済」にした（まとめて保存から外れ、その写真が PC に渡らない）→ ' + J(r.r1));
+    ok(/保存の途中で入った写真は、まだ渡していません/.test(r.r1.msg) && r.r1.warn === true,
+       '★保存の途中で入った写真がまだ渡っていないことを言わない（緑の「保存しました」で閉じる）→ ' + J(r.r1));
+    ok(r.r2.written === 'late,q1,t1' && r.r2.fileRev === r.r2.rev && r.r2.stale === false && r.r2.warn === false,
+       '★もう一度「保存」を押しても、その写真が書けない／「保存済」にならない／⚠ のまま → ' + J(r.r2));
+  });
+  await scene('㊽b', { pc:true, savePicker:true }, async page => {
+    const r = await page.evaluate(async () => {
+      await __state({ no:'2612MKM014', noDir:true });
+      const d = __mkdir('リスト', {}, {});
+      window.__savePickerRet = await d.getFileHandle('2612MKM014.json', { create:true });
+      M.cable_main_len = '12'; M._touched = true; saveDraft();
+      await __sleep(800);
+      __lateArm();
+      const w = await __watch(() => __press('btn-save'), 15000);
+      __lateOff();
+      await __sleep(1200);
+      const f = __fileOf(d, '2612MKM014.json');
+      const rec = await idbGet(M._lastDraftKey);
+      const o = w.ov[w.ov.length - 1] || {};
+      const r1 = { fired: __lateFired, picker: __savePickerCalls, title: o.title || '', warn: !!o.warn, msg: o.msg || '', written: __pids(f), m: __pids(M),
+                   rev: rec.rev | 0, fileRev: rec.fileRev | 0, stale: saveStale() };
+      try{ saveOverlayHide(); }catch(_){}
+      const w2 = await __watch(() => __press('btn-save'), 15000);
+      await __sleep(800);
+      const f2 = __fileOf(d, '2612MKM014.json');
+      const rec2 = await idbGet(M._lastDraftKey);
+      const o2 = w2.ov[w2.ov.length - 1] || {};
+      return { r1, r2: { written: __pids(f2), title: o2.title || '', rev: rec2.rev | 0, fileRev: rec2.fileRev | 0, stale: saveStale() } };
+    });
+    console.log('㊽b保存先を選ぶ画面の道：保存の途中で写真', J(r));
+    ok(r.r1.fired === 1 && r.r1.picker === 1 && r.r1.written === 't1' && r.r1.m === 'late,t1' && /保存しました/.test(r.r1.title),
+       '試験の前提: 保存先を選ぶ画面で書けていない／保存の途中で写真が入っていない → ' + J(r.r1));
+    ok(r.r1.fileRev < r.r1.rev && r.r1.stale === true && /保存の途中で入った写真は、まだ渡していません/.test(r.r1.msg) && r.r1.warn === true,
+       '★保存先を選ぶ画面で書いた保存で、書いたファイルに入っていない写真まで「保存済」にした（またはそのことを言わない）→ ' + J(r.r1));
+    ok(r.r2.written === 'late,t1' && r.r2.fileRev === r.r2.rev && r.r2.stale === false,
+       '★もう一度「保存」を押しても、その写真が書けない／「保存済」にならない → ' + J(r.r2));
+  });
+  await scene('㊽c', { noShare:true }, async page => {
+    const r = await page.evaluate(async () => {
+      await __state({ no:'2612MKM014', noDir:true });
+      M.cable_main_len = '12'; M._touched = true; saveDraft();
+      await __sleep(800);
+      __lateArm();
+      const w = await __watch(() => __press('btn-save'), 15000);
+      __lateOff();
+      const rd = async () => { try{ return JSON.parse(await (await fetch(__dlHref[__dlHref.length - 1])).text()); }catch(_){ return null; } };
+      const j = await rd();
+      await __sleep(800);
+      const rec = await idbGet(M._lastDraftKey);
+      const o = w.ov[w.ov.length - 1] || {};
+      const r1 = { fired: __lateFired, dl: w.dl, title: o.title || '', msg: o.msg || '', sent: __pids(j), m: __pids(M),
+                   rev: rec.rev | 0, fileRev: rec.fileRev | 0, stale: saveStale() };
+      try{ saveOverlayHide(); }catch(_){}
+      const w2 = await __watch(() => __press('btn-save'), 15000);
+      const j2 = await rd();
+      await __sleep(800);
+      const rec2 = await idbGet(M._lastDraftKey);
+      return { r1, r2: { dl: w2.dl, sent: __pids(j2), rev: rec2.rev | 0, fileRev: rec2.fileRev | 0, stale: saveStale() } };
+    });
+    console.log('㊽cダウンロードの道：保存の途中で写真', J(r));
+    ok(r.r1.fired === 1 && r.r1.dl.length === 1 && r.r1.dl[0] === '2612MKM014.json' && r.r1.sent === 't1' && r.r1.m === 'late,t1'
+       && /ダウンロードに入れました/.test(r.r1.title),
+       '試験の前提: ダウンロードに入れていない／保存の途中で写真が入っていない → ' + J(r.r1));
+    ok(r.r1.fileRev < r.r1.rev && r.r1.stale === true && /保存の途中で入った写真は、まだ渡していません/.test(r.r1.msg),
+       '★ダウンロードの保存で、入れたファイルに入っていない写真まで「保存済」にした（またはそのことを言わない）→ ' + J(r.r1));
+    ok(r.r2.dl[0] === '2612MKM014.json' && r.r2.sent === 'late,t1' && r.r2.fileRev === r.r2.rev && r.r2.stale === false,
+       '★もう一度「保存」を押しても、その写真が入らない／「保存済」にならない → ' + J(r.r2));
+  });
+  await scene('㊽d', { pc:true }, async page => {
+    const r = await page.evaluate(async () => {
+      await __state({ no:'2612MKM014', dirName:'リスト', files: { '2612MKM014.json': JSON.stringify(__pc14()) } });
+      const parent = __mkdir('その１', {}, { 'リスト': __D });
+      await saveDirSet(__D, parent);
+      savePlaceOkSet(__P1);
+      M.cable_main_len = '12'; M._touched = true; await persistDraft();
+      /* まとめて保存がファイルを書いて読み返した直後に、最後の写真が入る（中身はもう作ってある） */
+      const ov = saveVerify; let n = 0;
+      saveVerify = async function(){
+        const ret = await ov.apply(this, arguments);
+        if(!n++){ M.chosho_photos.push({ label: suggestLabel(M.chosho_photos.length), dataUri: __png('#0a0'), id: 'late' }); await photoKeepInto(M);
+                  await persistDraft(); }   // 何件も書くあいだに、下書きにも控えられた
+        return ret;
+      };
+      __pickerMode = 'return'; __pickerRet = __copyDir(__D); __plan = [null];
+      const w = await __watch(async () => { await saveAllDrafts('unsaved'); await __sleep(1500); }, 20000);
+      saveVerify = ov;
+      const f = __fileOf(__D, '2612MKM014.json');
+      const rec = await idbGet(M._lastDraftKey);
+      await refreshDraftInfo(true);
+      const r1 = { fired: n, wrote: w.wrote, written: __pids(f), m: __pids(M), rev: rec.rev | 0, fileRev: rec.fileRev | 0,
+                   stale: saveStale(), h: handoverOf(draftInfoOf('2612MKM014')), said: w.said.filter(s => /保存の途中/.test(s)) };
+      __pickerMode = 'return'; __pickerRet = __copyDir(__D); __plan = [null];
+      const w2 = await __watch(async () => { await saveAllDrafts('unsaved'); await __sleep(1500); }, 20000);
+      const f2 = __fileOf(__D, '2612MKM014.json');
+      const rec2 = await idbGet(M._lastDraftKey);
+      await refreshDraftInfo(true);
+      return { r1, r2: { wrote: w2.wrote, written: __pids(f2), rev: rec2.rev | 0, fileRev: rec2.fileRev | 0, stale: saveStale(),
+                         h: handoverOf(draftInfoOf('2612MKM014')), said: w2.said.filter(s => /保存の途中/.test(s)) } };
+    });
+    console.log('㊽dまとめて保存（フォルダ）：保存の途中で写真', J(r));
+    ok(r.r1.fired === 1 && r.r1.wrote.length === 1 && r.r1.written === 'q1,t1' && /late/.test(r.r1.m),
+       '試験の前提: まとめて保存で「その１ ＞ リスト」に書けていない／保存の途中で写真が入っていない → ' + J(r.r1));
+    ok(r.r1.fileRev < r.r1.rev && r.r1.stale === true && r.r1.h !== 'ok',
+       '★まとめて保存（フォルダ）で、書いたファイルに入っていない写真（保存の途中で入った）まで「保存済」にした → ' + J(r.r1));
+    ok(r.r1.said.length === 1 && /2612MKM014/.test(r.r1.said[0]) && /まだ渡していません/.test(r.r1.said[0]),
+       '★まとめて保存で、保存の途中で入った写真がまだ渡っていないことを言わない → ' + J(r.r1.said));
+    ok(r.r2.wrote.length === 1 && r.r2.written === 'late,q1,t1' && r.r2.fileRev === r.r2.rev && r.r2.stale === false && r.r2.h === 'ok' && !r.r2.said.length,
+       '★もう一度まとめて保存しても、その写真が書けない／「保存済」にならない → ' + J(r.r2));
+  });
+
+  /* ---------- ㊾ iPhone も、入れる場所は Dropbox で見つかる名前（その１ ＞ リスト） ---------- */
+  await scene('㊾', { ua:'iphone' }, async page => {
+    const r = await page.evaluate(async () => {
+      await __state({ no:'2612MKM014', noDir:true });
+      renderSaveBar(); await __sleep(100);
+      const sb = document.getElementById('sb-dest');
+      const bar = { text: sb ? sb.textContent.replace(/\s+/g, ' ').trim() : '', title: sb ? (sb.getAttribute('title') || '') : '' };
+      saveOverlayShow('2612MKM014.json');
+      const ovs = ((document.getElementById('save-ov') || {}).innerText || '').replace(/\s+/g, ' ');
+      try{ saveOverlayHide(); }catch(_){}
+      M.cable_main_len = '12'; M._touched = true; saveDraft();
+      await __sleep(600);
+      const w = await __watch(() => __press('btn-save'), 15000);
+      const o = w.ov[w.ov.length - 1] || {};
+      try{ saveOverlayHide(); }catch(_){}
+      /* 同じ iPhone で、見るだけの 2612MKM013 を 📮 → 📤 */
+      const row = getReceptionRows().find(x => x.mgmt_no === '2612MKM013');
+      await openFromReception(row); await __sleep(300);
+      M.chosho_note = 'メモ'; M._touched = true; saveDraft(); await __sleep(500);
+      __plan = ['📮', '📤'];
+      const w2 = await __watch(() => __press('btn-save'), 15000);
+      const p1 = w2.picks[1] || {};
+      const i = (p1.rows || []).findIndex(t => /^📤/.test(t));
+      return { ua: /iPhone/.test(navigator.userAgent), dirPicker: !!window.showDirectoryPicker, route: saveRoute(), hint: saveHintName(),
+               bar, ovs, names: w.sharedNames, title: o.title || '', msg: o.msg || '', where: saveHintWhere(),
+               sideSub: i >= 0 ? (p1.subs || [])[i] : '', sideNames: w2.sharedNames };
+    });
+    console.log('㊾iPhone の入れる場所の名前', J(r));
+    ok(r.ua && !r.dirPicker && r.route === '' && r.hint === P1 + '/リスト' && r.names[0] === '2612MKM014.json' && /共有で渡しました/.test(r.title),
+       '試験の前提: iPhone（フォルダを選べない）で、入れる場所が「その１ の物件/リスト」でない／共有で渡せていない → ' + J([r.ua, r.dirPicker, r.route, r.hint, r.names, r.title]));
+    ok(/物件情報_調書 ＞ その１ ＞ リスト/.test(r.sideSub) && r.sideNames.length === 1 && SIDE13.test(r.sideNames[0]),
+       '試験の前提: 📮 → 📤 の説明が「その１ ＞ リスト」でない／預けを渡せていない → ' + J([r.sideSub, r.sideNames]));
+    ok(/その１/.test(r.bar.text) && r.bar.text.indexOf(P1) < 0 && /「その１」/.test(r.bar.title) && r.bar.title.indexOf(P1) < 0,
+       '★iPhone の保存バーが、Dropbox に無い物件の正式名で入れる場所を言う（📮 は「その１ ＞ リスト」と言う）→ ' + J(r.bar));
+    ok(/入れる所：その１ ＞ リスト/.test(r.ovs) && r.ovs.indexOf(P1) < 0, '★iPhone の保存中の「入れる所」が、Dropbox に無い物件の正式名で言う → ' + r.ovs);
+    ok(/★入れる場所：「その１」フォルダの中の「リスト」フォルダ★/.test(r.msg) && r.msg.indexOf(P1) < 0,
+       '★iPhone で共有で渡したあとの案内（★入れる場所★）が、Dropbox に無い物件の正式名で言う → ' + r.msg);
+    ok(r.where === '「その１」フォルダの中の「リスト」', '★iPhone の「入れる場所」の言い方が「その１」でない → ' + r.where);
   });
 
   /* ---------- ㉚d 幅320px：まとめて保存の「閉じた」窓・端末の中のフォルダの知らせ ---------- */
