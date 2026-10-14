@@ -250,6 +250,9 @@ const fails = []; const ok = (c, m) => { if(!c) fails.push(m); };
       const odp = window.showDirectoryPicker, og = saveDirGet, oo = saveDirOk, osh = window.shareFilesSmart;
       const onav = navigator.share;
       let share = 0, dl = 0;
+      /* 版176：知らせは「📮 まとめて事務所に預ける」を並べた選ぶ窓で出る。出た文を控えて「やめる」で閉じる */
+      const opk = uiPickName;
+      uiPickName = async (t, n) => { window.__alerts.push(String(t || '') + ' ' + String(n || '').replace(/<[^>]+>/g, '')); return null; };
       window.showDirectoryPicker = async () => { throw thrown(); };
       saveDirGet = async () => { out.dirGet = true; return null; };
       saveDirOk = async () => true;
@@ -261,6 +264,7 @@ const fails = []; const ok = (c, m) => { if(!c) fails.push(m); };
       await saveAllDrafts();
       HTMLAnchorElement.prototype.click = oc;
       window.showDirectoryPicker = odp; saveDirGet = og; saveDirOk = oo; window.shareFilesSmart = osh;
+      uiPickName = opk;
       try{ Object.defineProperty(navigator, 'share', { configurable:true, value: onav }); }catch(_){}
       return { share, dl, alerts: window.__alerts.join(' / '), saved: await __countSaved() };
     };

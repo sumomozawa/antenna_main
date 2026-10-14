@@ -1,0 +1,961 @@
+/* 版176（メイン）
+   現場入力が【見るだけ】・許可切れ・保存先の違いで「何も書けない」ときの逃げ道として、
+   別の名前（管理番号_現場預け_YYYYMMDD-HHMMSS.json・中に _side）でファイルを渡すようになった（📮 事務所に預ける）。
+   PC はそれを戸別の行にせず、「📮 預かりを振り分ける」で正しい物件のリストの 管理番号.json へ1つにまとめる。
+   メイン側の決まりを場面ごとに確かめる。
+     ⓪ 前提（関数がそろっている・版番号がファイルと同じ・預けの名前の目印が現場入力と同じ／先頭・末尾に固定しない）
+     ① 📁 フォルダで読む：預け（名前で分かるもの・中に _side があるもの・名前の変わったもの）は行にしない。
+        一覧の外（_sideFiles）に名前と場所だけ覚える（中身・写真は持たない）。🧩 を勧めない。知らせに件数。
+        読み直しても同じ。預けを片付けたあと読み直しても「見当たりません」と言わない
+     ② 📄 ファイルで読む：預けは行にしない。「📁 フォルダで読み込むと振り分けできます」と言う
+     ③ 振り分け・まとめる：その２ に落ちた預けを、その１/リスト の 管理番号.json へ。
+        写真は和集合・工程の印は外れない（入れる方向だけ）・現場で直した欄（touched）だけ採る・PCだけの欄は採らない・
+        状態は進む方向だけ・_sideMerged に印・_side は入れない・まとめる前の控え＝元の中身・預けの控え＝預けの中身・預けは消える。
+        写真フォルダの中は探さない。同じ預けをもう一度置いて押すと「まとめ済み」＝戸別ファイルは1バイトも変えず、預けを片付けるだけ
+     ④ 合わせ方（sideMergeInto）だけ：touched の無い古い預け＝PCで空の欄だけ埋める／管理番号は変えない／
+        工程の日時は PC が空のときだけ／名前だけの空の写真枠は残す／前の印を残して足す
+     ⑤ 書いたあと読み返したら合わない → 元の中身に戻す・預けは消さない
+        ⑤b 合わせ方が写真を1枚落とした → 写真の id を全部確かめて気づき、元に戻す（預けは消さない）
+     ⑥ 書いたあと読み返せない → 戻さない（他の端末の保存を潰さない）・預けも消さない
+     ⑦ 控えが取れない：行き先の控え → 何も書かない／預けの控え → 預けを消さない（次に押すと片付けるだけ）
+     ⑧ まとめている間に別のPCが保存した → 何も書かない（「もう一度」）
+     ⑨ 新しく置く：行き先が証拠（_side.proj・このPCの物件）で決まったときだけ 管理番号.json を作る。
+        分からない・手で選んだ・暗号化・0KB・壊れ は触らない（理由を出す）
+     ⑩ 迷子（同じ管理番号が2つの物件のリストに）：並べて知らせるだけ・どれも触らない
+     ⑪ 読み込んだ一覧に関係するとき：振り分けたあと一覧を読み直す（まとめた中身が出る・見当たらない扱いにしない）。
+        a) その１/リスト を読んでいて上のフォルダを選ぶ　b) その２/リスト（預けがある所）を読んでいて その１ を選ぶ
+     ⑫ 開いて直している途中・台帳で直したまま（_editingRow・_lgEdited）の戸別は触らない
+     ⑬ 同じ戸別に預けが2つ（新しい戸別）：古い方で置き、新しい方をそこへまとめる。読み込んだ一覧の預けと2回数えない
+     ⑭ いつもの名前のファイルに _side が入ってしまったもの：一覧には出ないが、振り分けで印だけ外して戻す（消さない）
+     ⑮ 📥 現場取込で預けを選ぶ：直した欄だけ・工程の印は外れない（受付台帳の同意書も）・似た写真を捨てる選択を出さない・
+        写真は和集合・まとめた印。同じ預けをもう一度取り込もうとすると「もうまとめてあります」
+     ⑯ PC が いつもの名前で書くとき（buildIndividualContent・💾 戸別ファイルへ反映）_side を入れない。_sideMerged は残す
+     ⑰ フォルダの選び方：前に選んだフォルダの許可が断られた → 何も変えず忘れる（次はフォルダを選ぶ画面）・
+        閉じた → 黙る・許可があれば選び直さない・選ぶ画面は書き込み（readwrite）で開く
+     ⑱ 閲覧用（antenna_viewer）：ボタンを出さない・知らせを出さない・押しても何もしない／ビューアがメインから作り直してある。
+        試験しているメインでも、閲覧専用の印が立っていればフォルダを選ばせない・知らせを出さない
+   ★場面ごとに新しいブラウザの入れ物（newContext）を使う★ 前の場面の覚え書き（localStorage・IndexedDB）を持ち越さない。
+   フォルダは試験の中で作る作り物（getDirectoryHandle／getFileHandle／removeEntry／entries／values を持つ）。
+   「📮 預かりを振り分ける」のフォルダを選ぶ画面は window.showDirectoryPicker を差し替える。
+   使い方: node smoke_v176_main.js [メイン index.html の file:// URL]　（ONLY=③,⑦ で場面を絞れる）
+     （変異試験は壊した写しをここに渡す。⓪の「現場入力と同じ目印」と⑱のビューアは、いつもの置き場所のものを見る） */
+const { chromium } = require('playwright-core');
+const fs = require('fs'), path = require('path'), url = require('url'), cp = require('child_process');
+const EXE = process.env.CHROME || (function(){
+  for(const d of (function(){ try{ return fs.readdirSync('/opt/pw-browsers'); }catch(_){ return []; } })()){
+    const c = '/opt/pw-browsers/' + d + '/chrome-linux/chrome';
+    if(fs.existsSync(c)) return c;
+  }
+  return '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+})();
+const ROOT = path.resolve(__dirname, '..', '..', '..');
+const asUrl = s => /^(file|https?):/i.test(s) ? s : url.pathToFileURL(path.resolve(s)).href;
+const asPath = s => /^file:/i.test(s) ? url.fileURLToPath(s) : (/^https?:/i.test(s) ? '' : path.resolve(s));
+const MAIN = asUrl(process.argv[2] || path.join(ROOT, 'antenna_main', 'index.html'));
+const MAIN_PATH = asPath(MAIN);
+const REAL_MAIN = path.join(ROOT, 'antenna_main', 'index.html');
+const GENBA_PATH = process.env.GENBA_FOR_CONTRACT || path.join(ROOT, 'antenna_genba', 'index.html');
+const VIEWER_PATH = process.env.VIEWER || path.join(ROOT, 'antenna_viewer', 'index.html');
+const fails = []; const ok = (c, m) => { if(!c) fails.push(m); };
+/* 場面を絞る（変異試験を速くするため）: ONLY=③,⑦ のように付けると、その記号で始まる場面だけ走らせる */
+const ONLY = String(process.env.ONLY || '').split(',').map(x => x.trim()).filter(Boolean);
+const want = label => !ONLY.length || ONLY.some(x => String(label).indexOf(x) === 0);
+const WANT_VER = (function(){ try{
+  const m = fs.readFileSync(MAIN_PATH, 'utf8').match(/const APP_VERSION = "(\d+)"/);
+  return m ? m[1] : '';
+}catch(_){ return ''; } })();
+
+const NO = '2612MKM013';
+const SIDE = NO + '_現場預け_20261014-091812.json';
+const AT = '2026-10-14T00:18:12.000Z';
+const STAMP = AT + '|' + NO;
+const P1N = '令和８年度戸別受信設備設置工事（その１）';
+const P2N = '令和８年度戸別受信設備設置工事（その２）';
+
+/* ページの中で使う道具：作り物のフォルダ・写真・PCの戸別（D）・現場の預け（S）・振り分けの窓を押す */
+const SETUP = `
+  /* 作り物のフォルダ。書くときは close で中身が入る（途中で失敗したら元のまま）。
+     __hooks.getFile(name) が文字を返せばその中身を読ませ、Error を返せば読めなくする。
+     __hooks.write(name, text) は書いた直後に呼ぶ。__hooks.getDir(name) が Error を返せばそのフォルダを開けない。 */
+  window.__mk = function(name, files, subs){
+    const d = { kind:'directory', name, __files: Object.assign({}, files || {}), __subs: Object.assign({}, subs || {}),
+                __removed: [], __writes: [], __mt: {}, __hooks: {}, __perm: 'granted', __permReq: null };
+    const fh = n => ({ kind:'file', name:n, __d:d,
+      isSameEntry: async o => !!(o && o.__d === d && o.name === n),
+      getFile: async () => {
+        if(d.__hooks.getFile){ const r = d.__hooks.getFile(n);
+          if(r instanceof Error) throw r;
+          if(typeof r === 'string') return { name:n, size: new Blob([r]).size, lastModified: Date.now(), text: async () => r }; }
+        if(!(n in d.__files)){ const e = new Error('NotFound'); e.name = 'NotFoundError'; throw e; }
+        const t = d.__files[n];
+        return { name:n, size: new Blob([t]).size, lastModified: d.__mt[n] || Date.parse('2026-10-01T01:00:00Z'), text: async () => t };
+      },
+      createWritable: async () => { let buf = '';
+        return { write: async t => { buf += (typeof t === 'string') ? t : await new Blob([t]).text(); },
+                 close: async () => { d.__files[n] = buf; d.__mt[n] = Date.now(); d.__writes.push({ n, t: buf });
+                                      if(d.__hooks.write) d.__hooks.write(n, buf); } }; },
+      queryPermission: async () => 'granted', requestPermission: async () => 'granted' });
+    const list = () => Object.keys(d.__files).map(n => [n, fh(n)]).concat(Object.keys(d.__subs).map(n => [n, d.__subs[n]]));
+    const iter = map => () => ({ [Symbol.asyncIterator](){ const rows = list(); let i = 0;
+      return { next: async () => (i < rows.length) ? { value: map(rows[i++]), done:false } : { value: undefined, done: true } }; } });
+    Object.assign(d, {
+      queryPermission: async () => d.__perm,
+      requestPermission: async () => (d.__permReq || d.__perm),
+      isSameEntry: async o => o === d,
+      getFileHandle: async (n, opt) => {
+        if(!(n in d.__files)){ if(!(opt && opt.create)){ const e = new Error('NotFound'); e.name = 'NotFoundError'; throw e; } d.__files[n] = ''; }
+        return fh(n); },
+      getDirectoryHandle: async (n, opt) => {
+        if(d.__hooks.getDir){ const r = d.__hooks.getDir(n); if(r instanceof Error) throw r; }
+        if(!d.__subs[n]){ if(!(opt && opt.create)){ const e = new Error('NotFound'); e.name = 'NotFoundError'; throw e; } d.__subs[n] = window.__mk(n); }
+        return d.__subs[n]; },
+      removeEntry: async n => { if(!(n in d.__files)){ const e = new Error('NotFound'); e.name = 'NotFoundError'; throw e; }
+                                d.__removed.push(n); delete d.__files[n]; },
+      entries: iter(x => x), values: iter(x => x[1]), keys: iter(x => x[0])
+    });
+    return d;
+  };
+  /* フォルダの中身を「場所 → 中身」で写し取る（変わったところを見比べるため） */
+  window.__tree = function(d, pre){ const o = {}; pre = pre || '';
+    Object.keys(d.__files).forEach(n => { o[pre + n] = d.__files[n]; });
+    Object.keys(d.__subs).forEach(n => Object.assign(o, window.__tree(d.__subs[n], pre + n + '/')));
+    return o; };
+  window.__diff = function(a, b){ const out = [];
+    Object.keys(Object.assign({}, a, b)).sort().forEach(k => {
+      if(!(k in a)) out.push('+' + k); else if(!(k in b)) out.push('-' + k); else if(a[k] !== b[k]) out.push('~' + k); });
+    return out; };
+  window.__png = c => { const cv = document.createElement('canvas'); cv.width = 8; cv.height = 6; const x = cv.getContext('2d');
+    x.fillStyle = c; x.fillRect(0, 0, 8, 6); return cv.toDataURL('image/png'); };
+  window.__ph = (id, c) => ({ id, label: '写真' + id, dataUri: window.__png(c) });
+  window.__pids = t => { try{ const j = (typeof t === 'string') ? JSON.parse(t) : t;
+    return (j.chosho_photos || []).filter(p => p && p.dataUri).map(p => p.id).sort().join(','); }catch(_){ return '(読めない)'; } };
+  window.__COL = ['#c33','#3c3','#33c','#cc3','#3cc','#c3c'];
+  /* PC の戸別（写真6枚・工事完了・同意書・PCだけの欄） */
+  window.__D = no => ({ chosho_mgmt_no: no, chosho_cust_name: '三沢 太郎', chosho_cust_addr: '三沢市1-2', chosho_cust_tel: '',
+    work_type: 'uhf_new', amplifier: 'pcAmp', line_booster: 'lbPC', chosho_note: 'PCの備考',
+    work_done: true, work_done_at: '2026-09-30', chosho_status: 'completed',
+    flyer_done: false, consent_received: true, consent_received_at: '2026-09-01',
+    asbestos: { judge: 'none', by: 'office' }, qty_overrides: { a: 1 },
+    chosho_photos: ['p1','p2','p3','p4','p5','p6'].map((id, i) => window.__ph(id, window.__COL[i])),
+    _origin: 'main', editedAt: '2026-10-01T00:00:00Z' });
+  /* 現場の預け（PCのファイルを読めない端末から。写真は p1 と同じもの＋新しい t1） */
+  window.__S = (no, side) => ({ chosho_mgmt_no: no, chosho_cust_name: '三沢 太郎', chosho_cust_tel: '0176-11-2222',
+    work_type: 'catv_to_uhf', amplifier: 'genbaAmp', line_booster: '', chosho_note: '',
+    work_done: false, chosho_status: 'in_progress', flyer_done: true, flyer_done_at: '2026-10-14',
+    consent_received: false, asbestos: { judge: 'yes', by: 'genba' }, qty_overrides: {},
+    chosho_photos: [ window.__ph('p1', '#c33'), window.__ph('t1', '#963') ], _origin: 'genba',
+    _side: Object.assign({ v: 1, at: '${AT}', why: 'viewonly', proj: '', ledger: '${P2N}', place: 'その2', lacks: 5, base: null,
+      touched: ['amplifier', 'line_booster', 'work_done', 'consent_received', 'chosho_status', 'asbestos'], app: '176' }, side || {}) });
+  /* 物件（このPCの IndexedDB に入れる） */
+  window.__proj = (id, name, nos) => { const now = new Date().toISOString();
+    return { schema: PROJ_SCHEMA, id, name, createdAt: now, updatedAt: now,
+      cases: (nos || []).map((no, i) => ({ caseId: id + '_c' + i, file: 'リスト/' + no + '.json', lastModified: 0,
+        payload: { chosho_mgmt_no: no, chosho_cust_name: '試験 ' + no, chosho_status: 'in_progress', work_type: '' } })),
+      ledger: {}, takeout: {}, review: {} }; };
+  /* 「📮 預かりを振り分ける」を押して、窓が開いたら（pre を済ませてから）btn を押す。
+     窓の文字・OK の文字と押せるか を返す。OK が押せないときは「何もしない」で閉じる（止まらないように）。 */
+  window.__sortRun = async (btn, pre) => {
+    const seen = { opened: false, text: '', after: '', okText: '', okDisabled: null };
+    let finished = false;
+    const waiter = new Promise(res => { let n = 0; const t = setInterval(async () => {
+      const m = document.getElementById('sort-modal');
+      if(m && m.classList.contains('open') && !seen.opened){
+        seen.opened = true; clearInterval(t);
+        seen.text = (m.innerText || '').replace(/\\s+/g, ' ');
+        if(pre){ try { await pre(m); } catch(e){ seen.preErr = String(e && e.message || e); } }
+        seen.after = (m.innerText || '').replace(/\\s+/g, ' ');
+        const okb = document.getElementById('sort-ok');
+        seen.okText = okb ? okb.textContent : ''; seen.okDisabled = okb ? !!okb.disabled : null;
+        const b = (btn === 'sort-ok' && okb && okb.disabled) ? 'sort-cancel' : btn;
+        document.getElementById(b).click();
+        return res();
+      }
+      if(finished || ++n > 800){ clearInterval(t); res(); }
+    }, 25); });
+    /* 窓が出たまま戻らない（見当たらない窓・📥 の窓など）ときに試験ごと止まらないよう、20秒で切り上げる */
+    const tm = new Promise(r => setTimeout(() => { seen.timedOut = true; r(); }, 20000));
+    await Promise.race([sideSortButton(), tm]);
+    finished = true;
+    await waiter;
+    return seen;
+  };
+  /* 表の行（その管理番号を含む行）の「行き先」を、名前に want を含む物件へ替える */
+  window.__pickDest = (m, no, want) => {
+    const tr = [...m.querySelectorAll('tr')].filter(r => r.innerText.indexOf(no) >= 0)[0];
+    const sel = tr && tr.querySelector('select');
+    if(!sel) throw new Error('行き先を選ぶ所が無い: ' + no);
+    const op = [...sel.options].filter(o => o.textContent.indexOf(want) >= 0)[0];
+    if(!op) throw new Error('行き先の候補に ' + want + ' が無い');
+    sel.value = op.value; sel.dispatchEvent(new Event('change'));
+  };
+  window.__fresh = async () => {
+    try { listCensusClear(); } catch(_){}
+    _listRows = []; _listDirHandle = null;
+    try { _sideFiles = []; } catch(_){}
+    try { _sideSortRoot = null; } catch(_){}
+    try { await projHandleDelete(SIDE_SORT_DIR_KEY); } catch(_){}
+  };
+`;
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+let browser;
+const errs = [];
+/* 新しい入れ物でページを開く。出た窓（alert/confirm）は said に残して OK で閉じる */
+async function openPage(target, label){
+  const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 }, acceptDownloads: true });
+  const page = await ctx.newPage();
+  const said = [];
+  page.on('pageerror', e => errs.push(label + ' pageerror: ' + e.message));
+  page.on('console', m => { const t = m.text();
+    if(m.type() === 'error' && !/Failed to load resource/.test(t)) errs.push(label + ' console: ' + t.slice(0, 300)); });
+  page.on('dialog', d => { said.push({ type: d.type(), msg: d.message() }); d.accept().catch(()=>{}); });
+  page.on('download', dl => { dl.cancel().catch(()=>{}); });
+  await page.goto(target);
+  return { ctx, page, said };
+}
+async function openMain(label){
+  const o = await openPage(MAIN, label);
+  await o.page.waitForFunction(() => typeof listReloadFolder === 'function' && typeof genbaImportFlow === 'function'
+    && document.readyState === 'complete', null, { timeout: 30000 });
+  await sleep(2500);   // 起動の続き（保存の読み戻しなど）が済むのを待つ
+  await o.page.evaluate(SETUP);
+  o.said.length = 0;
+  return o;
+}
+/* ページの中で走らせる。止まったら { error } を返す（v175 のように関数が無いときも、場面ごとに赤にする） */
+async function run(page, fn, arg){
+  try { return await page.evaluate(fn, arg); }
+  catch(e){ return { error: String((e && e.message) || e).slice(0, 400) }; }
+}
+const alerts = said => said.filter(s => s.type === 'alert').map(s => s.msg);
+const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 900);
+const brief = o => JSON.stringify(o === undefined ? null : o).slice(0, 260);   // 流れを追うための短い控え（失敗の知らせは short）
+
+(async () => {
+  browser = await chromium.launch({ executablePath: EXE, args: ['--no-sandbox'] });
+
+  // ---- ⓪ 前提 ----
+  if(want('⓪')){
+    const { ctx, page } = await openMain('⓪');
+    const r0 = await run(page, () => {
+      const need = ['sideSortButton','sideMergeInto','isSideCaseFile','sideLoadNote','listReloadFolder','listSelectFolder','listSelectFiles',
+                    'genbaImportFlow','buildIndividualContent','lgwbApply','editorKeepFields','dupFindGroups','lgDupCounts'];
+      const names = { yes: [
+          'W1A001_現場預け_20261014-091812.json', 'W1A001_現場預け_20261014-091812-2.json',
+          'W1A001_現場預け_20261014-091812 (1).json', 'W1A001_現場預け_20261014-091812.json.txt',
+          'W1A001_現場預け_20261014-091812.json (1).txt', 'W1A001_現場預け_20261014-091812_3.json',
+          'W1A001_振り分け_20261014-091812.json' ],
+        no: [ 'W1A001.json', 'W1A001_1758000000000.json', 'W1A001_現場預け.json', 'W1A001 (1).json', 'W1A001_現場預け_2026101-091812.json' ] };
+      let re = null; try { re = SIDE_NAME_RE; } catch(_){}
+      return { missing: need.filter(n => typeof window[n] !== 'function'), ver: APP_VERSION,
+        src: re ? re.source : null, flags: re ? re.flags : null,
+        yesNg: re ? names.yes.filter(n => !re.test(n)) : null, noNg: re ? names.no.filter(n => re.test(n)) : null,
+        byData: (typeof isSideCaseFile === 'function') ? [isSideCaseFile('W1A001.json', { _side: { at: 'x' } }), isSideCaseFile('W1A001.json', { chosho_mgmt_no: 'W1A001' }),
+                  isSideCaseFile('W1A001.json', null)] : null };
+    });
+    let genbaSrc = null;
+    try { const m = fs.readFileSync(GENBA_PATH, 'utf8').match(/const SIDE_NAME_RE = \/(.*)\/([a-z]*);/); genbaSrc = m ? m[1] : null; } catch(_){}
+    console.log('⓪前提', brief(r0), '現場入力の目印', genbaSrc);
+    ok(!r0.error && r0.missing.length === 0, '★関数が無い → ' + (r0.error || r0.missing.join(' / ')));
+    ok(!!WANT_VER && r0.ver === WANT_VER, '★画面の版番号がファイルの APP_VERSION と違う → 画面 ' + r0.ver + ' ／ ファイル ' + WANT_VER);
+    ok(r0.src === '_(現場預け|振り分け)_\\d{8}-\\d{6}' && r0.flags === '',
+       '★預けの名前の目印が決まり（先頭・末尾に固定しない）と違う → ' + r0.src + ' /' + r0.flags);
+    ok(r0.yesNg && r0.yesNg.length === 0, '★預けの名前（Android の _数字・Dropbox の (1)・.json.txt）を見分けない → ' + short(r0.yesNg));
+    ok(r0.noNg && r0.noNg.length === 0, '★ふつうの戸別の名前を預けと見る → ' + short(r0.noNg));
+    ok(r0.byData && r0.byData.join() === 'true,false,false', '★中に _side があれば名前に関係なく預け（無ければ違う）になっていない → ' + short(r0.byData));
+    ok(genbaSrc !== null && genbaSrc === r0.src, '★現場入力（' + GENBA_PATH + '）の SIDE_NAME_RE がメインと違う → 現場 ' + genbaSrc + ' ／ メイン ' + r0.src);
+    await ctx.close();
+  }
+
+  // ---- ① 📁 フォルダで読む：預けは行にしない ----
+  if(want('①')){
+    const { ctx, page, said } = await openMain('①');
+    const r1 = await run(page, async ({ NO, SIDE }) => {
+      await __fresh();
+      const D = JSON.stringify(__D(NO), null, 2);
+      const S = JSON.stringify(__S(NO));
+      const S2 = JSON.stringify(Object.assign(__S('W1X002'), {}));         // 名前が変わった預け（中に _side）
+      const W4 = JSON.stringify({ chosho_mgmt_no: 'W1X004', work_type: 'uhf_new', chosho_status: 'in_progress', chosho_photos: [__ph('w4', '#456')] });
+      const list = __mk('リスト', { [NO + '.json']: D, [SIDE]: S, 'W1X002 (1).json': S2,
+                                   'W1X003_現場預け_20261014-091812 (1).json.txt': '', 'W1X004.json': W4 });
+      window.__confirms = [];
+      const origConfirm = window.confirm;
+      window.confirm = m => { window.__confirms.push(String(m)); return false; };
+      window.showDirectoryPicker = async () => list;
+      await listSelectFolder();
+      const o = {};
+      o.rows = (_listRows || []).map(r => r._name || r.file).sort();
+      o.side = (_sideFiles || []).map(x => x.name).sort();
+      o.sideKeys = (_sideFiles || []).map(x => Object.keys(x).filter(k => /data|photo/i.test(k)).join('|')).join(',');
+      o.status = (document.getElementById('list-status') || {}).textContent || '';
+      o.confirms = window.__confirms.slice();
+      o.dup = dupFindGroups(_listRows).length;
+      o.lgdup = lgDupCounts(_listRows)[NO];
+      // 読み直しても同じ
+      await listReloadFolder();
+      o.rows2 = (_listRows || []).map(r => r._name || r.file).sort();
+      o.side2 = (_sideFiles || []).length;
+      o.status2 = (document.getElementById('list-status') || {}).textContent || '';
+      // 預けを片付けた（事務所が手で消した）あと読み直す → 「見当たりません」と言わない
+      delete list.__files[SIDE]; delete list.__files['W1X002 (1).json'];
+      // 「見当たりません」の窓が出ると答えるまで戻らないので、少し待って切り上げる
+      await Promise.race([listReloadFolder(), new Promise(r => setTimeout(r, 4000))]);
+      await new Promise(r => setTimeout(r, 300));
+      const mo = document.getElementById('lgmiss-ov');
+      o.missOpen = !!(mo && mo.classList.contains('open'));
+      o.rows3 = (_listRows || []).map(r => r._name || r.file).sort();
+      o.side3 = (_sideFiles || []).length;
+      if(o.missOpen){ try { mo.classList.remove('open'); } catch(_){} }
+      window.confirm = origConfirm;
+      return o;
+    }, { NO, SIDE });
+    console.log('①📁 読み込み', brief(r1));
+    ok(!r1.error, '①止まった → ' + r1.error);
+    if(!r1.error){
+      ok(r1.rows.join() === [NO + '.json', 'W1X004.json'].join(), '★預けが戸別の行に入った（積算・費用が二重になる） → ' + short(r1.rows));
+      ok(r1.side.length === 3 && r1.side.indexOf(SIDE) >= 0 && r1.side.indexOf('W1X002 (1).json') >= 0,
+         '★預けを一覧の外（_sideFiles）に覚えていない → ' + short(r1.side));
+      ok(r1.sideKeys === ',,', '★一覧の外の預けに中身・写真を持たせている（名前・場所・大きさ・日時だけのはず） → ' + r1.sideKeys);
+      ok(!r1.confirms.some(m => /同じ管理番号/.test(m)), '★預けと PC のファイルを 🧩 でまとめようと勧める（現場の入力が捨てられる） → ' + short(r1.confirms));
+      ok(r1.dup === 0 && r1.lgdup === 1, '★預けが重複に数えられる → 🧩 ' + r1.dup + ' 組 ／ 台帳の重複 ' + r1.lgdup);
+      ok(/📮 現場から預かったファイルが 3件/.test(r1.status) && /預かりを振り分ける/.test(r1.status),
+         '★読み込んだあとの知らせに預けの件数・振り分けの道が出ない → ' + r1.status);
+      ok(r1.rows2.join() === r1.rows.join() && r1.side2 === 3 && /現場から預かったファイルが 3件/.test(r1.status2),
+         '★読み直すと預けの扱いが変わる → ' + short({ rows2: r1.rows2, side2: r1.side2, st: r1.status2 }));
+      ok(!r1.missOpen && r1.rows3.join() === r1.rows.join() && r1.side3 === 1,
+         '★預けを片付けたあと読み直すと「見当たりません」と聞く／行が変わる → ' + short({ miss: r1.missOpen, rows3: r1.rows3, side3: r1.side3 }));
+    }
+    await ctx.close();
+  }
+
+  // ---- ② 📄 ファイルで読む ----
+  if(want('②')){
+    const { ctx, page } = await openMain('②');
+    const r2 = await run(page, async ({ NO, SIDE }) => {
+      await __fresh();
+      const files = [ new File([JSON.stringify(__D(NO))], NO + '.json', { type: 'application/json' }),
+                      new File([JSON.stringify(__S(NO))], SIDE, { type: 'application/json' }),
+                      new File([JSON.stringify(__S('W2X002'))], 'W2X002.json', { type: 'application/json' }) ];
+      const orig = window.pickFile;
+      window.pickFile = (o, cb) => { cb(files); };
+      listSelectFiles();
+      await new Promise(r => setTimeout(r, 1500));
+      window.pickFile = orig;
+      return { rows: (_listRows || []).map(r => r.file).sort(), side: (_sideFiles || []).length,
+               status: (document.getElementById('list-status') || {}).textContent || '' };
+    }, { NO, SIDE });
+    console.log('②📄 読み込み', brief(r2));
+    ok(!r2.error, '②止まった → ' + r2.error);
+    if(!r2.error){
+      ok(r2.rows.join() === NO + '.json', '★📄 で読んだ預けが戸別の行に入った → ' + short(r2.rows));
+      ok(r2.side === 0, '📄 で読んだ預けを振り分けの対象に覚えた（消せない） → ' + r2.side);
+      ok(/現場から預かったファイルが 2件ありました/.test(r2.status) && /📁 フォルダで読み込むと振り分けできます/.test(r2.status),
+         '★📄 で読んだときに「📁 フォルダで読み込むと振り分けできます」と言わない → ' + r2.status);
+    }
+    await ctx.close();
+  }
+
+  // ---- ③ 振り分け・まとめる（二度目はまとめ済み） ----
+  if(want('③')){
+    const { ctx, page, said } = await openMain('③');
+    const r3 = await run(page, async ({ NO, SIDE }) => {
+      await __fresh();
+      const T0 = JSON.stringify(__D(NO), null, 2), ST = JSON.stringify(__S(NO));
+      const DECOY = 'W9Q999_現場預け_20261014-091812.json';
+      const l1 = __mk('リスト', { [NO + '.json']: T0 });
+      const p1 = __mk('その１', {}, { 'リスト': l1, '写真': __mk('写真', { [DECOY]: JSON.stringify(__S('W9Q999', { proj: 'その１' })) }) });
+      const l2 = __mk('リスト', { [SIDE]: ST });
+      const root = __mk('物件情報_調書', {}, { 'その１': p1, 'その２': __mk('その２', {}, { 'リスト': l2 }) });
+      window.showDirectoryPicker = async () => root;
+      const before = __tree(root);
+      const o = { run1: await __sortRun('sort-ok') };
+      const after = __tree(root);
+      o.diff = __diff(before, after);
+      const got = JSON.parse(l1.__files[NO + '.json']);
+      o.photos = __pids(got);
+      ['work_done','work_done_at','consent_received','consent_received_at','flyer_done','flyer_done_at','chosho_status',
+       'chosho_note','amplifier','line_booster','work_type','chosho_cust_tel','chosho_mgmt_no','_sideMerged'].forEach(k => { o[k] = got[k]; });
+      o.asbestos = JSON.stringify(got.asbestos); o.qty = JSON.stringify(got.qty_overrides);
+      o.hasSide = '_side' in got;
+      o.dBk = (l1.__subs['_整理前の控え'] || { __files: {} }).__files[NO + '.json'] === T0;
+      o.sBk = (l2.__subs['_整理前の控え'] || { __files: {} }).__files[SIDE] === ST;
+      o.sideLeft = SIDE in l2.__files;
+      o.decoy = (p1.__subs['写真'].__files[DECOY] || '').length > 0;
+      // 二度目：同じ預けを戻して押す → まとめ済み（戸別ファイルは1バイトも変えない）
+      const merged1 = l1.__files[NO + '.json'];
+      const w1 = l1.__writes.length;
+      l2.__files[SIDE] = ST;
+      o.run2 = await __sortRun('sort-ok');
+      o.same2 = l1.__files[NO + '.json'] === merged1;
+      o.writes2 = l1.__writes.length - w1;
+      o.sideLeft2 = SIDE in l2.__files;
+      o.sBk2 = Object.values((l2.__subs['_整理前の控え'] || { __files: {} }).__files).filter(t => t === ST).length;
+      return o;
+    }, { NO, SIDE });
+    const a3 = alerts(said);
+    console.log('③振り分け・まとめる', brief(r3), brief(a3));
+    ok(!r3.error, '③止まった → ' + r3.error);
+    if(!r3.error){
+      ok(r3.run1.opened && /2612MKM013/.test(r3.run1.text) && /まとめる（2612MKM013\.json に入れる）/.test(r3.run1.text),
+         '★振り分けの表に「まとめる」が出ない → ' + r3.run1.text.slice(0, 400));
+      ok(!/W9Q999/.test(r3.run1.text), '★写真フォルダの中まで預けを探した → ' + r3.run1.text.slice(0, 300));
+      ok(r3.photos === 'p1,p2,p3,p4,p5,p6,t1', '★写真が和集合にならない（PCの6枚＋現場の t1） → ' + r3.photos);
+      ok(r3.work_done === true && r3.work_done_at === '2026-09-30' && r3.chosho_status === 'completed',
+         '★預けで工事完了・状態が外れた（印は入れる方向だけ） → ' + short({ w: r3.work_done, at: r3.work_done_at, st: r3.chosho_status }));
+      ok(r3.consent_received === true && r3.consent_received_at === '2026-09-01', '★預けで同意書の印が外れた → ' + r3.consent_received);
+      ok(r3.flyer_done === true && r3.flyer_done_at === '2026-10-14', '★現場で済みにしたビラ配りの印・日付が入らない → ' + r3.flyer_done + ' ' + r3.flyer_done_at);
+      ok(r3.amplifier === 'genbaAmp', '★現場で直した欄（増幅器）が入らない → ' + r3.amplifier);
+      ok(r3.line_booster === '', '★現場で直した欄（空にした）が入らない → ' + r3.line_booster);
+      ok(r3.work_type === 'uhf_new' && r3.chosho_note === 'PCの備考' && r3.chosho_cust_tel === '',
+         '★現場で直していない欄を預けの値で上書きした（工事の種類・備考・電話） → ' + short({ wt: r3.work_type, note: r3.chosho_note, tel: r3.chosho_cust_tel }));
+      ok(r3.asbestos === JSON.stringify({ judge: 'none', by: 'office' }) && r3.qty === '{"a":1}',
+         '★PCだけの欄（石綿判定・数量の手直し）を預けで変えた → ' + r3.asbestos + ' ' + r3.qty);
+      ok(Array.isArray(r3._sideMerged) && r3._sideMerged.join() === STAMP && !r3.hasSide,
+         '★まとめた印（_sideMerged）が無い／_side が戸別ファイルに入った → ' + short({ sm: r3._sideMerged, side: r3.hasSide }));
+      ok(r3.dBk && r3.sBk, '★控え（まとめる前の戸別ファイル・預け）がそのままの中身で残っていない → ' + short({ d: r3.dBk, s: r3.sBk }));
+      ok(!r3.sideLeft, '★まとめた預けが残っている → ' + r3.sideLeft);
+      ok(r3.decoy, '★写真フォルダの中のファイルを触った');
+      ok(r3.diff.slice().sort().join() === ['~その１/リスト/' + NO + '.json', '+その１/リスト/_整理前の控え/' + NO + '.json',
+                             '-その２/リスト/' + SIDE, '+その２/リスト/_整理前の控え/' + SIDE].sort().join(),
+         '★変わったファイルが決まりと違う → ' + short(r3.diff));
+      ok(a3.some(m => /振り分け終わりました/.test(m) && /まとめた 1件/.test(m) && /_整理前の控え/.test(m)),
+         '★終わりの知らせ（まとめた件数・控えの場所）が無い → ' + short(a3));
+      ok(/まとめ済み/.test(r3.run2.text), '★同じ預けをもう一度振り分けると「まとめ済み」と出ない → ' + r3.run2.text.slice(0, 300));
+      ok(r3.same2 && r3.writes2 === 0, '★同じ預けを二度まとめた（あとで PC で直した内容を古い預けで戻す） → 書いた回数 ' + r3.writes2);
+      ok(!r3.sideLeft2 && r3.sBk2 === 2, '★まとめ済みの預けを控えへ写して片付けない → ' + short({ left: r3.sideLeft2, bk: r3.sBk2 }));
+      ok(a3.some(m => /まとめ済みで片付けた 1件/.test(m)), '★二度目の知らせに「まとめ済みで片付けた」が無い → ' + short(a3));
+    }
+    await ctx.close();
+  }
+
+  // ---- ④ 合わせ方だけ（sideMergeInto） ----
+  if(want('④')){
+    const { ctx, page } = await openMain('④');
+    const r4 = await run(page, async ({ NO }) => {
+      const o = {};
+      // a) touched の無い古い預け：PCで空の欄だけ埋める
+      { const D = __D(NO), S = __S(NO); delete S._side.touched;
+        const r = sideMergeInto(D, S, S._side, {});
+        o.a = { amp: r.merged.amplifier, tel: r.merged.chosho_cust_tel, lb: r.merged.line_booster, wd: r.merged.work_done,
+                fl: r.merged.flyer_done, st: r.merged.chosho_status, ph: __pids(r.merged), side: '_side' in r.merged, D: D.amplifier }; }
+      // b) touched に管理番号・PCだけの欄・工程の印が入っていても動かさない／状態は直したときだけ・進む方向だけ
+      { const D = __D(NO), S = __S(NO);
+        D.chosho_status = 'in_progress'; S.chosho_status = 'completed'; S.chosho_mgmt_no = 'X9X999';
+        S._side.touched = ['chosho_mgmt_no', 'qty_overrides', 'work_done', 'amplifier'];
+        const r1 = sideMergeInto(D, S, S._side, {});
+        S._side.touched.push('chosho_status');
+        const r2 = sideMergeInto(D, S, S._side, {});
+        o.b = { no: r1.merged.chosho_mgmt_no, qty: JSON.stringify(r1.merged.qty_overrides), wd: r1.merged.work_done,
+                st1: r1.merged.chosho_status, st2: r2.merged.chosho_status }; }
+      // c) 工程の日時：PCが済み・日時が空なら預けの日時で埋める。PCに日時があれば変えない
+      { const D = __D(NO), S = __S(NO);
+        D.flyer_done = true; D.flyer_done_at = ''; S.flyer_done_at = '2026-10-14';
+        D.work_done_at = '2026-09-30'; S.work_done = true; S.work_done_at = '2026-10-14';
+        const r = sideMergeInto(D, S, S._side, {});
+        o.c = { fat: r.merged.flyer_done_at, wat: r.merged.work_done_at }; }
+      // d) 名前だけの空の写真枠は残す・前の印を残して足す・_side は入れない
+      { const D = __D(NO), S = __S(NO);
+        D.chosho_photos.push({ id: 'slot1', label: '表札（あとで）' });
+        D._sideMerged = ['2026-10-01T00:00:00.000Z|' + NO]; D._side = { at: 'x' };
+        const r = sideMergeInto(D, S, S._side, {});
+        o.d = { slot: r.merged.chosho_photos.some(p => p && p.id === 'slot1' && !p.dataUri), n: r.merged.chosho_photos.length,
+                sm: r.merged._sideMerged, side: '_side' in r.merged, Dside: '_side' in D, Dn: D.chosho_photos.length }; }
+      return o;
+    }, { NO });
+    console.log('④合わせ方', brief(r4));
+    ok(!r4.error, '④止まった → ' + r4.error);
+    if(!r4.error){
+      ok(r4.a.amp === 'pcAmp' && r4.a.lb === 'lbPC' && r4.a.tel === '0176-11-2222',
+         '★touched の無い古い預けで、PCに値のある欄を上書きした／空の欄を埋めない → ' + short(r4.a));
+      ok(r4.a.wd === true && r4.a.fl === true && r4.a.st === 'completed' && r4.a.ph === 'p1,p2,p3,p4,p5,p6,t1' && !r4.a.side && r4.a.D === 'pcAmp',
+         '★古い預け：印・状態・写真・元の中身 → ' + short(r4.a));
+      ok(r4.b.no === NO && r4.b.qty === '{"a":1}' && r4.b.wd === true,
+         '★touched に入っていても、管理番号・PCだけの欄・工程の印を預けで変えた → ' + short(r4.b));
+      ok(r4.b.st1 === 'in_progress' && r4.b.st2 === 'completed', '★状態：直していないのに進めた／直したのに進めない → ' + short(r4.b));
+      ok(r4.c.fat === '2026-10-14' && r4.c.wat === '2026-09-30', '★工程の日時：PCの空を埋めない／PCの日時を変えた → ' + short(r4.c));
+      ok(r4.d.slot && r4.d.n === 8 && Array.isArray(r4.d.sm) && r4.d.sm.length === 2 && r4.d.sm[1] === STAMP && !r4.d.side && r4.d.Dside && r4.d.Dn === 7,
+         '★空の写真枠・前の印・_side・元の中身（書き替えない） → ' + short(r4.d));
+    }
+    await ctx.close();
+  }
+
+  // ---- ⑤⑥⑦⑧ 書いたあと・控え・あいだの保存 ----
+  for(const mode of ['⑤', '⑤b', '⑥', '⑦a', '⑦b', '⑧'].filter(want)){
+    const { ctx, page, said } = await openMain(mode);
+    const r = await run(page, async ({ NO, SIDE, mode }) => {
+      await __fresh();
+      const T0 = JSON.stringify(__D(NO), null, 2), ST = JSON.stringify(__S(NO));
+      const T0MOD = T0.replace('PCの備考', 'PCの備考（別のPCが直した）');
+      const l1 = __mk('リスト', { [NO + '.json']: T0 });
+      const l2 = __mk('リスト', { [SIDE]: ST });
+      const root = __mk('物件情報_調書', {}, { 'その１': __mk('その１', {}, { 'リスト': l1 }), 'その２': __mk('その２', {}, { 'リスト': l2 }) });
+      window.showDirectoryPicker = async () => root;
+      const CORRUPT = JSON.stringify({ chosho_mgmt_no: NO, chosho_photos: [] });
+      if(mode === '⑤') l1.__hooks.getFile = n => (n === NO + '.json' && l1.__files[n] !== T0) ? CORRUPT : undefined;
+      if(mode === '⑤b'){        // 合わせ方が写真を1枚落とした（壊れた合わせ方の代わり）→ 写真の id を全部確かめるところで止まる
+        window.__mgp = mergeGenbaPhotos;
+        mergeGenbaPhotos = function(){ return window.__mgp.apply(this, arguments).filter(p => !(p && p.id === 't1')); };
+      }
+      if(mode === '⑥') l1.__hooks.getFile = n => (n === NO + '.json' && l1.__files[n] !== T0)
+        ? Object.assign(new Error('読めない'), { name: 'NotReadableError' }) : undefined;
+      if(mode === '⑦a') l1.__hooks.getDir = n => (n === '_整理前の控え') ? new Error('控えを作れない') : undefined;
+      if(mode === '⑦b') l2.__hooks.getDir = n => (n === '_整理前の控え') ? new Error('控えを作れない') : undefined;
+      if(mode === '⑧'){
+        const bk = __mk('_整理前の控え');
+        bk.__hooks.write = () => { l1.__files[NO + '.json'] = T0MOD; };       // 控えを取っている間に、別のPCが保存した
+        l1.__subs['_整理前の控え'] = bk;
+      }
+      const o = { run: await __sortRun('sort-ok') };
+      l1.__hooks = {}; l2.__hooks = {};
+      if(window.__mgp){ mergeGenbaPhotos = window.__mgp; window.__mgp = null; }
+      const cur = l1.__files[NO + '.json'];
+      o.canonT0 = cur === T0; o.canonMod = cur === T0MOD;
+      o.canonPh = __pids(cur);
+      o.writes = l1.__writes.filter(w => w.n === NO + '.json').map(w => w.t === T0 ? 'T0' : (w.t === T0MOD ? 'MOD' : 'merged'));
+      o.sideLeft = (SIDE in l2.__files) && l2.__files[SIDE] === ST;
+      o.sideRemoved = l2.__removed.slice();
+      if(mode === '⑦b'){        // 次に押すと片付けるだけ（もうまとめてある）
+        const m1 = l1.__files[NO + '.json'];
+        o.run2 = await __sortRun('sort-ok');
+        o.same2 = l1.__files[NO + '.json'] === m1;
+        o.sideLeft2 = SIDE in l2.__files;
+      }
+      return o;
+    }, { NO, SIDE, mode });
+    const a = alerts(said);
+    console.log(mode, brief(r), brief(a));
+    ok(!r.error, mode + '止まった → ' + r.error);
+    if(r.error){ await ctx.close(); continue; }
+    if(mode === '⑤'){
+      ok(r.canonT0 && r.writes.join() === 'merged,T0', '★⑤読み返したら合わないのに、元の中身に戻さない → ' + short(r.writes));
+      ok(r.sideLeft && r.sideRemoved.length === 0, '★⑤まとめられなかったのに預けを消した');
+      ok(a.some(m => /もとに戻しました/.test(m) && /預けは消していません/.test(m)), '★⑤知らせに「もとに戻しました」「預けは消していません」が無い → ' + short(a));
+    }
+    if(mode === '⑤b'){
+      ok(r.canonT0 && r.writes.join() === 'merged,T0', '★⑤b書いたファイルに写真が1枚入っていないのに、元の中身に戻さない → ' + short(r.writes));
+      ok(r.sideLeft && r.sideRemoved.length === 0, '★⑤b写真の足りないまとめ方で、預けを消した（現場の写真が無くなる）');
+      ok(a.some(m => /写真が 1 枚 入っていませんでした/.test(m)), '★⑤b知らせに「写真が入っていませんでした」が無い → ' + short(a));
+    }
+    if(mode === '⑥'){
+      ok(r.writes.join() === 'merged', '★⑥読み返せないのに書き戻した（他の端末の新しい保存を潰す） → ' + short(r.writes));
+      ok(r.sideLeft && r.sideRemoved.length === 0, '★⑥確かめられないのに預けを消した');
+      ok(a.some(m => /読み返せませんでした/.test(m) && /もとに戻さず/.test(m)), '★⑥知らせに「読み返せませんでした・もとに戻さず」が無い → ' + short(a));
+    }
+    if(mode === '⑦a'){
+      ok(r.canonT0 && r.writes.length === 0, '★⑦a行き先の控えが取れないのに戸別ファイルを書いた → ' + short(r.writes));
+      ok(r.sideLeft && r.sideRemoved.length === 0, '★⑦a控えが取れないのに預けを消した');
+      ok(a.some(m => /行き先の控えを取れませんでした/.test(m)), '★⑦a知らせに理由が無い → ' + short(a));
+    }
+    if(mode === '⑦b'){
+      ok(r.canonPh === 'p1,p2,p3,p4,p5,p6,t1' && r.writes.join() === 'merged', '⑦b戸別ファイルへはまとまるはず → ' + short(r));
+      ok(r.sideLeft && r.sideRemoved.length === 0, '★⑦b預けの控えが取れないのに預けを消した');
+      ok(a.some(m => /預けの控えを取れなかったので、預けは消していません/.test(m)), '★⑦b知らせに理由が無い → ' + short(a));
+      ok(/まとめ済み/.test((r.run2 || {}).text || '') && r.same2 && !r.sideLeft2,
+         '★⑦b次に押したとき、まとめ済みとして片付けない／二度まとめた → ' + short({ t: (r.run2 || {}).text, same: r.same2, left: r.sideLeft2 }));
+    }
+    if(mode === '⑧'){
+      ok(r.canonMod && r.writes.length === 0, '★⑧あいだに別のPCが保存したのに上書きした → ' + short(r.writes));
+      ok(r.sideLeft && r.sideRemoved.length === 0, '★⑧まとめていないのに預けを消した');
+      ok(a.some(m => /別のPCがこの戸別を保存しました/.test(m) && /もう一度/.test(m)), '★⑧知らせに「もう一度」が無い → ' + short(a));
+    }
+    await ctx.close();
+  }
+
+  // ---- ⑨ 新しく置く／触らない ----
+  if(want('⑨')){
+    const { ctx, page, said } = await openMain('⑨');
+    const r9 = await run(page, async ({ NO, P1N }) => {
+      await __fresh();
+      await projIdbPut(__proj('pj176a', P1N, ['W7G007', 'W1Z001']));
+      const nm = no => no + '_現場預け_20261014-1' + ('00000' + no.slice(-3)).slice(-5) + '.json';
+      const mk = (no, side) => JSON.stringify(__S(no, Object.assign({ at: '2026-10-14T01:' + no.slice(-2) + ':00.000Z' }, side || {})));
+      const l1 = __mk('リスト', { 'W3C003.enc': '暗号の中身', 'W1Z001.json': JSON.stringify({ chosho_mgmt_no: 'W1Z001', work_type: 'uhf_new' }) });
+      const files = {
+        [nm(NO)]: mk(NO, { proj: 'その１' }),               // ① 預けに書いた物件 → その１ に新しく置く
+        [nm('W7G007')]: mk('W7G007'),                        // ③ このPCの物件 → その１ に新しく置く
+        [nm('W9Z009')]: mk('W9Z009', { ledger: 'その２' }),  // 分からない → 触らない
+        [nm('W8H008')]: mk('W8H008'),                        // 手で その１ を選んでも新しくは置かない
+        [nm('W3C003')]: mk('W3C003', { proj: 'その１' }),   // 行き先が暗号化 → 触らない
+        [nm('W4D004')]: '',                                   // 0KB → 触らない
+        [nm('W5E005')]: '{"chosho_mgmt_no":'                 // 壊れ → 触らない
+      };
+      const l2 = __mk('リスト', files);
+      const root = __mk('物件情報_調書', {}, { 'その１': __mk('その１', {}, { 'リスト': l1 }), 'その２': __mk('その２', {}, { 'リスト': l2 }) });
+      window.showDirectoryPicker = async () => root;
+      const before = __tree(root);
+      const o = { run: await __sortRun('sort-ok', m => __pickDest(m, 'W8H008', 'その１')) };
+      o.diff = __diff(before, __tree(root));
+      const put = l1.__files[NO + '.json'];
+      if(put){ const j = JSON.parse(put); o.put = { side: '_side' in j, sm: j._sideMerged, ph: __pids(j), amp: j.amplifier, no: j.chosho_mgmt_no }; }
+      const put7 = l1.__files['W7G007.json'];
+      if(put7){ const j = JSON.parse(put7); o.put7 = { side: '_side' in j, sm: (j._sideMerged || []).length }; }
+      o.names = { NO: nm(NO), W7: nm('W7G007') };
+      return o;
+    }, { NO, P1N });
+    const a9 = alerts(said);
+    console.log('⑨新しく置く', brief(r9), brief(a9));
+    ok(!r9.error, '⑨止まった → ' + r9.error);
+    if(!r9.error){
+      const t = r9.run.after || '';
+      ok(/新しく置く（2612MKM013\.json）/.test(r9.run.text) && /新しく置く（W7G007\.json）/.test(r9.run.text),
+         '★行き先が証拠（預けの物件・このPCの物件）で決まるのに「新しく置く」にならない → ' + r9.run.text.slice(0, 500));
+      ok(/どこの物件か分かりません（現場の台帳: その２）/.test(t), '★行き先の分からない預けに理由（現場の台帳）が出ない → ' + t.slice(0, 600));
+      ok(/行き先がはっきり分かるときだけ/.test(t), '★手で選んだ行き先に新しく置こうとする → ' + t.slice(0, 600));
+      ok(/暗号化されています（先に 🔓 復号/.test(t) && /中身が空（0KB）/.test(t) && /壊れていて読めません/.test(t),
+         '★暗号化・0KB・壊れの理由が出ない → ' + t.slice(0, 600));
+      ok(r9.run.okText === 'この内容で振り分ける（2 件）', '★振り分ける件数が違う（新しく置く2件だけのはず） → ' + r9.run.okText);
+      ok(r9.put && !r9.put.side && Array.isArray(r9.put.sm) && r9.put.sm.join() === '2026-10-14T01:13:00.000Z|' + NO
+         && r9.put.ph === 'p1,t1' && r9.put.amp === 'genbaAmp' && r9.put.no === NO,
+         '★新しく置いた 管理番号.json の中身（_side 無し・印・写真） → ' + short(r9.put));
+      ok(r9.put7 && !r9.put7.side && r9.put7.sm === 1, '★このPCの物件で決まった戸別を新しく置かない → ' + short(r9.put7));
+      const want = ['+その１/リスト/' + NO + '.json', '+その１/リスト/W7G007.json',
+                    '-その２/リスト/' + r9.names.NO, '-その２/リスト/' + r9.names.W7,
+                    '+その２/リスト/_整理前の控え/' + r9.names.NO, '+その２/リスト/_整理前の控え/' + r9.names.W7].sort().join();
+      ok(r9.diff.slice().sort().join() === want, '★変わったファイルが決まりと違う（触らないはずのものを触った等） → ' + short(r9.diff));
+      ok(a9.some(m => /新しく置いた 2件/.test(m) && /そのまま 5件/.test(m)), '★終わりの知らせの件数 → ' + short(a9));
+    }
+    await ctx.close();
+  }
+
+  // ---- ⑩ 迷子：知らせるだけ ----
+  if(want('⑩')){
+    const { ctx, page } = await openMain('⑩');
+    const r10 = await run(page, async ({ NO, SIDE }) => {
+      await __fresh();
+      const T1 = JSON.stringify(__D(NO), null, 2);
+      const T2 = JSON.stringify(Object.assign(__D(NO), { chosho_note: 'その２に紛れた写し', _origin: 'genba' }), null, 2);
+      const l1 = __mk('リスト', { [NO + '.json']: T1 });
+      const l2 = __mk('リスト', { [NO + '.json']: T2, [SIDE]: JSON.stringify(__S(NO)) });
+      const root = __mk('物件情報_調書', {}, { 'その１': __mk('その１', {}, { 'リスト': l1 }), 'その２': __mk('その２', {}, { 'リスト': l2 }) });
+      window.showDirectoryPicker = async () => root;
+      const before = __tree(root);
+      const o = { run: await __sortRun('sort-cancel') };
+      o.diff = __diff(before, __tree(root));
+      return o;
+    }, { NO, SIDE });
+    console.log('⑩迷子', brief(r10));
+    ok(!r10.error, '⑩止まった → ' + r10.error);
+    if(!r10.error){
+      ok(/別の物件のリストにも同じ管理番号のファイルがあります/.test(r10.run.text) && /その１ にも その２ にも 2612MKM013\.json/.test(r10.run.text),
+         '★迷子（2つの物件のリストに同じ管理番号）を知らせない → ' + r10.run.text.slice(0, 600));
+      ok(/どこの物件か分かりません/.test(r10.run.text) && r10.run.okDisabled === true,
+         '★行き先が2つあるのに、どちらかへ決めた → ' + short({ ok: r10.run.okText, dis: r10.run.okDisabled }));
+      ok(r10.diff.length === 0, '★迷子・預けを触った → ' + short(r10.diff));
+    }
+    await ctx.close();
+  }
+
+  // ---- ⑪ 読み込んだ一覧に関係するとき：読み直す ----
+  for(const mode of ['a', 'b'].filter(m => want('⑪' + m))){
+    const { ctx, page, said } = await openMain('⑪' + mode);
+    const r11 = await run(page, async ({ NO, SIDE, mode }) => {
+      await __fresh();
+      const T0 = JSON.stringify(__D(NO), null, 2), ST = JSON.stringify(__S(NO));
+      const l1 = __mk('リスト', { [NO + '.json']: T0, 'W1A001.json': JSON.stringify({ chosho_mgmt_no: 'W1A001', work_type: 'uhf_new', chosho_status: 'in_progress' }) });
+      const p1 = __mk('その１', {}, { 'リスト': l1 });
+      const l2 = __mk('リスト', { [SIDE]: ST, 'W2B001.json': JSON.stringify({ chosho_mgmt_no: 'W2B001', work_type: 'uhf_new', chosho_status: 'in_progress' }) });
+      const root = __mk('物件情報_調書', {}, { 'その１': p1, 'その２': __mk('その２', {}, { 'リスト': l2 }) });
+      _listDirHandle = (mode === 'a') ? l1 : l2;
+      await listReloadFolder();
+      const o = { rows0: (_listRows || []).map(r => r._name).sort().join(), side0: (_sideFiles || []).length };
+      window.showDirectoryPicker = async () => (mode === 'a') ? root : p1;
+      o.run = await __sortRun('sort-ok');
+      await new Promise(r => setTimeout(r, 300));
+      o.rows = (_listRows || []).map(r => r._name + ':' + (r.data && r.data.amplifier)).sort().join();
+      o.side1 = (_sideFiles || []).length;
+      const mo = document.getElementById('lgmiss-ov');
+      o.missOpen = !!(mo && mo.classList.contains('open'));
+      o.merged = __pids(l1.__files[NO + '.json']);
+      o.sideLeft = SIDE in l2.__files;
+      return o;
+    }, { NO, SIDE, mode });
+    const a11 = alerts(said);
+    console.log('⑪' + mode, brief(r11), brief(a11));
+    ok(!r11.error, '⑪' + mode + '止まった → ' + r11.error);
+    if(r11.error){ await ctx.close(); continue; }
+    ok(r11.merged === 'p1,p2,p3,p4,p5,p6,t1' && !r11.sideLeft, '⑪' + mode + ' まとまっていない → ' + short(r11));
+    ok(!r11.missOpen, '★⑪' + mode + ' 振り分けたあと「見当たりません」と聞いた');
+    if(mode === 'a'){
+      ok(r11.rows0 === [NO + '.json', 'W1A001.json'].join(), '⑪a試験の前提: 読み込んだ一覧 → ' + r11.rows0);
+      ok(/^2612MKM013\.json:genbaAmp,W1A001\.json:/.test(r11.rows),
+         '★⑪a振り分けたあと一覧を読み直さない（古い中身のまま＝あとの保存で戻ってしまう） → ' + r11.rows);
+    } else {
+      ok(r11.side0 === 1 && r11.rows0 === 'W2B001.json', '⑪b試験の前提: 預けのある一覧 → ' + short(r11));
+      ok(/（読み込んだ一覧）/.test(r11.run.text), '★⑪b選んだフォルダの外にある、読み込んだ一覧の預けを拾わない → ' + r11.run.text.slice(0, 400));
+      ok(/^W2B001\.json:[^,]*$/.test(r11.rows) && r11.side1 === 0,
+         '★⑪b片付けた預けが一覧の外の覚え（_sideFiles）に残る／一覧が変わった → ' + short({ rows: r11.rows, side: r11.side1 }));
+    }
+    await ctx.close();
+  }
+
+  // ---- ⑫ 直している途中の戸別は触らない ----
+  for(const mode of ['lg', 'edit'].filter(m => want('⑫' + m))){
+    const { ctx, page } = await openMain('⑫' + mode);
+    const r12 = await run(page, async ({ NO, SIDE, mode }) => {
+      await __fresh();
+      const T0 = JSON.stringify(__D(NO), null, 2), ST = JSON.stringify(__S(NO));
+      const l1 = __mk('リスト', { [NO + '.json']: T0 });
+      const l2 = __mk('リスト', { [SIDE]: ST });
+      const root = __mk('物件情報_調書', {}, { 'その１': __mk('その１', {}, { 'リスト': l1 }), 'その２': __mk('その２', {}, { 'リスト': l2 }) });
+      const row = { file: NO + '.json', data: Object.assign(__D(NO), { chosho_photos: null }), fileType: 'plain', _slim: true };
+      if(mode === 'lg') row._lgEdited = true;
+      _listRows = [row];
+      if(mode === 'edit') _editingRow = row;
+      window.showDirectoryPicker = async () => root;
+      const before = __tree(root);
+      const o = { run: await __sortRun('sort-ok') };
+      o.diff = __diff(before, __tree(root));
+      if(mode === 'edit') _editingRow = null;
+      _listRows = [];
+      return o;
+    }, { NO, SIDE, mode });
+    console.log('⑫' + mode, brief(r12));
+    ok(!r12.error, '⑫' + mode + '止まった → ' + r12.error);
+    if(r12.error){ await ctx.close(); continue; }
+    ok(r12.run.okDisabled === true && r12.diff.length === 0, '★⑫' + mode + ' 直している途中の戸別をまとめた（あとの保存で戻ってしまう） → ' + short(r12));
+    ok(mode === 'lg' ? /受付台帳で直したまま/.test(r12.run.text) : /いま開いて直している途中/.test(r12.run.text),
+       '★⑫' + mode + ' 触らない理由が出ない → ' + r12.run.text.slice(0, 500));
+    await ctx.close();
+  }
+
+  // ---- ⑬ 同じ戸別に預けが2つ（新しい戸別） ----
+  if(want('⑬')){
+    const { ctx, page } = await openMain('⑬');
+    const r13 = await run(page, async ({ NO, SIDE }) => {
+      await __fresh();
+      const Sa = __S(NO, { proj: 'その１' }); Sa.chosho_photos = [__ph('a1', '#123')]; Sa.amplifier = 'ampA';
+      const Sb = __S(NO, { proj: 'その１', at: '2026-10-14T05:00:00.000Z' }); Sb.chosho_photos = [__ph('b1', '#456')]; Sb.amplifier = 'ampB';
+      const nb = NO + '_現場預け_20261014-140000.json';
+      const l1 = __mk('リスト', {});
+      const l2 = __mk('リスト', { [nb]: JSON.stringify(Sb), [SIDE]: JSON.stringify(Sa) });
+      const root = __mk('物件情報_調書', {}, { 'その１': __mk('その１', {}, { 'リスト': l1 }), 'その２': __mk('その２', {}, { 'リスト': l2 }) });
+      _listDirHandle = l2;                         // その２/リスト を読んでいる（預けは一覧の外に覚える）
+      await listReloadFolder();
+      const sideN = (_sideFiles || []).length;
+      window.showDirectoryPicker = async () => root;
+      const run = await __sortRun('sort-ok');
+      const j = JSON.parse(l1.__files[NO + '.json'] || '{}');
+      return { sideN, inTable: (run.text.match(/2612MKM013_現場預け_/g) || []).length, okText: run.okText,
+               photos: __pids(j), amp: j.amplifier, sm: j._sideMerged, l2: Object.keys(l2.__files) };
+    }, { NO, SIDE });
+    console.log('⑬預けが2つ', brief(r13));
+    ok(!r13.error, '⑬止まった → ' + r13.error);
+    if(!r13.error){
+      ok(r13.sideN === 2 && r13.inTable === 2 && r13.okText === 'この内容で振り分ける（2 件）',
+         '★読み込んだ一覧の預けと、フォルダで見つけた預けを2回数えた → ' + short(r13));
+      ok(r13.photos === 'a1,b1' && r13.amp === 'ampB' && Array.isArray(r13.sm) && r13.sm.length === 2 && r13.l2.length === 0,
+         '★同じ戸別の2つ目の預け（あとのもの）を、1つ目で置いたファイルへまとめない → ' + short(r13));
+    }
+    await ctx.close();
+  }
+
+  // ---- ⑭ いつもの名前に _side が入ってしまったもの ----
+  if(want('⑭')){
+    const { ctx, page, said } = await openMain('⑭');
+    const r14 = await run(page, async ({ NO }) => {
+      await __fresh();
+      const D = __D(NO); D._side = { v: 1, at: '2026-10-13T00:00:00.000Z', touched: ['amplifier'] };
+      const T0 = JSON.stringify(D, null, 2);
+      const l1 = __mk('リスト', { [NO + '.json']: T0 });
+      const p1 = __mk('その１', {}, { 'リスト': l1 });
+      _listDirHandle = l1;
+      await listReloadFolder();
+      const o = { rows0: (_listRows || []).length, side0: (_sideFiles || []).length };
+      window.showDirectoryPicker = async () => p1;
+      o.run = await __sortRun('sort-ok');
+      const cur = l1.__files[NO + '.json'];
+      const j = cur ? JSON.parse(cur) : {};
+      o.still = !!cur; o.hasSide = '_side' in j; o.sm = j._sideMerged; o.photos = __pids(j); o.amp = j.amplifier;
+      o.bk = (l1.__subs['_整理前の控え'] || { __files: {} }).__files[NO + '.json'] === T0;
+      o.rows1 = (_listRows || []).map(r => r._name).join();
+      o.removed = l1.__removed.slice();
+      return o;
+    }, { NO });
+    console.log('⑭いつもの名前の _side', brief(r14));
+    ok(!r14.error, '⑭止まった → ' + r14.error);
+    if(!r14.error){
+      ok(r14.rows0 === 0 && r14.side0 === 1, '⑭試験の前提: 印の入ったいつもの名前のファイルは一覧に出ない → ' + short(r14));
+      ok(/預けの印を外す/.test(r14.run.text), '★いつもの名前のファイルに入った預けの印を外す道が無い → ' + r14.run.text.slice(0, 400));
+      ok(r14.still && r14.removed.length === 0 && !r14.hasSide && r14.photos === 'p1,p2,p3,p4,p5,p6' && r14.amp === 'pcAmp' && r14.bk,
+         '★いつもの名前のファイルを消した／印が残る／中身が変わった／控えが無い → ' + short(r14));
+      ok(r14.rows1 === NO + '.json', '★印を外したあと一覧に戻らない → ' + r14.rows1);
+    }
+    await ctx.close();
+  }
+
+  // ---- ⑮ 📥 現場取込で預けを選ぶ ----
+  if(want('⑮')){
+    const { ctx, page, said } = await openMain('⑮');
+    const r15a = await run(page, async ({ NO, SIDE }) => {
+      await __fresh();
+      const D = __D(NO);
+      const S = __S(NO);
+      S.chosho_photos.push(Object.assign(__ph('s2', __COL[1]), {}));     // p2 と同じ絵で別の写真ID（似た写真）
+      window.__ST = JSON.stringify(S);
+      _listRows = [ { file: NO + '.json', data: JSON.parse(JSON.stringify(D)), fileType: 'plain' } ];
+      _currentProject = null;
+      setLedger('m:' + NO, { consent: true, consentSrc: true, compdoc: true, compdocSrc: true });
+      window.__origPick = window.pickFile;
+      window.pickFile = (o, cb) => { cb([ new File([window.__ST], SIDE, { type: 'application/json' }) ]); };
+      window.__gi = { seen: '', radios: -1, n: 0 };
+      window.__giT = setInterval(() => { const m = document.getElementById('genba-import-modal');
+        if(m && m.classList.contains('open')){ window.__gi.n++; window.__gi.seen = (m.innerText || '').replace(/\s+/g, ' ');
+          window.__gi.radios = m.querySelectorAll('input[type=radio][name^="gi-sim"], .gi-sim input[type=radio]').length;
+          document.getElementById('gi-import').click(); } }, 25);
+      genbaImportFlow();
+      return true;
+    }, { NO, SIDE });
+    const waitAlert = async re => { for(let i = 0; i < 80; i++){ if(alerts(said).some(m => re.test(m))) return true; await sleep(100); } return false; };
+    const done1 = r15a === true && await waitAlert(/現場データ取込 完了/);
+    const r15b = done1 ? await run(page, ({ NO }) => {
+      const d = _listRows[0].data, lg = getLedger('m:' + NO) || {};
+      const o = { gi: Object.assign({}, window.__gi), wd: d.work_done, st: d.chosho_status, fl: d.flyer_done, cr: d.consent_received,
+        amp: d.amplifier, wt: d.work_type, note: d.chosho_note, ph: __pids(d), sm: d._sideMerged, side: '_side' in d,
+        lgConsent: lg.consent, lgCompdoc: lg.compdoc, lgFlyer: lg.flyer };
+      window.__gi = { seen: '', radios: -1, n: 0 };
+      genbaImportFlow();                         // 同じ預けをもう一度
+      return o;
+    }, { NO }) : { error: '取り込みが終わらない（知らせが出ない）: ' + short(r15a) };
+    const done2 = !r15b.error && await waitAlert(/もうまとめてあります/);
+    const r15c = await run(page, () => { clearInterval(window.__giT); window.pickFile = window.__origPick; return Object.assign({}, window.__gi); });
+    console.log('⑮📥 現場取込', brief(r15b), brief(r15c), brief(alerts(said)));
+    ok(!r15b.error, '⑮止まった → ' + r15b.error);
+    if(!r15b.error){
+      ok(/📮 現場の預け/.test(r15b.gi.seen) && /現場で直した欄だけ/.test(r15b.gi.seen), '★📥 の窓に「📮 現場の預け・直した欄だけ」が出ない → ' + r15b.gi.seen.slice(0, 400));
+      ok(r15b.gi.radios === 0, '★預けで「似た写真を捨てる」選択を出した（写真が減る） → ' + r15b.gi.radios);
+      ok(r15b.wd === true && r15b.st === 'completed' && r15b.cr === true && r15b.fl === true,
+         '★📥 で預けを取り込むと工程の印・状態が外れた／ビラが入らない → ' + short(r15b));
+      ok(r15b.lgConsent === true && r15b.lgCompdoc === true && r15b.lgFlyer === true,
+         '★📥 で受付台帳の同意書・完了書が外れた／ビラが入らない → ' + short({ c: r15b.lgConsent, d: r15b.lgCompdoc, f: r15b.lgFlyer }));
+      ok(r15b.amp === 'genbaAmp' && r15b.wt === 'uhf_new' && r15b.note === 'PCの備考',
+         '★📥 で直していない欄を預けで上書きした／直した欄が入らない → ' + short({ amp: r15b.amp, wt: r15b.wt, note: r15b.note }));
+      ok(r15b.ph === 'p1,p2,p3,p4,p5,p6,s2,t1', '★📥 の写真が和集合にならない → ' + r15b.ph);
+      ok(Array.isArray(r15b.sm) && r15b.sm.join() === STAMP && !r15b.side, '★📥 でまとめた印が無い／_side が入った → ' + short({ sm: r15b.sm, side: r15b.side }));
+      ok(done2 && r15c.n === 0, '★まとめ済みの預けをもう一度 📥 で取り込もうとした（あとで直した内容が戻る） → ' + short({ done2, n: r15c.n }));
+    }
+    await ctx.close();
+  }
+
+  // ---- ⑯ PC が いつもの名前で書くとき ----
+  if(want('⑯')){
+    const { ctx, page } = await openMain('⑯');
+    const r16 = await run(page, async ({ NO }) => {
+      const o = {};
+      const data = Object.assign(__D(NO), { _side: { at: 'x' }, _sideMerged: ['a|' + NO] });
+      const c = await buildIndividualContent({ data, _photosKnown: true }, null);
+      o.bic = { side: '_side' in c, sm: c._sideMerged };
+      const T = JSON.stringify(Object.assign(__D(NO), { _side: { at: 'y' }, _sideMerged: ['b|' + NO] }), null, 2);
+      const dir = __mk('リスト', { [NO + '.json']: T });
+      const row = { _dir: dir, _name: NO + '.json', data: { chosho_mgmt_no: NO } };
+      const r = await lgwbApply([{ row, name: NO + '.json', diffs: [{ k: 'chosho_note', to: '台帳で直した備考', label: '備考' }] }]);
+      const j = JSON.parse(dir.__files[NO + '.json']);
+      o.lgwb = { ok: r.ok, side: '_side' in j, sm: j._sideMerged, note: j.chosho_note, ph: __pids(j) };
+      const s = editorKeepFields({ chosho_mgmt_no: NO }, { _sideMerged: ['c|' + NO] });
+      o.keep = s._sideMerged;
+      return o;
+    }, { NO });
+    console.log('⑯いつもの名前で書く', brief(r16));
+    ok(!r16.error, '⑯止まった → ' + r16.error);
+    if(!r16.error){
+      ok(!r16.bic.side && Array.isArray(r16.bic.sm) && r16.bic.sm.join() === 'a|' + NO,
+         '★戸別ファイルへ書く中身に _side が入る（次に読むと預けと見られて一覧から消える）／_sideMerged が落ちる → ' + short(r16.bic));
+      ok(r16.lgwb.ok === 1 && !r16.lgwb.side && r16.lgwb.sm && r16.lgwb.sm.join() === 'b|' + NO && r16.lgwb.note === '台帳で直した備考'
+         && r16.lgwb.ph === 'p1,p2,p3,p4,p5,p6',
+         '★💾 戸別ファイルへ反映 で _side が残る／_sideMerged・写真が落ちる → ' + short(r16.lgwb));
+      ok(Array.isArray(r16.keep) && r16.keep.join() === 'c|' + NO, '★エディタで開いて保存すると、まとめた印（_sideMerged）が落ちる → ' + short(r16.keep));
+    }
+    await ctx.close();
+  }
+
+  // ---- ⑰ フォルダの選び方・許可 ----
+  if(want('⑰')){
+    const { ctx, page, said } = await openMain('⑰');
+    const r17 = await run(page, async ({ NO, SIDE }) => {
+      await __fresh();
+      const o = {};
+      const l2 = __mk('リスト', { [SIDE]: JSON.stringify(__S(NO)) });
+      const root = __mk('物件情報_調書', {}, { 'その２': __mk('その２', {}, { 'リスト': l2 }) });
+      const picks = [];
+      window.showDirectoryPicker = async opts => { picks.push(opts || {}); return root; };
+      // a) 前に選んだフォルダ：許可が断られた → 何も変えず忘れる。選ぶ画面は出さない（押した直後の1回を使ったので）
+      const old = __mk('前の物件情報_調書'); old.__perm = 'prompt'; old.__permReq = 'denied';
+      _sideSortRoot = old;
+      o.a = await __sortRun('sort-cancel');
+      o.aPicks = picks.length; o.aRoot = (_sideSortRoot === null);
+      // b) 次に押す → 選ぶ画面（書き込み）
+      o.b = await __sortRun('sort-cancel');
+      o.bPicks = picks.length; o.bMode = picks.length ? picks[picks.length - 1].mode : '';
+      // c) 許可のある覚えたフォルダ → 選び直さない
+      o.c = await __sortRun('sort-cancel');
+      o.cPicks = picks.length;
+      // d) 選ぶ画面を閉じた → 黙って何もしない
+      _sideSortRoot = null;
+      window.showDirectoryPicker = async () => { const e = new Error('閉じた'); e.name = 'AbortError'; throw e; };
+      o.d = await __sortRun('sort-cancel');
+      o.sideLeft = SIDE in l2.__files;
+      return o;
+    }, { NO, SIDE });
+    const a17 = alerts(said);
+    console.log('⑰選び方', brief(r17), brief(a17));
+    ok(!r17.error, '⑰止まった → ' + r17.error);
+    if(!r17.error){
+      ok(!r17.a.opened && r17.aPicks === 0 && r17.aRoot && a17.length >= 1 && /許可が取れませんでした/.test(a17[0]) && /何も変えていません/.test(a17[0]),
+         '★前に選んだフォルダの許可が断られたとき、忘れずに先へ進んだ／黙った → ' + short({ a: r17.a, picks: r17.aPicks, root: r17.aRoot, said: a17 }));
+      ok(r17.b.opened && r17.bPicks === 1 && r17.bMode === 'readwrite', '★次に押してもフォルダを選ぶ画面が出ない／書き込みで開かない → ' + short({ b: r17.b.opened, n: r17.bPicks, m: r17.bMode }));
+      ok(r17.c.opened && r17.cPicks === 1, '★許可のある覚えたフォルダなのに、また選ばせた → ' + r17.cPicks);
+      ok(!r17.d.opened && a17.length === 1, '★選ぶ画面を閉じただけで何か言う／窓が出た → ' + short(a17));
+      ok(r17.sideLeft, '★何もしていないのに預けが消えた');
+    }
+    await ctx.close();
+  }
+
+  // ---- ⑱ 閲覧用 ----
+  if(want('⑱')){
+    const py = cp.spawnSync('python3', [path.join(ROOT, 'antenna_main', '開発ツール', 'ビューア生成.py'), '--check',
+      '--main', REAL_MAIN, '--block', path.join(ROOT, 'antenna_main', '開発ツール', 'viewer-block.html'), '--out', VIEWER_PATH], { encoding: 'utf8' });
+    let r18 = null;
+    if(fs.existsSync(VIEWER_PATH)){
+      const o = await openPage(url.pathToFileURL(VIEWER_PATH).href, '⑱');
+      try { await o.page.waitForFunction(() => document.readyState === 'complete' && typeof listReloadFolder === 'function', null, { timeout: 30000 }); } catch(_){}
+      await sleep(2500);
+      r18 = await run(o.page, async () => {
+        const b = document.getElementById('btn-list-sort');
+        let picks = 0;
+        window.showDirectoryPicker = async () => { picks++; throw Object.assign(new Error('x'), { name: 'AbortError' }); };
+        try { await sideSortButton(); } catch(_){}
+        return { viewer: !!window.__VIEWER_MODE__, has: !!b, disp: b ? getComputedStyle(b).display : '',
+                 note: (typeof sideLoadNote === 'function') ? sideLoadNote({ side: [{ name: 'x' }] }) : null, picks };
+      });
+      await o.ctx.close();
+    }
+    // 試験しているメインそのものでも、閲覧専用の印（__VIEWER_MODE__）が立っていれば何もしない
+    let r18m = null;
+    {
+      const { ctx, page } = await openMain('⑱m');
+      r18m = await run(page, async () => {
+        window.__VIEWER_MODE__ = true;
+        let picks = 0;
+        window.showDirectoryPicker = async () => { picks++; throw Object.assign(new Error('x'), { name: 'AbortError' }); };
+        await sideSortButton();
+        const note = sideLoadNote({ side: [{ name: 'x' }] });
+        window.__VIEWER_MODE__ = false;
+        return { picks, note };
+      });
+      await ctx.close();
+    }
+    console.log('⑱閲覧用', brief(r18), brief(r18m), 'ビューア生成 --check', py.status);
+    ok(r18m && !r18m.error && r18m.picks === 0 && r18m.note === '', '★閲覧専用の印があっても振り分けのフォルダを選ばせる／知らせを出す → ' + short(r18m));
+    ok(py.status === 0, '★ビューア（antenna_viewer）がメインから作り直されていない → ' + String(py.stdout || '').split('\n').slice(-3).join(' ') + String(py.stderr || '').slice(0, 300));
+    ok(r18 && !r18.error && r18.viewer && r18.has && r18.disp === 'none', '★閲覧用で「📮 預かりを振り分ける」が出る → ' + short(r18));
+    ok(r18 && r18.note === '' && r18.picks === 0, '★閲覧用で振り分けの知らせを出す／フォルダを選ばせる → ' + short(r18));
+  }
+
+  await browser.close();
+  ok(errs.length === 0, '★画面のエラー: ' + errs.slice(0, 4).join(' / '));
+  if(fails.length){ console.log('FAIL\n- ' + fails.join('\n- ')); process.exit(1); }
+  console.log('PASS smoke_v176_main');
+})().catch(async e => {
+  console.log('FAIL 試験そのものが止まった: ' + (e && e.stack || e));
+  try { if(browser) await browser.close(); } catch(_){}
+  process.exit(1);
+});
