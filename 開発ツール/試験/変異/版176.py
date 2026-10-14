@@ -810,6 +810,17 @@ CASES = [
   (u"★読み直しを断られたとき、印を外しただけの戸別（行が無い）を「まだ前の中身」に数えない",
    u'''        const left = res.adopt.filter(a => a && a.m && done.indexOf(a) < 0).length;''',
    u'''        const left = res.adopt.filter(a => a && a.m && a.m.S && done.indexOf(a) < 0).length;''', TM, "main", u"㉚"),
+
+  # ======== メイン（5回目の見直しの直し） ========
+  (u"★🧹 未施工 で、まとめた預けの印（_sideMerged）を落とす（次の物件に保存で工事完了がまた付く）",
+   u'''  "_sideMerged"
+];''', u'''];''', TM, "main", u"㉛"),
+  (u"★ほかの戸別を書くときも、画面に開いている戸別の「状態」を合わせる（取込で別の戸別が完了になる）",
+   u'''    if(k2 && k2.status && _editingRow === row && !_indivWriteNotShown){''',
+   u'''    if(k2 && k2.status && _editingRow === row){''', TM, "main", u"㉜"),
+  (u"★📥 で戸別を書くときに、画面に出ていない戸別だと印を付けない",
+   u'''  try { _editingRow=row; _indivWriteNotShown = (prev !== row);''',
+   u'''  try { _editingRow=row; _indivWriteNotShown = false;''', TM, "main", u"㉜"),
 ]
 
 import sys as _s

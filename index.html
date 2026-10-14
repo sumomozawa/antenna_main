@@ -15069,6 +15069,9 @@ async function caseFileVerify(fh, obj){
     return "\u30fb読み返せませんでした（" + ((e && e.message) || e) + "）";
   }
 }
+/* ほかの戸別を書くために、いっとき _editingRow を替えているあいだ true（📥 現場取込・協力会社諸経費のそろえ直し）。
+   そのあいだは、画面（エディタ）に出ている戸別とは別の戸別なので、画面の欄に触らない（版176・5回目）。 */
+let _indivWriteNotShown = false;
 async function writeCurrentCaseToIndividualFile(){
   const row = _editingRow;
   if(!row || _listRows.indexOf(row) < 0) return "";
@@ -15149,7 +15152,7 @@ async function writeCurrentCaseToIndividualFile(){
   if(sideKept){
     row.data = Object.assign({}, row.data);
     const k2 = sideKeepFileMarks(row.data, sideFile);
-    if(k2 && k2.status && _editingRow === row){
+    if(k2 && k2.status && _editingRow === row && !_indivWriteNotShown){   // 画面に出ている戸別のときだけ、画面の状態も合わせる
       const el = document.getElementById("chosho_status");
       if(el && el.value !== k2.status) el.value = k2.status;
     }
@@ -23727,7 +23730,10 @@ const CASE_KEEP_ON_REVERT = [
   "flyer_done", "flyer_done_at",
   "consent_received", "consent_received_at",
   "compdoc_received", "compdoc_received_at",
-  "_manual", "_origin", "_schemaVer"
+  "_manual", "_origin", "_schemaVer",
+  // まとめた預けの印（版176）は残す。落とすと、次の「物件に保存」で戸別ファイルの印を「この行の知らない預け」と見て、
+  // いま戻した工事完了をまた付けてしまう（同じ預けを、もう一度まとめてしまうことにもなる）。
+  "_sideMerged"
 ];
 /* この戸別に積算の中身が入っているか（＝「未施工に戻す」を出すか） */
 function caseHasEstimate(row){
@@ -36666,14 +36672,14 @@ async function _genbaWriteRowIndividual(row, inImport){
   const noDirNote = "\n\u26a0 戸別ファイルへ書き戻していません（工事フォルダを掴めていません）";
   if(inImport && _genbaNoDir) return noDirNote;   // 1件目で掴めなかった＝残りも同じ。何度も窓を出さない
   const prev=_editingRow;
-  try { _editingRow=row;
+  try { _editingRow=row; _indivWriteNotShown = (prev !== row);
         const note = await writeCurrentCaseToIndividualFile();
         /* 普段の保存では静かな知らせだが、取り込みでは「1件も書けていない」ので必ず伝える。 */
         if(inImport && note && /工事フォルダ未リンク/.test(note)){ _genbaNoDir = true; return noDirNote; }
         return note; }
   catch(err){ console.warn("[現場取込] 個別JSON書戻し失敗:", err);
     return "\n\u26a0 戸別ファイルへの書き戻しに失敗しました（" + ((err && err.message) || err) + "）"; }
-  finally { _editingRow=prev; }
+  finally { _editingRow=prev; _indivWriteNotShown = false; }
 }
 
 // 1件のマージを行へ適用（再計算＋書戻し＋物件反映）。

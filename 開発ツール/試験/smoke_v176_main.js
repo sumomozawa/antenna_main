@@ -2029,6 +2029,118 @@ const brief = o => JSON.stringify(o === undefined ? null : o).slice(0, 260);   /
     await ctx.close();
   }
 
+  /* ㉛ 🧹 未施工 に戻した戸別を 物件に保存 しても、まとめた預けの工事完了をまた付けない（版176・5回目）
+        戻すときに まとめた印（_sideMerged）を落とすと、保存のとき戸別ファイルの印を「行の知らない預け」と見て工事完了を戻していた */
+  if(want('㉛')){
+    const { ctx, page, said } = await openMain('㉛');
+  const r = await run(page, async ({ NO, SIDE, P1N, STAMP }) => {
+      await __fresh();
+      const D = Object.assign(__D(NO), { work_done: false, chosho_status: 'in_progress', amplifier: 'amp_3u43' });
+      delete D.work_done_at;
+      const S = Object.assign(__S(NO, { proj: P1N, ledger: P1N,
+              touched: ['amplifier', 'line_booster', 'work_done', 'chosho_status', 'asbestos', 'chosho_cust_tel'] }),
+              { amplifier: 'amp_1u45', work_done: true, work_done_at: '2026-10-14', chosho_status: 'in_progress' });
+      const l1 = __mk('リスト', { [NO + '.json']: JSON.stringify(D, null, 2) });
+      const l2 = __mk('リスト', { [SIDE]: JSON.stringify(S) });
+      const p1 = __mk('その１', {}, { 'リスト': l1 });
+      const root = __mk('物件情報_調書', {}, { 'その１': p1, 'その２': __mk('その２', {}, { 'リスト': l2 }) });
+      const rd = Object.assign({}, D, { chosho_photos: null, chosho_photo_count: 6 });
+      const row = { file: 'リスト/' + NO + '.json', data: rd, fileType: 'plain', _fromProject: true, _slim: true, _photoCount: 6 };
+      _listRows = [row];
+      _currentProject = { id: 'pjE1', name: P1N, cases: [] };
+      _projDirHandle = p1;
+      window.showDirectoryPicker = async () => root;
+      const o = { run: (await __sortRun('sort-ok')).okText };
+      o.afterSort = { wd: row.data.work_done, st: row.data.chosho_status, sm: row.data._sideMerged, done: caseWorkDone(row) };
+      const f0 = JSON.parse(l1.__files[NO + '.json']);
+      o.fileAfterSort = { wd: f0.work_done, sm: f0._sideMerged, ph: __pids(f0) };
+      // 🧹 未施工
+      revertCaseFromList(row);
+      o.afterRevert = { wd: row.data.work_done, sm: row.data._sideMerged, amp: row.data.amplifier, done: caseWorkDone(row) };
+      try { await openCaseInEditor(row); } catch(e){ o.openErr = String(e && e.message || e); }
+      try { await overwriteSaveCurrentToProject(); } catch(e){ o.saveErr = String(e && e.message || e); }
+      const f1 = JSON.parse(l1.__files[NO + '.json']);
+      o.file = { wd: f1.work_done, at: f1.work_done_at, st: f1.chosho_status, sm: f1._sideMerged, ph: __pids(f1) };
+      o.doneAfterSave = caseWorkDone(row); o.rowAfterSave = { wd: row.data.work_done, sm: row.data._sideMerged };
+      _currentProject = null; _listRows = []; _projDirHandle = null; _editingRow = null;
+      return o;
+    }, { NO, SIDE, P1N, STAMP });
+    console.log('㉛未施工に戻して物件に保存', brief(r));
+    ok(!r.error, '㉛止まった → ' + r.error);
+    if(!r.error){
+      ok(r.afterSort.wd === true && (r.fileAfterSort.sm || []).indexOf(STAMP) >= 0 && r.afterRevert.done === false,
+         '㉛試験の前提: 振り分けで工事完了が入り、🧹 で外れる → ' + short(r));
+      ok(!r.file.wd && r.doneAfterSave === false && !r.rowAfterSave.wd,
+         '★㉛ 🧹 未施工 に戻したのに、物件に保存で工事完了がまた付いた（事務所が外した印を勝手に戻す）→ ' + short(r));
+      ok((r.afterRevert.sm || []).indexOf(STAMP) >= 0 && (r.file.sm || []).indexOf(STAMP) >= 0,
+         '★㉛ 🧹 未施工 で、まとめた預けの印（_sideMerged）が落ちた（同じ預けをまたまとめてしまう）→ ' + short(r));
+      ok(r.fileAfterSort.ph.split(',').every(p => r.file.ph.split(',').indexOf(p) >= 0),
+         '★㉛ 物件に保存で写真が減った → ' + short([r.fileAfterSort.ph, r.file.ph]));
+    }
+    await ctx.close();
+  }
+
+  /* ㉜ 📥 現場取込 でほかの戸別を書くとき、画面に開いている戸別の「状態」を書き替えない（版176・5回目） */
+  if(want('㉜')){
+    const { ctx, page, said } = await openMain('㉜');
+  const r = await run(page, async ({ NO, P1N, STAMP }) => {
+      await __fresh();
+      const A = 'W5A001', B = NO;
+      const FA = Object.assign(__D(A), { work_done: false, chosho_status: 'in_progress', consent_received: false, amplifier: 'amp_3u43' });
+      delete FA.work_done_at;
+      const FB = Object.assign(__D(B), { amplifier: 'amp_3u43', work_done: true, work_done_at: '2026-10-14', chosho_status: 'completed', _sideMerged: [STAMP] });
+      const l = __mk('リスト', { [A + '.json']: JSON.stringify(FA, null, 2), [B + '.json']: JSON.stringify(FB, null, 2) });
+      const rowA = { file: A + '.json', data: Object.assign({}, FA, { chosho_photos: null, chosho_photo_count: 6 }), fileType: 'plain', _fromProject: true, _slim: true, _photoCount: 6 };
+      const db = Object.assign({}, FB, { work_done: false, chosho_status: 'in_progress', chosho_photos: null, chosho_photo_count: 6 });
+      delete db.work_done_at; delete db._sideMerged;
+      const rowB = { file: B + '.json', data: db, fileType: 'plain', _fromProject: true, _slim: true, _photoCount: 6 };
+      _listRows = [rowA, rowB];
+      _currentProject = { id: 'pjE3', name: P1N, cases: [] };
+      _projDirHandle = l;
+      const o = {};
+      try { await openCaseInEditor(rowA); } catch(e){ o.openErr = String(e && e.message || e); }
+      o.selA0 = document.getElementById('chosho_status').value;
+      // 一覧へ戻る（ふつうの操作）
+      openListView();
+      await new Promise(r => setTimeout(r, 300));
+      o.editingInList = _editingRow && _editingRow.data.chosho_mgmt_no;
+      // 一覧の 📥 ボタンを押す
+      const G = { chosho_mgmt_no: B, chosho_cust_name: '三沢 太郎', work_type: 'uhf_new', amplifier: 'amp_3u43', chosho_status: 'in_progress',
+                  chosho_photos: [__ph('p1', '#c33'), __ph('g9', '#999')], _origin: 'genba' };
+      window.pickFile = (opt, cb) => cb([new File([JSON.stringify(G)], B + '.json', { type: 'application/json' })]);
+      const clicker = setInterval(() => { const b = document.getElementById('gi-import'); if(b && b.onclick && b.offsetParent) b.click(); }, 50);
+      document.getElementById('btn-genba-import').click();
+      for(let i = 0; i < 100; i++){ await new Promise(r => setTimeout(r, 100)); if(JSON.parse(l.__files[B + '.json']).chosho_photos.some(p => p.id === 'g9')) break; }
+      await new Promise(r => setTimeout(r, 2800));
+      clearInterval(clicker);
+      const fb = JSON.parse(l.__files[B + '.json']);
+      o.fileB = { wd: fb.work_done, st: fb.chosho_status, ph: __pids(fb) };
+      o.selA1 = document.getElementById('chosho_status').value;
+      o.rowA_afterImport = rowA.data.chosho_status;
+      // エディタへ戻って、何も触らずにまた一覧へ（ふつうの行き来）
+      closeListView();
+      o.selA2 = document.getElementById('chosho_status').value;
+      try { await overwriteSaveCurrentToProject(); } catch(e){ o.saveErr = String(e && e.message || e); }
+      openListView();
+      await new Promise(r => setTimeout(r, 2800));
+      o.rowA_afterToggle = rowA.data.chosho_status; o.doneA = caseWorkDone(rowA);
+      try { const rec = await projIdbGet('pjE3'); o.idb = (rec.cases || []).map(c => (c.payload || {}).chosho_mgmt_no + ':' + (c.payload || {}).chosho_status).join(); } catch(e){ o.idbErr = String(e); }
+      const fa = JSON.parse(l.__files[A + '.json']); o.fileA_noSave = fa.chosho_status;
+      _currentProject = null; _listRows = []; _projDirHandle = null; _editingRow = null;
+      return o;
+    }, { NO, P1N, STAMP });
+    console.log('㉜取込でほかの戸別の状態', brief(r));
+    ok(!r.error, '㉜止まった → ' + r.error);
+    if(!r.error){
+      ok(r.selA0 === 'in_progress' && r.fileB.st === 'completed' && r.fileB.wd === true && /g9/.test(r.fileB.ph),
+         '㉜試験の前提: 取り込んだ戸別（B）は完了のまま・写真が入る → ' + short(r));
+      ok(r.selA1 === 'in_progress' && r.selA2 === 'in_progress' && r.rowA_afterToggle === 'in_progress' && r.doneA === false
+         && r.fileA_noSave === 'in_progress' && /W5A001:in_progress/.test(r.idb || ''),
+         '★㉜ ほかの戸別を取り込んだら、画面に開いている戸別の状態が「完了」になった → ' + short(r));
+    }
+    await ctx.close();
+  }
+
   await browser.close();
   ok(errs.length === 0, '★画面のエラー: ' + errs.slice(0, 4).join(' / '));
   if(fails.length){ console.log('FAIL\n- ' + fails.join('\n- ')); process.exit(1); }
