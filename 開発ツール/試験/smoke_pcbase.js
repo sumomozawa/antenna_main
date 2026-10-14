@@ -517,13 +517,17 @@ const fails = []; const ok = (c, m) => { if(!c) fails.push(m); };
     const ret = await saveJsonRun();
     const after = JSON.parse(dir._files['370001.json']);
     saveDirGet = og; saveDirOk = oo; window.__answer = true;
-    return { ret, asked: window.__asked.join(' / '), 備考: after.chosho_note };
+    return { ret, asked: window.__asked.join(' / '), 備考: after.chosho_note,
+             info: _lastSaveInfo ? { title: _lastSaveInfo.title, escape: _lastSaveInfo.escape || '' } : null };
   });
   console.log('⑯-c 控えなしの確認', JSON.stringify(r16c));
   ok(/PCのファイルに中身が入っています/.test(r16c.asked) && /備考/.test(r16c.asked),
      '★控えが無いのに、置き換わるものを確かめない → ' + JSON.stringify(r16c));
-  ok(r16c.ret === false && r16c.備考 === 'PCの備考',
+  ok(r16c.備考 === 'PCの備考',
      '★「いいえ」を選んでも書いてしまう → ' + JSON.stringify(r16c));
+  /* 版176：「いいえ」で黙って閉じない。何も書かずに「保存をやめました（何も書いていません）」＋「📮 別の名前で事務所に預ける」を出す */
+  ok(r16c.ret === true && r16c.info && /保存をやめました/.test(r16c.info.title) && r16c.info.escape === 'merge',
+     '★「いいえ」のあと、何も書いていないことと 📮 を出さない（黙って閉じた） → ' + JSON.stringify(r16c));
 
   // ⑯-d 工事完了を取り消したら、状態も「完了」のままにしない（金額では決めない）
   const r16d = await page.evaluate(async () => {
@@ -616,8 +620,9 @@ const fails = []; const ok = (c, m) => { if(!c) fails.push(m); };
     await saveJsonRun();
     saveDirGet = og; saveDirOk = oo;
     const after = JSON.parse(dir._files[name]);
+    /* 版176：知らせは別の窓（uiAlert）ではなく、保存の結果の窓（_lastSaveInfo。📮 つき）で出る */
     return { 番号: after.chosho_mgmt_no, 写真: (after.chosho_photos||[]).length,
-             asked: window.__asked.join(' / ') };
+             asked: window.__asked.concat([(_lastSaveInfo && (_lastSaveInfo.title + ' ' + _lastSaveInfo.msg)) || '']).join(' / ') };
   });
   console.log('⑯-i 番号つきを書き潰さない', JSON.stringify(r16i));
   ok(r16i.番号 === '3C0001' && r16i.写真 === 2,

@@ -164,6 +164,19 @@ window.__pickHint = async function(label, typed){
   await __T(p, 5000);
   return rows;
 };
+/* 版176：選ぶ窓（#pick-modal）が出たら、見出しと本文を __said に控えて「やめる」で閉じる（fn の間だけ）。
+   帯の📁で見つからないときの知らせは、📮・📂 を並べた選ぶ窓で出るようになった。 */
+window.__withPick = async function(fn){
+  const t = setInterval(() => {
+    const pm = document.getElementById('pick-modal');
+    if(pm && pm.classList.contains('open')){
+      window.__said.push(((document.getElementById('pick-title') || {}).textContent || '') + ' ｜ '
+        + ((document.getElementById('pick-note') || {}).textContent || ''));
+      const c = document.getElementById('pick-close'); if(c) c.click();
+    }
+  }, 40);
+  try{ return await fn(); } finally { clearInterval(t); }
+};
 /* 管理番号 no の、この端末で入力した戸別を作る（PCのファイルは読んでいない） */
 window.__mine = function(no){
   M = freshModel(); ensureModelShape(M);
@@ -1741,7 +1754,7 @@ window.__mine = function(no){
       // b 見つからないとき：知らせに「物件 ＞ リスト」と出す（どこを探したか分かるように）
       M = freshModel(); M.chosho_mgmt_no = 'Z172Z99'; M._viewOnly = true;
       __said.length = 0;
-      await __T(pcGuardDirLoad(), 8000);
+      await __T(__withPick(() => pcGuardDirLoad()), 8000);
       o.b_知らせ = (__said.filter(s => /見つかりませんでした/.test(s))[0] || '').slice(0, 120);
       // c 覚えているが許可が切れている：押した操作で1回だけ聞き直し、読み込める
       __noDir(); await __clearDrafts();
@@ -2846,7 +2859,7 @@ window.__mine = function(no){
       root.values = () => { if(root.__perm !== 'granted') return { [Symbol.asyncIterator](){ return { next: async () => { throw ng(); } }; } }; return vs(); };
       M = freshModel(); M.chosho_mgmt_no = NO; M._viewOnly = true;
       __said.length = 0;
-      await __T(pcGuardDirLoad(), 8000);
+      await __T(__withPick(() => pcGuardDirLoad()), 8000);
       o.b = __said.filter(s => /見つかりませんでした/.test(s)).join(' / ');
     }
     // c リストに無い戸別で、この端末に無い写真を控えが知っている（前の版で物件のすぐ下に置いた戸別）
