@@ -44,6 +44,11 @@
      ⑰f 新しい記録（まだ一度も控えていない）で写真を2枚選び、そのまま待つ → 2枚とも端末の記録と画面に入る・「未保存」
      ⑰g ファイルに保存した記録で、取り込みの途中に開き直した → 残りが入ると「未保存」になる（保存済に見せない）
      ⑰h 一覧から記録を開いているあいだに、取り込みの写真が入る → 開いた記録にもその写真がある（備考を直しても消えない）
+   （ここから 特別記録の「保存」：書き出しているあいだに中身が変わったら「保存済」にしない・始めの記録を丸ごと書かない）
+     ⑰i ファイルへ書き出しているあいだに、取り込みの写真が入る → 「保存済」にしない・そう知らせる・記録を開いたまま（入った写真が出る）
+        もう一度「保存」を押すと、その写真もファイルに入って「保存済」になる
+     ⑰j 書き出しているあいだに「戻る」→ 開き直した記録でカメラの1枚 → その写真が端末の記録から消えない・「保存済」にしない
+     ⑰k 「保存済」の印を付けるために端末の記録を読んだところで、取り込みの写真が入る → その写真が端末の記録から消えない
    使い方: node smoke_v178_genba.js [現場入力 index.html の file:// URL]　（SCENE=①,③ で場面を絞れる） */
 const { chromium } = require('playwright-core');
 const fs = require('fs'), path = require('path');
@@ -987,6 +992,111 @@ window.__spImgs = () => document.querySelectorAll('#sp-body .sp-ph img').length;
     ok(r.fired === 1 && r.note === '開いてから直した', '⑰h試験の前提: 一覧から開くあいだに2枚目が入り、開いた記録で備考を直す → ' + J(r));
     ok(hasAll(r.scr, r.ps), '★⑰h一覧から開くあいだに入った写真が、開いた記録に無い → ' + J(r));
     ok(hasAll(r.final, r.ps), '★⑰h一覧から開くあいだに入った写真が、開いた記録で備考を直すと端末の記録から消える → ' + J(r));
+  });
+
+  /* ---------- ⑰i〜⑰k 特別記録の「保存」：書き出しているあいだに中身が変わる ----------
+     書き出すファイルの中身は「保存」を押したときに作る。書き出しているあいだ（フォルダ・保存先を選ぶ画面・共有・読み返し）に
+     入った写真はファイルに無いので、「保存済」にしてはいけない。印を付けるときに始めの記録を丸ごと書いてもいけない。 */
+  const SP_SAVE_SETUP = async () => {
+    const D = __mkdir('リスト', {});
+    window.showSaveFilePicker = undefined; saveDirGet = async () => D; saveDirSettle = async d => d;
+    window.__spD = D;
+  };
+  await scene('⑰i', async page => {
+    await page.evaluate(SP_SAVE_SETUP);
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const D = window.__spD, cs = ['#f81', '#f82', '#f83'];
+      const { key, id } = await __spNew('保存の途中');
+      __spFire('sp-pick', cs);
+      await __rel(cs[0]);                                // 1枚目が入った
+      let fired = 0;
+      window.__onWrite = async () => { if(fired) return; fired = 1; await __rel(cs[1]); };   // 書き出しているあいだに2枚目が入る
+      document.getElementById('sp-save').click();
+      for(let i = 0; i < 100 && !document.querySelector('#save-ov .save-ov-check'); i++) await __sleep(30);
+      await __sleep(200);
+      window.__onWrite = null;
+      const fname = Object.keys(D.__files)[0] || '';
+      const f1 = fname ? __spIds({ photos: JSON.parse(D.__files[fname]).chosho_photos }) : null;
+      const rec1 = await idbGet(key);
+      const ov = (document.getElementById('save-ov') || {}).textContent || '';
+      const open = !!(_spCur && _spCur.key === key), imgs = __spImgs();
+      await __rel(cs[2]); await __sleep(300);            // 取り込みの3枚目
+      const x = document.getElementById('save-ov-x2'); if(x) x.click();
+      /* もう一度「保存」（開いたままでなければ、一覧から開いて押す） */
+      if(!(_spCur && _spCur.key === key)) document.querySelector('[data-sp-open="' + id + '"]').click();
+      await __sleep(250);
+      const w0 = D.__wrote.length;
+      document.getElementById('sp-save').click();
+      for(let i = 0; i < 100 && D.__wrote.length === w0; i++) await __sleep(30);
+      await __sleep(400);
+      const rec2 = await idbGet(key);
+      return { fired, ps: cs.map(__pidOf), f1, db1: __spIds(rec1), stale1: !!(rec1 && spStale(rec1)),
+               said: /保存の途中/.test(ov) && /もう一度「保存」/.test(ov), open, imgs,
+               f2: __spIds({ photos: JSON.parse(D.__files[fname] || '{}').chosho_photos }), stale2: !!(rec2 && spStale(rec2)),
+               sameName: Object.keys(D.__files).length === 1 };
+    });
+    console.log('⑰i保存の途中で写真が入る', J(r));
+    ok(r.fired === 1 && r.f1 === r.ps[0], '⑰i試験の前提: 書き出すファイルは1枚目だけで、書き出しているあいだに2枚目が入る → ' + J(r));
+    ok(hasAll(r.db1, [r.ps[0], r.ps[1]]), '★⑰i書き出しているあいだに入った写真が、端末の記録から消えた → ' + J(r));
+    ok(r.stale1, '★⑰i書き出しているあいだに写真が入ったのに「保存済」になった（ファイルにその写真が無い） → ' + J(r));
+    ok(r.said, '★⑰i保存の途中で中身が変わったことを知らせない → ' + J(r));
+    ok(r.open && r.imgs === 2, '★⑰i保存の途中で中身が変わったのに、記録を閉じた・入った写真が画面に出ない → ' + J(r));
+    ok(hasAll(r.f2, r.ps) && !r.stale2 && r.sameName, '★⑰iもう一度「保存」を押しても、写真がそろわない・「保存済」にならない・別の名前のファイルができた → ' + J(r));
+  });
+
+  await scene('⑰j', async page => {
+    await page.evaluate(SP_SAVE_SETUP);
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const cC = '#0c9';
+      const { key, id } = await __spNew('保存の途中で開き直す');
+      __spFire('sp-pick', ['#f91']); await __rel('#f91');
+      let fired = 0;
+      window.__onWrite = async () => { if(fired) return; fired = 1;
+        await __spOpen(id);                              // 書き出しているあいだに「戻る」→ 開き直して
+        __spFire('sp-cam', [cC]); await __rel(cC); };     // カメラで1枚
+      document.getElementById('sp-save').click();
+      for(let i = 0; i < 100 && !document.querySelector('#save-ov .save-ov-check'); i++) await __sleep(30);
+      await __sleep(300);
+      window.__onWrite = null;
+      const rec = await idbGet(key);
+      return { fired, p1: __pidOf('#f91'), pC: __pidOf(cC), db: __spIds(rec), stale: !!(rec && spStale(rec)),
+               scr: __spIds(_spCur), open: !!(_spCur && _spCur.key === key) };
+    });
+    console.log('⑰j保存の途中で開き直す', J(r));
+    ok(r.fired === 1, '⑰j試験の前提: 書き出しているあいだに開き直してカメラで撮る → ' + J(r));
+    ok(hasAll(r.db, [r.p1, r.pC]), '★⑰j書き出しているあいだに開き直して撮った写真が、保存の印を付けたときに端末の記録から消えた → ' + J(r));
+    ok(r.stale, '★⑰j書き出しているあいだに写真が入ったのに「保存済」になった → ' + J(r));
+    ok(r.open && hasAll(r.scr, [r.p1, r.pC]), '★⑰j開き直した記録が閉じられた・撮った写真が出ない → ' + J(r));
+  });
+
+  await scene('⑰k', async page => {
+    await page.evaluate(SP_SAVE_SETUP);
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const cs = ['#fa1', '#fa2'];
+      const { key, id } = await __spNew('印のあいだ');
+      __spFire('sp-pick', cs);
+      await __rel(cs[0]);
+      /* 書き終えたあと、「保存済」の印のために端末の記録を読んだところで、取り込みの2枚目が入る */
+      let arm = 0, fired = 0;
+      window.__onWrite = async () => { arm = 1; };
+      const og = idbGet;
+      idbGet = async k => { const v = await og(k);
+        if(arm && k === key){ arm = 0; fired = 1; await __rel(cs[1]); await __sleep(300); }
+        return v; };
+      document.getElementById('sp-save').click();
+      for(let i = 0; i < 100 && !document.querySelector('#save-ov .save-ov-check'); i++) await __sleep(30);
+      await __sleep(600);
+      idbGet = og; window.__onWrite = null;
+      const rec = await idbGet(key);
+      return { fired, ps: cs.map(__pidOf), db: __spIds(rec), stale: !!(rec && spStale(rec)) };
+    });
+    console.log('⑰k印のあいだに写真が入る', J(r));
+    ok(r.fired === 1, '⑰k試験の前提: 保存済の印のために端末の記録を読んだところで2枚目が入る → ' + J(r));
+    ok(hasAll(r.db, r.ps), '★⑰k保存済の印を付けたときに、そのあいだに入った写真が端末の記録から消えた → ' + J(r));
+    ok(r.stale, '★⑰kファイルに無い写真が入ったのに「保存済」に見える → ' + J(r));
   });
 
   await b.close();

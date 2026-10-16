@@ -7,6 +7,7 @@
 #   ・現場入力：まとめて保存・全部保存し直す・引き継ぎ・受付台帳の取り込みで、始めに読んだ写しで下書きを書き戻して
 #     途中で届いた写真を消していた直し。写真の取り込みの最後の書き込みで、開き直した戸別・別の戸別の下書きを上書きしない。
 #     特別記録の写真の取り込みも、取り込みを始めた記録を丸ごと書かない（端末の記録を読み直して、新しく読んだ写真だけを足す）。
+#     特別記録の「保存」も、書き出しているあいだに中身が変わったら「保存済」にしない・印を付けるときに記録を丸ごと書かない。
 #   場面を絞って速くする（現場入力は SCENE、メインは ONLY に場面の記号を渡す）。
 #   「メイン」「現場」を引数に渡すと分けて走らせられる。名前の一部を渡すとそれだけ走る。
 import io, subprocess, os
@@ -331,6 +332,23 @@ CASES = [
   (u"★特別記録の取り込みで版を進めない（ファイルに入っていない写真が保存済みに見える）",
    u'''    prev.rev = Math.max(prev.rev | 0, (cur && cur.rev) | 0, rec.rev | 0) + 1;''',
    u'''    prev.rev = prev.rev | 0;''', TG, "genba", u"⑰g"),
+  # ======== 現場入力：特別記録の「保存」（書き出しているあいだに中身が変わる） ========
+  (u"★特別記録の保存済の印で、回数をいまの回数にする（書き出しているあいだに入った写真が「保存済」に見える）",
+   u'''    const put = o => { o.fileName = rec.fileName; if(ok){ o.fileSavedAt = at; o.fileRev = rev0; } };''',
+   u'''    const put = o => { o.fileName = rec.fileName; if(ok){ o.fileSavedAt = at; o.fileRev = o.rev | 0; } };''', TG, "genba", u"⑰i"),
+  (u"★特別記録の保存済の印を付けるとき、書き出した記録を丸ごと書く（書き出しているあいだに開き直して撮った写真が消える）",
+   u'''    const o = prev || spRow(rec);''', u'''    const o = spRow(rec);''', TG, "genba", u"⑰j"),
+  (u"★特別記録の保存済の印を、取り込みの書き込みと同じ列に並べない（印のあいだに入った写真が消える）",
+   u'''function spMarkSaved(rec, rev0, ok){
+  return spQueue(async () => {''',
+   u'''function spMarkSaved(rec, rev0, ok){
+  return (fn => fn())(async () => {''', TG, "genba", u"⑰k"),
+  (u"★特別記録の保存の途中で中身が変わっても知らせない（もう一度押すことに気づけない）",
+   u'''    return !!ok && (o.rev | 0) > rev0;''', u'''    return false;''', TG, "genba", u"⑰i"),
+  (u"★特別記録の保存の途中で中身が変わっても、記録を閉じる",
+   u'''    if(res && res.ok && !res.late){''', u'''    if(res && res.ok){''', TG, "genba", u"⑰i"),
+  (u"★特別記録の保存の途中で入った写真を、開いている画面に出さない",
+   u'''      if(res.late && spCurOf(r)) renderSpecialEdit(host);''', u'''''', TG, "genba", u"⑰i"),
 ]
 
 import sys as _s
