@@ -446,7 +446,7 @@ CASES = [
    u'''        try{ if(await spPhotoKeep(r, pending)) dup++; else if(small) shrunk++; pending = []; }catch(_){ if(small) shrunk++; }''',
    u'''        try{ if(await spPhotoKeep(r, pending)) dup++; else if(small) shrunk++; }catch(_){ if(small) shrunk++; } pending = [];''', TG, "genba", u"⑰l"),
   (u"★特別記録の取り込みで、ずっと控えられない写真を消える知らせでしか言わない",
-   u'''      if(dlg && dlg.classList.contains("open")) toast(msg); else uiAlert(msg);''', u'''      toast(msg);''', TG, "genba", u"⑰l"),
+   u'''      uiNoticeWhenIdle("⚠ " + pending.length''', u'''      toast("⚠ " + pending.length''', TG, "genba", u"⑰l"),
   (u"★特別記録の取り込みで、控えられなかった写真を ✕ で消していても、もう一度送る（消した写真が戻る）",
    u'''      const add = phs.filter(p => { const k = spPid(p); return k && (p === last || !(seen.has(k) && !have.has(k))); });''',
    u'''      const add = phs.slice();''', TG, "genba", u"⑰t"),
