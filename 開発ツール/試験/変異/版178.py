@@ -24,7 +24,7 @@ OUTG = os.path.join(HERE, "mut_genba.html")
 CR = lambda x: x.replace("\r\n", "\n").replace("\n", "\r\n")
 LF = lambda x: x.replace("\r\n", "\n")
 TM, TG = "smoke_v178_main.js", "smoke_v178_genba.js"
-TMM = "smoke_v178_mem_main.js"   # 3回目の見直し（メモリ）の場面 ㉟〜㊷
+TMM = "smoke_v178_mem_main.js"   # 3回目の見直し（メモリ）の場面 ㉟〜㊷・預けた縮小版の行の「💾 保存」㉗p（#174）
 
 # (名前, 壊す前, 壊した後, 試験, どのファイル, 場面)  どのファイル＝ "main"／"genba"。場面＝その試験の場面の記号
 THUMB_OLD = u'''  thumbMemoPut(row.file, row.lastModified, thumbs);   // 次にフォルダを読んだ時は作り直さない
@@ -342,16 +342,22 @@ CASES = [
    u'''  // File System Access API 対応ブラウザ (Chrome/Edge): 保存先ダイアログを表示
   if(window.showSaveFilePicker){''', TM, "main", u"㉗b"),
   (u"★物件から開いた戸別かを、縮小版の印だけで見る（写真の無い物件の行で、戸別ファイルの写真が消える）",
-   u'''  return !!(row && (row._fromProject || (row.data && row.data.chosho_photos_thumb)));''',
-   u'''  return !!(row && ((row.data && row.data.chosho_photos_thumb)));''', TM, "main", u"㉗c"),
+   u'''  return !!(row && (row._fromProject || (row.data && row.data.chosho_photos_thumb)
+''',
+   u'''  return !!(row && ((row.data && row.data.chosho_photos_thumb)
+''', TM, "main", u"㉗c"),
   (u"★物件から開いた戸別かを、縮小版の印だけで見る（暗号の物件の行＝印が無い。ハイブリッド保存で .hyb の暗号の写真が消える）",
-   u'''  return !!(row && (row._fromProject || (row.data && row.data.chosho_photos_thumb)));''',
-   u'''  return !!(row && ((row.data && row.data.chosho_photos_thumb)));''', TM, "main", u"㉘a"),
+   u'''  return !!(row && (row._fromProject || (row.data && row.data.chosho_photos_thumb)
+''',
+   u'''  return !!(row && ((row.data && row.data.chosho_photos_thumb)
+''', TM, "main", u"㉘a"),
   (u"★物件から開いたのではない戸別も写しにする（📂 で読んだ戸別を ファイルを選ぶ画面で保存できない）",
-   u'''  return !!(row && (row._fromProject || (row.data && row.data.chosho_photos_thumb)));''',
+   u'''  return !!(row && (row._fromProject || (row.data && row.data.chosho_photos_thumb)
+    || (typeof rowHasParkedThumb === "function" && rowHasParkedThumb(row))));''',
    u'''  return true;''', TM, "main", u"㉗d"),
   (u"★物件から開いたのではない戸別も写しにする（🔐／ハイブリッド保存をファイルを選ぶ画面で保存できない）",
-   u'''  return !!(row && (row._fromProject || (row.data && row.data.chosho_photos_thumb)));''',
+   u'''  return !!(row && (row._fromProject || (row.data && row.data.chosho_photos_thumb)
+    || (typeof rowHasParkedThumb === "function" && rowHasParkedThumb(row))));''',
    u'''  return true;''', TM, "main", u"㉘d"),
   (u"★写しに、画面に入れなかった写真を入れない（図面の無い戸別の写しが写真0枚）",
    u'''  if(fromProj) editorAddHiddenPhotos(s, true);''', u'''''', TM, "main", u"㉗b"),
@@ -508,6 +514,10 @@ CASES = [
   const password = await promptPassword({
     title: "🔐🔑 ハイブリッド暗号化保存 (方式C)",''', TM, "main", u"㉘f"),
 
+  # ---- （G5）#176（預けた縮小版）との取り決め：預けた縮小版を持つ行も「物件から開いた戸別」と同じに扱う ----
+  (u"★預けた縮小版を持つ行（台帳で作った行・縮小版の印が外れた）の「💾 保存」で、ファイルを選ぶ画面を開く（戸別ファイルを縮小版で置き換える）",
+   u'''    || (typeof rowHasParkedThumb === "function" && rowHasParkedThumb(row))));''',
+   u'''    || false));''', TMM, "main", u"㉗p"),
   # ---- （G4）版178 の b93342c を取り込んだあとの見直しの直し：写しの知らせを画面の写真に合わせる ----
   (u"★剥がれた画面に写真が出ていて写しに入るのに、「写真は…この写しには入りません」とだけ言う（この画面の写真は入ると言わない）",
    u'''    + (_editorPhotosStripped ? (ph.length ?''', u'''    + (_editorPhotosStripped ? (false ?''', TM, "main", u"㉘i"),

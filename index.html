@@ -15946,9 +15946,12 @@ async function saveState(){
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
 }
-/* 行が物件から開いたものか（版178）。物件の行（_fromProject）か、物件の縮小版の印（chosho_photos_thumb）を持つ行 */
+/* 行が物件から開いたものか（版178）。物件の行（_fromProject）か、物件の縮小版の印（chosho_photos_thumb）を持つ行。
+   戸別ファイルに預けた縮小版（rowHasParkedThumb）を持つ行も同じに扱う（版178・#176 との取り決め）。
+   台帳で作った行は、読めないまま保存すると縮小版の印が外れるが、画面は預けた縮小版のまま（ファイルを選ぶ画面で戸別ファイルを置き換えると縮小版で書く） */
 function rowOpenedFromProject(row){
-  return !!(row && (row._fromProject || (row.data && row.data.chosho_photos_thumb)));
+  return !!(row && (row._fromProject || (row.data && row.data.chosho_photos_thumb)
+    || (typeof rowHasParkedThumb === "function" && rowHasParkedThumb(row))));
 }
 /* 物件から開いた戸別か（版178）。「💾 保存」「🔐 暗号化保存」「ハイブリッド保存」が、ファイルを選ぶ画面を開くかを決める。
    ★画面の側でも覚えておく（_editorProjRow）★ 開いている行を一覧で「🧹 未施工」「一覧から消す」・世帯の削除にすると、
