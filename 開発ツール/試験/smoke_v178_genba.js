@@ -18,6 +18,7 @@
      ⑤ 引き継ぎ（📥）：確かめの窓のあいだに届いた写真を、下書きから消さない
      ⑥ 受付台帳の取り込み：入れ直しているあいだに届いた写真を、下書きから消さない
      ⑦ 写真の取り込みの途中でその戸別を開き直し、カメラで1枚足した → 取り込みの残りが届いても、その1枚が消えない
+     ⑦b 測定値のCSVの取り込み（別の戸別へ移ったあとで読み終わる）でも、開き直して足したカメラの写真を消さない
      ⑧ 管理番号が別の下書きと重なった新しい戸別（一時のキー）に写真を取り込む → 別の戸別の下書きを置き換えない
      ⑨ 特別記録：写真を読み終える前に「戻る」を押した → 読み終わりの描き直しで止まらない（写真は読み終えたときに控えてある）
    （ここから 写真の取り込みは、いちばん新しい下書きに「新しく読んだ写真だけ」を足す。下書きのキーが移っていれば移った先へ）
@@ -426,6 +427,32 @@ window.__holders = async function(ps, except){
     ok(r.mid && r.mid.indexOf(r.cam) >= 0, '⑦試験の前提: 開き直した戸別にカメラの1枚が入る → ' + J(r));
     ok(r.final && r.final.indexOf(r.cam) >= 0 && r.final.indexOf(r.p3) >= 0,
        '★⑦写真の取り込みの残りが届くと、開き直して足したカメラの写真が下書きから消える → ' + J(r));
+  });
+
+  /* ---------- ⑦b 測定値のCSVの取り込みが、別の戸別へ移ったあとで読み終わる → 開き直して足したカメラの写真を消さない ----------
+     CSV の取り込み（handleMeasCsv）は、読み終えたとき読込元の戸別が画面に無ければ persistModel(読込元) で書く（写真を足す道ではない）。 */
+  await scene('⑦b', async page => {
+    const r = await page.evaluate(async ({ NA, NB }) => {
+      __gatedImport();
+      await __state();
+      await __open('no:' + NA);                         // A を開く（M = A1）＝CSV の読込元
+      const A1 = M;
+      await __open('no:' + NB);                          // CSV を読んでいるあいだに B へ
+      await __open('no:' + NA);                          // A を開き直す（M = A2、別の物）
+      const cam = handlePhotoFiles(__files(['#0f0']));   // A2 でカメラの1枚
+      await __rel('#0f0'); await cam;
+      await __open('no:' + NB);                          // B へ（A2 はカメラの1枚ごと下書きへ）
+      const mid = __pids((await idbGet('no:' + NA)).model);
+      A1.measurements.antenna = [{ db: '61', mer: '30', ber: '' }];   // CSV を読み終えた（読込元 A1 に入る）
+      await persistModel(A1);                            // handleMeasCsv と同じ：別の戸別へ移ったので読込元を直接控える
+      const rec = await idbGet('no:' + NA);
+      return { cam: __pidOf('#0f0'), mid, final: __pids(rec.model),
+               meas: ((rec.model.measurements || {}).antenna || [])[0] || null };
+    }, { NA, NB });
+    console.log('⑦b CSVの取り込み', J(r));
+    ok(r.mid && r.mid.indexOf(r.cam) >= 0, '⑦b試験の前提: 開き直した戸別にカメラの1枚が入る → ' + J(r));
+    ok(r.meas && r.meas.db === '61', '⑦b試験の前提: CSV の値が下書きに入る → ' + J(r));
+    ok(r.final && r.final.indexOf(r.cam) >= 0, '★⑦b測定値のCSVの取り込みが読み終わると、開き直して足したカメラの写真が下書きから消える → ' + J(r));
   });
 
   /* ---------- ⑧ 管理番号が別の下書きと重なった新しい戸別（一時のキー）に写真を取り込む → 別の戸別の下書きを置き換えない ---------- */

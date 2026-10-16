@@ -198,8 +198,8 @@ CASES = [
    u'''    const rec = isOpen ? byNo[it.no] : await draftRecNow(byNo[it.no]);''', u'''    const rec = byNo[it.no];''', TG, "genba", u"⑤"),
   (u"★受付台帳の取り込み：始めに読んだ写しに入れて書き戻す（届いた写真が消える）",
    u'''    const rec = await draftRecNow(rec0);''', u'''    const rec = rec0;''', TG, "genba", u"⑥"),
-  (u"★写真の取り込みの最後の書き込みで、下書きにしか無い写真を足さない（開き直して足した写真が消える）",
-   u'''      mergePhotosInto(m.chosho_photos, prev.model.chosho_photos);''', u'''''', TG, "genba", u"⑦"),
+  (u"★測定値のCSVの取り込みの書き込みで、下書きにしか無い写真を足さない（開き直して足した写真が消える）",
+   u'''      mergePhotosInto(m.chosho_photos, prev.model.chosho_photos);''', u'''''', TG, "genba", u"⑦b"),
   (u"★写真の取り込みの最後の書き込みを、管理番号のキーへ書く（別の戸別の下書きを置き換える）",
    u'''    const key = m._lastDraftKey ? draftKeyNow(m._lastDraftKey)
       : (m.chosho_mgmt_no ? ("no:"+m.chosho_mgmt_no) : (m._draftId || (m._draftId="tmp:"+Date.now())));''',

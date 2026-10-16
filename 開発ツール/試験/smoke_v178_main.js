@@ -52,6 +52,7 @@
      ㉓ 開いたあとで現場入力がファイルに足した写真を、保存で消さない（画面で消した写真だけを消す）
         a) 図面なし・物件に保存　b) 図面あり・💾 上書き保存（物件なし）　c) 一覧へ戻ったあと、協力会社諸経費のそろえ直しで書く
         d) 物件に保存のあと開き直して 💾 上書き保存　e) 画面で消した写真は 💾 上書き保存 で消える　f) 足して上書き保存 → 消して上書き保存 → 消える
+        g) 📮 振り分けで写真が入った（まだ開いていない）📁 の行を開いて1枚消す → 💾 上書き保存で消える
      ㉔ 自分のファイルから読んだ行の小さい写真（図など）を「小さい写真」と言わない。物件の行（開いて直して印が外れた）は今までどおり言う
      ㉕ 暗号の戸別（.hyb）：写真を剥がした封筒をそのまま書かない（a 元のファイルの暗号の写真を戻して書く　b 鍵が違えば書かない・知らせる）
      ㉖ 物件の縮小版づくりが動いているあいだに次の保存が来たら、終わるのを待つ（縮小版の無い行を「写真なし」で物件に入れない）
@@ -1289,7 +1290,8 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
   //   d) 図面なしで写真を足して物件に保存 → 現場が足した → 開き直して 💾 上書き保存
   //   e) 画面で消した写真は、これまでどおり 💾 上書き保存 で消える
   //   f) 一度開いて戻った行を開き直す → 写真を足して 💾 上書き保存 → その写真を消して 💾 上書き保存 → 消える
-  for(const mode of ['a', 'b', 'c', 'd', 'e', 'f'].filter(m => want('㉓' + m))){
+  //   g) 写真の無かった 📁 の行に 📮 振り分けで現場の写真が入った（行が写真を持つ・まだ開いていない）→ 開いて1枚消して 💾 上書き保存 → 消える
+  for(const mode of ['a', 'b', 'c', 'd', 'e', 'f', 'g'].filter(m => want('㉓' + m))){
     const { ctx, page, said } = await openMain('㉓' + mode);
     const r = await run(page, async ({ NO, PN, mode }) => {
       const g1 = __jpeg(900, 700, 0.85, 121), K = __jpeg(900, 700, 0.85, 122), x1 = __jpeg(900, 700, 0.85, 123);
@@ -1298,7 +1300,8 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       const drawing = (mode !== 'a' && mode !== 'd');
       const base = { chosho_mgmt_no: NO, chosho_cust_name: '試験 様', chosho_status: 'in_progress', work_type: 'uhf_new' };
       if(drawing) base.amplifier = 'amp_3u43';
-      const photos0 = [{ id: 'g1', label: 'g1', dataUri: g1 }].concat(mode === 'e' ? [{ id: 'x1', label: 'x1', dataUri: x1 }] : []);
+      const photos0 = (mode === 'g') ? undefined                                // g) 📁 で読んだときは写真が無かった
+        : [{ id: 'g1', label: 'g1', dataUri: g1 }].concat(mode === 'e' ? [{ id: 'x1', label: 'x1', dataUri: x1 }] : []);
       if(proj) await __openProj(__proj178('pj178v' + mode, PN, []));
       const list = __mk('リスト', { [NO + '.json']: JSON.stringify(Object.assign({}, base, { chosho_photos: photos0 }), null, 2) });
       if(proj) _projDirHandle = list;                                          // 工事フォルダとつながっている
@@ -1370,6 +1373,21 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
         try { renderPhotoInputs(); } catch(_){}
         try { markEditorDirty(); } catch(_){}
         await overwriteSaveCurrent();
+      } else if(mode === 'g'){
+        // 📮 預かりを振り分ける：現場の預けの写真（g1・x1）を戸別ファイルへ入れ、一覧の行にも同じ写真を持たせる（sideAdoptRow）
+        fieldAdds({ id: 'g1', label: 'g1', dataUri: g1 }); fieldAdds({ id: 'x1', label: 'x1', dataUri: x1 });
+        o.adopt = await sideAdoptRow(row, { m: { stamp: '20261016-090000', fh, no: NO, photos: 2, side: { touched: [] },
+          S: { chosho_mgmt_no: NO, chosho_photos: [{ id: 'g1', label: 'g1', dataUri: g1 }, { id: 'x1', label: 'x1', dataUri: x1 }] } } });
+        o.rowHeld = { slim: !!row._slim, ids: ((row.data && row.data.chosho_photos) || []).filter(p => p && p.dataUri).map(p => p.id).join(','),
+                      seen: row._photosSeen instanceof Set ? row._photosSeen.size : null };
+        await listLoadRow(row);                                                 // 開く（行の写真を画面に出す）
+        o.shown = shownIds();
+        o.btnText = document.getElementById('btn-save-overwrite').textContent;
+        STATE.photos = (STATE.photos || []).filter(p => !(p && p.id === 'x1'));   // 画面で x1 を消す
+        try { renderPhotoInputs(); } catch(_){}
+        try { markEditorDirty(); } catch(_){}
+        __setTel('090-2222-3333');
+        await overwriteSaveCurrent();
       }
       const j = JSON.parse(list.__files[NO + '.json']);
       return Object.assign(o, { file: ids(), tel: j.chosho_cust_tel, writes: list.__writes.length });
@@ -1378,7 +1396,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
     console.log('㉓' + mode + '開いたあとで現場が足した写真', short(r), short(a23.slice(-1).map(m => m.slice(0, 60))));
     ok(!r.error, '㉓' + mode + '止まった → ' + r.error);
     if(!r.error){
-      const want23 = { a: 'K,g1', b: 'K,g1', c: 'K,g1', d: 'G2,P,g1', e: 'g1', f: 'g1' }[mode];
+      const want23 = { a: 'K,g1', b: 'K,g1', c: 'K,g1', d: 'G2,P,g1', e: 'g1', f: 'g1', g: 'g1' }[mode];
       if(mode === 'a') ok(r.shown === 'g1' && r.btn.pressed && /物件に保存/.test(r.btn.text), '㉓a試験の前提: 開くとファイルの写真が出て、物件に保存できる → ' + short(r));
       if(mode === 'b' || mode === 'e') ok(r.shown === (mode === 'e' ? 'g1,x1' : 'g1') && /上書き保存/.test(r.btnText), '㉓' + mode + '試験の前提: 📁 で読んだ戸別を開くと、ファイルの写真が出て「💾 上書き保存」になる → ' + short(r));
       if(mode === 'c') ok(r.shown === 'g1' && !r.rowHeld.slim && r.rowHeld.ids === 'g1' && /戸別の個別JSONも更新しました/.test(r.note),
@@ -1388,7 +1406,9 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       if(mode === 'f') ok(!r.rowHeld.slim && r.rowHeld.ids === 'g1' && r.shown === 'g1' && /上書き保存/.test(r.btnText) && r.first === 'P,g1',
                           '㉓f試験の前提: 戻ると行が写真を持ち、開き直して足した P が上書き保存で入る → ' + short(r));
       ok(r.tel === '090-2222-3333', '㉓' + mode + '試験の前提: 直しが戸別ファイルに入る → ' + short(r));
-      if(mode === 'e' || mode === 'f') ok(r.file === want23, '★㉓' + mode + '画面で消した写真が、戸別ファイルに残る（消えない） → ' + short(r));
+      if(mode === 'g') ok(r.adopt === true && !r.rowHeld.slim && r.rowHeld.ids === 'g1,x1' && r.rowHeld.seen === null && r.shown === 'g1,x1' && /上書き保存/.test(r.btnText),
+                          '㉓g試験の前提: 振り分けで行が写真を持ち（まだ開いていない）、開くと写真が出て「💾 上書き保存」になる → ' + short(r));
+      if(mode === 'e' || mode === 'f' || mode === 'g') ok(r.file === want23, '★㉓' + mode + '画面で消した写真が、戸別ファイルに残る（消えない） → ' + short(r));
       else ok(r.file === want23, '★㉓' + mode + '開いたあとで現場入力がファイルに足した写真が、保存で消えた → ' + short(r));
     }
     await ctx.close();
