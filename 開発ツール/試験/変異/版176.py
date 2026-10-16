@@ -782,7 +782,7 @@ CASES = [
   (u"★引き継いだ状態を開いている画面に入れない（開いたままもう一度保存すると外れる）",
    u'''      if(el && el.value !== k2.status) el.value = k2.status;''', u'''''', TM, "main", u"㉙"),
   (u"★戸別ファイルから済みの印・状態を引き継いだことを知らせない",
-   u'''  renamedNote += sideKeptNote;''', u'''''', TM, "main", u"㉙"),
+   u'''  renamedNote += sideKeptNote + thumbKeptNote;''', u'''  renamedNote += thumbKeptNote;''', TM, "main", u"㉙"),   # 版178 で縮小版の知らせ（thumbKeptNote）を足した
   (u"★物件の行のときも、振り分けたあと 📁 のフォルダを読み直す（物件の戸別・物件だけの直しが消える）",
    u'''      related = false;
       if(res.gone.length){                       // 片付けた預けは''', u'''      if(res.gone.length){                       // 片付けた預けは''', TM, "main", u"㉘a"),

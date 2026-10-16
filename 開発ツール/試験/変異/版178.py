@@ -478,8 +478,8 @@ CASES = [
    u'''  const er = _editingRow, r = er || _editorProjRow;''',
    u'''  const er = _editingRow, r = er;''', TM, "main", u"㉘g"),
   (u"★工事調書のまとめ印刷のあと、「写真が復元できていない」印とバナーを戻さない（💾 上書き保存の確かめが出ない）",
-   u'''      _editorPhotosStripped = savedStripped; showPhotoStrippedBanner(savedStripped);''',
-   u'''''', TM, "main", u"㉘h"),
+   u'''      if(savedStripped){ _editorPhotosStripped = true; showPhotoStrippedBanner(true); }   // 写真の出ていない画面のまま（版178）
+''', u'''''', TM, "main", u"㉘h"),
   (u"★暗号の戸別へ「💾 物件に保存」を案内するとき、ここで足した写真とお客様の欄が入らないことを言わない",
    u'''    + (projBtn ? (hyb ? "戸別ファイル（" + fname + "）へは「💾 物件に保存」で書いてください（図面・積算が入ります）。\\n"''',
    u'''    + (projBtn ? (false ? "戸別ファイル（" + fname + "）へは「💾 物件に保存」で書いてください（図面・積算が入ります）。\\n"''', TM, "main", u"㉘a"),
@@ -567,6 +567,265 @@ CASES = [
   (u"★引き継ぎで新しい印が無いとき、行の控えを待たずに書く（2つ目からの行が残らない）",
    u'''      await flowShareItemsApply(items, byNo, openNo);''',
    u'''      flowShareItemsApply(items, byNo, openNo);''', TG, "genba", u"⑯"),
+  # ======== メイン：7回目の直し（物件の覚えている名前が古い戸別を、縮小版のファイルにしない） ========
+  # ======== メイン：物件の覚えている名前が古い戸別を、縮小版のファイルにしない（7回目の見直し） ========
+  (u"★古い名前で元のファイルが見つからないとき、工事フォルダの中の元の写真を使わない（縮小版のファイルを作る）",
+   u'''  if(created && !photoSrcFh && row.fileType === "plain" && ((row.data && row.data.chosho_photos_thumb) || row._fromProject)){''',
+   u'''  if(false){''', TM, "main", u"㊸ha"),
+  (u"★見つけた元の写真を、縮小版の代わりに使わない（📥 現場取込）",
+   u'''    return (b && photoLongEdgeOf(b.p.dataUri) > photoLongEdgeOf(p.dataUri)) ? Object.assign({}, p, { dataUri: b.p.dataUri }) : p;''',
+   u'''    return p;''', TM, "main", u"㊸hc"),
+  (u"★見つけた元の写真を、縮小版の代わりに使わない（協力会社諸経費のそろえ直し）",
+   u'''    return (b && photoLongEdgeOf(b.p.dataUri) > photoLongEdgeOf(p.dataUri)) ? Object.assign({}, p, { dataUri: b.p.dataUri }) : p;''',
+   u'''    return p;''', TM, "main", u"㊸hd"),
+  (u"★同じ管理番号のファイルを読めなかったことを覚えない（行の写真がみな縮小版でも、縮小版のファイルを作る）",
+   u'''    if(!fb.read){ unread.push({ path: it.path, file: true }); continue; }''',
+   u'''    if(!fb.read) continue;''', TM, "main", u"㊸ia"),
+  (u"★同じ管理番号のファイルを読めなかったことを覚えない（途中で切れた Android の名前のファイル）",
+   u'''    if(!fb.read){ unread.push({ path: it.path, file: true }); continue; }''',
+   u'''    if(!fb.read) continue;''', TM, "main", u"㊸o"),
+  (u"★開けないフォルダを覚えない（本当のファイルのある リスト を開けなくても、縮小版のファイルを作る）",
+   u'''    } catch(_){ unread.push({ path: pre, file: false }); }''',
+   u'''    } catch(_){}''', TM, "main", u"㊸ib"),
+  (u"★開けないフォルダが1つでもあると、探すのをやめて断る（関係の無いフォルダ1つで作れない・📁 の読み込みと違う）",
+   u'''  await walk(dir, "");''',
+   u'''  await walk(dir, ""); if(unread.length) return { ok: false, walked: true, file: false, why: "工事フォルダの中を見られませんでした" };''', TM, "main", u"㊸id"),
+  (u"★読めないファイルが1つでもあると、読めたファイルの元の写真も使わない（切れた Android の名前のファイルで、G が小さいまま）",
+   u'''    if(!fb.read){ unread.push({ path: it.path, file: true }); continue; }''',
+   u'''    if(!fb.read) return { ok: false, walked: true, file: true, why: "工事フォルダの中の " + it.path + " を読めませんでした" };''', TM, "main", u"㊸n"),
+  (u"★読めなかった所を覚えていても使わない（確かめられないまま縮小版のファイルを作る）",
+   u'''  if(unread.length && obj.chosho_photos.some(small)){''',
+   u'''  if(false){''', TM, "main", u"㊸ia"),
+  (u"★元の写真がみな見つかっても、読めなかった所があると「小さいまま入れた」とする",
+   u'''  if(unread.length && obj.chosho_photos.some(small)){''',
+   u'''  if(unread.length){''', TM, "main", u"㊸id"),
+  (u"★確かめられなかったのに、作らなかったことを知らせない",
+   u'''        return "\\n\\u26a0 戸別の個別JSONは作っていません：" + up.why + "。\\n"''',
+   u'''        return "" + "\\n"''', TM, "main", u"㊸ia"),
+  (u"★読めないファイルと開けないフォルダで、知らせる直し方を取り違える",
+   u'''             + (up.file''',
+   u'''             + (!up.file''', TM, "main", u"㊸o"),
+  (u"★行に元の大きさの写真があっても断る（画面で足した P の原寸が、どこにも残らない）",
+   u'''      if(!orig){''',
+   u'''      if(true){''', TM, "main", u"㊸n"),
+  (u"★行の写真がみな縮小版でも断らない（確かめられないまま縮小版のファイルを作る）",
+   u'''      if(!orig){''',
+   u'''      if(false){''', TM, "main", u"㊸o"),
+  (u"★縮小版のまま入れたことを知らせない",
+   u'''  renamedNote += sideKeptNote + thumbKeptNote;''',
+   u'''  renamedNote += sideKeptNote;''', TM, "main", u"㊸n"),
+  (u"★縮小版のまま入れた知らせに ⚠ を付ける（📥 の知らせで、書けた戸別を「書けていません」に数える）",
+   u'''      thumbKeptNote = "\\n※ " + up.why''',
+   u'''      thumbKeptNote = "\\n\\u26a0 " + up.why''', TM, "main", u"㊸ic"),
+  (u"★控えのフォルダ・写真のフォルダまで見に行く（📁 の読み込みと違う）",
+   u'''        if(h.kind === "directory"){ if(!scanSkipDirName(name)) await walk(h, pre + name + "/"); }''',
+   u'''        if(h.kind === "directory"){ await walk(h, pre + name + "/"); }''', TM, "main", u"㊸j"),
+  (u"★付け替える前の番号のファイルを探さない（縮小版のファイルを作る）",
+   u'''    const up = await indivThumbOriginals(dir, [mg].concat(/^戸別$/.test(oldNo) ? [] : [oldNo]), contentObj);''',
+   u'''    const up = await indivThumbOriginals(dir, [mg], contentObj);''', TM, "main", u"㊸k"),
+  (u"★見つけたファイルの写真をみな足す（ほかのお宅の写真が入る）",
+   u'''      if(!q || !q.id || !q.dataUri || !need.has(q.id)) return;
+      const c = { p: q, from: "file", thumb: false }, b = best.get(q.id);
+      best.set(q.id, b ? pickBetterPhoto(b, c) : c);
+    });
+  }
+  obj.chosho_photos = arr.map(p => {
+    if(!small(p)) return p;
+    const b = best.get(p.id);
+    return (b && photoLongEdgeOf(b.p.dataUri) > photoLongEdgeOf(p.dataUri)) ? Object.assign({}, p, { dataUri: b.p.dataUri }) : p;
+  });''',
+   u'''      if(!q || !q.id || !q.dataUri) return;
+      const c = { p: q, from: "file", thumb: false }, b = best.get(q.id);
+      best.set(q.id, b ? pickBetterPhoto(b, c) : c);
+    });
+  }
+  obj.chosho_photos = arr.map(p => {
+    if(!small(p)) return p;
+    const b = best.get(p.id);
+    return (b && photoLongEdgeOf(b.p.dataUri) > photoLongEdgeOf(p.dataUri)) ? Object.assign({}, p, { dataUri: b.p.dataUri }) : p;
+  }).concat(Array.from(best.entries()).filter(([k]) => !arr.some(p => p && p.id === k)).map(([k, b]) => ({ id: k, label: "", dataUri: b.p.dataUri })));''',
+   TM, "main", u"㊸k"),
+  (u"★名前の通りの「管理番号.json」しか探さない（Android の名前を見落とす）",
+   u'''keys.has(key(junkNoFromName(name))))''',
+   u'''keys.has(key(name.replace(/\\.json(\\.txt)?$/i, ""))))''', TM, "main", u"㊸l"),
+  (u"★縮小版の無い行でも工事フォルダの中を見て回る",
+   u'''  if(!arr.some(small)) return { ok: true, walked: false };''',
+   u'''''', TM, "main", u"㊸ma"),
+  (u"★探す管理番号が無くても見て回る（関係の無いフォルダを開けないだけで、番号の無い戸別のファイルを作らない）",
+   u'''  if(!keys.size) return { ok: true, walked: false };''',
+   u'''''', TM, "main", u"㊸mb"),
+  (u"★同じ写真がいくつもあるとき、pickBetterPhoto でなく長辺の大きいほうを選ぶ（物差しが2つ・撮りっぱなしの重い写真が入る）",
+   u'''      best.set(q.id, b ? pickBetterPhoto(b, c) : c);''',
+   u'''      best.set(q.id, (b && photoLongEdgeOf(b.p.dataUri) >= photoLongEdgeOf(q.dataUri)) ? b : c);''', TM, "main", u"㊸q"),
+  (u"★見つけた写真が縮小版より小さくても置き換える",
+   u'''    return (b && photoLongEdgeOf(b.p.dataUri) > photoLongEdgeOf(p.dataUri)) ? Object.assign({}, p, { dataUri: b.p.dataUri }) : p;''',
+   u'''    return b ? Object.assign({}, p, { dataUri: b.p.dataUri }) : p;''', TM, "main", u"㊸q"),
+  (u"★見て回っているあいだに届いたファイルを、確かめずに上書きする（現場の写真が消える）",
+   u'''      if(now) return "\\n\\u26a0 戸別の個別JSONは書いていません：''',
+   u'''      if(false) return "\\n\\u26a0 戸別の個別JSONは書いていません：''', TM, "main", u"㊸p"),
+  (u"★見て回ったことを伝えない（届いたファイルを確かめずに上書きする）",
+   u'''  return { ok: true, walked: true };''',
+   u'''  return { ok: true, walked: false };''', TM, "main", u"㊸p"),
+  # ======== メイン：7回目の直し（暗号の物件の行を上書き保存しても写真を残す） ========
+  # ======== メイン：暗号の戸別（.hyb）を、写真の出ていない画面から 💾 上書き保存しても写真を残す（7回目の見直し） ========
+  (u"★写真の出ていない画面で、元ファイルの写真に足さずに書く（.hyb が画面の写真だけになる）",
+   u'''        stateObj.chosho_photos = photosKeepFileOnly(filePh, added);
+''', u'''''', TM, "main", u"㉕e"),
+  (u"★写真の出ていない画面で、元ファイルをほどかない（ほどけないとして断る・直しが入らない）",
+   u'''          if(_editorPhotosStripped){ try { fileDec = await decryptHybrid(fresh, pw); } catch(_){ fileDec = null; } }
+''', u'''''', TM, "main", u"㉕e"),
+  (u"★元ファイルに暗号の写真があっても、取り出さずに書く（ほどけない .hyb を写真なしで書く）",
+   u'''      if(fp && fp.iv && fp.ct){''', u'''      if(false){''', TM, "main", u"㉕g"),
+  (u"★元ファイルの写真の部分が壊れている（ほどくと写真が外れる）のに書く",
+   u'''        if(!(fileDec && !fileDec._photosStripped)){''', u'''        if(!fileDec){''', TM, "main", u"㉕gbad"),
+  (u"★写真の出ている画面でも、元ファイルの写真に足して書く（画面で消した写真が戻る）",
+   u'''    if(fmt === "hybrid" && _editorPhotosStripped && readOk){''', u'''    if(fmt === "hybrid" && readOk){''', TM, "main", u"㉕i"),
+  (u"★写真の出ていない画面で、画面で足した写真を書かない",
+   u'''photosKeepFileOnly(filePh, added);''', u'''photosKeepFileOnly(filePh, []);''', TM, "main", u"㉕enew"),
+  (u"★元ファイルの写真が古い形 {before, after} のとき、そのまま使う（A・B が消える）",
+   u'''        const filePh = Array.isArray(fileDec.chosho_photos) ? fileDec.chosho_photos : migratePhotosShape(fileDec.chosho_photos);''',
+   u'''        const filePh = fileDec.chosho_photos;''', TM, "main", u"㉕eold"),
+  (u"★読み直した元ファイルを取っておかない（.hyb の形か確かめられない＝いつも断る）",
+   u'''          prev = fresh.plain; fileEnv = fresh;''', u'''          prev = fresh.plain;''', TM, "main", u"㉕e"),
+  (u"★先に「写真が失われます」と聞く（前のまま）",
+   u'''  // 写真が出ていない画面（写真を剥がした封筒で開いた）は、元ファイルを読み直したあとで、その写真に足して書く（版178。下）
+''',
+   u'''  if(_editorPhotosStripped){
+    if(!confirm("⚠ この戸別の写真は復元できていません（共有物件由来などで剥がれています）。\\n\\nこのまま上書き保存すると、元ファイルに入っていた写真が失われます。\\n\\nそれでも上書きしますか？\\n（写真を残したい場合はキャンセルし、元の個別ファイル(.hyb)から開き直してください）")) return;
+  }
+''', TM, "main", u"㉕enew"),
+  (u"★帯が「写真が失われます」のまま",
+   u'''「💾 上書き保存」では、元の写真はそのまま残し、ここで足した写真を足して書きます（ここで写真を消しても、元のファイルからは消えません）。";''',
+   u'''このまま上書き保存／再暗号化すると、元ファイルの写真が失われます。写真が必要な場合は元の個別ファイル(.hyb)から開き直してください。";''',
+   TM, "main", u"㉕enew"),
+  (u"★写真の出ていない画面で、壊れた .hyb をこの画面の中身で書き直すか聞く（OK で写真がみな消える）",
+   u'''      if(readWhy === "broken" && fmt === "hybrid" && _editorPhotosStripped){''', u'''      if(false){''', TM, "main", u"㉕o"),
+  (u"★付いているファイルが暗号（.hyb）の形でなくても書く（平文の 管理番号.json の写真が消える）",
+   u'''      if(detectEncFormat(fileEnv) !== "hybrid"){''', u'''      if(false){''', TM, "main", u"㉕l"),
+  (u"★まとめ印刷のあと、写真の出ていない画面の印を戻さない",
+   u'''      if(savedStripped){ _editorPhotosStripped = true; showPhotoStrippedBanner(true); }   // 写真の出ていない画面のまま（版178）
+''', u'''''', TM, "main", u"㉕k"),
+  (u"★まとめ印刷のあと、写真の出ている画面にも「写真が出ていません」の印を立てる（画面で消した写真が戻る）",
+   u'''      if(savedStripped){''', u'''      if(true){''', TM, "main", u"㉕kshown"),
+  (u"★開いている暗号の戸別へ 📥 したあと、写真の出ていない画面の印を立てない（取り込んだ写真だけで書く）",
+   u'''    if(row.fileType === "hybrid" && (wasSlim || keepStripped)){''', u'''    if(false){''', TM, "main", u"㉕j"),
+  (u"★📥 の前から写真の出ていない画面だったのを見ない",
+   u'''(wasSlim || keepStripped)){''', u'''(wasSlim)){''', TM, "main", u"㉕jstrip"),
+  (u"★平文の戸別へ 📥 しても、写真の出ていない画面の印・帯を出す",
+   u'''    if(row.fileType === "hybrid" && (wasSlim || keepStripped)){''', u'''    if((wasSlim || keepStripped)){''', TM, "main", u"㉕jplain"),
+  (u"★開いている .enc の戸別へ 📥 したあと、上書き保存の行き先を戻す（取り込んだ写真だけで .enc を書く）",
+   u'''    if(row.fileType === "full" && wasSlim) _loadedOrigin = null;
+''', u'''''', TM, "main", u"㉕n"),
+  (u"★開き直すとき、行にだけある写真を画面に出さない（足して一覧へ戻った写真が消える）",
+   u'''  full.chosho_photos = ph.slice();''', u'''''', TM, "main", u"㉕m"),
+  (u"★開き直したとき、行にだけある写真を行から外す（何もせずに戻ってもう一度開くと消える）",
+   u'''        const lite = Object.assign({}, full); lite.chosho_photos = rowPh; // 一覧側は写真を保持しない（行にだけある写真は持ったまま。版178）''',
+   u'''        const lite = Object.assign({}, full); lite.chosho_photos = null;''', TM, "main", u"㉕m"),
+  (u"★開き直したとき、行をファイルから読む形に戻す（次に開くとファイルだけを読み、足した写真が消える）",
+   u'''        target.data = lite; target.unlocked = true; target._slim = !rowPh;   // 行にだけある写真があるあいだは、行の封筒で開く（版178）''',
+   u'''        target.data = lite; target.unlocked = true; target._slim = true;''', TM, "main", u"㉕mproj"),
+  (u"★パスワードを聞いて開き直すとき、行にだけある写真を画面に出さない",
+   u'''      const rowPh = hybRowPhotosToShow(full, target);   // 行にだけある写真を画面に出す（版178）
+      const lite = Object.assign({}, full); lite.chosho_photos = rowPh;
+''', u'''      const rowPh = null;
+      const lite = Object.assign({}, full); lite.chosho_photos = rowPh;
+''', TM, "main", u"㉕mpw"),
+  (u"★パスワードを聞いて開き直したとき、行をファイルから読む形に戻す（次に開くと足した写真が消える）",
+   u'''      target.data = lite; target.unlocked = true; target._slim = !rowPh;
+''', u'''      target.data = lite; target.unlocked = true; target._slim = true;
+''', TM, "main", u"㉕mpw"),
+  (u"★写真を剥がした封筒で開いたのでなくても、行の写真を出す（ファイルからほどいた写真を行の写真で置き換える）",
+   u'''  if(!full || !full._photosStripped || !target || !target._photosKnown || !target.data) return null;''',
+   u'''  if(!full || !target || !target._photosKnown || !target.data) return null;''', TM, "main", u"㉕p"),
+  (u"★行の写真を当てにしてよいか見ずに、行の写真を出す",
+   u'''  if(!full || !full._photosStripped || !target || !target._photosKnown || !target.data) return null;''',
+   u'''  if(!full || !full._photosStripped || !target || !target.data) return null;''', TM, "main", u"㉕p"),
+  (u"★名前だけの枠しか無い行でも、行の写真として出す",
+   u'''  if(!Array.isArray(ph) || !ph.some(p => p && p.dataUri)) return null;''', u'''  if(!Array.isArray(ph)) return null;''', TM, "main", u"㉕p"),
+  # ======== メイン：7回目の直し（📥で入れた写真だけが物件の写真になるのを直す） ========
+  # ======== メイン：📥 で入れた写真だけが物件の写真になる（常駐させない行・戸別ファイルへ書けなかった） ========
+  (u"★常駐させない行の物件の縮小版を、行の写真（📥 で入れた分）だけで作る（ファイルを読まない）",
+   u'''  if(row._slim && (row.fileHandle || row.srcFile)){
+    own = !!(arr && arr.some(p => p && p.dataUri));''',
+   u'''  if(false){
+    own = !!(arr && arr.some(p => p && p.dataUri));''', TM, "main", u"㊾ch"),
+  (u"★常駐させない行の物件の縮小版を、行の写真（📥 で入れた分）だけで作る（まとめで作り直した行も G だけ）",
+   u'''  if(row._slim && (row.fileHandle || row.srcFile)){
+    own = !!(arr && arr.some(p => p && p.dataUri));''',
+   u'''  if(false){
+    own = !!(arr && arr.some(p => p && p.dataUri));''', TM, "main", u"㊾fa"),
+  (u"★常駐させない行の物件の縮小版を、ファイルの写真だけで作る（📥 で入れた写真が物件に入らない）",
+   u'''      const ph = slimRowWithMemPhotos(full, row).chosho_photos;''',
+   u'''      const ph = full.chosho_photos;''', TM, "main", u"㊾ch"),
+  (u"★常駐させない行の物件の縮小版を、ファイルの写真だけで作る（アパートでまとめた世帯の写真が物件から消える）",
+   u'''      const ph = slimRowWithMemPhotos(full, row).chosho_photos;''',
+   u'''      const ph = full.chosho_photos;''', TM, "main", u"㊾h"),
+  (u"★縮小版を作るときファイルを読めないと、行の写真（📥 で入れた分）を足さない（物件から G が消える）",
+   u'''      prev = Array.isArray(row._thumbs) ? row._thumbs : [];   // 読めない：前の縮小版に、行の写真の縮小版を足す（下）''',
+   u'''      return;''', TM, "main", u"㊾e"),
+  (u"★ファイルを読めないとき、前の縮小版を土台にしない（行の写真だけで作る。ほかの端末の保存とまとめると物件が G だけのまま）",
+   u'''      prev = Array.isArray(row._thumbs) ? row._thumbs : [];   // 読めない：前の縮小版に、行の写真の縮小版を足す（下）''',
+   u'''      prev = [];''', TM, "main", u"㊾ja"),
+  (u"★ファイルを読めないとき、前の縮小版を土台にしない（📄 の行で書けたあと、物件が G だけになる）",
+   u'''      prev = Array.isArray(row._thumbs) ? row._thumbs : [];   // 読めない：前の縮小版に、行の写真の縮小版を足す（下）''',
+   u'''      prev = [];''', TM, "main", u"㊾k"),
+  (u"★読めないとき前の縮小版に足すのに、同じ写真を見分けない（読めないまま保存するたびに G が増える）",
+   u'''  if(prev) thumbs = photosKeepFileOnly(prev, thumbs);''',
+   u'''  if(prev) thumbs = prev.concat(thumbs);''', TM, "main", u"㊾e"),
+  (u"★読めない・行の写真も無いときにも縮小版を作り直したことにする（読めるようになっても作り直さない）",
+   u'''      if(!own) return;                // 読めない・行の写真も無い → 前の縮小版のまま（無ければ作らない＝枚数だけ）
+''', u'''''', TM, "main", u"㊾db"),
+  (u"★ファイルを読めずに作った縮小版に印を付けない（読めるようになっても作り直さない）",
+   u'''  row._thumbsNoFile = own && !both;                   // ファイルを読めずに作った（版178。次の保存でまた読む）
+''', u'''''', TM, "main", u"㊾ib"),
+  (u"★物件の保存で、ファイルを読まずに作った縮小版の行を拾わない（読めないあいだ G が物件に入らない）",
+   u'''    && (!Array.isArray(r._thumbs) || r._thumbsNoFile)''',
+   u'''    && !Array.isArray(r._thumbs)''', TM, "main", u"㊾e"),
+  (u"★ファイルを読まずに作った縮小版があると、縮小版を作り直さない（入口で戻る）",
+   u'''  if(!row || row.fileType !== "plain" || (Array.isArray(row._thumbs) && !row._thumbsNoFile)) return;''',
+   u'''  if(!row || row.fileType !== "plain" || Array.isArray(row._thumbs)) return;''', TM, "main", u"㊾e"),
+  (u"★ファイルを読まずに作った縮小版があると、作り直した縮小版を付けない（付ける前に戻る）",
+   u'''  if(Array.isArray(row._thumbs) && !row._thumbsNoFile) return;''',
+   u'''  if(Array.isArray(row._thumbs)) return;''', TM, "main", u"㊾e"),
+  (u"★ファイルを読めずに作った縮小版を、このファイルの縮小版として覚える（読み直すとファイルの写真の代わりに入る）",
+   u'''  if(row._thumbsNoFile) return;
+  thumbMemoPut(row.file, row.lastModified, thumbs);''',
+   u'''  thumbMemoPut(row.file, row.lastModified, thumbs);''', TM, "main", u"㊾ib"),
+  (u"★📥 で常駐させない行の物件の縮小版を捨てる（読めないとき物件が G だけになる）",
+   u'''    row._amtCache=undefined; row._bomCache=undefined; row._thumbs=keepTh;''',
+   u'''    row._amtCache=undefined; row._bomCache=undefined; row._thumbs=undefined;''', TM, "main", u"㊾ja"),
+  (u"★📥 で常駐させない行の物件の縮小版を捨てる（写真の無い取り込みで、読めないとき物件が写真なしになる）",
+   u'''    row._amtCache=undefined; row._bomCache=undefined; row._thumbs=keepTh;''',
+   u'''    row._amtCache=undefined; row._bomCache=undefined; row._thumbs=undefined;''', TM, "main", u"㊾jc"),
+  (u"★📥 で常駐させない行の物件の縮小版を捨てる（📄 の行で書けたあと、物件が G だけになる）",
+   u'''    row._amtCache=undefined; row._bomCache=undefined; row._thumbs=keepTh;''',
+   u'''    row._amtCache=undefined; row._bomCache=undefined; row._thumbs=undefined;''', TM, "main", u"㊾k"),
+  (u"★📥 で残した物件の縮小版に、作り直す印を付けない（ファイルの写真だけのまま G が物件に入らない）",
+   u'''    if(keepTh) row._thumbsNoFile = true;
+''', u'''''', TM, "main", u"㊾ja"),
+  (u"★📥 で常駐させない行の枚数を、取り込んだ写真の数にする（写真の無い取り込みで一覧が「なし」）",
+   u'''    row._photoCount = row._slim ? (row._photoCount > 0 ? row._photoCount : 0) : n; }''',
+   u'''    row._photoCount = n; }''', TM, "main", u"㊾da"),
+  (u"★📥 で常駐させない行の枚数に、取り込んだ写真の数を足す（🧩 重複をまとめる が古いほうを残す方に選ぶ）",
+   u'''    row._photoCount = row._slim ? (row._photoCount > 0 ? row._photoCount : 0) : n; }''',
+   u'''    row._photoCount = row._slim ? (row._photoCount > 0 ? row._photoCount : 0) + n : n; }''', TM, "main", u"㊾l"),
+  (u"★ファイルの写真と合わせた縮小版の枚数を、行の枚数にする（🧩 重複をまとめる が古いほうを残す方に選ぶ）",
+   u'''  row._thumbsNoFile = own && !both;                   // ファイルを読めずに作った（版178。次の保存でまた読む）
+''', u'''  row._thumbsNoFile = own && !both;                   // ファイルを読めずに作った（版178。次の保存でまた読む）
+  if(both) row._photoCount = thumbs.length;
+''', TM, "main", u"㊾l"),
+  (u"★物件に入れる枚数を、常駐させない行でも行の枚数（ファイルの枚数）だけにする（取り込んだ写真を数えない）",
+   u'''  c.chosho_photo_count = (r._slim && Array.isArray(r._thumbs)) ? Math.max(n, r._thumbs.length) : n;''',
+   u'''  c.chosho_photo_count = n;''', TM, "main", u"㊾ch"),
+  (u"★物件の保存で、ファイルに写真が無い常駐させない行の 📥 の写真を拾わない（物件に G が入らない）",
+   u'''(r._photoCount > 0 || (r._slim && r.data && Array.isArray(r.data.chosho_photos) && r.data.chosho_photos.some(p => p && p.dataUri)))''',
+   u'''r._photoCount > 0''', TM, "main", u"㊾czero"),
+  (u"★📮 振り分けを行に入れるとき、行にだけある写真（📥 で入れて書けなかった分）を足さない",
+   u'''    own = slimRowWithMemPhotos(fr, r).chosho_photos;    // 行にだけある写真（📥 で入れて書けなかった分）も足す（版178。落とすと、どこにも残らない）''',
+   u'''    own = fr.chosho_photos;''', TM, "main", u"㊾g"),
+  (u"★アパートでファイルを持たせた世帯の、物件の縮小版を作り直さない",
+   u'''    target._thumbs = undefined;
+''', u'''''', TM, "main", u"㊾h"),
 ]
 
 import sys as _s
