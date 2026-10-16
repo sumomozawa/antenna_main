@@ -2955,6 +2955,8 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       o.fileAfterImport = ids();
       o.screenAfterImport = shown();
       o.editing = _editingRow === row;
+      { const b = document.getElementById('btn-save-overwrite');      // 開いたまま 📥 したあとのボタン
+        o.btnAfterImport = { text: b && b.textContent, disabled: !!(b && b.disabled) }; }
       await openCaseInEditor(row);                                     // 開き直す
       o.shown2 = shown();
       __setTel('090-1111-2222');
@@ -2972,6 +2974,8 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
          '㊽b試験の前提: 画面で B を消して戻り（行は A）、開いたまま 📥（ファイルは A・B のまま）、開き直して上書き保存できる → ' + short(r));
       ok(r.screenAfterImport === 'A,G' && r.shown2 === 'A,G', '★㊽b開いている戸別へ 📥 したあと、画面が A・G にならない（消した B が戻った・G が出ない） → ' + short(r));
       ok(r.file === 'A,G', '★㊽b開いている戸別へ 📥 したあとの上書き保存で、画面で消した写真 B が戸別ファイルに戻った・G が入らない → ' + short(r));
+      ok(r.btnAfterImport && !r.btnAfterImport.disabled && /上書き保存/.test(r.btnAfterImport.text || ''),
+         '★㊽b開いている戸別へ 📥 したあと、「💾 上書き保存」が押せないまま → ' + short(r.btnAfterImport));
     }
     await ctx.close();
   }

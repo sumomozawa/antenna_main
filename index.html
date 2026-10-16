@@ -37395,7 +37395,11 @@ async function applyGenbaMergeToRow(row, genbaData, opts){
       const fr = await rereadRowSource(row);
       if(fr && typeof fr === "object") shown = Object.assign({}, row.data, { chosho_photos: slimRowWithMemPhotos(fr, row).chosho_photos });
     }
+    const keepOrigin = _loadedOrigin;   // 開いていた戸別の元ファイル（applyStateData が外す）
     try { applyStateData(shown); _editingRow=row; try{ rtClaimLock(row); }catch(_){} } catch(_){}
+    /* 元ファイルの行き先とボタンを戻す（版178）。戻さないと「💾」が押せないまま（📁 の戸別は上書き保存できない）になっていた */
+    if(keepOrigin && keepOrigin.fileHandle && !_loadedOrigin) _loadedOrigin = keepOrigin;
+    try { updateOverwriteSaveBtn(); } catch(_){}
     if(row.fileType === "plain") rowSeePhotos(row, (shown || {}).chosho_photos, wasSlim);
   }
   return note;

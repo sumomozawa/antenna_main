@@ -240,6 +240,8 @@ CASES = [
    u'''    if(Array.isArray(rp) && rp.length) row.file = rp.join("/");''', u'''    if(false) row.file = rp.join("/");''', TM, "main", u"㊸d"),
   (u"★物件から作った暗号の行（写真を剥がした封筒）を、付いているファイルがあっても剥がした封筒のまま開く（上書き保存で写真なしの .hyb を書く）",
    u'''  if(!row._slim && row.envelope && !fromFile) return row.envelope;''', u'''  if(!row._slim && row.envelope) return row.envelope;''', TM, "main", u"㉕d"),
+  (u"★開いている戸別へ 📥 したあと、元ファイルの行き先を戻さない（「💾 上書き保存」が押せないまま）",
+   u'''    if(keepOrigin && keepOrigin.fileHandle && !_loadedOrigin) _loadedOrigin = keepOrigin;''', u'''''', TM, "main", u"㊽b"),
   # ======== 現場入力：3回目の見直しの直し ========
   (u"★下書きの引っ越しの覚えを、別の下書きでも引く（別のお宅の下書きに写真が入る）",
    u'''    if(uid && e.uid && e.uid !== uid) break;           // 別の下書きの引っ越し＝引かない''', u'''''', TG, "genba", u"⑳"),
