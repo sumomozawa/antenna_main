@@ -367,22 +367,22 @@ CASES = [
 
   # ---- （G2）見直しの直し：開いている行が一覧から外れても写しにする・案内するボタン・写しの写真 ----
   (u"★物件から開いた印を画面の側で覚えない（開いている行を 🧹 未施工にすると、💾 保存がファイルを選ぶ画面を開く）",
-   u'''  return _editorFromProject || rowOpenedFromProject(_editingRow);''',
+   u'''  return !!_editorProjRow || rowOpenedFromProject(_editingRow);''',
    u'''  return rowOpenedFromProject(_editingRow);''', TM, "main", u"㉗e"),
   (u"★物件から開いた印を画面の側で覚えない（図面のある戸別で、縮小版が戸別ファイルに書かれる）",
-   u'''  return _editorFromProject || rowOpenedFromProject(_editingRow);''',
+   u'''  return !!_editorProjRow || rowOpenedFromProject(_editingRow);''',
    u'''  return rowOpenedFromProject(_editingRow);''', TM, "main", u"㉗f"),
   (u"★図面のまだ無い物件の行を開くとき、物件から開いた印を立てない",
-   u'''    _editorFromProject = rowOpenedFromProject(row);   // 物件から開いた（版178。行が外れても、保存は写しにする）
+   u'''    _editorProjRow = rowOpenedFromProject(row) ? row : null;   // 物件から開いた行（版178。行が外れても、保存は写しにする）
 ''', u'''''', TM, "main", u"㉗e"),
   (u"★図面のある物件の行を開くとき（setLoadedOrigin）、物件から開いた印を立てない",
-   u'''  _editorFromProject = rowOpenedFromProject(_editingRow);   // 物件から開いた（版178。行が外れても、保存は写しにする）
+   u'''  _editorProjRow = rowOpenedFromProject(_editingRow) ? _editingRow : null;   // 物件から開いた行（版178。行が外れても、保存は写しにする）
 ''', u'''''', TM, "main", u"㉗f"),
   (u"★画面を替えても、物件から開いた印を下ろさない（📂 で読んだ戸別まで写しにされる）",
-   u'''  _editorFromProject = false;   // 物件から開いた印も下ろす（版178）
+   u'''  _editorProjRow = null;   // 物件から開いた行の覚えも下ろす（版178）
 ''', u'''''', TM, "main", u"㉗g"),
   (u"★工事調書のまとめ印刷のあと、物件から開いた印を戻さない",
-   u'''_editorHiddenPhotos = savedHidden; _editorFromProject = savedFromProj;''',
+   u'''_editorHiddenPhotos = savedHidden; _editorProjRow = savedProjRow;''',
    u'''_editorHiddenPhotos = savedHidden;''', TM, "main", u"㉗h"),
   (u"★写しでも、行が外れたときは画面に入れなかった写真を足さない（図面の無い戸別の写しが写真0枚）",
    u'''  if(!s || !h || (!any && h.row !== _editingRow) || !h.photos.length) return s;''',
@@ -400,6 +400,51 @@ CASES = [
    u'''  if(fromProj){ if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }
   const password = await promptPassword({
     title: "🔐🔑 ハイブリッド暗号化保存 (方式C)",''', TM, "main", u"㉘c"),
+
+  # ---- （G3）2回目の見直しの直し：📥 のあとも覚える・ボタンを描き直す・外れたあとの名前・復元できていない印・暗号の戸別への案内 ----
+  (u"★📥 で開いている戸別へ入れたあと、物件から開いた行の覚えを戻さない（そのあと 🧹 未施工にすると、ファイルを選ぶ画面が開く）",
+   u'''    _editorProjRow = (projRow === row || rowOpenedFromProject(row)) ? row : null;
+''', u'''''', TM, "main", u"㉗i"),
+  (u"★📥 で開いている戸別へ入れたあと、ボタンを描き直さない（押せない「💾 上書き保存」のまま）",
+   u'''    try { updateOverwriteSaveBtn(); } catch(_){}   // 「💾 物件に保存」を出し直す（applyStateData のときは行が外れていた）
+''', u'''''', TM, "main", u"㉗i"),
+  (u"★世帯の削除で開いている行が外れても、ボタンを描き直さない（「💾 物件に保存」が押せるまま）",
+   u'''  if(_editingRow === row){ _editingRow = null; try { updateOverwriteSaveBtn(); } catch(_){} }   // ボタンを描き直す（版178）
+  try { lgClearTouched([key]); } catch(_){}''',
+   u'''  if(_editingRow === row) _editingRow = null;
+  try { lgClearTouched([key]); } catch(_){}''', TM, "main", u"㉗j"),
+  (u"★受付台帳の「一覧から消す」で開いている行が外れても、ボタンを描き直さない",
+   u'''          if(_editingRow === row){ _editingRow = null; try { updateOverwriteSaveBtn(); } catch(_){} }   // ボタンを描き直す（版178）
+          projTouch();
+          renderListTable();
+          if(choice === "file")''',
+   u'''          if(_editingRow === row) _editingRow = null;
+          projTouch();
+          renderListTable();
+          if(choice === "file")''', TM, "main", u"㉗k"),
+  (u"★行が外れたとき、知らせの戸別ファイルの名前を開いた行から作らない（暗号の戸別を 管理番号.json と言う）",
+   u'''  const er = _editingRow, r = er || _editorProjRow;''',
+   u'''  const er = _editingRow, r = er;''', TM, "main", u"㉘g"),
+  (u"★工事調書のまとめ印刷のあと、「写真が復元できていない」印とバナーを戻さない（💾 上書き保存の確かめが出ない）",
+   u'''      _editorPhotosStripped = savedStripped; showPhotoStrippedBanner(savedStripped);''',
+   u'''''', TM, "main", u"㉘h"),
+  (u"★暗号の戸別へ「💾 物件に保存」を案内するとき、ここで足した写真とお客様の欄が入らないことを言わない",
+   u'''    + (projBtn ? (hyb ? "戸別ファイル（" + fname + "）へは「💾 物件に保存」で書いてください（図面・積算が入ります）。\\n"''',
+   u'''    + (projBtn ? (false ? "戸別ファイル（" + fname + "）へは「💾 物件に保存」で書いてください（図面・積算が入ります）。\\n"''', TM, "main", u"㉘a"),
+  (u"★🔐 暗号化保存の写しで、行が外れたら画面に入れなかった写真を足さない（写しが写真0枚）",
+   u'''  if(fromProj){ editorAddHiddenPhotos(s, true); if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }   // 写しには画面に入れなかった写真も入れる
+  const password = await promptPassword({
+    title: "🔐 暗号化保存",''',
+   u'''  if(fromProj){ editorAddHiddenPhotos(s); if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }
+  const password = await promptPassword({
+    title: "🔐 暗号化保存",''', TM, "main", u"㉘f"),
+  (u"★ハイブリッド保存の写しで、行が外れたら画面に入れなかった写真を足さない（写しが写真0枚）",
+   u'''  if(fromProj){ editorAddHiddenPhotos(s, true); if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }   // 写しには画面に入れなかった写真も入れる
+  const password = await promptPassword({
+    title: "🔐🔑 ハイブリッド暗号化保存 (方式C)",''',
+   u'''  if(fromProj){ editorAddHiddenPhotos(s); if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }
+  const password = await promptPassword({
+    title: "🔐🔑 ハイブリッド暗号化保存 (方式C)",''', TM, "main", u"㉘f"),
 
   # ======== 現場入力：まとめて保存（E・F） ========
   (u"★まとめて保存（フォルダ）：下書きの中身が変わっていても、写しで書き直す・保存済にする",
