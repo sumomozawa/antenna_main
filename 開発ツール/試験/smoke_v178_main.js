@@ -212,6 +212,9 @@
          （pw：2回目からはパスワードを聞かれて開く　proj：物件（共有ファイル）を開いている → 3回目に開いて備考を直して戻っても、共有ファイルは 1U のまま。
            前は開くたびに行を「ファイルから読む」に替え、3回目にファイルの古い 3U で画面・行・物件・.hyb を戻していた）
      ㉕u 📥 で暗号の戸別に入れた写真 G が、写真の出ていない画面で開いても消えない
+     ㉕v 暗号の戸別を直して戻ってから 🔄 一括再暗号化（新しいパスワード）→ 行の封筒もファイルと同じ鍵の元になる・新しいパスワードで開いて 💾 上書き保存できる
+     ㉕w 直して戻ったあと、ほかのPCが .hyb を書き替えた（鍵の元が新しい）→ 🔄 一括再暗号化はこの戸別を飛ばして知らせる（ファイルはほかのPCが書いたまま）
+     ㉕x 暗号の戸別へ 📥 現場取込（現場の増幅器）→ 封筒の暗号でない部分にも入る：開くと現場の増幅器・💾 で .hyb にも・物件（共有ファイル）にも
          A：物件の暗号の行に「💾 戸別ファイルへ反映」でファイルが付いた → 📥 G → 開く → 画面に G（帯あり）・行に G → 戻ってもう一度開いても G
             → 💾 上書き保存 → .hyb は A・B・G
          U：📁 の .hyb へ 📥 G → 開くときだけファイルを読めない → 画面に G（帯あり）・行に G → 次に開くと A・B・G → 💾 上書き保存 → .hyb は A・B・G
@@ -5862,8 +5865,8 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
         await applyBulkReenc();
         return Object.assign({ wrote: list.__writes.length - w0 }, await h.fileAs(pw));
       };
-      h.importG = async () => {                                    // 📥 現場取込（取り込み窓の「取り込む」まで。現場の写真 G）
-        const genba = { chosho_mgmt_no: NO, _origin: 'genba', work_type: 'uhf_new', chosho_photos: [{ id: 'g1', label: '現場', dataUri: G }] };
+      h.importG = async (extra) => {                               // 📥 現場取込（取り込み窓の「取り込む」まで。現場の写真 G。extra＝現場で入れたほかの欄）
+        const genba = Object.assign({ chosho_mgmt_no: NO, _origin: 'genba', work_type: 'uhf_new', chosho_photos: [{ id: 'g1', label: '現場', dataUri: G }] }, extra || {});
         const jf = new File([JSON.stringify(genba)], NO + '.json', { type: 'application/json' });
         const oPick = pickFile, oa = window.alert, al = [];
         pickFile = (o3, cb) => { setTimeout(() => cb(o3 && o3.multiple ? [jf] : jf), 0); };
@@ -5942,14 +5945,17 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
     await ctx.close();
   }
 
-  // ---- ㉕r 🔓 した 📁 の .hyb（写真 A・B。開いていない）へ 📥 現場取込（写真 G）→ 行を押して開く → 写真の出ている画面に A・B・G
-  //   → 何もせずに戻ってもう一度開いても A・B・G → 💾 上書き保存 → .hyb は A・B・G
+  // ---- ㉕r 🔓 した 📁 の .hyb（写真 A・B。開いていない）へ 📥 現場取込（写真 G）→ 行を押して開く → 💾 上書き保存 → .hyb は A・B・G
+  //   ''：物件なし（戸別ファイルへ書けない）→ 行はまだファイルに無い現場の中身を持つので、行の封筒で開く（写真の出ていない画面に G・帯あり）。
+  //       何もせずに戻ってもう一度開いても G → 💾 上書き保存はファイルの写真に足して書く（A・B・G）
+  //   proj：共有ファイルの物件あり（戸別ファイルへ書けた）→ 行はファイルから読む・開くと写真の出ている画面に A・B・G（ファイルの写真＋行にだけある G）
   //   （前はファイルからほどいた A・B だけを出して、行にだけある G を行からも外し、G がどこにも残らなかった）
-  if(want('㉕r')){
-    const { ctx, page, said } = await openMain('㉕r');
+  for(const mode of ['', 'proj'].filter(m => want('㉕r' + m))){
+    const L = '㉕r' + mode;
+    const { ctx, page, said } = await openMain(L);
     await page.evaluate(HYB25);
-    const r = await run(page, async ({ NO }) => {
-      const h = await __hyb25(NO);
+    const r = await run(page, async ({ NO, mode }) => {
+      const h = await __hyb25(NO, mode === 'proj' ? { shared: 'pj25r' } : {});
       const { row } = h;
       const o = { loaded: h.loaded };
       o.importNote = await h.importG();                            // 📥 現場取込（開いていない戸別）
@@ -5963,18 +5969,26 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       await h.sleep(200);
       o.file = await h.fileAs();
       return o;
-    }, { NO });
-    console.log('㉕r開いていない暗号の戸別へ 📥 してから開く', short(r));
-    ok(!r.error, '㉕r止まった → ' + r.error);
+    }, { NO, mode });
+    console.log(L + '開いていない暗号の戸別へ 📥 してから開く', short(r));
+    ok(!r.error, L + '止まった → ' + r.error);
     if(!r.error){
-      ok(r.loaded.rows === 1 && r.loaded.slim && r.afterImport.slim && r.afterImport.rowPh === 'G' && r.afterImport.file === 'A,B' && r.open1.click,
-         '㉕r試験の前提: 🔓 した .hyb の行（ファイルから読む）へ 📥 すると、行に G・ファイルは A・B のまま → ' + short(r));
-      ok(r.open1.shown === 'A,B,G' && !r.open1.stripped && !r.open1.banner,
-         '★㉕r📥 で入れた写真 G が、開くと画面に出ない（ファイルの写真だけ）・写真の出ている画面にならない → ' + short(r.open1));
-      ok(r.back1.rowPh === 'G' && r.open2.shown === 'A,B,G' && !r.open2.stripped,
-         '★㉕r何もせずに戻ってもう一度開くと、📥 で入れた写真 G が消えた（開いたとき行から外した） → ' + short(r.back1) + ' ' + short(r.open2));
+      ok(r.loaded.rows === 1 && r.loaded.slim && r.afterImport.rowPh === 'G' && r.afterImport.file === 'A,B' && r.open1.click
+         && r.afterImport.slim === (mode === 'proj'),
+         L + '試験の前提: 🔓 した .hyb の行へ 📥 すると、行に G・ファイルの写真は A・B のまま・' + (mode === 'proj' ? '書けたので行はファイルから読む' : '書けないので行の封筒で開く') + ' → ' + short(r));
+      if(mode === 'proj'){
+        ok(r.open1.shown === 'A,B,G' && !r.open1.stripped && !r.open1.banner,
+           '★' + L + '📥 で入れた写真 G が、開くと画面に出ない（ファイルの写真だけ）・写真の出ている画面にならない → ' + short(r.open1));
+        ok(r.back1.rowPh === 'G' && r.open2.shown === 'A,B,G' && !r.open2.stripped,
+           '★' + L + '何もせずに戻ってもう一度開くと、📥 で入れた写真 G が消えた（開いたとき行から外した） → ' + short(r.back1) + ' ' + short(r.open2));
+      } else {
+        ok(r.open1.shown === 'G' && r.open1.stripped && r.open1.banner && r.open1.rowPh === 'G',
+           '★' + L + '📥 で入れた写真 G が、開くと画面に出ない・行から消えた（または写真の出ていない画面の印・帯が無い） → ' + short(r.open1));
+        ok(r.back1.rowPh === 'G' && r.open2.shown === 'G' && r.open2.stripped,
+           '★' + L + '何もせずに戻ってもう一度開くと、📥 で入れた写真 G が消えた → ' + short(r.back1) + ' ' + short(r.open2));
+      }
       ok(r.press && r.file.ids === 'A,B,G' && r.file.tel === '090-2222-3333',
-         '★㉕r💾 上書き保存で .hyb が A・B・G にならない（📥 で入れた写真が入らない・元の写真が減った） → ' + short(r.file));
+         '★' + L + '💾 上書き保存で .hyb が A・B・G にならない（📥 で入れた写真が入らない・元の写真が減った） → ' + short(r.file));
     }
     await ctx.close();
   }
@@ -6095,8 +6109,8 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
   // ---- ㉕u 📥 で暗号の戸別に入れた写真 G が、写真の出ていない画面で開いても消えない
   //   A：📁 で読んで物件を作る → 物件を開き直す（行は物件の、写真を剥がした封筒）→ 🔓 →「💾 戸別ファイルへ反映」でファイルが付く
   //      → 📥 G → 開く → 画面に G（帯あり）・行に G → 戻ってもう一度開いても G → 💾 上書き保存 → .hyb は A・B・G
-  //   U：📁 の .hyb → 🔓 → 📥 G → 開くときだけファイルを読めない（同期の途中など）→ 画面に G（帯あり）・行に G
-  //      → 戻って次に開くと A・B・G → 💾 上書き保存 → .hyb は A・B・G
+  //   U：📁 の .hyb → 🔓 → 📥 G（物件なし＝書けない）→ 行の封筒で開く（ファイルが読めなくても開ける・読まない）→ 画面に G（帯あり）・行に G
+  //      → 戻って次に開いても G → 💾 上書き保存（読めるようになってから）→ .hyb は A・B・G
   //   （前は行の写真を当てにしてよい印が無いと出さず、行からも外して、G がどこにも残らなかった。📥 の知らせは「戸別を開いて保存で書けます」）
   for(const mode of ['A', 'U'].filter(m => want('㉕u' + m))){
     const L = '㉕u' + mode;
@@ -6119,8 +6133,9 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       const row = h.row;
       o.importNote = await h.importG();
       o.afterImport = { rowPh: h.names(row.data && row.data.chosho_photos), known: !!row._photosKnown, file: (await h.fileAs()).ids };
-      if(mode === 'U') h.list.__unreadable[h.FN] = 1;              // 開くときだけファイルを読めない
+      if(mode === 'U') h.list.__unreadable[h.FN] = 1;              // 開くときファイルを読めない（同期の途中など）
       o.open1 = await h.open();
+      if(mode === 'U'){ o.notRead = h.list.__unreadable[h.FN] === 1; h.list.__unreadable[h.FN] = 0; }   // 開くときファイルを読まなかった → 読めるようにする
       await h.back();                                              // 何もせずに戻る
       o.back1 = { rowPh: h.names(row.data && row.data.chosho_photos) };
       o.open2 = await h.open();
@@ -6142,10 +6157,124 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       if(mode === 'A')
         ok(r.back1.rowPh === 'G' && /G/.test(r.open2.shown), '★' + L + ' 何もせずに戻ってもう一度開くと、📥 で入れた写真 G が消えた → ' + short(r.back1) + ' ' + short(r.open2));
       else
-        ok(r.back1.rowPh === 'G' && r.open2.shown === 'A,B,G' && !r.open2.stripped,
-           '★' + L + ' 読めるようになって開くと、ファイルの A・B と 📥 で入れた G が写真の出ている画面に出ない（G が消えた） → ' + short(r.back1) + ' ' + short(r.open2));
+        ok(r.notRead && r.back1.rowPh === 'G' && r.open2.shown === 'G' && r.open2.stripped,
+           '★' + L + ' 書けなかった 📥 のあと、開くときファイルを読んだ（行の封筒で開かない）・もう一度開くと G が消えた → ' + short(r.notRead) + ' ' + short(r.back1) + ' ' + short(r.open2));
       ok(r.press && r.file.ids === 'A,B,G' && r.file.tel === '090-2222-3333',
          '★' + L + ' 💾 上書き保存で .hyb が A・B・G にならない（📥 で入れた写真 G が入らない・元の写真が減った） → ' + short(r.file));
+    }
+    await ctx.close();
+  }
+  // ---- ㉕v 📁 の .hyb（A・B・増幅器 3U）を開いて 1U に直して戻る → 🔄 一括再暗号化（新しいパスワード）
+  //   → 行の封筒もファイルと同じ鍵の元（salt）になる → 新しいパスワードで開いて電話を直し 💾 上書き保存 → .hyb は A・B・1U・電話
+  //   （前は行の封筒が古い鍵のまま残り、開くと古い封筒で開いて 💾 が「写真を取り出せませんでした」で書けず、物件にも古い鍵が残った）
+  if(want('㉕v')){
+    const { ctx, page, said } = await openMain('㉕v');
+    await page.evaluate(HYB25);
+    const r = await run(page, async ({ NO }) => {
+      const h = await __hyb25(NO);
+      const row = h.row, NEWPW = 'atarashii-99';
+      const o = {};
+      o.open1 = await h.open();
+      __setField('amplifier', 'amp_1u45');
+      await h.back();                                              // 直したので行へ取り込む（行は写真を剥がした封筒のまま）
+      o.reenc = await h.reenc(NEWPW);
+      const f = JSON.parse(h.list.__files[h.FN]);
+      o.saltSame = !!(row.envelope && f && row.envelope.salt === f.salt);
+      setSessionPassword(NEWPW);
+      promptPassword = async () => NEWPW;                          // 聞かれたら新しいパスワード
+      o.open2 = await h.open();
+      __setTel('090-2222-3333');
+      const w0 = h.list.__writes.length;
+      o.press = (await __pressSave()).pressed;
+      await h.sleep(200);
+      o.wrote = h.list.__writes.length - w0;
+      o.file = await h.fileAs(NEWPW);
+      return o;
+    }, { NO });
+    const al = alerts(said);
+    console.log('㉕v直して戻ったあとの 🔄 一括再暗号化（新しいパスワード）', short(r), short(al.slice(-2).map(a => a.slice(0, 50))));
+    ok(!r.error, '㉕v止まった → ' + r.error);
+    if(!r.error){
+      ok(r.open1.click && r.open1.shown === 'A,B' && r.reenc.wrote === 1 && r.reenc.ids === 'A,B' && r.reenc.amp === 'amp_1u45',
+         '㉕v試験の前提: 直して戻ったあとの 🔄 一括再暗号化で、.hyb が新しいパスワードの A・B・1U になる → ' + short(r));
+      ok(r.saltSame, '★㉕v 🔄 一括再暗号化のあと、行の封筒が古い鍵のまま（開くと古い封筒で開き、💾 上書き保存が書けない・物件に古い鍵が残る） → ' + short(r));
+      ok(r.press && r.wrote === 1 && r.file.ids === 'A,B' && r.file.tel === '090-2222-3333' && r.file.amp === 'amp_1u45'
+         && !al.some(a => /取り出せませんでした/.test(a)),
+         '★㉕v 🔄 のあと新しいパスワードで開いて 💾 上書き保存すると書けない・写真が減った・直しが入らない → ' + short(r) + ' ' + short(al.slice(-1)));
+    }
+    await ctx.close();
+  }
+
+  // ---- ㉕w 📁 の .hyb（A・B・増幅器 3U）を開いて 1U に直して戻る → ほかのPCが .hyb を書き替えた（増幅器 1U-BC・写真 A・B・C。鍵の元が新しい）
+  //   → 🔄 一括再暗号化（新しいパスワード）はこの戸別を飛ばし、「写真が出ていないので飛ばした戸別」と知らせる
+  //   → .hyb はほかのPCが書いたまま（前のパスワードで開ける・1U-BC・A・B・C）。行の古い中身（1U）で戻さない
+  if(want('㉕w')){
+    const { ctx, page, said } = await openMain('㉕w');
+    await page.evaluate(HYB25);
+    const r = await run(page, async ({ NO }) => {
+      const h = await __hyb25(NO);
+      const o = {};
+      o.open1 = await h.open();
+      __setField('amplifier', 'amp_1u45');
+      await h.back();
+      const d = await decryptHybrid(JSON.parse(h.list.__files[h.FN]), h.PW);   // ほかのPCが書き替えた（同じパスワード・鍵の元は新しい）
+      d.amplifier = 'amp_1ubc45';
+      d.chosho_photos = (d.chosho_photos || []).concat([{ id: 'hC', label: '写真C', dataUri: __jpeg(580, 430, 0.85, 155) }]);
+      h.list.__files[h.FN] = JSON.stringify(await encryptHybrid(d, h.PW), null, 2);
+      const before = h.list.__files[h.FN];
+      o.reenc = await h.reenc('atarashii-99');
+      o.same = h.list.__files[h.FN] === before;
+      const fd = await decryptHybrid(JSON.parse(h.list.__files[h.FN]), h.PW);
+      o.file = { n: (fd.chosho_photos || []).filter(p => p && p.dataUri).length, amp: fd.amplifier };
+      return o;
+    }, { NO });
+    const al = alerts(said).map(a => a.replace(/\s+/g, ' '));
+    console.log('㉕wほかのPCが書き替えた .hyb の 🔄 一括再暗号化', short(r), short(al.slice(-1).map(a => a.slice(0, 80))));
+    ok(!r.error, '㉕w止まった → ' + r.error);
+    if(!r.error){
+      ok(r.open1.click && r.open1.shown === 'A,B', '㉕w試験の前提: 開いて A・B が出る → ' + short(r.open1));
+      ok(r.reenc.wrote === 0 && r.same && r.file.amp === 'amp_1ubc45' && r.file.n === 3,
+         '★㉕w ほかのPCが書き替えた .hyb を、🔄 一括再暗号化が行の古い中身（増幅器 1U）で書き替えた → ' + short(r));
+      ok(al.some(a => /写真が出ていないので飛ばした戸別: 1 件/.test(a) && /💾 上書き保存/.test(a)),
+         '★㉕w 飛ばしたことを知らせない（または「💾 上書き保存してから」と言わない） → ' + short(al.slice(-1)));
+    }
+    await ctx.close();
+  }
+
+  // ---- ㉕x 🔓 した 📁 の .hyb（増幅器 3U）へ 📥 現場取込（増幅器 1U-BC・写真 G）→ 開くと 1U-BC（現場の機器）→ 💾 上書き保存で .hyb も 1U-BC
+  //   proj：共有ファイルの物件を開いているとき、📥 のあとの物件の保存で、物件（共有ファイル）にも 1U-BC が入る（開かなくても）
+  //   （前は行の中身だけが替わり、封筒の暗号でない部分は古いままで、開くと 3U に戻り、💾 で 3U を書き、物件にも 3U が入っていた）
+  for(const mode of ['', 'proj'].filter(m => want('㉕x' + m))){
+    const L = '㉕x' + mode;
+    const { ctx, page, said } = await openMain(L);
+    await page.evaluate(HYB25);
+    const r = await run(page, async ({ NO, mode }) => {
+      const h = await __hyb25(NO, mode === 'proj' ? { shared: 'pj25x' } : {});
+      const row = h.row;
+      const o = {};
+      o.importNote = await h.importG({ amplifier: 'amp_1ubc45' });
+      o.afterImport = { rowAmp: row.data && row.data.amplifier, envAmp: ((row.envelope || {}).plain || {}).amplifier,
+                        envName: ((row.envelope || {}).plain || {}).chosho_cust_name };
+      if(mode === 'proj'){ h.stop(); await projSaveNow(); o.diskAmp = h.diskAmp(); }
+      o.open1 = await h.open();
+      __setTel('090-2222-3333');
+      o.press = (await __pressSave()).pressed;
+      await h.sleep(200);
+      o.file = await h.fileAs();
+      return o;
+    }, { NO, mode });
+    console.log(L + '暗号の戸別へ 📥 した現場の増幅器', short(r));
+    ok(!r.error, L + '止まった → ' + r.error);
+    if(!r.error){
+      ok(r.afterImport.rowAmp === 'amp_1ubc45' && r.open1.click && r.press,
+         L + '試験の前提: 📥 で行の増幅器が現場の 1U-BC になる・開いて保存できる → ' + short(r));
+      ok(r.afterImport.envAmp === 'amp_1ubc45' && r.afterImport.envName === undefined,
+         '★' + L + ' 📥 の現場の増幅器が、封筒の暗号でない部分に入らない（または氏名が暗号でない部分に入った） → ' + short(r.afterImport));
+      ok(r.open1.amp === 'amp_1ubc45', '★' + L + ' 📥 のあと開くと、現場の増幅器 1U-BC が古い 3U に戻った → ' + short(r.open1));
+      ok(r.file.amp === 'amp_1ubc45' && /G/.test(r.file.ids) && /A/.test(r.file.ids),
+         '★' + L + ' 💾 上書き保存で .hyb に現場の増幅器が入らない（古い 3U を書いた）・写真が減った → ' + short(r.file));
+      if(mode === 'proj')
+        ok(r.diskAmp === 'amp_1ubc45', '★' + L + ' 📥 のあとの物件の保存で、物件（共有ファイル）に古い 3U が入った → ' + short(r.diskAmp));
     }
     await ctx.close();
   }

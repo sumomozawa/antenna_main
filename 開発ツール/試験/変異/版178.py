@@ -767,15 +767,10 @@ CASES = [
   (u"★📸 写真の一括書き出しが、剥がした封筒をそのまま読む（直して戻ったあと「鍵がなくスキップ」）",
    u'''    try { env = await getEnvelopeForPhotos(row); } catch(_){}''',
    u'''    try { env = await getFullEnvelope(row); } catch(_){}''', TM, "main", u"㉕qedit"),
-  (u"★🔄 一括再暗号化・📄 一括平文化が、剥がした封筒をそのまま読む（直して戻ったあと「写真未復元のため保全スキップ」）",
-   u'''      const env = await getEnvelopeForPhotos(row); // 写真ct復元済みの完全envelope（剥がした封筒ならファイルの写真。版178）''',
-   u'''      const env = await getFullEnvelope(row);''', TM, "main", u"㉕qedit"),
-  (u"★📷・📸・📄・🔄 の封筒の暗号でない部分を、行（直したところ）でなくファイルから取る（🔄・📄 で増幅器 1U が 3U に戻る）",
-   u'''  return Object.assign({}, fresh, { plain: (env && env.plain) || fresh.plain });''',
-   u'''  return fresh;''', TM, "main", u"㉕qedit"),
-  (u"★📷・📸・📄・🔄 の封筒の暗号でない部分を、行でなくファイルから取る（開き直して戻ったあと、🔄・📄 で増幅器 1U が 3U に戻る）",
-   u'''  return Object.assign({}, fresh, { plain: (env && env.plain) || fresh.plain });''',
-   u'''  return fresh;''', TM, "main", u"㉕qreopen"),
+  (u"★🔄 一括再暗号化・📄 一括平文化が、剥がした封筒をそのまま読む（直して戻ったあと「写真が出ていないので飛ばした戸別」）",
+   u'''        if(sp) env = sp;''', u'''''', TM, "main", u"㉕qedit"),
+  # 「📷・📸・📄・🔄 の封筒の暗号でない部分を行から取る」の2件は外した（9回目の見直し）。🔄・📄 は getEnvelopeForPhotos を使わなくなり
+  #  （indivHybridEnvelope で、鍵の元が同じときだけファイルの写真を差し込む）、📷・📸 は写真だけを読む＝壊しても見分けようが無い。
   (u"★ファイルからほどいたとき、行にだけある写真を足さない（📥 で入れた写真 G が、開くと消える）",
    u'''  const base = Array.isArray(full.chosho_photos) ? full.chosho_photos : (full.chosho_photos ? migratePhotosShape(full.chosho_photos) : []);
   full.chosho_photos = photosKeepFileOnly(base, ph.filter(p => p && p.dataUri));
@@ -833,6 +828,25 @@ CASES = [
   (u"★暗号の戸別を 💾 上書き保存したあと、行をファイルから読む形にしない（ボタンを押したとき：開き直すと写真が出ない）",
    u'''        _editingRow._slim = true;
 ''', u'''''', TM, "main", u"㉕sclick"),
+  # ======== メイン：9回目の見直しの直し（一括再暗号化は鍵の元が同じときだけファイルの写真を差し込む・書いたら行の封筒も新しく・📥 の現場の欄を暗号の行の封筒にも） ========
+  (u"★🔄 一括再暗号化のあと、行の封筒を新しい鍵のものにしない（開くと古い封筒で開き、💾 上書き保存が書けない・物件に古い鍵が残る）",
+   u'''        row.envelope = e2;''', u'''''', TM, "main", u"㉕v"),
+  # 「鍵の元の違うファイルの写真を差し込む」は、🔄 ではほどけない写真になって結局飛ばす（壊しても同じ結果）。物件に保存の道は ㉕b が見る。
+  (u"★🔄 一括再暗号化で、写真の出ていない戸別を飛ばさずに書く（ほかのPCが書き替えた .hyb の写真と中身が、行の古い中身で消える）",
+   u'''    if(stateObj && stateObj._photosStripped){''', u'''    if(false){''', TM, "main", u"㉕w"),
+  # 飛ばした戸別の知らせの言い方は ㉕w が見る（同じ行が 🔄 と 📄 の2か所にあり、1か所だけを壊す目印が作れない）。
+  (u"★📥 で暗号の行に入れた現場の欄（増幅器など）を、封筒の暗号でない部分に入れない（開くと古い値・💾 で古い値・物件にも古い値）",
+   u'''  if(row.fileType === "hybrid" && row.envelope && merged && typeof merged === "object"){''',
+   u'''  if(false){''', TM, "main", u"㉕x"),
+  (u"★📥 で暗号の行の封筒に入れるとき、氏名などの暗号の欄まで暗号でない部分に入れる",
+   u'''    for(const k in merged){ if(sens.indexOf(k) < 0) np[k] = merged[k]; }''',
+   u'''    for(const k in merged){ np[k] = merged[k]; }''', TM, "main", u"㉕x"),
+  (u"★暗号の行へ 📥 して戸別ファイルへ書けなかったのに「ファイルから読む」のまま（開くとファイルの古い中身で開き、現場の増幅器が戻る）",
+   u'''  if(row.fileType === "hybrid" && row._slim && !/個別JSONも更新しました/.test(String(note || ""))) row._slim = false;''',
+   u'''''', TM, "main", u"㉕x"),
+  (u"★暗号の行へ 📥 して戸別ファイルへ書けたのに「ファイルから読む」をやめる（開くとファイルの写真が出ない）",
+   u'''  if(row.fileType === "hybrid" && row._slim && !/個別JSONも更新しました/.test(String(note || ""))) row._slim = false;''',
+   u'''  if(row.fileType === "hybrid" && row._slim) row._slim = false;''', TM, "main", u"㉕rproj"),
 ]
 
 import sys as _s
