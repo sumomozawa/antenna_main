@@ -22854,8 +22854,8 @@ async function aptMgMovePhotos(target, stray){
     return { moved: n, note: "元のファイル " + stray._name + " を " + tmg + " の持ち物にしました（「💾 戸別ファイルへ反映」で名前が付け替わります）"
       + (own.length ? ("\n" + tmg + " の行にだけあった写真 " + own.length + " 枚も、このファイルへ入れました") : "") };
   }
-  // どちらにもファイルが無い → 手元の写真を合わせる（まとめる先の預けた元の写真も先に読み直す・版178・3回目）
-  try { await rowTakeBackOriginals(target); } catch(_){}
+  // どちらにもファイルが無い → 手元の写真を合わせる（まとめる先の預けた元の写真も先に読み直す・読めなければ移さない・版178・3回目）
+  await takeBackTarget();
   target.data = Object.assign({}, target.data || {}, { chosho_photos: mergeGenbaPhotos(
     (target.data || {}).chosho_photos, strayPhotos,
     { mainThumb: !!((target.data || {}).chosho_photos_thumb),
