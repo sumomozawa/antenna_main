@@ -29302,8 +29302,12 @@ function rowsOriginalsRestore(rows, keep){
     const arr = r.data.chosho_photos.map(p => {
       if(!p || !p.dataUri) return p;
       const o = m.get(p.id || photoContentId(p.dataUri));
-      if(!o || !(String(o.dataUri).length > String(p.dataUri).length)) return p;   // 元の写真（縮小版より大きい）だけ
-      if(o.thumb != null && o.thumb !== p.dataUri) return p;                        // ほかの端末が直した写真は、そのまま
+      if(!o) return p;
+      /* この端末の縮小版を覚えているときは、大きさでなく「作り直した行の写真が、その縮小版そのものか」で決める（版178）。
+         小さい図・画面写し（PNG）は、元の写真のほうが縮小版（JPEG）より短いことがあり、大きさで比べると元の写真を戻さず、
+         縮小版が残っていた（あとで戸別ファイルへ縮小版が書かれる）。 */
+      if(o.thumb != null){ if(o.thumb !== p.dataUri || o.dataUri === p.dataUri) return p; }   // ほかの端末が直した写真は、そのまま
+      else if(!(String(o.dataUri).length > String(p.dataUri).length)) return p;            // 縮小版を覚えていない：元の写真（縮小版より大きい）だけ
       up++;
       return Object.assign({}, p, { dataUri: o.dataUri });
     });

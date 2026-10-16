@@ -91,8 +91,11 @@ CASES = [
   (u"★🔄 最新を取り込むとき、元の写真を持ち越さない",
    u'''    if(keepOrig) rowsOriginalsRestore(_listRows, keepOrig);''', u'''''', TM, "main", u"⑫a"),
   (u"★ほかの端末が直した写真（回した・軽くした）を、この端末の古い元の写真に戻す",
-   u'''      if(o.thumb != null && o.thumb !== p.dataUri) return p;                        // ほかの端末が直した写真は、そのまま''',
-   u'''''', TM, "main", u"⑰"),
+   u'''      if(o.thumb != null){ if(o.thumb !== p.dataUri || o.dataUri === p.dataUri) return p; }   // ほかの端末が直した写真は、そのまま''',
+   u'''      if(o.thumb != null){ if(o.dataUri === p.dataUri) return p; }''', TM, "main", u"⑰"),
+  (u"★縮小版を覚えているのに大きさで比べる（元の写真のほうが短い PNG の図・画面写しを、縮小版のまま残す）",
+   u'''      if(o.thumb != null){ if(o.thumb !== p.dataUri || o.dataUri === p.dataUri) return p; }   // ほかの端末が直した写真は、そのまま''',
+   u'''      if(o.thumb != null){ if(o.thumb !== p.dataUri || !(String(o.dataUri).length > String(p.dataUri).length)) return p; }''', TM, "main", u"⑰b"),
   (u"★持ち越すとき、作り直した行に無い写真も足す（ほかの端末で消した写真が戻る）",
    u'''    if(up) r.data = Object.assign({}, r.data, { chosho_photos: arr });
   });
@@ -172,8 +175,8 @@ CASES = [
    u'''                      && (target._fromProject || target.data.chosho_photos_thumb));''',
    u'''                      && (target.data.chosho_photos_thumb));''', TM, "main", u"⑭d"),
   (u"★持ち越すとき、縮小版を覚えていない写真は元に戻さない（開き直したあと縮小版が戸別ファイルに書かれる）",
-   u'''      if(o.thumb != null && o.thumb !== p.dataUri) return p;                        // ほかの端末が直した写真は、そのまま''',
-   u'''      if(o.thumb !== p.dataUri) return p;''', TM, "main", u"⑫d"),
+   u'''      else if(!(String(o.dataUri).length > String(p.dataUri).length)) return p;            // 縮小版を覚えていない：元の写真（縮小版より大きい）だけ''',
+   u'''      else return p;''', TM, "main", u"⑫d"),
   # ======== メイン：3回目の見直しの直し ========
   (u"★名前の大文字・小文字だけ違う管理番号に直すと、書いたファイルを「古い名前」として消す（Windows・Mac で写真ごと無くなる）",
    u'''  if(legacyToRemove && nameKey(relpath) === nameKey(legacyToRemove)){ relpath = oldRel; legacyToRemove = ""; }''', u'''''', TM, "main", u"㉒"),
