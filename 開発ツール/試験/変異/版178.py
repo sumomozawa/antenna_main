@@ -467,6 +467,17 @@ CASES = [
   (u"★一覧から直に別の戸別を開いても、前の戸別を軽くしない",
    u'''    if(!seq0) await rowParkPrevAfterOpen(prev);   // 開けたら、前の戸別をもう一度軽くする（版178・3回目）
 ''', u'''''', TMM, "main", u"㊷l"),
+  (u"★新しく作る戸別ファイルで、預けた縮小版（縮小版の印は外れている）の元の写真を探さない（縮小版のファイルを作る）",
+   u'''row._fromProject || rowHasParkedThumb(row))){''', u'''row._fromProject)){''', TMM, "main", u"㊷n"),
+  (u"★新しく作る戸別ファイル（元のファイルが無い）でも、預けた縮小版を外す（元の写真に替えられず、写真の無いファイルを作る）",
+   u'''        if((existingFh || alsoFh) && photoIsParkedThumb(row, x)){ parkLeft++; return false; }''',
+   u'''        if(photoIsParkedThumb(row, x)){ parkLeft++; return false; }''', TMM, "main", u"㊷n"),
+  (u"★戸別ファイルから元の写真が無くなった預けた縮小版を、元の写真の代わりに書く",
+   u'''        if((existingFh || alsoFh) && photoIsParkedThumb(row, x)){ parkLeft++; return false; }
+''', u'''''', TMM, "main", u"㊷o"),
+  (u"★戸別ファイルに入れなかった預けた縮小版を知らせない",
+   u'''  if(parkLeft) _indivParkLeft.set(data, parkLeft);
+''', u'''''', TMM, "main", u"㊷o"),
   # ======== 現場入力：まとめて保存（E・F） ========
   (u"★まとめて保存（フォルダ）：下書きの中身が変わっていても、写しで書き直す・保存済にする",
    u'''    const lateOther = !keep && !!model && model !== M && !!(opt && opt.wrote) && !draftRecSame(rec, (opt && opt.was) || "");''',
@@ -539,7 +550,7 @@ CASES = [
   # ======== メイン：7回目の直し（物件の覚えている名前が古い戸別を、縮小版のファイルにしない） ========
   # ======== メイン：物件の覚えている名前が古い戸別を、縮小版のファイルにしない（7回目の見直し） ========
   (u"★古い名前で元のファイルが見つからないとき、工事フォルダの中の元の写真を使わない（縮小版のファイルを作る）",
-   u'''  if(created && !photoSrcFh && row.fileType === "plain" && ((row.data && row.data.chosho_photos_thumb) || row._fromProject)){''',
+   u'''  if(created && !photoSrcFh && row.fileType === "plain" && ((row.data && row.data.chosho_photos_thumb) || row._fromProject || rowHasParkedThumb(row))){''',
    u'''  if(false){''', TM, "main", u"㊸ha"),
   (u"★見つけた元の写真を、縮小版の代わりに使わない（📥 現場取込）",
    u'''    return (b && b.p.dataUri !== p.dataUri && (photoLongEdgeOf(b.p.dataUri) > photoLongEdgeOf(p.dataUri) || !projThumbLike(b.p)))

@@ -15169,6 +15169,7 @@ async function buildIndividualContent(row, existingFh, alsoFh){
      新しい 102 のファイルの写真が0枚になった（元の3枚は 086 のファイルに取り残された）。
      行が写真を確かに持っていると分かっている時（＝エディタで開いて書き戻した時）だけ、
      行の写真を採る。それ以外は元ファイルの写真をそのまま残す。 */
+  let parkLeft = 0;                                                    // 戸別ファイルに入れなかった預けた縮小版（版178・3回目）
   const thumbish = !!data.chosho_photos_thumb || !!row._fromProject   // サムネ＝原寸ではない
                 || rowHasParkedThumb(row, data.chosho_photos);         // 戸別ファイルに預けた写真の縮小版も（印が外れていても・版178・3回目）
   const photosKnown = !!row._photosKnown && !thumbish;
@@ -15213,7 +15214,14 @@ async function buildIndividualContent(row, existingFh, alsoFh){
       const keyOf = x => (x && x.id) || ((x && x.dataUri) ? photoContentId(x.dataUri) : "");
       const baseKeys = new Set((Array.isArray(basePhotos) ? basePhotos : [])
         .filter(x => x && x.dataUri).map(keyOf).filter(Boolean));
-      return rowPhotos.filter(x => x && x.id && !baseKeys.has(x.id));
+      /* ★預けた縮小版を、元の写真の代わりに書かない★（版178・3回目）元のファイルに、その写真の元の写真がもう無い
+         （ほかの端末で消した・動かした）・読み直せなかった。縮小版は物件に残る（何も失わない）。呼び出し側が知らせる。
+         新しく作るファイル（元のファイルが無い）は、呼び出し側が工事フォルダの中の元の写真に替える（替えられなければ作らない） */
+      return rowPhotos.filter(x => {
+        if(!(x && x.id && !baseKeys.has(x.id))) return false;
+        if((existingFh || alsoFh) && photoIsParkedThumb(row, x)){ parkLeft++; return false; }
+        return true;
+      });
     })() : rowPhotos) : null;
     if(!addable || !addable.length){
       // 足せるものが無い → 元のファイルの写真をそのまま残す
@@ -15243,8 +15251,10 @@ async function buildIndividualContent(row, existingFh, alsoFh){
   }
   delete data.chosho_photos_thumb; delete data.chosho_photo_count; // 物件専用メタは個別ファイルに残さない
   delete data._side;          // 📮 預けの印は いつもの名前のファイルに入れない（版176。_sideMerged は残す）
+  if(parkLeft) _indivParkLeft.set(data, parkLeft);
   return data;
 }
+const _indivParkLeft = new WeakMap();   // 書く中身 → 戸別ファイルに入れなかった預けた縮小版の枚数（版178・3回目）
 /* 行の写真を、このファイルから読んで開いたか（版178）。📄 で選んだファイル（File）は、工事フォルダのファイルではない */
 async function indivSameFile(from, fh){
   if(!from || !fh || typeof from.isSameEntry !== "function") return false;
@@ -15658,7 +15668,10 @@ async function writeCurrentCaseToIndividualFile(){
        閉じると物件の縮小版だけになる）。知らせに ⚠ は付けない（📥 の「書けていません」に数えない）
      見て回っているあいだに、同じ名前のファイルが届いていたら（ほかの端末の同期）、読まずに上書きしない。 */
   let thumbKeptNote = "";
-  if(created && !photoSrcFh && row.fileType === "plain" && ((row.data && row.data.chosho_photos_thumb) || row._fromProject)){
+  const parkLeft = _indivParkLeft.get(contentObj) || 0;
+  if(parkLeft) thumbKeptNote = "\n※ この戸別の写真のうち " + parkLeft + " 枚は、戸別ファイルから元の写真を読めなかった（ほかの端末で消した・動かした など）ので、"
+                             + "戸別ファイルには入れていません（小さい写真で置き換えないため）。物件には小さい写真が残っています。";
+  if(created && !photoSrcFh && row.fileType === "plain" && ((row.data && row.data.chosho_photos_thumb) || row._fromProject || rowHasParkedThumb(row))){
     const oldNo = junkNoFromName(oldBase);
     const before = (contentObj.chosho_photos || []).slice();   // 元の写真を探す前の、行の写真（版178）
     const up = await indivThumbOriginals(dir, [mg].concat(/^戸別$/.test(oldNo) ? [] : [oldNo]), contentObj);
