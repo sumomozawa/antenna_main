@@ -156,7 +156,7 @@ CASES = [
    u'''      if(fresh){ d = lgOverlayLedger(fresh, target); } }''', TM, "main", u"㉓e"),
   (u"★一度開いた行（写真を持っている）を開き直したとき、見せた写真を覚えない",
    u'''    else rowSeePhotos(target, d && d.chosho_photos);                                                         // 行の写真を見せる（版178）''',
-   u'''''', TM, "main", u"㉓f"),
+   u'''''', TM, "main", u"㉓g"),
   (u"★図面のある物件の行（縮小版の印が外れた）を、元のファイルへそのまま上書きする",
    u'''                      && (target._fromProject || target.data.chosho_photos_thumb));''',
    u'''                      && (target.data.chosho_photos_thumb));''', TM, "main", u"⑭d"),
