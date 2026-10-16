@@ -40,14 +40,18 @@
      ⑳b 同じく、途中で 034 の戸別を開いた → 034 の画面にも下書きにも 033 の写真が出ない。
         下書きを書いたキーの引っ越しの覚えは、その下書き自身のものだけ捨てる（別の下書きの覚えは残す・4回目の見直し）
      ㉑ 測定値のCSVの取り込み（別の戸別へ移ったあとで読み終わる）で、そのキーの下書きが別の下書き（印が違う）になっていた
-        → 別の下書きを置き換えない・取り込んだ戸別は一時のキーに残る（下書き一覧に出る）・別の下書きに入れたことを知らせる。
-        ⑳と同じ打ち間違いのあとでも、034 を置き換えない
+        → 別の下書きを置き換えない・取り込んだ戸別は一時のキーに残る（下書き一覧に出る）・別の下書きに入れたことを
+        取り込みの最後に窓で知らせる（「測定値」と言う。「写真」と言わない）。⑳と同じ打ち間違いのあとでも、034 を置き換えない
      ㉒ 写真が下書きに書かれている最中に、その戸別を開き直した（画面の写しは書く前の下書き）→ 書いた写真が画面の写しにも入り、控えても消えない
    （ここから 4回目の見直しの直し：同じ番号のファイルを読んでも下書きの印を引き継ぐ。別の下書きの引っ越しの覚えは捨てない）
      ㉓ A を開いて写真を3枚取り込み、1枚目のあとで「📂 読込」から A の PCのファイル（PCの写真 pc1）を読んだ（自動の控えも走る）
         → 残りの写真も画面と A の下書き1つにそろう（一時のキーの下書きを作らない）・まとめて保存で全部 A のファイルに入ってから「保存済」
      ㉔ 新規で D のつもりで 033 と打ち間違え、写真を4枚取り込む。1枚目のあとで B を見に行き、下書き一覧から戻って 034 に直し、
         本当の 033（C）を受付台帳から開いた → 残りの写真は D の下書き（034）にそろう・C の下書きは元のまま・まとめて保存で 034.json に4枚
+   （ここから 5回目の見直しの直し：別の下書きに入れたことは、小さな知らせではなく、取り込みの最後に窓で知らせる）
+     ㉕ A を開いて写真を3枚取り込み、1枚目のあとで受付台帳の A の行の「取消」で下書きを消し、受付台帳から A を開き直した
+        （新しい下書き・印が違う）→ 残りの写真は一時のキーの下書きに入る（a1・1〜3枚目とも消えない・下書き一覧に出る）・
+        取り込みが終わったとき、「写真を、別の下書きに入れました」「下書き一覧」と窓で知らせる
    使い方: node smoke_v178_genba.js [現場入力 index.html の file:// URL]　（SCENE=①,③ で場面を絞れる） */
 const { chromium } = require('playwright-core');
 const fs = require('fs'), path = require('path');
@@ -191,7 +195,7 @@ window.__delPhoto = function(pid){
   M.chosho_photos.splice(i, 1); saveDraft(); try{ refreshPhotos(); }catch(_){}
   return 'splice';
 };
-/* （㉑・㉓・㉔で使う）画面の下に出る短い知らせ（toast）を __toasts に控える。知らせはそのまま出す */
+/* （㉓・㉔で使う）画面の下に出る短い知らせ（toast）を __toasts に控える。知らせはそのまま出す */
 window.__catchToasts = function(){
   if(window.__toasts) return;
   window.__toasts = [];
@@ -940,10 +944,11 @@ window.__holders = async function(ps, except){
       M.chosho_photos.push(__ph('x1', '#880')); saveDraft(); await __sleep(700);
       const kx = M._lastDraftKey, uidX = M._uid;
       await __open('no:' + NB);
-      __catchToasts(); const t0 = __toasts.length;       // ここから出た知らせを見る
-      rel(); await p; await __sleep(500);                // CSV を読み終えた（読込元は消す前の A）
+      const t0 = __said.length;                          // ここから出た窓を見る
+      rel(); await p;                                    // CSV を読み終えた（読込元は消す前の A）
+      const said = __said.slice(t0);                     // 取り込みが終わったときには、もう窓が出ている
+      await __sleep(500);
       readFileAsArrayBuffer = orig;
-      const said = __toasts.slice(t0);
       const meas = m => (((m || {}).measurements || {}).antenna || [])[0] || null;
       const rx = await idbGet('no:' + NA);
       const tmps = ((await idbGetAll()) || []).filter(x => x && x.model && /^tmp:/.test(x.key || ''))
@@ -963,8 +968,11 @@ window.__holders = async function(ps, except){
     ok(t.length === 1 && t[0].meas && String(t[0].meas.db) === '61' && t[0].photos === 'a1',
        '★㉑CSV を読み込んだ戸別（A：値と写真）が、一時のキーに残らない（または X の写真が混ざった） → ' + J(r.tmps));
     ok(t.length === 1 && (r.listed || []).indexOf(t[0].key) >= 0, '★㉑一時のキーに残した戸別が、下書き一覧に出ない → ' + J(r.listed));
-    ok((r.said || []).some(s => s.indexOf(NA) >= 0 && /別の下書き/.test(s)),
-       '★㉑そのキーの下書きが別のものに替わっていたのに、別の下書き（一時のキー）に入れたことを知らせない → ' + J(r.said));
+    /* 小さな知らせ（toast）は、すぐあとの「…CH取込」で消えて読めなかった（5回目の見直し）。取り込みの最後に窓で知らせる */
+    const w = (r.said || []).filter(s => /別の下書き/.test(s));
+    ok(w.some(s => s.indexOf(NA) >= 0 && /測定値/.test(s) && /下書き一覧/.test(s)),
+       '★㉑そのキーの下書きが別のものに替わっていたのに、測定値を別の下書き（一時のキー）に入れたことを窓で知らせない（「下書き一覧」も言わない） → ' + J(r.said));
+    ok(w.every(s => !/写真/.test(s)), '★㉑測定値の CSV の取り込みなのに「写真を別の下書きに入れました」と知らせた → ' + J(w));
   });
 
   /* ---------- ㉒ 写真が下書きに書かれている最中に、その戸別を開き直した → 書いた写真が消えない ----------
@@ -1040,7 +1048,7 @@ window.__holders = async function(ps, except){
                     others: await __holders(ps, ['no:' + NA]), before: await __info(NA) };
       await saveAllDrafts('unsaved'); await __sleep(1000); // まとめて保存
       res.fileA = __file(NA); res.after = await __info(NA); res.draftsAfter = await __draftsOfNo(NA);
-      res.said = __toasts.filter(s => /別の下書き/.test(s));
+      res.said = __toasts.concat(__said).filter(s => /別の下書き/.test(s));   // 小さな知らせと窓の両方を見る
       return Object.assign(res, { all });
     }, { NA });
     console.log('㉓取り込みの途中で同じ戸別のファイルを読んだ', J(r));
@@ -1104,7 +1112,7 @@ window.__holders = async function(ps, except){
                     others: await __holders(ps, ['no:' + ND]), dupC: await __draftsOfNo(NC) };
       await saveAllDrafts('unsaved'); await __sleep(1000); // まとめて保存
       res.fileD = __file(ND); res.fileC = __file(NC); res.infoD = await __info(ND);
-      res.said = __toasts.filter(s => /別の下書き/.test(s));
+      res.said = __toasts.concat(__said).filter(s => /別の下書き/.test(s));   // 小さな知らせと窓の両方を見る
       return res;
     }, { NB, NC, ND });
     console.log('㉔番号を直した戸別の取り込みの途中で本当の 033 を開いた', J(r));
@@ -1120,6 +1128,69 @@ window.__holders = async function(ps, except){
     ok(hasAll(r.fileD, r.ps) && r.infoD && r.infoD.h === 'ok' && (r.fileC === null || lacks(r.fileC, r.ps)),
        '★㉔まとめて保存で、D の写真4枚が 2612MKM034.json にそろわない（または 033 のファイルに入った） → ' + J({ fileD: r.fileD, fileC: r.fileC, infoD: r.infoD }));
     ok(r.said && r.said.length === 0, '★㉔同じ下書き（番号を直しただけ）なのに「別の下書きに入れました」と出た → ' + J(r.said));
+  });
+
+  /* ---------- ㉕ 写真の取り込みの途中で、受付台帳の「取消」で A の下書きを消し、受付台帳から開き直した → 窓で知らせる ----------
+     開き直した A は新しい下書き（印が違う）。残りの写真はそこを置き換えず、一時のキーの下書き（取り込みを始めた A）に入る。
+     4回目の見直しではこれを小さな知らせ（toast）で言っていたが、すぐあとの「写真を読んでいます… 2 / 3」で消えて読めず、
+     A は写真0枚のまま「保存済」になり、写真は下書き一覧の見知らぬ1行にだけ残っていた（5回目の見直し）。
+     取り込みが終わったときに窓で「写真を、別の下書きに入れました」「下書き一覧」と知らせる。 */
+  await scene('㉕', async page => {
+    const r = await page.evaluate(async ({ NA }) => {
+      __gatedImport();
+      await __state();                                   // A（写真 a1）・B の下書き（画面は B）
+      await __open('no:' + NA);                          // A を開く
+      const uidA = M._uid;
+      const cs = ['#a91', '#a92', '#a93'], ps = cs.map(__pidOf);
+      const imp = handlePhotoFiles(__files(cs));         // ギャラリーから写真を3枚選んだ
+      await __rel(cs[0]);                                // 1枚目（A を開いている＝自動の控えで A の下書きに入る）
+      const draftA = async () => __pids(((await idbGet('no:' + NA)) || {}).model);
+      for(let i = 0; i < 150 && (await draftA()).split(',').indexOf(ps[0]) < 0; i++) await __sleep(20);
+      const before = await draftA();
+      const rowBtn = sel => { let b = null;              // 受付台帳の A の行のボタン
+        document.querySelectorAll('#reception-modal .draft').forEach(el => {
+          if(!b && (el.textContent || '').indexOf(NA) >= 0) b = el.querySelector(sel); });
+        return b; };
+      openReceptionModal(); await __sleep(500);
+      const ub = rowBtn('.d-undo[data-recundo]');        // 「取消」（確かめの窓は OK）
+      if(ub) ub.click(); else await untouchCase(getReceptionRows().find(x => x.mgmt_no === NA));
+      for(let i = 0; i < 150 && await idbGet('no:' + NA); i++) await __sleep(20);
+      await __sleep(300);
+      const gone = !(await idbGet('no:' + NA));
+      if(!document.getElementById('reception-modal').classList.contains('open')) openReceptionModal();
+      await __sleep(500);
+      const ob = rowBtn('.d-open[data-recopen]');        // A を受付台帳から開き直す
+      if(ob) ob.click(); else await openFromReception(getReceptionRows().find(x => x.mgmt_no === NA));
+      for(let i = 0; i < 150 && !(M.chosho_mgmt_no === NA && M._lastDraftKey === 'no:' + NA && M._uid && M._uid !== uidA); i++) await __sleep(20);
+      await __sleep(600);
+      const uidNew = M._uid, rn0 = await idbGet('no:' + NA);
+      const reopen = { undoBtn: !!ub, openBtn: !!ob, before, gone, no: M.chosho_mgmt_no, key: M._lastDraftKey,
+                       uidNew: !!uidNew && uidNew !== uidA, rec: !!(rn0 && rn0.model && rn0.model._uid === uidNew) };
+      const t0 = __said.length;                          // ここから出た窓を見る
+      await __rel(cs[1]); await __rel(cs[2]); await imp; // 2枚目・3枚目。取り込みが終わった
+      const said = __said.slice(t0).filter(s => /別の下書き/.test(s));
+      await __sleep(500);
+      const tmps = ((await idbGetAll()) || []).filter(x => x && x.model && /^tmp:/.test(x.key || ''))
+        .map(x => ({ key: x.key, no: x.model.chosho_mgmt_no, name: x.model.chosho_cust_name, photos: __pids(x.model) }));
+      const rn = await idbGet('no:' + NA);
+      let listed = [];
+      try{ await openDraftModal(); await __sleep(300);   // 下書き一覧に出るか
+        listed = Array.from(new Set(Array.from(document.querySelectorAll('#draft-list [data-draftopen]')).map(el => el.getAttribute('data-draftopen'))));
+        closeDraftModal(); }catch(_){}
+      return { ps, all: ['a1'].concat(ps), reopen, said, tmps, listed,
+               a: rn && rn.model && { no: rn.model.chosho_mgmt_no, uid: rn.model._uid === uidNew, photos: __pids(rn.model) } };
+    }, { NA });
+    console.log('㉕取り込みの途中で A を取消して開き直した', J(r));
+    const o = r.reopen || {};
+    ok(hasAll(o.before, ['a1', r.ps[0]]) && o.gone && o.no === NA && o.key === 'no:' + NA && o.uidNew && o.rec,
+       '㉕試験の前提: 1枚目が A の下書きに入り、「取消」で A の下書きが消え、受付台帳から開き直した A は新しい下書き（印が違う）になる → ' + J(o));
+    ok(r.a && r.a.no === NA && r.a.uid, '★㉕開き直した A の下書き（新しい下書き）が、取り込みの戸別で置き換わった → ' + J(r.a));
+    const t = (r.tmps || []).filter(x => x.no === NA);
+    ok(t.length === 1 && hasAll(t[0].photos, r.all),
+       '★㉕取り込んだ写真（a1・1〜3枚目）が、一時のキーの下書き1つにそろって残らない（写真が消えた） → ' + J(r.tmps));
+    ok(t.length === 1 && (r.listed || []).indexOf(t[0].key) >= 0, '★㉕写真を入れた一時のキーの下書きが、下書き一覧に出ない → ' + J(r.listed));
+    ok((r.said || []).length === 1 && r.said[0].indexOf(NA) >= 0 && /写真/.test(r.said[0]) && /下書き一覧/.test(r.said[0]),
+       '★㉕取り込みが終わっても、写真を別の下書きに入れたことを窓で知らせない（または何度も出た・「下書き一覧」を言わない） → ' + J(r.said));
   });
 
   await b.close();
