@@ -786,12 +786,14 @@ CASES = [
   return ph;
 }''', u'''  return null;
 }''', TM, "main", u"㉕p"),
-  (u"★ファイルからほどいたとき、行にだけある写真を足さない（開くとき読めなかったファイルを、読めるようになって開くと G が消える）",
+  # ㉕uU は10回目の直しで、書けなかった 📥 の行をファイルを読まずに開く（写真を剥がした枝）ようになり、この枝を通らない。
+  # 11回目の直しの 📄 ファイルの行（読んだファイルの写真を差し込んでほどく）が通るので、㉕zfg で見る。
+  (u"★ファイルからほどいたとき、行にだけある写真を足さない（📄 ファイルの .hyb へ 📥 した G が、開くと消える）",
    u'''  const base = Array.isArray(full.chosho_photos) ? full.chosho_photos : (full.chosho_photos ? migratePhotosShape(full.chosho_photos) : []);
   full.chosho_photos = photosKeepFileOnly(base, ph.filter(p => p && p.dataUri));
   return ph;
 }''', u'''  return null;
-}''', TM, "main", u"㉕uU"),
+}''', TM, "main", u"㉕zfg"),
   (u"★ファイルからほどいたときも、ファイルの写真を行の写真で置き換える（📥 で入れた G だけが出て、上書き保存で A・B が消える）",
    u'''  full.chosho_photos = photosKeepFileOnly(base, ph.filter(p => p && p.dataUri));''',
    u'''  full.chosho_photos = ph.slice();''', TM, "main", u"㉕r"),
