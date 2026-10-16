@@ -142,7 +142,7 @@ window.__open = async function(k){
   const rec = await idbGet(k);
   M = rec.model; M._lastDraftKey = k; ensureModelShape(M); resetOpenState(); render(); await saveStateLoad();
 };
-/* 本物の写真の取り込み（handlePhotoFiles）を、1枚ずつ好きなときに届かせる道具（⑦⑧だけで使う） */
+/* 本物の写真の取り込み（handlePhotoFiles）を、1枚ずつ好きなときに届かせる道具（⑦⑧・⑩〜⑮で使う） */
 window.__gatedImport = function(){
   window.__cg = {};
   window.__cgate = c => new Promise(r => { window.__cg[c] = r; });

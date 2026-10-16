@@ -232,6 +232,18 @@ CASES = [
   (u"★取り込みが2つ重なったとき、読んで足して書くのを1つずつにしない（片方の写真が消える）",
    u'''  return await photoKeepQueue(() => persistModel(model, Array.isArray(added) ? added : undefined));''',
    u'''  return await persistModel(model, Array.isArray(added) ? added : undefined);''', TG, "genba", u"⑮"),
+  (u"★取り込みが2つ重なったとき（開き直した写しから始めた取り込み）、1つずつにしない（片方の写真が消える）",
+   u'''  return await photoKeepQueue(() => persistModel(model, Array.isArray(added) ? added : undefined));''',
+   u'''  return await persistModel(model, Array.isArray(added) ? added : undefined);''', TG, "genba", u"⑮b"),
+  (u"★取り込みが覚えている下書きのキーの、移った先を引かない（開いている写しに届かない）",
+   u'''  const mk = model._lastDraftKey ? draftKeyNow(model._lastDraftKey) : "";''',
+   u'''  const mk = model._lastDraftKey || "";''', TG, "genba", u"⑩"),
+  (u"★下書きに入れた写真を、まだ入れていない写真として持ち越す（画面で消した写真が戻る）",
+   u'''      try{ if(await photoKeepInto(model, pending)) pending=[]; }catch(_){}''',
+   u'''      try{ await photoKeepInto(model, pending); }catch(_){}''', TG, "genba", u"⑫b"),
+  (u"★引き継ぎで新しい印が無いとき、行の控えを待たずに書く（2つ目からの行が残らない）",
+   u'''      await flowShareItemsApply(items, byNo, openNo);''',
+   u'''      flowShareItemsApply(items, byNo, openNo);''', TG, "genba", u"⑯"),
 ]
 
 import sys as _s
