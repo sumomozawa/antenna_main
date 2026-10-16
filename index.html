@@ -15532,11 +15532,23 @@ async function saveState(){
   // 管理番号が入力されていればそれを既定ファイル名に使用（ファイル名NG文字はサニタイズ）
   const mgmtRaw = (document.getElementById("chosho_mgmt_no") || {}).value || "";
   const mgmtSafe = mgmtRaw.trim().replace(/[\\/:*?"<>|]/g, "_");
-  const defaultBase = mgmtSafe || ("アンテナ工事_" + todayLocalYmd());
+  /* ★物件から開いた戸別は、ファイルを選ぶ画面で保存しない★（版178）
+     この画面の写真は物件に控えた小さい写真（長辺512px）で、図面のまだ無い戸別では写真を画面に入れてもいない。
+     前は「管理番号.json」の名前で前に使ったフォルダを出していたので、工事フォルダの戸別ファイルを選んで置き換えると、
+     原寸の写真が縮小版に置き換わり、ファイルにしか無い写真が消えた（図面の無い戸別は写真が0枚）。何も知らせなかった。
+     ファイルを選ぶ画面で選んだ既にあるファイルは、ブラウザがページへ渡す前に中身を空にする（Chrome の決まり）。
+     あとから読んで写真を合わせることはできず、書かずに止めても写真は戻らない。だから画面を開く前に分ける
+     （現場入力の保存も、写真の歯止めを画面を開く前にしている）。
+     写しをダウンロードの場所へ、管理番号.json とは別の名前で保存し（戸別ファイルは書き替えない）、
+     戸別ファイルへは「💾 物件に保存」（工事フォルダの元の写真と合わせて書く）で書くよう知らせる。
+     写しには、画面に入れなかった写真も入れる（写真を減らさない）。 */
+  const fromProj = !!(_editingRow && (_editingRow._fromProject || (_editingRow.data && _editingRow.data.chosho_photos_thumb)));
+  if(fromProj) editorAddHiddenPhotos(s);
+  const defaultBase = mgmtSafe ? (mgmtSafe + (fromProj ? "_写し" : "")) : ("アンテナ工事_" + todayLocalYmd());
   const content = JSON.stringify(s, null, 2);
 
   // File System Access API 対応ブラウザ (Chrome/Edge): 保存先ダイアログを表示
-  if(window.showSaveFilePicker){
+  if(window.showSaveFilePicker && !fromProj){
     try {
       const opts = {
         suggestedName: defaultBase + ".json",
@@ -15573,7 +15585,8 @@ async function saveState(){
   }
 
   // フォールバック: 従来のダウンロード方式（ブラウザ既定のダウンロードフォルダ）
-  const name = prompt("ファイル名を入力してください（拡張子.jsonは自動付与）\n※保存先はブラウザのダウンロード既定フォルダです", defaultBase);
+  const name = prompt((fromProj ? saveStateProjNote(s, mgmtSafe) + "\n\n" : "")
+    + "ファイル名を入力してください（拡張子.jsonは自動付与）\n※保存先はブラウザのダウンロード既定フォルダです", defaultBase);
   if(name === null) return;
   const fname = (name.trim() || defaultBase).replace(/\.json$/i, "") + ".json";
   const blob = new Blob([content], { type:"application/json" });
@@ -15583,6 +15596,17 @@ async function saveState(){
   a.download = fname;
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
+}
+/* 物件から開いた戸別の「💾 保存」で出す知らせ（版178）。写しの写真が物件の縮小版（長辺512px以下）かどうかで言い方を変える */
+function saveStateProjNote(s, mgmtSafe){
+  const small = ((s && Array.isArray(s.chosho_photos)) ? s.chosho_photos : []).some(p => {
+    if(!p || !p.dataUri) return false;
+    const e = photoLongEdgeOf(p.dataUri); return e > 0 && e <= PROJ_THUMB_MAXPX; });
+  return "\u26a0 この戸別は物件から開いています。\n"
+    + (small ? "写真は、物件に控えた小さい写真です（元の写真ではありません）。\n"
+             : "工事フォルダの戸別ファイルにしか無い写真は、この画面には入っていないことがあります。\n")
+    + "戸別ファイル（" + (mgmtSafe || "管理番号") + ".json）へは「💾 物件に保存」で書いてください。工事フォルダの元の写真と合わせて書きます。\n"
+    + "ここでは写しを保存します。戸別ファイルは書き替えません。";
 }
 /* JSONデータを現在のUI/STATEに適用する共通ロジック */
 function applyStateData(s){
@@ -36276,6 +36300,18 @@ function editorKeepFields(s, prev){
   EDITOR_KEEP_FIELDS.forEach(k => { if((k in prev) && !(k in s)) s[k] = prev[k]; });
   return s;
 }
+/* 画面に入れなかった写真（図面のまだ無い物件の行の写真・_editorHiddenPhotos）を、エディタの写真の前に足す（版178）。
+   画面の写真と同じもの（写真IDか中身が同じ）は足さない。一覧の行へ取り込むとき・「💾 保存」の写しで使う。 */
+function editorAddHiddenPhotos(s){
+  const h = _editorHiddenPhotos;
+  if(!s || !h || h.row !== _editingRow || !h.photos.length) return s;
+  const ed = Array.isArray(s.chosho_photos) ? s.chosho_photos : [];
+  const have = new Set();
+  ed.forEach(p => { if(p && p.dataUri){ if(p.id) have.add(p.id); have.add(photoContentId(p.dataUri)); } });
+  const keep = h.photos.filter(p => !((p.id && have.has(p.id)) || have.has(photoContentId(p.dataUri))));
+  if(keep.length) s.chosho_photos = keep.concat(ed);
+  return s;
+}
 function syncEditorToRowData(force){
   if(!_editingRow || _listRows.indexOf(_editingRow) < 0) return;
   // 開いてから何も触っていなければ書き戻さない（見ただけで工事内容・金額が入るのを防ぐ）。
@@ -36293,13 +36329,7 @@ function syncEditorToRowData(force){
     // サムネイルを再生成して物件に保存する（エディタで追加/差替した写真も物件に残る）。
     // 行の写真は元の写真のまま（縮小版は物件に入れるときだけ。版178）。
     /* 画面に入れなかった写真（図面のまだ無い物件の行の写真）は前に足す（版178。行と物件から消さない） */
-    if(_editorHiddenPhotos && _editorHiddenPhotos.row === _editingRow && _editorHiddenPhotos.photos.length){
-      const ed = Array.isArray(s.chosho_photos) ? s.chosho_photos : [];
-      const have = new Set();
-      ed.forEach(p => { if(p && p.dataUri){ if(p.id) have.add(p.id); have.add(photoContentId(p.dataUri)); } });
-      const keep = _editorHiddenPhotos.photos.filter(p => !((p.id && have.has(p.id)) || have.has(photoContentId(p.dataUri))));
-      if(keep.length) s.chosho_photos = keep.concat(ed);
-    }
+    editorAddHiddenPhotos(s);
     const _photos = Array.isArray(s.chosho_photos) ? s.chosho_photos.filter(p => p && p.dataUri) : [];
     if(_photos.length === 0) s.chosho_photos = null;
     const oldTk = subCaseKey(_editingRow);

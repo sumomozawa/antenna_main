@@ -71,10 +71,10 @@ CASES = [
 ''', u'''    _editorHiddenPhotos = false && row._fromProject
 ''', TM, "main", u"⑧a"),
   (u"★画面に入れなかった写真を、保存で行へ足さない",
-   u'''      if(keep.length) s.chosho_photos = keep.concat(ed);''', u'''      if(false) s.chosho_photos = keep.concat(ed);''', TM, "main", u"⑨b"),
+   u'''  if(keep.length) s.chosho_photos = keep.concat(ed);''', u'''  if(false) s.chosho_photos = keep.concat(ed);''', TM, "main", u"⑨b"),
   (u"★画面に入れなかった写真と同じ写真を入れ直すと、二重になる",
-   u'''      const keep = _editorHiddenPhotos.photos.filter(p => !((p.id && have.has(p.id)) || have.has(photoContentId(p.dataUri))));''',
-   u'''      const keep = _editorHiddenPhotos.photos.slice();''', TM, "main", u"⑧b"),
+   u'''  const keep = h.photos.filter(p => !((p.id && have.has(p.id)) || have.has(photoContentId(p.dataUri))));''',
+   u'''  const keep = h.photos.slice();''', TM, "main", u"⑧b"),
   (u"★別の物を画面に出しても、画面に入れなかった写真の覚えを消さない（画面で消した写真が戻る）",
    u'''  _editingRow = null;
   _editorHiddenPhotos = null;
@@ -171,6 +171,27 @@ CASES = [
   (u"★「小さい写真」を印だけで見る（開いて保存すると知らせが消える）",
    u'''  return d.chosho_photos.some(p => { if(!p || !p.dataUri) return false; const e = photoLongEdgeOf(p.dataUri); return e > 0 && e <= PROJ_THUMB_MAXPX; });''',
    u'''  return !!d.chosho_photos_thumb;''', TM, "main", u"⑱a"),
+  # ======== メイン：物件から開いた戸別の「💾 保存」（名前を付けて保存）（G） ========
+  (u"★物件から開いた戸別でも、ファイルを選ぶ画面で保存する（選んだ戸別ファイルが空にされ、縮小版で書かれる）",
+   u'''  if(window.showSaveFilePicker && !fromProj){''', u'''  if(window.showSaveFilePicker){''', TM, "main", u"㉗a"),
+  (u"★物件から開いた戸別（図面なし）でも、ファイルを選ぶ画面で保存する（戸別ファイルが写真0枚になる）",
+   u'''  if(window.showSaveFilePicker && !fromProj){''', u'''  if(window.showSaveFilePicker){''', TM, "main", u"㉗b"),
+  (u"★物件から開いた戸別かを、縮小版の印だけで見る（写真の無い物件の行で、戸別ファイルの写真が消える）",
+   u'''  const fromProj = !!(_editingRow && (_editingRow._fromProject || (_editingRow.data && _editingRow.data.chosho_photos_thumb)));''',
+   u'''  const fromProj = !!(_editingRow && ((_editingRow.data && _editingRow.data.chosho_photos_thumb)));''', TM, "main", u"㉗c"),
+  (u"★物件から開いたのではない戸別も写しにする（📂 で読んだ戸別を ファイルを選ぶ画面で保存できない）",
+   u'''  const fromProj = !!(_editingRow && (_editingRow._fromProject || (_editingRow.data && _editingRow.data.chosho_photos_thumb)));''',
+   u'''  const fromProj = true;''', TM, "main", u"㉗d"),
+  (u"★写しに、画面に入れなかった写真を入れない（図面の無い戸別の写しが写真0枚）",
+   u'''  if(fromProj) editorAddHiddenPhotos(s);''', u'''''', TM, "main", u"㉗b"),
+  (u"★写しの名前を 管理番号.json のままにする（戸別ファイルと同じ名前）",
+   u'''(mgmtSafe + (fromProj ? "_写し" : ""))''', u'''(mgmtSafe)''', TM, "main", u"㉗a"),
+  (u"★写しの窓で「戸別ファイルへは 💾 物件に保存 で書いてください」と知らせない",
+   u'''  const name = prompt((fromProj ? saveStateProjNote(s, mgmtSafe) + "\\n\\n" : "")''',
+   u'''  const name = prompt((""''', TM, "main", u"㉗b"),
+  (u"★写真の無い写しにも「物件に控えた小さい写真です」と知らせる",
+   u'''    + (small ? "写真は、物件に控えた小さい写真です（元の写真ではありません）。\\n"''',
+   u'''    + (true ? "写真は、物件に控えた小さい写真です（元の写真ではありません）。\\n"''', TM, "main", u"㉗c"),
 
   # ======== 現場入力：まとめて保存（E・F） ========
   (u"★まとめて保存（フォルダ）：下書きの中身が変わっていても、写しで書き直す・保存済にする",

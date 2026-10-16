@@ -61,6 +61,13 @@
      ⑯c 同じ管理番号のファイルが2つあり、行の知らない写真がある → 書かない・「🧩 重複をまとめる」を案内する
      ⑯d 付け替え先のファイルの写真を行がみな知っている → 両方の写真で書き、古いファイルを消す（断らない）
      ⑯e 同じ・物件の行が付け替え先の写真の縮小版しか持っていない → 付け替え先には原寸を残す
+   （ここから 名前を付けて保存）
+     ㉗ 物件から開いた戸別で、エディタの「💾 保存」（名前を付けて保存）を押す。フォルダには現場の 管理番号.json（原寸 G）。
+        ファイルを選ぶ画面は Chrome と同じく、選んだファイルを こちらへ渡す前に空にする（あとから読んで合わせることはできない）。
+        → ファイルを選ぶ画面を開かない（戸別ファイルは元のまま）。写しをダウンロードの場所へ保存する（名前は 管理番号_写し.json）。
+          写しの写真は減らさない（画面に入れなかった写真も入れる）。戸別ファイルへは「💾 物件に保存」で書くよう知らせる
+        a) 図面あり（縮小版が画面に出る）に写真 P を足す　b) 図面なし（写真を画面に入れていない）　c) 写真の無い物件の行
+        d) 物件から開いたのではない戸別（📂 で読んだ）は、今までどおりファイルを選ぶ画面で 管理番号.json
    ★場面ごとに新しいブラウザの入れ物（newContext）を使う★ 前の場面の覚え書き（localStorage・IndexedDB）を持ち越さない。
    フォルダは試験の中で作る作り物（getDirectoryHandle／getFileHandle／removeEntry／entries／values を持つ）。
    フォルダを選ぶ画面は window.showDirectoryPicker を差し替える。
@@ -1711,6 +1718,85 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       ok(r.ids.join() === 'G2,P' && r.removed.join() === NO + '.json' && !r.keptOld && r.tree.join() === NO2 + '.json',
          '★⑯' + mode + '付け替え先の写真を行がみな知っているのに、書かずに断った・古いファイルを残した → ' + short(r));
       ok(!a.some(m => /書き替えていません/.test(m)), '★⑯' + mode + '断る必要が無いのに「書き替えていません」と知らせた → ' + short(a.slice(-1)));
+    }
+    await ctx.close();
+  }
+
+  // ---- ㉗ 物件から開いた戸別の「💾 保存」（名前を付けて保存）：ファイルを選ぶ画面で戸別ファイルを置き換えさせない ----
+  for(const mode of ['a', 'b', 'c', 'd'].filter(m => want('㉗' + m))){
+    const { ctx, page, said } = await openMain('㉗' + mode);
+    const r = await run(page, async ({ NO, PN, mode }) => {
+      const G = __jpeg(900, 700, 0.85, 271); const gid = photoContentId(G);
+      const Gt = await makeThumbDataUri(G, PROJ_THUMB_MAXPX, PROJ_THUMB_QUALITY);
+      const fileText = JSON.stringify({ chosho_mgmt_no: NO, chosho_cust_name: '試験 様', amplifier: 'amp_3u43', _origin: 'genba',
+                                        chosho_photos: [{ id: gid, label: '現場で撮った', dataUri: G }] }, null, 2);
+      const list = __mk('リスト', { [NO + '.json']: fileText });
+      const root = __mk('その１', {}, { 'リスト': list });
+      window.showDirectoryPicker = async () => root;
+      /* ファイルを選ぶ画面（名前を付けて保存）。利用者は工事フォルダの戸別ファイルを選んで置き換える。
+         Chrome と同じく、選んだファイルを こちらへ渡す前に空にする */
+      const picks = [];
+      window.showSaveFilePicker = async o => { picks.push((o && o.suggestedName) || '');
+        list.__files[NO + '.json'] = ''; return await list.getFileHandle(NO + '.json'); };
+      /* ダウンロード（写しの名前と中身）を拾う */
+      const blobs = {}, dls = [];
+      const oc = URL.createObjectURL.bind(URL);
+      URL.createObjectURL = b => { const u = oc(b); blobs[u] = b; return u; };
+      const ck = HTMLAnchorElement.prototype.click;
+      HTMLAnchorElement.prototype.click = function(){
+        if(this.download){ dls.push({ name: this.download, blob: blobs[this.href] }); return; }
+        return ck.call(this); };
+      let P = null, eP = null;
+      if(mode === 'd'){
+        applyStateData({ chosho_mgmt_no: NO, chosho_cust_name: '試験 様', amplifier: 'amp_3u43',
+                         chosho_photos: [{ id: gid, label: '現場で撮った', dataUri: G }] });   // 📂 で読んだ戸別（物件なし）
+      } else {
+        const payload = { chosho_mgmt_no: NO, chosho_cust_name: '試験 様', chosho_status: 'in_progress', work_type: '' };
+        if(mode !== 'c') Object.assign(payload, { chosho_photos: [{ id: gid, label: '現場で撮った', dataUri: Gt }],
+                                                  chosho_photos_thumb: true, chosho_photo_count: 1 });
+        if(mode === 'a') payload.amplifier = 'amp_3u43';            // 図面あり＝開くと物件の縮小版が画面に出る
+        await __openProj(__proj178('pj178s' + mode, PN, [{ caseId: 'c1', file: 'リスト/' + NO + '.json', lastModified: 0, payload }]));
+        const row = _listRows.filter(r => r.data.chosho_mgmt_no === NO)[0];
+        await openCaseInEditor(row);
+        if(mode === 'a'){ P = __jpeg(900, 700, 0.85, 272); eP = await __addPhoto(P, 'p.jpg'); }
+      }
+      const shown = (STATE.photos || []).filter(p => p && p.dataUri).length;
+      await document.getElementById('btn-save').onclick();         // エディタの「💾 保存」
+      const tag = p => p.id === gid ? (p.dataUri === G ? 'G' : (p.dataUri === Gt ? 'G縮' : 'G?'))
+                                    : (eP && p.id === eP.id ? (p.dataUri === P ? 'P' : 'P?') : '?');
+      const fileNow = list.__files[NO + '.json'];
+      const dl = dls[0] || null;
+      let copy = null;
+      try { copy = (dl && dl.blob) ? JSON.parse(await dl.blob.text()) : null; } catch(_){ copy = '(読めない)'; }
+      return { picks, shown, eP: mode === 'a' ? !!(eP && eP.dataUri === P) : null,
+               fileSame: fileNow === fileText, filePh: (__photosOf(fileNow || '{}') || []).map(tag), writes: list.__writes.length,
+               dls: dls.map(d => d.name), copyNo: (copy && copy.chosho_mgmt_no) || null,
+               copyPh: (copy && typeof copy === 'object') ? (copy.chosho_photos || []).filter(p => p && p.dataUri).map(tag).sort() : copy };
+    }, { NO, PN, mode });
+    const asked = said.filter(s => s.type === 'prompt').map(s => s.msg);   // 「💾 保存」で出た窓（写しの名前を聞く窓）
+    console.log('㉗' + mode + '物件から開いた戸別の名前を付けて保存', short(r), short(asked.map(m => m.slice(0, 200))));
+    ok(!r.error, '㉗' + mode + '止まった → ' + r.error);
+    if(!r.error){
+      if(mode === 'd'){
+        ok(r.picks.length === 1 && r.picks[0] === NO + '.json' && r.dls.length === 0 && r.filePh.join() === 'G',
+           '★㉗d物件から開いたのではない戸別の「💾 保存」が、今までどおりファイルを選ぶ画面（' + NO + '.json）で保存しない → ' + short(r));
+        ok(!asked.some(m => /物件に保存/.test(m)), '★㉗d物件から開いたのではない戸別で「💾 物件に保存」を案内した → ' + short(asked));
+      } else {
+        if(mode === 'a') ok(r.shown === 2 && r.eP === true, '㉗a試験の前提: 図面のある戸別を開くと縮小版が画面に出て、P を足せる → ' + short(r));
+        if(mode !== 'a') ok(r.shown === 0, '㉗' + mode + '試験の前提: 図面のまだ無い戸別を開くと、写真は画面に出ない → ' + short(r));
+        ok(r.picks.length === 0 && r.fileSame && r.writes === 0,
+           '★㉗' + mode + '物件から開いた戸別の「💾 保存」で、ファイルを選ぶ画面を開いた（選んだ戸別ファイルが空にされ、'
+           + (mode === 'a' ? '縮小版で書かれる・原寸の G が消える' : '写真の無いファイルになる') + '） → ' + short(r));
+        ok(r.dls.length === 1 && r.dls[0] === NO + '_写し.json' && r.copyNo === NO,
+           '★㉗' + mode + '写しをダウンロードの場所へ「' + NO + '_写し.json」で保存しない → ' + short(r));
+        const want = { a: 'G縮,P', b: 'G縮', c: '' }[mode];
+        ok(Array.isArray(r.copyPh) && r.copyPh.join() === want,
+           '★㉗' + mode + '写しの写真が減った・違う（' + want + ' のはず。図面の無い戸別は画面に入れなかった写真も入れる） → ' + short(r.copyPh));
+        ok(asked.some(m => /💾 物件に保存/.test(m) && /戸別ファイル/.test(m) && /書き替えません/.test(m)),
+           '★㉗' + mode + '「戸別ファイルへは 💾 物件に保存 で書いてください」と知らせない → ' + short(asked));
+        if(mode !== 'c') ok(asked.some(m => /物件に控えた小さい写真/.test(m)), '★㉗' + mode + '写真が物件に控えた小さい写真だと知らせない → ' + short(asked));
+        else ok(!asked.some(m => /物件に控えた小さい写真/.test(m)), '★㉗c写真の無い戸別で「小さい写真です」と知らせた → ' + short(asked));
+      }
     }
     await ctx.close();
   }
