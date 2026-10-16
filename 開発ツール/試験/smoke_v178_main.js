@@ -43,6 +43,7 @@
         自分の縮小版のままの物件を開き直すときは、元の写真を持ち越す
      ⑱ 「小さい写真」の知らせは、行の写真の中身で決める（開いて保存しても消えない・元の写真の行には出さない）
      ⑲ 共有ファイルとまとめたあと、もう一度写真を足して保存しても、物件にしか無い写真を落とさない
+     ⑳ フォルダから読んだ戸別（図面なし）で画面から消した写真は、これまでどおり戸別ファイルからも消える（版178 で変えていない）
    ★場面ごとに新しいブラウザの入れ物（newContext）を使う★ 前の場面の覚え書き（localStorage・IndexedDB）を持ち越さない。
    フォルダは試験の中で作る作り物（getDirectoryHandle／getFileHandle／removeEntry／entries／values を持つ）。
    フォルダを選ぶ画面は window.showDirectoryPicker を差し替える。
@@ -1085,6 +1086,38 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       ok(r.replaced, '⑲試験の前提: 保存で共有ファイルとまとめ、行が作り直される → ' + short(r));
       ok(r.row.join() === 'G,P1,P2' && r.idb.join() === 'G,P1,P2' && r.shared.join() === 'G,P1,P2' && r.file.join() === 'G,P1,P2',
          '★⑲まとめたあとの保存で、物件にしか無い写真が消えた → ' + short(r));
+    }
+    await ctx.close();
+  }
+
+  // ---- ⑳ フォルダから読んだ戸別（図面なし）を開いて写真を消し、物件に保存 → これまでどおり戸別ファイルからも消える ----
+  //   （開くときにそのファイルを読んでいる＝画面の写真がファイルの写真。消したのは利用者の意思）
+  if(want('⑳')){
+    const { ctx, page } = await openMain('⑳');
+    const r = await run(page, async ({ NO, PN }) => {
+      await __openProj(__proj178('pj178t', PN, []));
+      const K = __jpeg(900, 700, 0.85, 91), X = __jpeg(900, 700, 0.85, 92);
+      const obj = { chosho_mgmt_no: NO, chosho_cust_name: '試験 様', chosho_status: 'in_progress', work_type: 'uhf_new',
+                    chosho_photos: [{ id: 'k1', label: 'K', dataUri: K }, { id: 'x1', label: 'X', dataUri: X }] };
+      const list = __mk('リスト', { [NO + '.json']: JSON.stringify(obj, null, 2) });
+      _projDirHandle = list;
+      const fh = await list.getFileHandle(NO + '.json');
+      const row = buildListRow(NO + '.json', 1, JSON.parse(list.__files[NO + '.json']), fh);
+      slimListRow(row, true);
+      _listRows = [row];
+      await openCaseInEditor(row);
+      const shown = (STATE.photos || []).filter(p => p && p.dataUri).map(p => p.id).join(',');
+      STATE.photos = (STATE.photos || []).filter(p => !(p && p.id === 'x1'));
+      try { renderPhotoInputs(); } catch(_){}
+      try { markEditorDirty(); } catch(_){}
+      const btn = await __pressSave();
+      return { shown, btn, file: __pids(list.__files[NO + '.json']) };
+    }, { NO, PN });
+    console.log('⑳フォルダから読んだ戸別で写真を消す', short(r));
+    ok(!r.error, '⑳止まった → ' + r.error);
+    if(!r.error){
+      ok(r.shown === 'k1,x1' && r.btn.pressed, '⑳試験の前提: 開くとファイルの写真が画面に出て、物件に保存できる → ' + short(r));
+      ok(r.file === 'k1', '★⑳フォルダから読んで開いた戸別で消した写真が、戸別ファイルに戻ってくる（利用者が消したのに） → ' + short(r));
     }
     await ctx.close();
   }
