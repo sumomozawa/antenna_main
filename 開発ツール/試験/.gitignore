@@ -4,3 +4,5 @@ package.json
 全件.out
 変異/mut_*.html
 __pycache__/
+変異/_tmp*.py
+変異/mut_main_t*.html

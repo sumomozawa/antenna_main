@@ -217,7 +217,11 @@
      ㉕x 暗号の戸別へ 📥 現場取込（現場の増幅器）→ 封筒の暗号でない部分にも入る：開くと現場の増幅器・💾 で .hyb にも・物件（共有ファイル）にも
      ㉕y 物件のファイルから読む .hyb に受付台帳で「完了」→ 🔄 一括再暗号化（パスワードそのまま・新しいパスワード）→ 物件に「完了」が残る・物件の封筒も新しい鍵
      ㉕z ほかのPCが物件で「完了」を付けた（この端末はまだ取り込んでいない）→ 🔄 一括再暗号化 → 物件の保存で「完了」を消さない
+     ㉕yS ほかのPCが物件なしで .hyb を書き替えた（新しい鍵の元・1U）→ 🔄 → 物件の封筒は、いまのファイルの中身（1U）＋受付台帳の「完了」＋新しい鍵（古い中身に新しい鍵を付けない）
+     ㉕yL この端末は受付台帳を直していない・ほかのPCが .hyb に「完了」（備考）を入れた → 🔄 → 物件の封筒にもほかのPCの「完了」（備考）（古い写しをかぶせない）
+     ㉕zM ほかのPCが物件を保存（この戸別は直していない）→ 🔄 → まとめても物件のこの戸別は新しい鍵（keep・newpw）
      ㉕zf 📄 ファイルで読んだ .hyb へ 📥（G・1U-BC）→ 開くと A・B・G（読んだファイルの写真を差し込む）・保存の中身も A・B・G（nog：現場の写真なし　gpw：聞かれたパスワードで）
+     ㉕zk 📄 ファイルで読んだ .hyb で B を消し A を「玄関」にして戻る → 開き直しても A「玄関」だけ・保存も同じ・一括平文化も A は「玄関」
      ㉕ze 📄 ファイルで読んだ .hyb を直して P を足して戻る → 📄 一括平文化・🔄 一括再暗号化が A・B・P・直しを書き出す（飛ばさない・P を抜かない）
          A：物件の暗号の行に「💾 戸別ファイルへ反映」でファイルが付いた → 📥 G → 開く → 画面に G（帯あり）・行に G → 戻ってもう一度開いても G
             → 💾 上書き保存 → .hyb は A・B・G
@@ -6380,6 +6384,111 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
     await ctx.close();
   }
 
+  // ---- ㉕yS 共有ファイルの物件で 📁（物件に取り込む）した .hyb（ファイルから読む行）→ 受付台帳で「完了」→ 物件の保存
+  //   → ほかのPCが物件なしで .hyb を書き替えた（増幅器 1U・鍵の元が新しい）→ この端末で 🔄 一括再暗号化（パスワードそのまま）→ 物件の保存
+  //   → 物件の封筒がファイルと同じ鍵の元なら、中身もいまのファイルの 1U（受付台帳の「完了」も残る）
+  //   （前は行の古い中身 3U に新しい鍵の元を付けたので、あとの 💾 物件に保存 が、ほかのPCの 1U を古い 3U で戻した）
+  if(want('㉕yS')){
+    const { ctx, page, said } = await openMain('㉕yS');
+    await page.evaluate(HYB25);
+    const r = await run(page, async ({ NO }) => {
+      const h = await __hyb25(NO, { shared: 'pj25yS' });
+      const o = { loaded: h.loaded };
+      o.done = await h.ledgerDone();
+      h.stop(); await projSaveNow();
+      const d = await decryptHybrid(JSON.parse(h.list.__files[h.FN]), h.PW);   // ほかのPC：物件なしで 💾 上書き保存（新しい鍵の元）
+      d.amplifier = 'amp_1u45';
+      h.list.__files[h.FN] = JSON.stringify(await encryptHybrid(d, h.PW), null, 2);
+      o.reenc = await h.reenc(null);
+      h.stop(); await projSaveNow();
+      const pl = h.diskCase() || {};
+      o.disk = { amp: (pl.plain || {}).amplifier, st: (pl.plain || {}).chosho_status, saltSame: pl.salt === JSON.parse(h.list.__files[h.FN]).salt };
+      return o;
+    }, { NO });
+    console.log('㉕ySほかのPCが書き替えた .hyb の 🔄 と物件の封筒', short(r));
+    ok(!r.error, '㉕yS止まった → ' + r.error);
+    if(!r.error){
+      ok(r.loaded.slim && r.done.rowSt === 'completed' && r.reenc.wrote === 1 && r.reenc.amp === 'amp_1u45' && r.reenc.ids === 'A,B',
+         '㉕yS試験の前提: ファイルから読む行の 🔄 で、.hyb はほかのPCの 1U のまま A・B で書かれる → ' + short(r));
+      ok(!(r.disk.saltSame && r.disk.amp !== 'amp_1u45'),
+         '★㉕yS 🔄 のあと物件の封筒が、ファイルと同じ鍵の元なのに古い中身（3U）（あとの 💾 物件に保存 が、ほかのPCの 1U を戻す） → ' + short(r.disk));
+      ok(r.disk.saltSame && r.disk.amp === 'amp_1u45' && r.disk.st === 'completed',
+         '★㉕yS 🔄 のあと物件の封筒が、いまのファイルの中身（1U）・受付台帳の「完了」・新しい鍵にならない → ' + short(r.disk));
+    }
+    await ctx.close();
+  }
+
+  // ---- ㉕yL 共有ファイルの物件で 📁（物件に取り込む）した .hyb（ファイルから読む行）→ 物件の保存（この端末は受付台帳を直していない）
+  //   → ほかのPCが物件なしで .hyb を書き替えた（st：状態を「完了」に　note：備考を書いた。鍵の元が新しい）→ この端末で 🔄（パスワードそのまま）→ 物件の保存
+  //   → 物件の封筒に、ほかのPCの「完了」（備考）が入る（この端末の古い写しの受付台帳の欄をかぶせない）
+  //   （前は、この端末が直していない受付台帳の欄まで古い写しでかぶせ、ファイルと同じ鍵の元で物件に入れたので、
+  //     あとの 💾 物件に保存 が、ほかのPCの「完了」・備考を戻した）
+  for(const mode of ['st', 'note'].filter(m => want('㉕yL' + m))){
+    const L = '㉕yL' + mode;
+    const { ctx, page, said } = await openMain(L);
+    await page.evaluate(HYB25);
+    const r = await run(page, async ({ NO, mode }) => {
+      const h = await __hyb25(NO, { shared: 'pj25yL' });
+      const o = { loaded: h.loaded, lgEdited: !!h.row._lgEdited };
+      h.stop(); await projSaveNow();
+      const d = await decryptHybrid(JSON.parse(h.list.__files[h.FN]), h.PW);   // ほかのPC：物件なしで 💾 上書き保存（新しい鍵の元）
+      if(mode === 'st') d.chosho_status = 'completed'; else d.chosho_note = '現場：裏口から';
+      h.list.__files[h.FN] = JSON.stringify(await encryptHybrid(d, h.PW), null, 2);
+      o.reenc = await h.reenc(null);
+      h.stop(); await projSaveNow();
+      const pl = h.diskCase() || {};
+      o.disk = { st: (pl.plain || {}).chosho_status, note: (pl.plain || {}).chosho_note, saltSame: pl.salt === JSON.parse(h.list.__files[h.FN]).salt };
+      const fd = await decryptHybrid(JSON.parse(h.list.__files[h.FN]), h.PW);
+      o.file = { st: fd.chosho_status, note: fd.chosho_note };
+      return o;
+    }, { NO, mode });
+    console.log(L + 'ほかのPCがファイルに入れた受付台帳の欄と 🔄', short(r));
+    ok(!r.error, L + '止まった → ' + r.error);
+    if(!r.error){
+      const want1 = mode === 'st' ? (r.disk.st === 'completed') : (r.disk.note === '現場：裏口から');
+      ok(r.loaded.slim && !r.lgEdited && r.reenc.wrote === 1 && (mode === 'st' ? r.file.st === 'completed' : r.file.note === '現場：裏口から'),
+         L + '試験の前提: この端末は受付台帳を直していない・🔄 で .hyb はほかのPCの中身のまま → ' + short(r));
+      ok(!(r.disk.saltSame && !want1),
+         '★' + L + ' 🔄 のあと物件の封筒が、ファイルと同じ鍵の元なのに、この端末の古い写しの受付台帳の欄（ほかのPCの' + (mode === 'st' ? '「完了」' : '備考') + 'が消える） → ' + short(r.disk));
+    }
+    await ctx.close();
+  }
+
+  // ---- ㉕zM 共有ファイルの物件で 📁（物件に取り込む）した .hyb → 物件の保存 → ほかのPCが物件を保存（別の戸別を足しただけ。この戸別は直していない）
+  //   → この端末で 🔄 一括再暗号化（keep：パスワードそのまま　newpw：新しいパスワード）→ 物件の保存（ほかのPCの保存とまとめる）
+  //   → 物件のこの戸別は新しい鍵（ファイルと同じ鍵の元・新しいパスワードでほどける）・ほかのPCの戸別も残る
+  //   （前は「この端末が直した戸別」でないので、まとめるときほかのPCの写し（前の鍵）に戻り、💾 物件に保存 が断り、新しいパスワードで開けなかった）
+  for(const mode of ['keep', 'newpw'].filter(m => want('㉕zM' + m))){
+    const L = '㉕zM' + mode;
+    const { ctx, page, said } = await openMain(L);
+    await page.evaluate(HYB25);
+    const r = await run(page, async ({ NO, mode }) => {
+      const h = await __hyb25(NO, { shared: 'pj25zM' });
+      const NEWPW = 'atarashii-99';
+      const o = { loaded: h.loaded };
+      h.stop(); await projSaveNow();
+      __otherDeviceSaves('2612ZZZ901');                            // ほかのPC：別の戸別を足して物件を保存（この戸別は直していない）
+      o.reenc = await h.reenc(mode === 'newpw' ? NEWPW : null);
+      h.stop(); await projSaveNow();
+      const pl = h.diskCase() || {};
+      o.disk = { saltSame: pl.salt === JSON.parse(h.list.__files[h.FN]).salt,
+                 other: JSON.parse(window.__disk).cases.some(c => (c.payload || {}).chosho_mgmt_no === '2612ZZZ901') };
+      try { o.disk.name = (await decryptHybrid(pl, mode === 'newpw' ? NEWPW : h.PW)).chosho_cust_name; } catch(_){ o.disk.name = '（ほどけない）'; }
+      o.rowSalt = (_listRows.find(x => x && x.fileType === 'hybrid') || {}).envelope;
+      o.rowSalt = !!(o.rowSalt && o.rowSalt.salt === JSON.parse(h.list.__files[h.FN]).salt);
+      return o;
+    }, { NO, mode });
+    console.log(L + 'ほかのPCの保存とまとめても 🔄 の鍵が物件に残る', short(r));
+    ok(!r.error, L + '止まった → ' + r.error);
+    if(!r.error){
+      ok(r.reenc.wrote === 1 && r.reenc.ids === 'A,B' && r.disk.other,
+         L + '試験の前提: 🔄 で .hyb を書く・ほかのPCが足した戸別が物件にある → ' + short(r));
+      ok(r.disk.saltSame && r.disk.name === '暗号 様' && r.rowSalt,
+         '★' + L + ' ほかのPCの保存とまとめたら、🔄 で新しくした鍵が物件（と行）で前の鍵に戻った（💾 物件に保存 が断る・新しいパスワードで開けない） → ' + short(r));
+    }
+    await ctx.close();
+  }
+
   // ---- ㉕zf 📄 ファイルで読んだ .hyb（A・B・増幅器 3U。書き戻せない＝iPad など）を 🔓 → 📥 現場取込（増幅器 1U-BC・写真 G）→ 開く
   //   → 画面に A・B・G（写真の出ている画面）・増幅器 1U-BC → 保存（💾 保存・🔑 ハイブリッド保存）に出す中身も A・B・G → 戻ってもう一度開いても同じ
   //   （nog：現場の写真なし → A・B　gpw：覚えているパスワードを消して、聞かれて入れて開く）
@@ -6409,6 +6518,50 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
          '★' + L + ' 📄 ファイルの .hyb へ 📥 して開くと、読んだファイルの写真 A・B が画面に出ない・保存の中身から抜ける（写真を剥がした封筒で開いた） → ' + short(r.open1) + ' 保存=' + r.saveSet);
       ok(r.open2.shown === want1 && r.open2.amp === 'amp_1ubc45',
          '★' + L + ' もう一度開くと、写真か現場の増幅器が変わった → ' + short(r.open2));
+    }
+    await ctx.close();
+  }
+
+  // ---- ㉕zk 📄 ファイルで読んだ .hyb（A「写真A」・B「写真B」）を開いて、B を × で消し、A の名前を「玄関」に、増幅器を 1U にして一覧へ戻る
+  //   → 開き直すと画面は A「玄関」だけ（読んだファイルの写真で戻さない）・保存（💾 保存・🔑）の中身も A「玄関」
+  //   → 一括平文化の中身は A が「玄関」（行の写真が先。ファイルにしか無い B は足す＝減らさない）
+  //   （前は読んだファイルの写真が勝ち、消した B が戻り、名前も「写真A」に戻った。保存してもその古いほうが書かれた）
+  if(want('㉕zk')){
+    const { ctx, page, said } = await openMain('㉕zk');
+    await page.evaluate(HYB25);
+    const r = await run(page, async ({ NO }) => {
+      const h = await __hyb25(NO, { src: true });
+      const desc = arr => (Array.isArray(arr) ? arr : []).filter(p => p && p.dataUri).map(p => h.nm(p.dataUri) + ':' + (p.label || '')).join(',');
+      const o = { loaded: Object.assign({ fh: !!h.row.fileHandle, src: !!h.row.srcFile }, h.loaded) };
+      o.open1 = await h.open();
+      const wrap = document.getElementById('photo-list');
+      wrap.querySelector('[data-photo-del="1"]').click(); await h.sleep(200);      // B を × で消す（確かめは「はい」）
+      const lb = document.getElementById('photo-list').querySelector('[data-photo-label="0"]');
+      lb.value = '玄関'; lb.dispatchEvent(new Event('input', { bubbles: true })); await h.sleep(100);
+      __setField('amplifier', 'amp_1u45');
+      o.edited = desc(STATE.photos);
+      await h.back();
+      o.afterBack = { known: !!h.row._photosKnown, rowPh: desc(h.row.data && h.row.data.chosho_photos) };
+      o.open2 = await h.open();
+      o.screen2 = desc(STATE.photos);
+      o.save2 = desc(collectState().chosho_photos);
+      await h.back();
+      const blobs = [], oURL = URL.createObjectURL;
+      URL.createObjectURL = b => { blobs.push(b); return oURL.call(URL, b); };
+      try { await bulkConvertToPlain(); } finally { URL.createObjectURL = oURL; }
+      const js = blobs.filter(b => b && b.type === 'application/json');
+      try { const d = JSON.parse(await js[js.length - 1].text()); o.plain = { ph: desc(d.chosho_photos), amp: d.amplifier }; } catch(_){ o.plain = { ph: '（書かない）' }; }
+      return o;
+    }, { NO });
+    console.log('㉕zk📄 ファイルの .hyb で写真を直して戻り、開き直す', short(r));
+    ok(!r.error, '㉕zk止まった → ' + r.error);
+    if(!r.error){
+      ok(r.loaded.src && r.open1.shown === 'A,B' && r.edited === 'A:玄関' && r.afterBack.known && r.afterBack.rowPh === 'A:玄関',
+         '㉕zk試験の前提: 📄 ファイルの .hyb を開いて B を消し A を「玄関」にして戻ると、行は A「玄関」 → ' + short(r));
+      ok(r.screen2 === 'A:玄関' && r.save2 === 'A:玄関' && r.open2.amp === 'amp_1u45',
+         '★㉕zk 開き直すと、読んだファイルの写真で戻った（消した B が戻った・名前が「写真A」に戻った）・保存の中身も古いほう → ' + short(r.screen2) + ' 保存=' + r.save2);
+      ok(/^A:玄関(,B:写真B)?$/.test(r.plain.ph) && r.plain.amp === 'amp_1u45',
+         '★㉕zk 一括平文化の中身で、画面で直した名前が読んだファイルの「写真A」に戻った（行の写真を先にしない） → ' + short(r.plain));
     }
     await ctx.close();
   }
