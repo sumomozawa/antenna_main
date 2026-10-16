@@ -125,7 +125,11 @@ CASES = [
   (u"★同じお宅か聞いて「キャンセル」でも書く",
    u'''      if(ok) return "";''', u'''      return "";''', TM, "main", u"⑯h"),
   (u"★まとめて書いているとき（📥・諸経費のそろえ直し）にも、同じお宅かを聞く（聞けないのに書く）",
-   u'''      if(_indivWriteNotShown){''', u'''      if(false){''', TM, "main", u"⑯i"),
+   u'''      if(_indivWriteNotShown && !(sj && no2 && toHalfWidthAn(String(sj.chosho_mgmt_no || "")).trim().toUpperCase() === no2.toUpperCase())){''',
+   u'''      if(false){''', TM, "main", u"⑯i"),
+  (u"★まとめて書いているとき、同じ管理番号のファイルが2つあっても 🧩 で1つにする案内を出さない",
+   u'''      if(_indivWriteNotShown && !(sj && no2 && toHalfWidthAn(String(sj.chosho_mgmt_no || "")).trim().toUpperCase() === no2.toUpperCase())){''',
+   u'''      if(_indivWriteNotShown){''', TM, "main", u"⑯k"),
   (u"★ファイルにしか無い写真を足しても、行の写真だけを返す（📄 で読んだ行で、工事フォルダの写真が消える）",
    u'''  return added ? out : rowPhotos;''', u'''  return rowPhotos;''', TM, "main", u"⑮a"),
   (u"★戻ってきた写真に、枠の名前を引き継がない",
@@ -192,7 +196,9 @@ CASES = [
    u'''    ph = ok ? slimRowWithMemPhotos(fr, row).chosho_photos : d.chosho_photos;   // 読めなければ、行が持っている写真（取り込んだ分）だけ（版178）''',
    u'''    ph = ok ? slimRowWithMemPhotos(fr, row).chosho_photos : null;''', TM, "main", u"㊻c"),
   (u"★ファイルの写真を読めないまま開いた戸別でも、戻るときに「行の写真を当てにしてよい」にする（ファイルの写真が消える）",
-   u'''    if(!_editingRow._photosPartial){''', u'''    if(true){''', TM, "main", u"㊻c"),
+   u'''    if(!_editingRow._photosPartial){
+      _editingRow._photosKnown = true;''', u'''    if(true){
+      _editingRow._photosKnown = true;''', TM, "main", u"㊻c"),
   (u"★💾 上書き保存で元ファイルを読み直せなくても書く（開いたあとで現場が足した写真が消える）",
    u'''    if(!readOk && readWhy !== "empty"){''', u'''    if(false){''', TM, "main", u"㊼"),
   (u"★💾 上書き保存の元ファイルが無くなっていても（ほかのPCが名前を変えた）、同じフォルダの「管理番号.json」に付け直さない（いつまでも書けない）",
@@ -230,15 +236,20 @@ CASES = [
   (u"★💾 反映で別のフォルダを選んで読み直したあと、物件が覚える名前を工事フォルダからの道のりにそろえない（次に縮小版のファイルを作る）",
    u'''  await rowsFileFromProjDir(_listRows);   // 物件が覚える名前は、工事フォルダから見た道のりにそろえる（版178）''',
    u'''''', TM, "main", u"㊸e"),
-  (u"★物件の覚えている名前で見つからないとき、工事フォルダの中の「管理番号.json」を探さずに新しく作る（縮小版のファイルが増える）",
-   u'''    if(hit.length === 1){ fh = hit[0].fh; photoSrcFh = fh; relpath = hit[0].path; legacyToRemove = ""; }''',
-   u'''''', TM, "main", u"㊸f"),
+  # 「物件の覚えている名前で見つからないとき、工事フォルダの中の 管理番号.json を探す」は5回目の見直しで外した
+  #  （控えのフォルダを数える・現場のファイルを確かめずに上書きする）。そのため ㊸f の件も外した。
   (u"★付けたファイルの道のりを、付けたときのフォルダから見たまま覚える（次に工事フォルダへ縮小版のファイルを作る）",
    u'''    if(Array.isArray(rp) && rp.length) row.file = rp.join("/");''', u'''    if(false) row.file = rp.join("/");''', TM, "main", u"㊸d"),
-  (u"★物件から作った暗号の行（写真を剥がした封筒）を、付いているファイルがあっても剥がした封筒のまま開く（上書き保存で写真なしの .hyb を書く）",
-   u'''  if(!row._slim && row.envelope && !fromFile) return row.envelope;''', u'''  if(!row._slim && row.envelope) return row.envelope;''', TM, "main", u"㉕d"),
+  # 「物件から作った暗号の行を、付いているファイルの暗号の部分で開く」は5回目の見直しで外した（まとめて復号のあと古い図面で開いた）。㉕d の件も外した。
   (u"★開いている戸別へ 📥 したあと、元ファイルの行き先を戻さない（「💾 上書き保存」が押せないまま）",
    u'''    if(keepOrigin && keepOrigin.fileHandle && !_loadedOrigin) _loadedOrigin = keepOrigin;''', u'''''', TM, "main", u"㊽b"),
+  (u"★ファイルの写真を読めないまま開いた戸別で、写真の枚数を画面の枚数（0）で上書きする（物件に写真0枚で入る）",
+   u'''    if(!_editingRow._photosPartial){
+      _editingRow._photoCount = _photos.length;''', u'''    if(true){
+      _editingRow._photoCount = _photos.length;''', TM, "main", u"㊻d"),
+  (u"★💾 反映 で別のフォルダを選んだとき、工事フォルダをまだ掴んでいないと、覚えている工事フォルダで道のりを引かない",
+   u'''  if(!pd && _currentProject){ try { pd = await projHandleGet(_currentProject.id + ":dir"); } catch(_){ pd = null; } }   // 覚えている工事フォルダ（道のりを引くだけ）''',
+   u'''''', TM, "main", u"㊸g"),
   # ======== 現場入力：3回目の見直しの直し ========
   (u"★下書きの引っ越しの覚えを、別の下書きでも引く（別のお宅の下書きに写真が入る）",
    u'''    if(uid && e.uid && e.uid !== uid) break;           // 別の下書きの引っ越し＝引かない''', u'''''', TG, "genba", u"⑳"),
@@ -251,9 +262,13 @@ CASES = [
   (u"★同じ管理番号のファイルを読み込んだとき、下書きを見分ける印を引き継がない（取り込み中の残りの写真が別の下書きへ行き、保存済に見える）",
    u'''    if(M._uid) m._uid = M._uid;   // 同じ下書きの印（版178。替わると、取り込み中の残りの写真が別の下書きへ行き、保存済に見えてしまう）''',
    u'''''', TG, "genba", u"㉓"),
-  (u"★届け先の下書きが別のものに替わっていたとき、黙って別の下書きに入れる",
-   u'''      toast("⚠ 管理番号 " + (m.chosho_mgmt_no || "") + " の下書きが別のものに替わっていたので、届いた写真は別の下書き（一覧に出ます）に入れました");''',
+  (u"★届け先の下書きが別のものに替わっていたとき、黙って別の下書きに入れる（測定値のCSV）",
+   u'''  await persistMovedNotice();                   // 別の下書きに入れたときは窓で知らせる（版178）''',
    u'''''', TG, "genba", u"㉑"),
+  (u"★届け先の下書きが別のものに替わっていたとき、黙って別の下書きに入れる（写真の取り込み）",
+   u'''  if(fail) toast(fail+"枚は読み込めませんでした（別の写真でお試しください）");   // 大事な知らせを最後に
+  await persistMovedNotice();''',
+   u'''  if(fail) toast(fail+"枚は読み込めませんでした（別の写真でお試しください）");   // 大事な知らせを最後に''', TG, "genba", u"㉕"),
   (u"★取り込みの書き込みで、別の下書き（印が違う）を置き換える",
    u'''    if(prev && prev.model && !draftSameUid(prev.model, m)){''', u'''    if(false){''', TG, "genba", u"㉑"),
   (u"★書いているあいだに開き直された写しに、書いた写真を足さない（写しを控えると写真が消える）",
