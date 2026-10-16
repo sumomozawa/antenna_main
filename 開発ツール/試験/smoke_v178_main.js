@@ -7,7 +7,8 @@
    縮小版は物件（端末内の IndexedDB・共有ファイル）の保存のためだけに使う。どの経路でも写真の枚数は減らさない。
      ⓪ 前提（関数がそろっている・版番号がファイルと同じ）
      ① 物件の行（図面なし・写真なし）に写真を足して「物件に保存」→ フォルダを選ぶ → 新しい 管理番号.json の写真が
-        エディタの写真と同じ（1文字も違わない）。物件（IndexedDB）には縮小版。行の写真は元のまま（縮小版の印なし）
+        エディタの写真と同じ（1文字も違わない）。物件（IndexedDB）には縮小版。行は（3回目の見直しで）縮小版を持ち、どのファイルに入っているかを覚える
+        （預けたこと・預け先・読み直しの確かめは smoke_v178_mem_main.js）
      ② フォルダに現場の 管理番号.json（写真 G＝原寸）があり、物件の行は G の縮小版
         a) 図面あり（開くと縮小版が画面に出る）　b) 図面なし（画面に出ない）
         → 写真 P を足して保存 → ファイルは G（原寸のまま）＋ P（元のまま）の2枚。物件（端末内）にも G と P が残る
@@ -513,7 +514,9 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       return { btn, picks, srcLen: src.length, srcBytes: __bytes(src), edSame: !!(ed && ed.dataUri === src), edId: ed && ed.id,
                n: ph.length, same: ph.length === 1 && ph[0].dataUri === src, lens: ph.map(p => p.dataUri.length), ids: ph.map(p => p.id),
                idb: { n: idb.photos.length, lens: idb.photos.map(p => p.dataUri.length), thumb: idb.thumb, count: idb.count, ids: idb.photos.map(p => p.id) },
-               row: { thumbFlag: !!row.data.chosho_photos_thumb, same: ((row.data.chosho_photos || []).filter(p => p && p.dataUri)[0] || {}).dataUri === src },
+               row: { thumbFlag: !!row.data.chosho_photos_thumb, same: ((row.data.chosho_photos || []).filter(p => p && p.dataUri)[0] || {}).dataUri === src,
+                      parked: (typeof rowHasParkedThumb === 'function') && rowHasParkedThumb(row),
+                      to: (ed && typeof rowParkedEntry === 'function' && rowParkedEntry(row, ed) && rowParkedEntry(row, ed).fh.name) || '' },
                thumbFile: /chosho_photos_thumb|chosho_photo_count/.test(list.__files[NO + '.json'] || '') };
     }, { NO, PN });
     const a1 = alerts(said);
@@ -529,7 +532,9 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       ok(!r1.thumbFile, '★①物件専用の印（chosho_photos_thumb／chosho_photo_count）が戸別ファイルに入った');
       ok(r1.idb.n === 1 && r1.idb.thumb === true && r1.idb.lens[0] < r1.srcLen && r1.idb.count === 1 && r1.idb.ids[0] === r1.edId,
          '★①物件（端末内）には縮小版（写真IDそのまま）が入っていない → ' + short(r1.idb));
-      ok(r1.row.thumbFlag === false && r1.row.same === true, '★①物件の保存で、行の写真が縮小版に置き換わった → ' + short(r1.row));
+      // 3回目の見直し（メモリ）から：戸別ファイルに入れて確かめた元の写真は、行に持たせない（預けた縮小版＋預け先）
+      ok(r1.row.parked === true && r1.row.same === false && r1.row.to === NO + '.json',
+         '★①戸別ファイルに入れて確かめたのに、行が元の写真を持ち続けている・預け先が違う → ' + short(r1.row));
       ok(a1.some(m => /戸別の個別JSONも更新しました/.test(m)), '①知らせに戸別ファイルを書いたことが出ない → ' + short(a1));
     }
     await ctx.close();
@@ -1006,7 +1011,8 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
     ok(!r.error, '⑪止まった → ' + r.error);
     if(!r.error){
       ok(r.shown === 0 && r.printed === 1, '⑪試験の前提: 図面の無い戸別を開いて、まとめ印刷をした → ' + short(r));
-      ok(r.file.join() === 'G,P' && r.idb.join() === 'G,P' && r.row.join() === 'G,P',
+      // 行の P は、戸別ファイルに入れて確かめたので預けた縮小版（3回目の見直し）。G と P が行に残っていること
+      ok(r.file.join() === 'G,P' && r.idb.join() === 'G,P' && r.row.join() === 'G,P縮',
          '★⑪まとめ印刷のあとの保存で、物件にしか無い写真が消えた → ' + short(r));
     }
     await ctx.close();

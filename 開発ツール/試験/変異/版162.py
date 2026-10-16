@@ -43,7 +43,7 @@ CASES = [
    u'''  if(row.fileType !== "plain") return "暗号化";''', u'''  void 0;''',
    "smoke_v162_main.js", "main"),
   (u"★物件から開いた行（小さい写真しか無い）も触る",
-   u'''  if(row._fromProject || (row.data && row.data.chosho_photos_thumb)) return "小さい写真しか無い";''',
+   u'''  if(row._fromProject || (row.data && row.data.chosho_photos_thumb && !rowParkedOnlyThumb(row))) return "小さい写真しか無い";''',
    u'''  void 0;''', "smoke_v162_main.js", "main"),
   (u"★いま開いている戸別も触る（次の保存で原寸が戻る）",
    u'''  if(row === _editingRow) return "いま開いている";''', u'''  void 0;''',
