@@ -644,12 +644,18 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       if(mode === 'b'){                                           // b) 現場がファイルから P を消していた → P は持ち続ける（確かめてから）
         const j = JSON.parse(list.__files[NO + '.json']); j.chosho_photos = []; list.__files[NO + '.json'] = JSON.stringify(j, null, 2);
       }
+      // a) 縮小版が1枚足りない（写真が増えたあと作り直していない）→ 物件の保存の縮小版づくりの中で預けるとき、縮小版を作り直す。
+      //    そこでその回の終わりを待つと、自分の終わりを待って止まる
+      for(let i = 0; _projThumbsRun && i < 100; i++){ try { await _projThumbsRun; } catch(_){} }
+      if(mode === 'a') row._thumbs = [{ id: ed.id, label: '', dataUri: await makeThumbDataUri(src, PROJ_THUMB_MAXPX, PROJ_THUMB_QUALITY) }];
+      o.stale = Array.isArray(row._thumbs) ? row._thumbs.length : -1;
       // 物件の保存（取り込みの終わりと同じ）。止まらないこと
       const t0 = Date.now();
       const done = await Promise.race([(async () => { await prepareProjectThumbs(); await projSaveNow(); return 'done'; })(),
                                        new Promise(res => setTimeout(() => res('timeout'), 20000))]);
       o.save = { done, ms: Date.now() - t0, row: (row.data.chosho_photos || []).filter(p => p && p.dataUri).map(tag).sort(), held: __memRows().nOrig,
                  flag: !!row.data.chosho_photos_thumb, idb: (await __idbPhotos('pj178pg' + mode, NO)).photos.length };
+      if(done !== 'done') return o;                               // 止まったまま先へ進むと、開くところでも待って終わらない
       // フォルダを掴めるようになって開いて保存 → ファイルに P と G
       window.showDirectoryPicker = picker;
       await openCaseInEditor(row);
@@ -665,7 +671,10 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
     if(!r.error){
       ok(r.parked && /掴めていません/.test(r.note) && r.merged.row.join() === 'G,P' && r.merged.held === 2,
          '㊷' + mode + '試験の前提: 預けたあと 📥 で、行が P（読み直し）と G を持つ → ' + short(r));
+      if(mode === 'a') ok(r.stale === 1, '㊷a試験の前提: 縮小版が1枚足りない → ' + short(r.stale));
       ok(r.save.done === 'done', '★㊷' + mode + '物件の保存が止まった（縮小版づくりの中で、その回の終わりを待っている） → ' + short(r.save));
+    }
+    if(!r.error && r.save.done === 'done'){
       if(mode === 'a') ok(r.save.row.join() === 'G,P縮' && r.save.held === 1 && r.save.idb === 2,
          '★㊷a物件の保存で、ファイルにある P を軽くしない／まだファイルに無い G まで軽くした → ' + short(r.save));
       else ok(r.save.row.join() === 'G,P' && r.save.held === 2 && r.save.idb === 2,
