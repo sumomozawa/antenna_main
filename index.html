@@ -15520,7 +15520,9 @@ async function indivThumbOriginals(dir, nos, obj){
   obj.chosho_photos = arr.map(p => {
     if(!small(p)) return p;
     const b = best.get(p.id);
-    return (b && photoLongEdgeOf(b.p.dataUri) > photoLongEdgeOf(p.dataUri)) ? Object.assign({}, p, { dataUri: b.p.dataUri }) : p;
+    /* 縮小版より大きい・または物件の縮小版でない（PNG の図など＝元の写真）ときに使う（版178） */
+    return (b && b.p.dataUri !== p.dataUri && (photoLongEdgeOf(b.p.dataUri) > photoLongEdgeOf(p.dataUri) || !projThumbLike(b.p)))
+      ? Object.assign({}, p, { dataUri: b.p.dataUri }) : p;
   });
   if(unread.length && obj.chosho_photos.some(small)){
     const u = unread[0], where = u.path.replace(/\/$/, "");
@@ -16895,6 +16897,18 @@ async function overwriteReattach(origin, row, fmt){
   } catch(_){ return null; }
 }
 /* 復号に使う完全な envelope を取得（軽量化で剥がした写真ct等を元ファイルから復元） */
+/* 写真を読むための封筒（版178）。一覧の 📷・写真の書き出し・一括再暗号化だけに使う（開くとき・まとめて復号には使わない）。
+   行の封筒の写真が「剥がした印」で、ファイルがあるときは、ファイルを読み、ファイルの暗号の部分（写真・氏名など）に、
+   行の封筒の暗号でない部分（物件・画面で直したところ）を合わせて返す。読めない・ファイルに暗号の写真が無いときは、今までどおり。 */
+async function getEnvelopeForPhotos(row){
+  const env = await getFullEnvelope(row);
+  const ph = env && env.encrypted_fields && env.encrypted_fields.chosho_photos;
+  if(!row || row.fileType !== "hybrid" || !ph || (ph.iv && ph.ct) || !(row.fileHandle || row.srcFile)) return env;
+  const fresh = await rereadRowSource(row);
+  const fp = fresh && typeof fresh === "object" && fresh.encrypted_fields && fresh.encrypted_fields.chosho_photos;
+  if(!(fp && fp.iv && fp.ct)) return env;
+  return Object.assign({}, fresh, { plain: (env && env.plain) || fresh.plain });
+}
 async function getFullEnvelope(row){
   if(!row._slim && row.envelope) return row.envelope;
   const fresh = await rereadRowSource(row);
@@ -20256,7 +20270,7 @@ async function bulkReencodeTargets(params){
     if(row.fileType === "plain"){
       stateObj = (await rereadRowSource(row)) || row.data; // 写真込みの完全データ
     } else {
-      const env = await getFullEnvelope(row); // 写真ct復元済みの完全envelope
+      const env = await getEnvelopeForPhotos(row); // 写真ct復元済みの完全envelope（剥がした封筒ならファイルの写真。版178）
       // 候補試行
       for(const cand of candidates){
         try {
@@ -24477,7 +24491,7 @@ async function loadRowPhotos(row){
     }
     if(row.fileType === "hybrid"){
       if(!_sessionPassword) return { photos: [], locked: true };
-      const env = await getFullEnvelope(row);
+      const env = await getEnvelopeForPhotos(row);   // 剥がした封筒ならファイルの写真（版178）
       const full = await decryptHybrid(env, _sessionPassword);
       const arr = (full && Array.isArray(full.chosho_photos)) ? full.chosho_photos : [];
       return { photos: arr.filter(p => p && p.dataUri) };
@@ -24584,7 +24598,8 @@ function hybRowPhotosToShow(full, target){
   const ph = target.data.chosho_photos;
   if(!Array.isArray(ph) || !ph.some(p => p && p.dataUri)) return null;
   if(full._photosStripped){
-    if(!target._photosKnown) return null;
+    /* 暗号の行が持つ写真は、📥 で入れた・画面で足して一覧へ戻った写真（物件の縮小版ではない）。いつも出す（版178）。
+       出さないと、開いたとき行から消え、保存してもファイルに入らなかった（上書き保存では、ファイルの写真に足して書く） */
     full.chosho_photos = ph.slice();   // ほどいた中身そのものに入れる（入れ物を替えると、写真を剥がした印が消える）
     return ph;
   }
@@ -24615,13 +24630,15 @@ async function listLoadRow(target){
   if(target.fileType === "hybrid"){
     if(_sessionPassword){
       try {
+        const wasSlim = !!target._slim;
         const env = await getFullEnvelope(target);
         const full = lgOverlayLedger(await decryptHybrid(env, _sessionPassword), target);
         const rowPh = hybRowPhotosToShow(full, target);   // 行にだけある写真を画面に出す（版178）
         const lite = Object.assign({}, full); lite.chosho_photos = rowPh; // 一覧側は写真を保持しない（行にだけある写真は持ったまま。版178）
-        /* 写真はファイルにあるので、次に開くとき・一覧の 📷・写真の書き出し・一括再暗号化は、ファイルを読む（_slim）。
-           行にだけある写真は行に持ったまま、開くとき足す（版178。行の封筒（写真を剥がした印）のままにすると、それらが写真を読めなくなった） */
-        target.data = lite; target.unlocked = true; target._slim = true;
+        /* 「ファイルから読む」（_slim）かどうかは、開く前のまま（版178）。行の封筒で開いた行を「ファイルから読む」に替えると、
+           次に開いたとき、まだファイルに入っていない直し（物件・画面で直した増幅器など）を、ファイルの古い中身で戻していた。
+           一覧の 📷・写真の書き出し・一括再暗号化は、getEnvelopeForPhotos でファイルの写真を読む */
+        target.data = lite; target.unlocked = true; target._slim = wasSlim;
         target._amtCache = undefined; target._bomCache = undefined;
         applyStateData(full);
         setLoadedOrigin(target);
@@ -24647,11 +24664,12 @@ async function listLoadRow(target){
       return;
     }
     try {
+      const wasSlim = !!target._slim;
       const env = await getFullEnvelope(target);
       const full = lgOverlayLedger(await decryptHybrid(env, pw), target);
       const rowPh = hybRowPhotosToShow(full, target);   // 行にだけある写真を画面に出す（版178）
       const lite = Object.assign({}, full); lite.chosho_photos = rowPh;
-      target.data = lite; target.unlocked = true; target._slim = true;   // 上と同じ（版178）
+      target.data = lite; target.unlocked = true; target._slim = wasSlim;   // 上と同じ（版178）
       target._amtCache = undefined; target._bomCache = undefined;
       setSessionPassword(pw);
       applyStateData(full);
@@ -25639,7 +25657,7 @@ async function _writeCasePhotos(parentDir, mgmtNo, photos){
 async function _getCasePhotos(row, pickedDir, pwCandidates){
   if(row.fileType === "hybrid" || row.fileType === "full"){
     let env = null;
-    try { env = await getFullEnvelope(row); } catch(_){}
+    try { env = await getEnvelopeForPhotos(row); } catch(_){}   // 剥がした封筒ならファイルの写真（版178）
     if(env){
       for(const pw of (pwCandidates || [])){
         try{
@@ -29125,7 +29143,9 @@ async function prepareProjectThumbs(silent){
     }
     /* 作っているあいだに写真が変わって付けなかった行は、この回のうちに作り直す（版178。写真なしで物件に保存しないため） */
     for(let pass = 0; pass < 2; pass++){
-      const again = targets.filter(r => r && (!Array.isArray(r._thumbs) || r._thumbsRetry));
+      /* 作り直しの印の付いた行は、作り始めに入っていなかった行も（縮小版づくりのあいだに 📥 で入った等。版178） */
+      const again = (_listRows || []).filter(r => r && r.fileType === "plain"
+        && (r._thumbsRetry || (targets.indexOf(r) >= 0 && !Array.isArray(r._thumbs))));
       if(!again.length) break;
       for(const r of again){ await new Promise(res => setTimeout(res, 0)); await ensureRowThumbs(r); }
     }
@@ -37532,11 +37552,11 @@ async function applyGenbaMergeToRow(row, genbaData, opts){
      物件しか見ないほかの端末では、ファイルにある写真が消えて見えていた。 */
   { const keepTh = (row._slim && Array.isArray(row._thumbs) && row._thumbs.length) ? row._thumbs : undefined;
     row._amtCache=undefined; row._bomCache=undefined; row._thumbs=keepTh;
-    if(keepTh) row._thumbsNoFile = true;
+    if(keepTh){ row._thumbsNoFile = true; row._thumbsRetry = true; }   // 縮小版づくりのあいだに入っても、同じ回で作り直す（版178）
     const n = Array.isArray(merged.chosho_photos)?merged.chosho_photos.filter(p=>p&&p.dataUri).length:0;
     /* 暗号（.hyb・.enc）の行の枚数は「分からない」（-1＝🔒）。0 にすると一覧に「―」（写真なし）と出る（版178） */
     row._photoCount = (row._slim && row.fileType === "plain") ? (row._photoCount > 0 ? row._photoCount : 0)
-      : ((row._slim && row._photoCount === -1 && !n) ? -1 : n); }
+      : (row._slim ? (n ? Math.max(n, row._photoCount) : row._photoCount) : n); }
   try { resolveRowOutsourceFee(row); } catch(_){}  // 物件の協力会社諸経費を auto 行へ再適用
   try { markCaseEdited(row); } catch(_){}
   if(genbaData && ("chosho_note" in genbaData)
