@@ -4642,6 +4642,8 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
   // ---- ㊾h アパートの帯の外の行（📁 の行・ファイルに写真 S1・S2）を、ファイルを持たない世帯（台帳で作った行・写真 T1）へまとめる
   //   （aptMgMovePhotos：ファイルをそのまま持たせる）→ 物件（この端末）のその世帯は T1・S1・S2 の3枚
   //   （前は物件の縮小版を作り直さず、T1 だけ・枚数2で入っていた＝持たせたファイルの写真が物件から消えた）
+  //   版179 から：まとめる先の行にだけある T1 も、持たせるファイルへ和集合で入れ（書く → 読み返す → 確かめる）、
+  //   行はファイルと同じ写真（S1・S2・T1）を持つ（_slim にしない）。前提をそれに合わせた
   if(want('㊾h')){
     const { ctx, page } = await openMain('㊾h');
     const r = await run(page, async ({ NO, PN }) => {
@@ -4666,6 +4668,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       o.moved = await aptMgMovePhotos(tRow, sRow);                     // ファイルをまとめる先の持ち物にする
       aptMgRemoveRow(sRow); markCaseEdited(tRow);
       o.t = { slim: !!tRow._slim, held: ((tRow.data || {}).chosho_photos || []).map(p => p.id).join(',') };
+      o.file = (JSON.parse(list.__files[NOS + '.json']).chosho_photos || []).filter(p => p && p.dataUri).map(p => p.id).sort().join(',');
       await saveProj();
       o.after = await proj(NO);
       o.disk = __diskPhotos(NO);
@@ -4674,8 +4677,9 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
     console.log('㊾hアパートの帯の外の行をファイルの無い世帯へまとめる', short(r));
     ok(!r.error, '㊾h止まった → ' + r.error);
     if(!r.error){
-      ok(r.before.t.ids === 'T1' && r.before.s.ids === 'S1,S2' && r.moved && r.moved.moved === 2 && r.t.slim && r.t.held === 'T1',
-         '㊾h試験の前提: まとめる先は T1 を持ち、帯の外の行のファイル（S1・S2）を持たされた → ' + short(r));
+      ok(r.before.t.ids === 'T1' && r.before.s.ids === 'S1,S2' && r.moved && r.moved.moved === 2 && !r.t.slim && r.t.held === 'S1,S2,T1'
+         && r.file === 'S1,S2,T1',
+         '㊾h試験の前提（版179）: まとめる先は T1 を持ち、帯の外の行のファイル（S1・S2）を持たされ、T1 もそのファイルへ入った → ' + short(r));
       ok(r.after.ids === 'S1,S2,T1' && r.after.count === 3 && r.disk.n === 3 && r.disk.count === 3,
          '★㊾hまとめたあとの物件のその世帯が T1・S1・S2 の3枚でない（持たせたファイルの写真が物件から消えた） → ' + short(r.after) + ' ' + short(r.disk));
     }

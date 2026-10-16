@@ -1515,7 +1515,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
     await ctx.close();
   }
 
-  // ---- ㊷p 預けた写真のある世帯へ、帯の外の行（ファイルあり）を 🏢 まとめて消す（世帯は常駐させない行になる）→ 預けたファイルをほかの端末が消した → 📥 現場取込 ----
+  // ---- ㊷p 預けた写真のある世帯が、その写真の入っていない別のファイルを「ファイルから読む」形で持った（版179 より前の 🏢 まとめて消す と同じ形）→ 預けたファイルをほかの端末が消した → 📥 現場取込 ----
   //      → 戸別ファイルに入れなかった預けた縮小版を、行から外さない（外すと物件からも消える＝ただ1つの写し）
   if(want('㊷p')){
     const { ctx, page } = await openMain('㊷p');
@@ -1538,7 +1538,9 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       const q = __jpeg(900, 700, 0.85, 416);                      // 帯の外の行のファイル（写真 Q）
       root.__files[NO + '.json'] = JSON.stringify({ chosho_mgmt_no: NO, chosho_cust_name: '帯の外 様', chosho_photos: [{ id: 'qq1', label: 'Q', dataUri: q }] });
       stray._dir = root; stray._name = NO + '.json'; stray.fileHandle = await root.getFileHandle(NO + '.json'); stray.file = NO + '.json';
-      try { o.move = (await aptMgMovePhotos(target, stray)).moved; } catch(e){ o.move = 'ERR ' + (e && e.message || e); }
+      target._dir = root; target._name = NO + '.json'; target.fileHandle = stray.fileHandle; target.file = NO + '.json';
+      target._slim = true; target._photosKnown = false; target._thumbs = undefined; target._manual = false; delete target._detached;
+      o.move = 1;
       o.slim = !!target._slim && rowHasParkedThumb(target);
       delete root.__files[NO2 + '.json'];                          // 預けたファイルを、ほかの端末が消した
       const tag = p => (p.id === e1.id ? (p.dataUri === s1 ? 'P1' : 'P1縮') : (p.id === 'qq1' ? (p.dataUri === q ? 'Q' : 'Q縮') : '?'));
@@ -1557,6 +1559,52 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       ok(r.parked && r.move === 1 && r.slim && /個別JSONも更新しました/.test(r.note) && r.file === 'Q',
          '㊷p試験の前提: 預けた世帯へまとめ、📥 で戸別ファイルに Q を書いた（預けた縮小版は書かない） → ' + short(r));
       ok(r.row === 'P1縮' && r.project === 'Q縮,P1縮', '★㊷p戸別ファイルに入れなかった預けた縮小版を行から外し、物件からも消した → ' + short({ row: r.row, project: r.project }));
+    }
+    await ctx.close();
+  }
+
+  // ---- ㊷r 預けた写真のある世帯（ファイルは付いていない）へ、帯の外の行（ファイルあり）を 🏢 まとめて消す（版179：世帯の行の写真もそのファイルへ入れる）----
+  //      a) 預けた元の写真を読み直して入れる（縮小版を入れない）・入れて確かめたら行に持たせない
+  //      b) 預けたファイルを読めない → 移さない（縮小版を元の写真としてファイルへ入れない）
+  for(const mode of ['a', 'b'].filter(m => want('㊷r' + m))){
+    const { ctx, page } = await openMain('㊷r' + mode);
+    const r = await run(page, async ({ NO, NO2, PN, mode }) => {
+      const NO3 = '2612MKM079';
+      await __openProj(__proj178('pj178pr' + mode, PN, [
+        { caseId: 'c1', file: NO + '.json', lastModified: 0, payload: { chosho_mgmt_no: NO, chosho_cust_name: '帯の外 様', chosho_status: 'in_progress', work_type: '' } },
+        { caseId: 'c2', file: NO2 + '.json', lastModified: 0, payload: { chosho_mgmt_no: NO2, chosho_cust_name: 'まとめる先 様', chosho_status: 'in_progress', work_type: '' } },
+        { caseId: 'c3', file: NO3 + '.json', lastModified: 0, payload: { chosho_mgmt_no: NO3, chosho_cust_name: '別 様', chosho_status: 'in_progress', work_type: '' } }]));
+      const stray = _listRows.filter(r => r.data.chosho_mgmt_no === NO)[0], target = _listRows.filter(r => r.data.chosho_mgmt_no === NO2)[0];
+      const row3 = _listRows.filter(r => r.data.chosho_mgmt_no === NO3)[0];
+      const root = __mk('その１', {});
+      window.showDirectoryPicker = async () => root;
+      await openCaseInEditor(target);
+      const s1 = __jpeg(900, 700, 0.85, 420);
+      const e1 = await __addPhoto(s1, 'p1.jpg');
+      await __pressSave();
+      await openCaseInEditor(row3);
+      const o = { parked: rowHasParkedThumb(target) && !(target._dir && target._name) };
+      const q = __jpeg(900, 700, 0.85, 421);
+      root.__files[NO + '.json'] = JSON.stringify({ chosho_mgmt_no: NO, chosho_cust_name: '帯の外 様', chosho_photos: [{ id: 'qq1', label: 'Q', dataUri: q }] });
+      stray._dir = root; stray._name = NO + '.json'; stray.fileHandle = await root.getFileHandle(NO + '.json'); stray.file = NO + '.json';
+      if(mode === 'b') root.__unreadable[NO2 + '.json'] = 99;      // 預けたファイルを読めない
+      const tag = p => (p.id === e1.id ? (p.dataUri === s1 ? 'P1' : 'P1縮') : (p.id === 'qq1' ? (p.dataUri === q ? 'Q' : 'Q縮') : '?'));
+      try { o.move = (await aptMgMovePhotos(target, stray)).moved; } catch(e){ o.move = 'ERR ' + String(e && e.message || e).slice(0, 40); }
+      o.file = (__photosOf(root.__files[NO + '.json']) || []).filter(p => p && p.dataUri).map(tag).join();
+      o.row = (target.data.chosho_photos || []).filter(p => p && p.dataUri).map(tag).join();
+      return o;
+    }, { NO, NO2, PN, mode });
+    console.log('㊷r' + mode + '預けた世帯へまとめる（版179）', short(r));
+    ok(!r.error, '㊷r' + mode + '止まった → ' + r.error);
+    if(!r.error){
+      ok(r.parked, '㊷r' + mode + '試験の前提: まとめる先の写真を預けた → ' + short(r));
+      if(mode === 'a'){
+        ok(r.move === 1 && r.file === 'Q,P1', '★㊷raまとめる先の預けた縮小版を、元の写真としてファイルへ入れた → ' + short(r));
+        ok(r.row === 'Q縮,P1縮', '★㊷ra入れて確かめた元の写真を、まとめる先の行に持たせたまま → ' + short(r));
+      } else {
+        ok(/^ERR まとめる先の写真のうち 1 枚/.test(String(r.move)) && r.file === 'Q' && r.row === 'P1縮',
+           '★㊷rb預けたファイルを読めないのに、縮小版をファイルへ入れて移した → ' + short(r));
+      }
     }
     await ctx.close();
   }
