@@ -4630,6 +4630,16 @@
   .apw-opts label:hover{background:#e2edf9;}
   .apw-opts label.on{background:#1e5b8f;border-color:#17496f;color:#fff;font-weight:700;}
   .apw-opts input{margin:0;cursor:pointer;}
+  /* 長さを選ぶ柱（CATV支給柱建柱。版177）：チェック1つと長さの選択1つを、上の label と同じ見た目の枠1つに入れる。
+     選択（select）は label の外に置く＝長さを選ぶときにチェックまで切り替わらない。 */
+  .apw-opts .apw-optgrp{display:inline-flex;align-items:center;flex-wrap:wrap;gap:4px 8px;max-width:100%;font-size:12.5px;
+    background:#eef4fb;border:1px solid #bcd8ef;border-radius:4px;padding:3px 10px;color:#1e5b8f;}
+  .apw-opts .apw-optgrp:hover{background:#e2edf9;}
+  .apw-opts .apw-optgrp.on{background:#1e5b8f;border-color:#17496f;color:#fff;font-weight:700;}
+  .apw-opts .apw-optgrp label,.apw-opts .apw-optgrp label:hover{background:none;border:0;padding:0;color:inherit;}
+  .apw-opts .apw-optgrp select{width:auto;min-width:0;max-width:100%;min-height:0;margin:0;padding:1px 4px;
+    font:inherit;font-size:13px;font-weight:400;color:#111;background:#fff;border:1px solid #9fc0dd;border-radius:4px;
+    -webkit-appearance:menulist;appearance:auto;cursor:pointer;}
   .apw-body{display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;}
   .apw-canvas{position:relative;flex:1 1 300px;min-width:260px;max-width:400px;}
   .apw-canvas svg{width:100%;height:auto;display:block;}
@@ -6951,7 +6961,7 @@ async function lsRestoreFromIdb(){
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "176";
+const APP_VERSION = "177";
 /* ============================================================
    ★日時の表示は、必ずこの端末の時刻で★
    保存している日時は世界時のISO文字列（…T01:03:00.000Z）。これを文字のまま
@@ -7230,6 +7240,11 @@ const DEFAULT_PARTS = {
   pole_m63:       { name:"ｶﾗｰM63ﾎﾟｰﾙ",           category:"support",   model:"XDDC1263MKA",material_cost:30000, labor_cost:17700, unit:"本", diagram_label:"M63ポール" },
   catv_pole_keep: { name:"CATV柱既存の位置で使用", category:"misc",     model:"",           material_cost:    0, labor_cost:    0, unit:"式", diagram_label:"CATV柱(既存)" },
   catv_pole_move: { name:"CATV柱移設して使用",     category:"misc",     model:"",           material_cost:    0, labor_cost:26500, unit:"式", diagram_label:"CATV柱(移設)" },
+  // 市で支給された柱を建てて使う（版177）。柱は市の支給なので材料費は根枷＋底キャップ（6,530円）だけ、
+  // 労務は柱の長さで変わる。材料の付く柱なのでポール新設と同じ「屋外金物(支持)」（工事調書の使用材料にも出る）。
+  catv_pole_sup7: { name:"CATV支給柱建柱 7m（根枷・底キャップ）", category:"support", model:"", material_cost: 6530, labor_cost:17700, unit:"本", diagram_label:"CATV支給柱(7m)" },
+  catv_pole_sup8: { name:"CATV支給柱建柱 8m（根枷・底キャップ）", category:"support", model:"", material_cost: 6530, labor_cost:20000, unit:"本", diagram_label:"CATV支給柱(8m)" },
+  catv_pole_sup9: { name:"CATV支給柱建柱 9m（根枷・底キャップ）", category:"support", model:"", material_cost: 6530, labor_cost:22400, unit:"本", diagram_label:"CATV支給柱(9m)" },
   ibt206:         { name:"自在バンド IBT206",     category:"support",   model:"IBT206",     material_cost:  420, labor_cost:    0, unit:"個", diagram_label:"IBT206" },
   ibt312:         { name:"自在バンド IBT312",     category:"support",   model:"IBT312",     material_cost:  880, labor_cost:    0, unit:"個", diagram_label:"IBT312" },
   rsg32:          { name:"マスト支持金具 RSG32",  category:"support",   model:"RSG32",      material_cost:  760, labor_cost:    0, unit:"個", diagram_label:"RSG32" },
@@ -8110,7 +8125,10 @@ const AG_JOINT_PARTS_ID = { "MJ32S-P":"mj32sp", "MJ25S":"mj25s", "MJ3225":"mj322
 const AG_POLE_PARTS_ID = {
   "ポール新設":             "pole_m63",
   "CATV柱既存の位置で使用": "catv_pole_keep",
-  "CATV柱移設して使用":     "catv_pole_move"
+  "CATV柱移設して使用":     "catv_pole_move",
+  "CATV支給柱建柱（7m）で使用": "catv_pole_sup7",   // 版177
+  "CATV支給柱建柱（8m）で使用": "catv_pole_sup8",
+  "CATV支給柱建柱（9m）で使用": "catv_pole_sup9"
 };
 function appendGuideBomRows(bom, guide, opts){
   // アパートの2世帯目以降は建物の金物を持たない（代表が背負う）。
@@ -12728,7 +12746,13 @@ function rebuild(){
   var POLE_OPTIONS=[
     {key:'poleNew',  label:'ポール新設',             unit:'本', tip:'ｶﾗｰM63ﾎﾟｰﾙ（XDDC1263MKA）を新設で計上します。'},
     {key:'catvKeep', label:'CATV柱既存の位置で使用', unit:'式', tip:'既存のCATV柱を、いまの位置のまま使います。'},
-    {key:'catvMove', label:'CATV柱移設して使用',     unit:'式', tip:'既存のCATV柱を移設して使います。'}
+    {key:'catvMove', label:'CATV柱移設して使用',     unit:'式', tip:'既存のCATV柱を移設して使います。'},
+    // 市で支給された柱を建てて使う（版177）。長さ（7m／8m／9m）ごとに別の選択肢だが、画面では group で
+    // まとめて「チェック1つ＋長さの選択1つ」で出す（renderOpts）。true にできるのは group で1つだけ
+    // （buildSceneOptions）。label は積算の行の名前＝メインの AG_POLE_PARTS_ID と一致させること。
+    {key:'catvSup7', label:'CATV支給柱建柱（7m）で使用', unit:'本', group:'catvSup', len:'7m', groupLabel:'CATV支給柱建柱で使用', tip:'市で支給された柱を建てて、それにアンテナを取り付けます。'},
+    {key:'catvSup8', label:'CATV支給柱建柱（8m）で使用', unit:'本', group:'catvSup', len:'8m', groupLabel:'CATV支給柱建柱で使用', tip:'市で支給された柱を建てて、それにアンテナを取り付けます。'},
+    {key:'catvSup9', label:'CATV支給柱建柱（9m）で使用', unit:'本', group:'catvSup', len:'9m', groupLabel:'CATV支給柱建柱で使用', tip:'市で支給された柱を建てて、それにアンテナを取り付けます。'}
   ];
 
   // ---- pattern configs (data-driven scenes) ----
@@ -12982,9 +13006,13 @@ function rebuild(){
   // 保存値が無い/不正なキーは未設置＋既定型番で補う。
   // 柱まわりの選択の初期化。そのパターンに無い選択肢は捨てる（別パターンの残りを持ち込まない）。
   function buildSceneOptions(cfg, savedOptions){
-    var o={};
+    var o={}, grpOn={};
     (cfg.options||[]).forEach(function(op){
-      o[op.key] = !!(savedOptions && savedOptions[op.key]);
+      var on = !!(savedOptions && savedOptions[op.key]);
+      // 同じ group（長さ違いの同じ柱）で true にできるのは1つだけ。保存値に2つ以上あっても並びの先の
+      // ものだけを残す（画面に出る長さ1つと積算の行を必ず一致させる＝見えない金額を乗せない）。
+      if(on && op.group){ if(grpOn[op.group]) on=false; else grpOn[op.group]=true; }
+      o[op.key] = on;
     });
     return o;
   }
@@ -13065,8 +13093,12 @@ function rebuild(){
     var btnsEl=hostEl.querySelector('.apw-btns');
 
     var currentId, scene, currentMenu=null;
+    var optPick={};   // 長さを選ぶ柱：チェックしていないときに選んだ長さ（group → key）。保存はしない
+    // ※現場入力は押すたびにガイドを作り直すので、ここも毎回空になる＝現場入力ではチェックを外すと長さが先頭（7m）に戻る。
+    //   外した柱は計上しないので、金額は変わらない（メインは作り直さないので、外しても選んでいた長さのまま）
 
     function initFromState(rawState){
+      optPick={};     // 別の戸別を開いたら覚えた長さは捨てる
       var norm = normalizeAntennaGuide(rawState);
       var cfg = findPatternConfig(norm.pattern) || PATTERN_CONFIGS[0];
       currentId = cfg.id;
@@ -13121,9 +13153,21 @@ function rebuild(){
     // 柱まわりの選択（どの柱を使うか）。選択肢を持たないパターンでは何も出さない。
     function renderOpts(){
       var list = scene.config.options || [];
+      // 描き直すと押していた欄が消える。どの欄だったかを覚えておき、描き直したあとにそこへ戻す
+      // （キーボードで長さの選択の ↓ を続けて押せるように。チェックをスペースで押したときも同じ）
+      var fa=document.activeElement, fk=null;
+      if(fa && fa!==optsEl && optsEl.contains(fa)){
+        ['data-opt-len','data-opt-group','data-opt'].some(function(at){ var v=fa.getAttribute(at); if(v!=null){ fk='['+at+'="'+v+'"]'; return true; } return false; });
+      }
       optsEl.innerHTML='';
       if(!list.length) return;
+      var grpDone={};
       list.forEach(function(op){
+        if(op.group){
+          // 長さ違いの同じ柱（group）は、最初の1つの位置にまとめて枠を1つだけ出す
+          if(!grpDone[op.group]){ grpDone[op.group]=true; optsEl.appendChild(renderOptGroup(list, op.group)); }
+          return;
+        }
         var on = !!(scene.options && scene.options[op.key]);
         var lb=document.createElement('label');
         if(on) lb.className='on';
@@ -13139,6 +13183,56 @@ function rebuild(){
         lb.appendChild(document.createTextNode(op.label));
         optsEl.appendChild(lb);
       });
+      if(fk){ var fn=optsEl.querySelector(fk); if(fn) fn.focus(); }
+    }
+    // 長さを選ぶ柱（版177）：チェック1つ＋長さの選択1つ。保存は長さごとのキーの true（1つだけ）。
+    // ・チェックを入れる → いま選んでいる長さ（既定は先頭＝7m）だけを true
+    // ・チェックが入っているときに長さを変える → true を新しい長さへ移す
+    // ・チェックを外す → group のぜんぶを false
+    // ・チェックが入っていないときに長さを変えても何も計上しない（チェックしたときに使う長さを覚えるだけ）
+    function renderOptGroup(list, group){
+      var members=list.filter(function(o){ return o.group===group; });
+      var head=members[0];
+      var name=head.groupLabel||head.label;
+      var onKey='';
+      members.forEach(function(mb){ if(!onKey && scene.options && scene.options[mb.key]) onKey=mb.key; });
+      var isMember=function(k){ return members.some(function(mb){ return mb.key===k; }); };
+      var wrap=document.createElement('span');
+      wrap.className='apw-optgrp'+(onKey?' on':'');
+      if(head.tip) wrap.title=head.tip;
+      var lb=document.createElement('label');
+      var cb=document.createElement('input');
+      cb.type='checkbox'; cb.checked=!!onKey; cb.setAttribute('data-opt-group', group);
+      lb.appendChild(cb);
+      lb.appendChild(document.createTextNode(name));
+      var sel=document.createElement('select');
+      sel.setAttribute('data-opt-len', group);
+      sel.setAttribute('aria-label', '柱の長さ'); sel.title='柱の長さ';
+      members.forEach(function(mb){
+        var o=document.createElement('option');
+        o.value=mb.key; o.textContent=mb.len||mb.label;
+        sel.appendChild(o);
+      });
+      sel.value = onKey || (isMember(optPick[group]) ? optPick[group] : head.key);
+      function setOn(key){
+        members.forEach(function(mb){ scene.options[mb.key]=(mb.key===key); });
+      }
+      cb.addEventListener('change', function(){
+        optPick[group]=sel.value;
+        setOn(cb.checked ? sel.value : '');
+        closeMenu();
+        commit();
+      });
+      sel.addEventListener('change', function(){
+        optPick[group]=sel.value;
+        if(!cb.checked) return;
+        setOn(sel.value);
+        closeMenu();
+        commit();
+      });
+      wrap.appendChild(lb);
+      wrap.appendChild(sel);
+      return wrap;
     }
     function renderScene(){
       var cfg=scene.config;
@@ -26182,6 +26276,7 @@ function renderChosho(){
      ★労務は載せない★（利用者の指定・2026-09-09）
      宅内調整・高所作業車損料・雑工事・保安器撤去・引込線撤去・CATV柱・協力会社諸経費・
      石綿みなし対応 諸経費 は、物ではなく手間（労務）なので工事調書には出さない。
+     （CATV支給柱建柱＝版177 は根枷・底キャップの材料費が付くので、使用材料に出る）
      分類（その他労務・撤去工事）ごと落とすと、同じ分類に入っているアッテネーター・雪止横葺・
      FA（中継）という本物の部材まで消えてしまうので、**材料費が付いているかどうか**で分ける。
      単価マスターでは、労務だけの品目は材料費が 0 円で登録されている。

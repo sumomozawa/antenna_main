@@ -386,6 +386,9 @@ svg#diagram{ cursor:default !important; }
       node.addEventListener(t, function(e){
         // 印刷ダイアログ等のショートカットは通す
         if((t === "keydown" || t === "keypress") && (e.ctrlKey || e.metaKey)) return;
+        // 選択欄（長さ・あり／なし など）は ↑↓ や文字のキーでも中身が替わってしまう。Tab（次の欄へ移る）だけ通す。
+        // 替わっても計算には届かないので、画面だけが積算と食い違ってしまうため。
+        if((t === "keydown" || t === "keypress") && e.target && e.target.tagName === "SELECT" && e.key !== "Tab") e.preventDefault();
         // 折りたたみ（details/summary）の開け閉めは通す。閲覧専用でも中身は読めるように。
         if(e.target && e.target.closest && e.target.closest("summary")) return;
         e.stopPropagation();
