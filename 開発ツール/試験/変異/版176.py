@@ -436,7 +436,7 @@ CASES = [
    u'''    for(const it of sideDone) await markDraftSidedFor(it.model, shared ? "share" : "dl", it.sig);''',
    u'''    // (消した)''', TG, "genba", u"㉞c"),
   (u"★まとめて保存（共有）：渡したあと、写しで下書きを書き戻す（渡しているあいだに入った写真が消える）",
-   u'''    if(await markDraftSavedFor(f.key, f.model, dir ? { wrote: f.state } : { keep: true, sig: f.sig }) === "late") lateNos.push(f.no);''',
+   u'''    if(await markDraftSavedFor(f.key, f.model, dir ? { wrote: f.state, was: f.sig } : { keep: true, sig: f.sig }) === "late") lateNos.push(f.no);''',   # 版178 で was を足した
    u'''    if(await markDraftSavedFor(f.key, f.model) === "late") lateNos.push(f.no);''', TG, "genba", u"㉞d"),
   (u"★いつもの名前のファイルから、事務所でまとめた覚え（_sideMerged）を落とす",
    u'''  const PASS_NG = { type:1, rows:1, sheets:1, _fileBase:1, _side:1 };''',
@@ -650,7 +650,7 @@ CASES = [
   (u"★まとめて保存（共有）：渡した中身の指紋を渡さない",
    u'''{ keep: true, sig: f.sig }''', u'''{ keep: true }''', TG, "genba", u"㊻a"),
   (u"★まとめて保存（共有）：中身が変わっても、保存バーを「保存済」にする",
-   u'''delete M._otherFile; if(sentOkM) saveStateFile(); }''', u'''delete M._otherFile; saveStateFile(); }''', TG, "genba", u"㊻a"),
+   u'''delete M._otherFile; if(sentOkM && !lateOther) saveStateFile(); }''', u'''delete M._otherFile; if(!lateOther) saveStateFile(); }''', TG, "genba", u"㊻a"),   # 版178 で !lateOther を足した
   (u"★1件の保存（共有）：中身が変わっても「保存済」にする",
    u'''      if(same0){ await markDraftSaved(); saveStateFile(); }''', u'''      { await markDraftSaved(); saveStateFile(); }''', TG, "genba", u"㊻b"),
   (u"1件の保存（共有）：中身が変わって、まだ渡していない分があることを言わない",
@@ -678,7 +678,7 @@ CASES = [
   (u"ダウンロードの保存：保存の途中で入った写真がまだ渡っていないことを言わない",
    u'''    + (lateD ? ("\\n\\n" + saveLateLine()) : ""), warn: true };''', u'''    , warn: true };''', TG, "genba", u"㊽c"),
   (u"★まとめて保存（フォルダ）：書いた中身を渡さない（保存の途中で入った写真があっても「保存済」にする）",
-   u'''dir ? { wrote: f.state } : { keep: true, sig: f.sig }''', u'''dir ? null : { keep: true, sig: f.sig }''', TG, "genba", u"㊽d"),
+   u'''dir ? { wrote: f.state, was: f.sig } : { keep: true, sig: f.sig }''', u'''dir ? null : { keep: true, sig: f.sig }''', TG, "genba", u"㊽d"),   # 版178 で was を足した
   (u"★まとめて保存（フォルダ）：いま開いている戸別に保存の途中で入った写真を見ない",
    u'''    const lateM = !!(opt && opt.wrote) && model === M && photosLateVs(opt.wrote, M);''', u'''    const lateM = false;''', TG, "genba", u"㊽d"),
   (u"まとめて保存：保存の途中で写真が入った戸別を知らせない",
@@ -730,14 +730,13 @@ CASES = [
   (u"★新しく置いたとき、置いた戸別ファイルを渡さない",
    u'''  out.merged.fh = fh;''', u'''  out.merged.fhX = fh;''', TM, "main", u"㉖c"),
   (u"★図面のまだ無い戸別を開くとき、行の写真を画面に入れない",
-   u'''    base.chosho_photos = await editorPresetPhotos(row);''', u'''    base.chosho_photos = [];''', TM, "main", u"㉖c"),
-  (u"★図面のまだ無い戸別を開くとき、物件の保存でサムネにした写真を画面に入れない（保存で消える）",
-   u'''  if(row._fromProject) return [];''', u'''  if(row._fromProject || d.chosho_photos_thumb) return [];''', TM, "main", u"㉖c"),
+   u'''    base.chosho_photos = preset;''', u'''    base.chosho_photos = [];''', TM, "main", u"㉖c"),   # 版178 で開けなかったときに止まる行を足した
+  # 「★図面のまだ無い戸別を開くとき、物件の保存でサムネにした写真を画面に入れない」は版178 で外した
+  # （版178 から物件の保存で行の写真をサムネに置き換えないので、壊しても同じ動き＝見分けようが無い）
   (u"★図面のまだ無い戸別を開くとき、常駐させない写真を元のファイルから読まない",
    u'''  if(row._slim && (row.fileHandle || row.srcFile)){
-    const fr = await rereadRowSource(row);
-    ph = (fr && typeof fr === "object") ? fr.chosho_photos : null;
-  }''', u'''''', TM, "main", u"㉖f"),
+    const rr = await rereadRowSourceWhy(row);''', u'''  if(false){
+    const rr = { data: null, why: "none" };''', TM, "main", u"㉖f"),   # 版178 で見せた写真を覚える行を足した（else が続くので if だけ壊す）
   (u"★新しく置けないとき、どうすれば置けるか言わない",
    u'''      + sideSortNewHint(it, acc, p) };''', u'''      };''', TM, "main", u"㉗a"),
   (u"★上のフォルダを選んでいても「上のフォルダを選ぶと置けます」と言う",
@@ -783,7 +782,7 @@ CASES = [
   (u"★引き継いだ状態を開いている画面に入れない（開いたままもう一度保存すると外れる）",
    u'''      if(el && el.value !== k2.status) el.value = k2.status;''', u'''''', TM, "main", u"㉙"),
   (u"★戸別ファイルから済みの印・状態を引き継いだことを知らせない",
-   u'''  renamedNote += sideKeptNote;''', u'''''', TM, "main", u"㉙"),
+   u'''  renamedNote += sideKeptNote + thumbKeptNote;''', u'''  renamedNote += thumbKeptNote;''', TM, "main", u"㉙"),   # 版178 で縮小版の知らせ（thumbKeptNote）を足した
   (u"★物件の行のときも、振り分けたあと 📁 のフォルダを読み直す（物件の戸別・物件だけの直しが消える）",
    u'''      related = false;
       if(res.gone.length){                       // 片付けた預けは''', u'''      if(res.gone.length){                       // 片付けた預けは''', TM, "main", u"㉘a"),
