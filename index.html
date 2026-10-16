@@ -14827,7 +14827,13 @@ function overwriteFmtLabel(fmt){
   return fmt === "hybrid" ? "ハイブリッド(.hyb)" : (fmt === "full" ? "全暗号化(.enc)" : "平文(.json)");
 }
 function setLoadedOrigin(target){
-  _loadedOrigin = (target && target.fileHandle)
+  /* ★物件の縮小版を持つ行は、元のファイルへそのまま上書きしない★（版178）
+     「💾 戸別ファイルへ反映」は、物件の行にファイルを付ける（写真は読み直さない）。そのまま開くと画面は物件の縮小版で、
+     「💾 上書き保存」がその縮小版で原寸の写真を上書きし、ファイルにしか無い写真（現場が足した分）も消していた。
+     このときは「物件に保存」の道（ファイルの写真と合わせて書く）を通す。 */
+  const thumbRow = !!(target && target.fileType === "plain" && !target._slim && target.data
+                      && (target._fromProject || target.data.chosho_photos_thumb));
+  _loadedOrigin = (target && target.fileHandle && !thumbRow)
     ? { file: target.file, fileHandle: target.fileHandle, fileType: target.fileType }
     : null;
   // 一覧の行から開いた戸別は台帳⇄エディタ双方向反映の対象として追跡
@@ -15056,13 +15062,14 @@ async function buildIndividualContent(row, existingFh){
      行の写真を採る。それ以外は元ファイルの写真をそのまま残す。 */
   const thumbish = !!data.chosho_photos_thumb || !!row._fromProject;   // サムネ＝原寸ではない
   const photosKnown = !!row._photosKnown && !thumbish;
-  /* ★ファイルを持たない行は、戸別ファイルにしか無い写真を落とさない★（版178）
-     行の写真を当てにしてよい（エディタで開いて保存した）行でも、ファイルを持たない行（受付台帳で作った行など）は、
-     そのファイルを読んでから開いたわけではない。工事フォルダに同じ管理番号のファイルがある（現場入力が先に書いた等）と、
-     行の写真だけを書けば、ファイルにしか無い写真が消える。実際に、写真の無い行を開いて保存すると、
-     現場の写真が全部消えていた。行の知らない写真（と名前だけの枠）は残し、行の知っている写真は行のものを書く。
+  /* ★いま書くファイルを読んで開いた行でなければ、戸別ファイルにしか無い写真を落とさない★（版178）
+     行の写真を当てにしてよい（エディタで開いて保存した）行でも、そのファイルを読んでから開いたとは限らない
+     （受付台帳で作った行・「💾 戸別ファイルへ反映」でファイルが付いただけの行・📄 で読んだ別の場所のファイルの行）。
+     工事フォルダに同じ管理番号のファイルがある（現場入力が先に書いた等）と、行の写真だけを書けば、ファイルにしか無い写真が消える。
+     実際に、写真の無い行を開いて保存すると、現場の写真が全部消えていた。行の知らない写真（と名前だけの枠）は残し、
+     行の知っている写真は行のものを書く。エディタがこのファイルを読んで開いた行（_photosFrom）だけは、画面で消した写真を消す。
      中身を読めないときは書かない（確かめられなければ何も消さない）。 */
-  if(photosKnown && !row.fileHandle && !row.srcFile && existingFh){
+  if(photosKnown && existingFh && !(await indivSameFile(row._photosFrom, existingFh))){
     const fb = await indivReadFilePhotos(existingFh);
     if(!fb.read) return null;
     data.chosho_photos = photosKeepFileOnly(data.chosho_photos, fb.photos);
@@ -15131,6 +15138,11 @@ async function buildIndividualContent(row, existingFh){
   delete data._side;          // 📮 預けの印は いつもの名前のファイルに入れない（版176。_sideMerged は残す）
   return data;
 }
+/* 行の写真を、このファイルから読んで開いたか（版178）。📄 で選んだファイル（File）は、工事フォルダのファイルではない */
+async function indivSameFile(from, fh){
+  if(!from || !fh || typeof from.isSameEntry !== "function") return false;
+  try { return !!(await from.isSameEntry(fh)); } catch(_){ return false; }
+}
 /* 戸別ファイルの写真を読む（版178）。0バイト（前の保存が途中で切れた残り）・先頭の目印（BOM）は「読めた・写真なし」。
    中身があるのに読めない（壊れている）ときだけ read:false。 */
 async function indivReadFilePhotos(fh){
@@ -15161,8 +15173,10 @@ function photosKeepFileOnly(rowPhotos, filePhotos){
         out[i] = o;
       } else out.push(p);
       know(p); added++;
-    } else if(p.id && String(p.label || "").trim() && !out.some(q => q && q.id === p.id)){
-      out.push(p); added++;                                                          // 名前だけの枠
+    } else if(String(p.label || "").trim()
+              && (p.id ? !out.some(q => q && q.id === p.id)
+                       : !out.some(q => q && String(q.label || "").trim() === String(p.label).trim()))){
+      out.push(p); added++;                                                          // 名前だけの枠（同じ名前の枠は二重にしない）
     }
   });
   return added ? out : rowPhotos;
@@ -15245,6 +15259,14 @@ async function writeCurrentCaseToIndividualFile(){
   let fh = null;
   try { fh = await resolveFileHandleInDir(dir, relpath, false); } catch(_){ fh = null; }
   const created = !fh;
+  /* ★管理番号を付け替えた先（または「管理番号.json」へ名前をそろえる先）に、もうファイルがある★（版178）
+     元のファイルの写真だけを見て書くと、行き先のファイルにしか無い写真が消え、そのうえ元のファイルも消してしまう。
+     書かずに知らせる（2つのファイルは「🧩 重複をまとめる」で1つにできる）。 */
+  if(legacyToRemove && fh && photoSrcFh && photoSrcFh !== fh){
+    return "\n\u26a0 戸別の個別JSONは書き替えていません：" + relpath.split(/[\\/]/).pop() + " が、もう工事フォルダにあります。\n"
+         + "\u3000 そのまま書くと、そのファイルにしか無い写真が消えます。\n"
+         + "\u3000 一覧の「🧩 重複をまとめる」で1つにしてから、もう一度お試しください。";
+  }
   if(!photoSrcFh && fh) photoSrcFh = fh;
   if(!fh){ try { fh = await resolveFileHandleInDir(dir, relpath, true); } catch(e){ return "\n⚠ 戸別の個別JSONの保存先を作成できませんでした（" + (e && e.message || e) + "）。"; } }
   if(!fh) return "\n⚠ 戸別の個別JSONの保存先を取得できませんでした。";
@@ -24004,7 +24026,7 @@ async function loadRowPhotos(row){
   try {
     if(row.fileType === "plain"){
       let arr = (row.data && Array.isArray(row.data.chosho_photos)) ? row.data.chosho_photos : null;
-      const isThumb = !!(arr && row.data.chosho_photos_thumb); // 物件埋め込みのサムネイル
+      const isThumb = !!(arr && rowHasThumbPhotos(row.data)); // 物件埋め込みのサムネイル（中身の大きさで見る・版178）
       if(!arr && (row.fileHandle || row.srcFile)){
         const full = await rereadRowSource(row);
         arr = (full && Array.isArray(full.chosho_photos)) ? full.chosho_photos : null;
@@ -24115,7 +24137,8 @@ async function listLoadRow(target){
   // --- 平文: 写真を常駐させていないため元ファイルを読み直して完全復元 ---
   if(target.fileType === "plain"){
     let d = target.data;
-    if(target._slim){ const fresh = await rereadRowSource(target); if(fresh) d = lgOverlayLedger(fresh, target); }
+    if(target._slim){ const fresh = await rereadRowSource(target);
+      if(fresh){ d = lgOverlayLedger(fresh, target); target._photosFrom = target.fileHandle || target.srcFile || null; } }   // 写真をこのファイルから読んだ（版178）
     applyStateData(d);
     setLoadedOrigin(target);
     closeListView();
@@ -26762,13 +26785,20 @@ function cdlShown(){
   return aptRegroup(list.map(e => e.row)).map(r => by.get(r)).filter(Boolean);
 }
 /* 写真の欄。数えるだけで、写真そのものには触らない。 */
+/* 行の写真に、物件の縮小版（長辺 PROJ_THUMB_MAXPX 以下）が入っているか（版178）。
+   行の写真を縮小版に置き換えなくなったので、印（chosho_photos_thumb）だけでは分からない
+   （開いて保存すると印が外れる・元の写真に戻した行にも印が残る）。写真が行に無いときは印で見る。 */
+function rowHasThumbPhotos(d){
+  if(!d || !Array.isArray(d.chosho_photos)) return !!(d && d.chosho_photos_thumb);
+  return d.chosho_photos.some(p => { if(!p || !p.dataUri) return false; const e = photoLongEdgeOf(p.dataUri); return e > 0 && e <= PROJ_THUMB_MAXPX; });
+}
 function cdlPhotoText(e){
   const d = (e.row && e.row.data) || {};
   if(!e.printable || e.locked) return { t: "―", warn: false, tip: "開くまで分かりません" };
   const n = lgPhotoCountOf(d, e.row);
   if(n < 0) return { t: "―", warn: false, tip: "開くまで分かりません" };   // 枚数がまだ分からない行
   if(!n) return { t: "なし", warn: false, tip: "" };
-  if(d.chosho_photos_thumb) return { t: n + "枚（小さい写真）", warn: true, tip: "物件に保存するとき縮めた写真です。はっきり出すには 📁 フォルダ から戸別を読み込んでください" };
+  if(rowHasThumbPhotos(d)) return { t: n + "枚（小さい写真）", warn: true, tip: "物件に保存するとき縮めた写真です。はっきり出すには 📁 フォルダ から戸別を読み込んでください" };
   // 写真が行に無いとき、元のファイルから戻せるのは「ふつうの戸別ファイル」だけ（暗号の戸別は戻せない）
   if(!Array.isArray(d.chosho_photos) && (e.row.fileType !== "plain" || (!e.row.fileHandle && !e.row.srcFile)))
     return { t: n + "枚（紙には出ません）", warn: true, tip: "写真の元が手元にありません。暗号をかけた戸別は、この窓からの印刷では写真が出ません" };
@@ -26856,7 +26886,7 @@ function cdlRender(keepUid){
   base.forEach(e => { if(e.dupN > 1) dupGroups.add(toHalfWidthAn((e.row.data && e.row.data.chosho_mgmt_no) || "").trim()); });
   const sel = list.filter(e => e.printable && cdlChecked(e));
   const photoP = cdlPhotoSum(sel);
-  const thumbN = sel.filter(e => ((e.row.data || {}).chosho_photos_thumb)).length;
+  const thumbN = sel.filter(e => rowHasThumbPhotos(e.row.data || {})).length;
 
   const companies = Array.from(new Set(base.map(e => e.company).filter(Boolean))).sort((a, b) => a.localeCompare(b, "ja"));
   const yms = Array.from(new Set(base.map(e => e.ym))).sort();
@@ -28894,34 +28924,47 @@ function mergeProjectSnapshots(disk, local, marks){
 }
 /* マージ結果をこの端末にも反映（共有ファイルへ書いた直後）。編集中エディタは caseId で再リンクして壊さない。
    ※ 保存処理中に来た編集マークを消さないよう applyProject にはマーク非クリア指定(_merge)で渡す。 */
-async function applyMergedLocally(merged){
-  const editId = (_editingRow && _editingRow._caseId) || null;
-  /* ★行が持っている元の写真を、作り直した行へ持ち越す★（版178）
-     まとめた物件には縮小版しか入っていない。そのまま行を作り直すと、このあと戸別ファイルへ書くとき
-     （「物件に保存」・💾 戸別ファイルへ反映）に元の写真の代わりに縮小版を書いてしまう。
-     まとめた行にある写真（同じ写真ID）だけを元の写真に戻す。写真は足さない（ほかの端末で消した写真を戻さない）。 */
-  const keepPh = {};
-  (_listRows || []).forEach(r => {
+/* ★同じ物件を開き直すとき（まとめる・🔄 最新を取り込む・開き直す）、行が持っている元の写真を、作り直した行へ持ち越す★（版178）
+   物件（端末内・共有ファイル）には縮小版しか入っていない。そのまま行を作り直すと、まだ戸別ファイルに入れていない元の写真が消え、
+   あとで戸別ファイルへ書くとき（「物件に保存」・💾 戸別ファイルへ反映）に縮小版を書いてしまう。
+   作り直した行にある写真（同じ戸別・同じ写真ID）が、この端末がその写真から作った縮小版そのもののときだけ、元の写真に戻す。
+   写真は足さない（ほかの端末で消した写真を戻さない）。ほかの端末が直した写真（回した・軽くした）は、その端末のものを使う。 */
+function rowsOriginalsCapture(rows){
+  const keep = {};
+  (rows || []).forEach(r => {
     if(!r || r.fileType !== "plain" || !r._caseId || !r.data || !Array.isArray(r.data.chosho_photos)) return;
+    const th = new Map();
+    (Array.isArray(r._thumbs) ? r._thumbs : []).forEach(t => { if(t && t.dataUri) th.set(t.id || photoContentId(t.dataUri), t.dataUri); });
     const m = new Map();
-    r.data.chosho_photos.forEach(p => { if(p && p.dataUri) m.set(p.id || photoContentId(p.dataUri), p); });
-    if(m.size) keepPh[r._caseId] = m;
+    r.data.chosho_photos.forEach(p => {
+      if(!p || !p.dataUri) return;
+      const k = p.id || photoContentId(p.dataUri);
+      m.set(k, { dataUri: p.dataUri, thumb: th.has(k) ? th.get(k) : null });
+    });
+    if(m.size) keep[r._caseId] = m;
   });
-  try { await projIdbPut(merged); } catch(_){}
-  await applyProject(merged, { silent: true, fileHandle: _projFileHandle, _merge: true });
-  (_listRows || []).forEach(r => {
-    const m = r && r._caseId && keepPh[r._caseId];
+  return keep;
+}
+function rowsOriginalsRestore(rows, keep){
+  (rows || []).forEach(r => {
+    const m = r && r._caseId && keep[r._caseId];
     if(!m || r.fileType !== "plain" || !r.data || !Array.isArray(r.data.chosho_photos)) return;
     let up = 0;
     const arr = r.data.chosho_photos.map(p => {
       if(!p || !p.dataUri) return p;
       const o = m.get(p.id || photoContentId(p.dataUri));
       if(!o || !(String(o.dataUri).length > String(p.dataUri).length)) return p;   // 元の写真（縮小版より大きい）だけ
+      if(o.thumb != null && o.thumb !== p.dataUri) return p;                        // ほかの端末が直した写真は、そのまま
       up++;
       return Object.assign({}, p, { dataUri: o.dataUri });
     });
     if(up) r.data = Object.assign({}, r.data, { chosho_photos: arr });
   });
+}
+async function applyMergedLocally(merged){
+  const editId = (_editingRow && _editingRow._caseId) || null;
+  try { await projIdbPut(merged); } catch(_){}
+  await applyProject(merged, { silent: true, fileHandle: _projFileHandle, _merge: true });   // 元の写真は applyProject の中で持ち越す（版178）
   if(editId){
     const nr = _listRows.find(r => r && r._caseId === editId);
     if(nr){
@@ -29087,6 +29130,8 @@ async function applyProject(p, opts){
     if(!opts._merge) _projDirHandle = null; // 物件を新規に開く＝工事フォルダリンクは持ち越さない（必要時にIDBから再リンク）
     _specialRows = [];                      // 前のフォルダの特別記録は持ち越さない
     _sideFiles = [];                        // 前のフォルダの預けも持ち越さない（版176）
+    /* 同じ物件を開き直す（まとめる・🔄 最新を取り込む・開き直す）ときは、行が持っている元の写真を持ち越す（版178） */
+    const keepOrig = (_currentProject && p && _currentProject.id === p.id) ? rowsOriginalsCapture(_listRows) : null;
     _listRows = (p.cases || []).map(c => {
       // 台帳起点の行（仮受付・手入力）はマーカーから直接復元（空欄でも消えない）
       if(c.payload && c.payload._manual){
@@ -29095,16 +29140,22 @@ async function applyProject(p, opts){
         delete data._manual;
         delete data._origin;
         if(data._detached){ delete data._detached; }
+        /* ★写真の枚数と縮小版も、ふつうの行（buildListRow）と同じように持たせる★（版178）
+           持たせないと、次の物件の保存で縮小版が作られず、この行の写真が物件から抜けていた（枚数だけ残る）。 */
+        const ph = Array.isArray(data.chosho_photos) ? data.chosho_photos.filter(x => x && x.dataUri) : null;
         return { file: c.file || ("manual:" + projNewId()), lastModified: c.lastModified || 0,
                  _detached: (c.payload && c.payload._detached) || undefined,
                  data, fileType: "plain", envelope: null, unlocked: true,
                  _manual: true, _origin: origin || "manual", _fromProject: true,
+                 _photoCount: ph ? ph.length : (Number.isInteger(data.chosho_photo_count) ? data.chosho_photo_count : 0),
+                 _thumbs: (ph && data.chosho_photos_thumb) ? ph : undefined,
                  _caseId: c.caseId || projNewId() }; // Phase2: 安定IDを復元（無ければ付与）
       }
       const r = buildListRow(c.file || "", c.lastModified || 0, c.payload, null);
       if(r){ r._fromProject = true; if(c.caseId) r._caseId = c.caseId; } // 元ファイル無し＋安定ID(あれば)復元
       return r;
     }).filter(Boolean);
+    if(keepOrig) rowsOriginalsRestore(_listRows, keepOrig);
     _listSelectedFolderName = p.name || "";
     // 物件を新規に開く時は注釈マップを一旦空に（前の物件の管理番号キーが残って越境表示/焼込されるのを防ぐ・指摘#9）。
     // マージ反映時(_merge)は保存中に来た編集を保持するためクリアしない（merged を加算反映）。
@@ -36041,6 +36092,7 @@ async function editorPresetPhotos(row){
   if(row._slim && (row.fileHandle || row.srcFile)){
     const fr = await rereadRowSource(row);
     ph = (fr && typeof fr === "object") ? fr.chosho_photos : null;
+    if(fr && typeof fr === "object") row._photosFrom = row.fileHandle || row.srcFile;   // 写真をこのファイルから読んだ（版178）
   }
   return Array.isArray(ph) ? JSON.parse(JSON.stringify(ph.filter(p => p && (p.dataUri || p.label)))) : [];
 }
