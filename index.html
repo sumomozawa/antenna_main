@@ -15541,10 +15541,10 @@ async function saveState(){
      （現場入力の保存も、写真の歯止めを画面を開く前にしている）。
      写しをダウンロードの場所へ、管理番号.json とは別の名前で保存し（戸別ファイルは書き替えない）、
      戸別ファイルへは「💾 物件に保存」（工事フォルダの元の写真と合わせて書く）で書くよう知らせる。
-     写しには、画面に入れなかった写真も入れる（写真を減らさない）。 */
-  const fromProj = !!(_editingRow && (_editingRow._fromProject || (_editingRow.data && _editingRow.data.chosho_photos_thumb)));
+     写しには、画面に入れなかった写真も入れる（写真を減らさない）。🔐 暗号化保存・ハイブリッド保存も同じにする。 */
+  const fromProj = saveStateFromProject();
   if(fromProj) editorAddHiddenPhotos(s);
-  const defaultBase = mgmtSafe ? (mgmtSafe + (fromProj ? "_写し" : "")) : ("アンテナ工事_" + todayLocalYmd());
+  const defaultBase = saveStateBaseName(mgmtSafe, fromProj);
   const content = JSON.stringify(s, null, 2);
 
   // File System Access API 対応ブラウザ (Chrome/Edge): 保存先ダイアログを表示
@@ -15597,16 +15597,32 @@ async function saveState(){
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
 }
-/* 物件から開いた戸別の「💾 保存」で出す知らせ（版178）。写しの写真が物件の縮小版（長辺512px以下）かどうかで言い方を変える */
+/* 物件から開いた戸別か（版178）。「💾 保存」「🔐 暗号化保存」「ハイブリッド保存」が、ファイルを選ぶ画面を開くかを決める。
+   物件の行（_fromProject）か、物件の縮小版の印（chosho_photos_thumb）を持つ行 */
+function saveStateFromProject(){
+  return !!(_editingRow && (_editingRow._fromProject || (_editingRow.data && _editingRow.data.chosho_photos_thumb)));
+}
+/* 保存するファイルの名前の土台（版178）。物件から開いた戸別の写しは「管理番号_写し」＝戸別ファイルとは別の名前 */
+function saveStateBaseName(mgmtSafe, fromProj){
+  return mgmtSafe ? (mgmtSafe + (fromProj ? "_写し" : "")) : ("アンテナ工事_" + todayLocalYmd());
+}
+/* 物件から開いた戸別の「💾 保存」「🔐 暗号化保存」「ハイブリッド保存」で出す知らせ（版178）。
+   写しの写真が、物件の縮小版（長辺512px以下）か・復元できていない（暗号の戸別で剥がれている＝_editorPhotosStripped）かで言い方を変える */
 function saveStateProjNote(s, mgmtSafe){
   const small = ((s && Array.isArray(s.chosho_photos)) ? s.chosho_photos : []).some(p => {
     if(!p || !p.dataUri) return false;
     const e = photoLongEdgeOf(p.dataUri); return e > 0 && e <= PROJ_THUMB_MAXPX; });
+  const ext = (_editingRow && _editingRow.fileType === "hybrid") ? ".hyb" : ".json";
   return "\u26a0 この戸別は物件から開いています。\n"
-    + (small ? "写真は、物件に控えた小さい写真です（元の写真ではありません）。\n"
+    + (_editorPhotosStripped ? "写真は復元できていないので、この写しには入りません（暗号の写真は、工事フォルダの戸別ファイルにあります）。\n"
+     : small ? "写真は、物件に控えた小さい写真です（元の写真ではありません）。\n"
              : "工事フォルダの戸別ファイルにしか無い写真は、この画面には入っていないことがあります。\n")
-    + "戸別ファイル（" + (mgmtSafe || "管理番号") + ".json）へは「💾 物件に保存」で書いてください。工事フォルダの元の写真と合わせて書きます。\n"
+    + "戸別ファイル（" + (mgmtSafe || "管理番号") + ext + "）へは「💾 物件に保存」で書いてください。工事フォルダの元の写真と合わせて書きます。\n"
     + "ここでは写しを保存します。戸別ファイルは書き替えません。";
+}
+/* 物件から開いた戸別の暗号の写し（🔐 暗号化保存・ハイブリッド保存）を保存する前に、知らせて確かめる（版178）。false＝やめた */
+function saveStateProjConfirm(s, mgmtSafe, fname){
+  return confirm(saveStateProjNote(s, mgmtSafe) + "\n\n写し（" + fname + "）をダウンロードの場所へ保存します。よろしいですか？");
 }
 /* JSONデータを現在のUI/STATEに適用する共通ロジック */
 function applyStateData(s){
@@ -15774,6 +15790,17 @@ async function saveStateEncrypted(){
     alert("このブラウザは Web Crypto API に対応していません（https 環境で開いてください）");
     return;
   }
+  /* ★物件から開いた戸別は、ファイルを選ぶ画面で保存しない★（版178。「💾 保存」と同じ。くわしくは saveState の説明）
+     ファイルを選ぶ画面は、選んだ既にあるファイルをページへ渡す前に空にする。工事フォルダの 管理番号.hyb／.enc を選ぶと、
+     元の暗号の写真が消える（画面の写真は物件の縮小版か、復元できていないもの）。写しをダウンロードの場所へ、別の名前で保存する。
+     パスワードを聞く前に知らせて確かめる（やめるなら、パスワードを打つ前に）。 */
+  const fromProj = saveStateFromProject();
+  const mgmtRaw = (document.getElementById("chosho_mgmt_no") || {}).value || "";
+  const mgmtSafe = mgmtRaw.trim().replace(/[\\/:*?"<>|]/g, "_");
+  const defaultBase = saveStateBaseName(mgmtSafe, fromProj);
+  const fname = defaultBase + ".antenna.enc";
+  const s = collectState();
+  if(fromProj){ editorAddHiddenPhotos(s); if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }   // 写しには画面に入れなかった写真も入れる
   const password = await promptPassword({
     title: "🔐 暗号化保存",
     desc: "このファイルを暗号化するパスワードを設定してください。\n復号時に同じパスワードが必要です（復旧手段なし）。",
@@ -15781,7 +15808,6 @@ async function saveStateEncrypted(){
   });
   if(!password) return;
 
-  const s = collectState();
   const jsonString = JSON.stringify(s);
   let envelope;
   try {
@@ -15792,12 +15818,7 @@ async function saveStateEncrypted(){
   }
   const content = JSON.stringify(envelope, null, 2);
 
-  const mgmtRaw = (document.getElementById("chosho_mgmt_no") || {}).value || "";
-  const mgmtSafe = mgmtRaw.trim().replace(/[\\/:*?"<>|]/g, "_");
-  const defaultBase = mgmtSafe || ("アンテナ工事_" + todayLocalYmd());
-  const fname = defaultBase + ".antenna.enc";
-
-  if(window.showSaveFilePicker){
+  if(window.showSaveFilePicker && !fromProj){
     try {
       const opts = {
         suggestedName: fname,
@@ -15833,7 +15854,7 @@ async function saveStateEncrypted(){
   a.href = url; a.download = fname;
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
-  alert("🔐 暗号化保存が完了しました");
+  alert(fromProj ? ("🔐 写しをダウンロードの場所へ保存しました：" + fname + "\n戸別ファイルは書き替えていません。") : "🔐 暗号化保存が完了しました");
 }
 
 async function saveStateHybrid(){
@@ -15841,6 +15862,14 @@ async function saveStateHybrid(){
     alert("このブラウザは Web Crypto API に対応していません（https 環境で開いてください）");
     return;
   }
+  /* ★物件から開いた戸別は、ファイルを選ぶ画面で保存しない★（版178。🔐 暗号化保存と同じ。くわしくは saveState の説明） */
+  const fromProj = saveStateFromProject();
+  const mgmtRaw = (document.getElementById("chosho_mgmt_no") || {}).value || "";
+  const mgmtSafe = mgmtRaw.trim().replace(/[\\/:*?"<>|]/g, "_");
+  const defaultBase = saveStateBaseName(mgmtSafe, fromProj);
+  const fname = defaultBase + ".antenna.hyb";
+  const s = collectState();
+  if(fromProj){ editorAddHiddenPhotos(s); if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }   // 写しには画面に入れなかった写真も入れる
   const password = await promptPassword({
     title: "🔐🔑 ハイブリッド暗号化保存 (方式C)",
     desc: "氏名・電話番号・住所・現場写真を暗号化します。\n管理番号・工事種別・施工日は平文のまま保存され、一覧画面でパスワードなしで閲覧可能です（必要最小限の取扱い）。",
@@ -15848,7 +15877,6 @@ async function saveStateHybrid(){
   });
   if(!password) return;
 
-  const s = collectState();
   let envelope;
   try {
     envelope = await encryptHybrid(s, password);
@@ -15858,12 +15886,7 @@ async function saveStateHybrid(){
   }
   const content = JSON.stringify(envelope, null, 2);
 
-  const mgmtRaw = (document.getElementById("chosho_mgmt_no") || {}).value || "";
-  const mgmtSafe = mgmtRaw.trim().replace(/[\\/:*?"<>|]/g, "_");
-  const defaultBase = mgmtSafe || ("アンテナ工事_" + todayLocalYmd());
-  const fname = defaultBase + ".antenna.hyb";
-
-  if(window.showSaveFilePicker){
+  if(window.showSaveFilePicker && !fromProj){
     try {
       const opts = {
         suggestedName: fname,
@@ -15899,7 +15922,8 @@ async function saveStateHybrid(){
   a.href = url; a.download = fname;
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
-  alert("🔐🔑 ハイブリッド暗号化保存が完了しました\n(氏名・電話・住所・写真のみ暗号化／他の項目は平文)");
+  alert(fromProj ? ("🔐🔑 写しをダウンロードの場所へ保存しました：" + fname + "\n戸別ファイルは書き替えていません。")
+                 : "🔐🔑 ハイブリッド暗号化保存が完了しました\n(氏名・電話・住所・写真のみ暗号化／他の項目は平文)");
 }
 
 

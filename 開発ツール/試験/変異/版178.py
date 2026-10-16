@@ -173,15 +173,27 @@ CASES = [
    u'''  return !!d.chosho_photos_thumb;''', TM, "main", u"⑱a"),
   # ======== メイン：物件から開いた戸別の「💾 保存」（名前を付けて保存）（G） ========
   (u"★物件から開いた戸別でも、ファイルを選ぶ画面で保存する（選んだ戸別ファイルが空にされ、縮小版で書かれる）",
-   u'''  if(window.showSaveFilePicker && !fromProj){''', u'''  if(window.showSaveFilePicker){''', TM, "main", u"㉗a"),
+   u'''  // File System Access API 対応ブラウザ (Chrome/Edge): 保存先ダイアログを表示
+  if(window.showSaveFilePicker && !fromProj){''',
+   u'''  // File System Access API 対応ブラウザ (Chrome/Edge): 保存先ダイアログを表示
+  if(window.showSaveFilePicker){''', TM, "main", u"㉗a"),
   (u"★物件から開いた戸別（図面なし）でも、ファイルを選ぶ画面で保存する（戸別ファイルが写真0枚になる）",
-   u'''  if(window.showSaveFilePicker && !fromProj){''', u'''  if(window.showSaveFilePicker){''', TM, "main", u"㉗b"),
+   u'''  // File System Access API 対応ブラウザ (Chrome/Edge): 保存先ダイアログを表示
+  if(window.showSaveFilePicker && !fromProj){''',
+   u'''  // File System Access API 対応ブラウザ (Chrome/Edge): 保存先ダイアログを表示
+  if(window.showSaveFilePicker){''', TM, "main", u"㉗b"),
   (u"★物件から開いた戸別かを、縮小版の印だけで見る（写真の無い物件の行で、戸別ファイルの写真が消える）",
-   u'''  const fromProj = !!(_editingRow && (_editingRow._fromProject || (_editingRow.data && _editingRow.data.chosho_photos_thumb)));''',
-   u'''  const fromProj = !!(_editingRow && ((_editingRow.data && _editingRow.data.chosho_photos_thumb)));''', TM, "main", u"㉗c"),
+   u'''  return !!(_editingRow && (_editingRow._fromProject || (_editingRow.data && _editingRow.data.chosho_photos_thumb)));''',
+   u'''  return !!(_editingRow && ((_editingRow.data && _editingRow.data.chosho_photos_thumb)));''', TM, "main", u"㉗c"),
+  (u"★物件から開いた戸別かを、縮小版の印だけで見る（暗号の物件の行＝印が無い。ハイブリッド保存で .hyb の暗号の写真が消える）",
+   u'''  return !!(_editingRow && (_editingRow._fromProject || (_editingRow.data && _editingRow.data.chosho_photos_thumb)));''',
+   u'''  return !!(_editingRow && ((_editingRow.data && _editingRow.data.chosho_photos_thumb)));''', TM, "main", u"㉘a"),
   (u"★物件から開いたのではない戸別も写しにする（📂 で読んだ戸別を ファイルを選ぶ画面で保存できない）",
-   u'''  const fromProj = !!(_editingRow && (_editingRow._fromProject || (_editingRow.data && _editingRow.data.chosho_photos_thumb)));''',
-   u'''  const fromProj = true;''', TM, "main", u"㉗d"),
+   u'''  return !!(_editingRow && (_editingRow._fromProject || (_editingRow.data && _editingRow.data.chosho_photos_thumb)));''',
+   u'''  return true;''', TM, "main", u"㉗d"),
+  (u"★物件から開いたのではない戸別も写しにする（🔐／ハイブリッド保存をファイルを選ぶ画面で保存できない）",
+   u'''  return !!(_editingRow && (_editingRow._fromProject || (_editingRow.data && _editingRow.data.chosho_photos_thumb)));''',
+   u'''  return true;''', TM, "main", u"㉘d"),
   (u"★写しに、画面に入れなかった写真を入れない（図面の無い戸別の写しが写真0枚）",
    u'''  if(fromProj) editorAddHiddenPhotos(s);''', u'''''', TM, "main", u"㉗b"),
   (u"★写しの名前を 管理番号.json のままにする（戸別ファイルと同じ名前）",
@@ -190,8 +202,71 @@ CASES = [
    u'''  const name = prompt((fromProj ? saveStateProjNote(s, mgmtSafe) + "\\n\\n" : "")''',
    u'''  const name = prompt((""''', TM, "main", u"㉗b"),
   (u"★写真の無い写しにも「物件に控えた小さい写真です」と知らせる",
-   u'''    + (small ? "写真は、物件に控えた小さい写真です（元の写真ではありません）。\\n"''',
-   u'''    + (true ? "写真は、物件に控えた小さい写真です（元の写真ではありません）。\\n"''', TM, "main", u"㉗c"),
+   u'''     : small ? "写真は、物件に控えた小さい写真です（元の写真ではありません）。\\n"''',
+   u'''     : true ? "写真は、物件に控えた小さい写真です（元の写真ではありません）。\\n"''', TM, "main", u"㉗c"),
+  # ======== メイン：物件から開いた戸別の「🔐 暗号化保存」「ハイブリッド保存」（H） ========
+  (u"★物件から開いた戸別でも、ハイブリッド保存はファイルを選ぶ画面で保存する（選んだ .hyb が空にされ、暗号の写真が消える）",
+   u'''    envelope = await encryptHybrid(s, password);
+  } catch(err){
+    alert("暗号化エラー: " + (err.message || err));
+    return;
+  }
+  const content = JSON.stringify(envelope, null, 2);
+
+  if(window.showSaveFilePicker && !fromProj){''',
+   u'''    envelope = await encryptHybrid(s, password);
+  } catch(err){
+    alert("暗号化エラー: " + (err.message || err));
+    return;
+  }
+  const content = JSON.stringify(envelope, null, 2);
+
+  if(window.showSaveFilePicker){''', TM, "main", u"㉘a"),
+  (u"★物件から開いた戸別でも、🔐 暗号化保存はファイルを選ぶ画面で保存する（選んだ戸別ファイルが空にされる）",
+   u'''    envelope = await encryptJsonString(jsonString, password);
+  } catch(err){
+    alert("暗号化エラー: " + (err.message || err));
+    return;
+  }
+  const content = JSON.stringify(envelope, null, 2);
+
+  if(window.showSaveFilePicker && !fromProj){''',
+   u'''    envelope = await encryptJsonString(jsonString, password);
+  } catch(err){
+    alert("暗号化エラー: " + (err.message || err));
+    return;
+  }
+  const content = JSON.stringify(envelope, null, 2);
+
+  if(window.showSaveFilePicker){''', TM, "main", u"㉘c"),
+  (u"★写しの名前を 管理番号 のままにする（ハイブリッド保存の写しが戸別ファイルと同じ名前の土台）",
+   u'''(mgmtSafe + (fromProj ? "_写し" : ""))''', u'''(mgmtSafe)''', TM, "main", u"㉘a"),
+  (u"★写真が復元できていない（剥がれている）ことを知らせない",
+   u'''    + (_editorPhotosStripped ? "写真は復元できていないので、この写しには入りません（暗号の写真は、工事フォルダの戸別ファイルにあります）。\\n"''',
+   u'''    + (false ? "写真は復元できていないので、この写しには入りません（暗号の写真は、工事フォルダの戸別ファイルにあります）。\\n"''', TM, "main", u"㉘a"),
+  (u"★知らせの戸別ファイルの名前を、暗号の戸別でも .json と言う",
+   u'''  const ext = (_editingRow && _editingRow.fileType === "hybrid") ? ".hyb" : ".json";''',
+   u'''  const ext = ".json";''', TM, "main", u"㉘a"),
+  (u"★🔐 暗号化保存の写しに、画面に入れなかった写真を入れない（図面の無い戸別の写しが写真0枚）",
+   u'''  if(fromProj){ editorAddHiddenPhotos(s); if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }   // 写しには画面に入れなかった写真も入れる
+  const password = await promptPassword({
+    title: "🔐 暗号化保存",''',
+   u'''  if(fromProj){ if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }
+  const password = await promptPassword({
+    title: "🔐 暗号化保存",''', TM, "main", u"㉘c"),
+  (u"★ハイブリッド保存で、パスワードの前に知らせて確かめない",
+   u'''  if(fromProj){ editorAddHiddenPhotos(s); if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }   // 写しには画面に入れなかった写真も入れる
+  const password = await promptPassword({
+    title: "🔐🔑 ハイブリッド暗号化保存 (方式C)",''',
+   u'''  if(fromProj){ editorAddHiddenPhotos(s); }
+  const password = await promptPassword({
+    title: "🔐🔑 ハイブリッド暗号化保存 (方式C)",''', TM, "main", u"㉘b"),
+  (u"★ハイブリッド保存の写しのあと「保存が完了しました」と言う（戸別ファイルに書いたように聞こえる）",
+   u'''  alert(fromProj ? ("🔐🔑 写しをダウンロードの場所へ保存しました：" + fname + "\\n戸別ファイルは書き替えていません。")''',
+   u'''  alert(false ? ("🔐🔑 写しをダウンロードの場所へ保存しました：" + fname + "\\n戸別ファイルは書き替えていません。")''', TM, "main", u"㉘a"),
+  (u"★🔐 暗号化保存の写しのあと「保存が完了しました」と言う",
+   u'''  alert(fromProj ? ("🔐 写しをダウンロードの場所へ保存しました：" + fname + "\\n戸別ファイルは書き替えていません。") : "🔐 暗号化保存が完了しました");''',
+   u'''  alert("🔐 暗号化保存が完了しました");''', TM, "main", u"㉘c"),
 
   # ======== 現場入力：まとめて保存（E・F） ========
   (u"★まとめて保存（フォルダ）：下書きの中身が変わっていても、写しで書き直す・保存済にする",
