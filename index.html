@@ -14833,7 +14833,7 @@ function setLoadedOrigin(target){
      「💾 上書き保存」がその縮小版で原寸の写真を上書きし、ファイルにしか無い写真（現場が足した分）も消していた。
      このときは「物件に保存」の道（ファイルの写真と合わせて書く）を通す。 */
   const thumbRow = !!(target && target.fileType === "plain" && !target._slim && target.data
-                      && (target._fromProject || target.data.chosho_photos_thumb));
+                      && (target._fromProject || target.data.chosho_photos_thumb || rowHasParkedThumb(target)));   // 預けた縮小版も（版178・3回目）
   _loadedOrigin = (target && target.fileHandle && !thumbRow)
     ? { file: target.file, fileHandle: target.fileHandle, fileType: target.fileType }
     : null;
@@ -14974,6 +14974,21 @@ async function overwriteSaveCurrent(){
     }
     editorKeepFields(stateObj, prev);
     if(_editingRow) editorKeepFields(stateObj, _editingRow.data || null);
+    /* ★預けた縮小版で、元ファイルの元の写真を上書きしない★（版178・3回目）
+       画面に預けた縮小版が出ている（元の写真を読み直せなかった）ときは、いま読んだ元ファイルの同じ写真（元の写真）に替えて書く。
+       元ファイルにも無い（読めなかった・ほかの端末が消した）ときは書かない。 */
+    if(fmt === "plain" && _editingRow && rowHasParkedThumb(_editingRow, stateObj.chosho_photos)){
+      const u = photosUnparkFrom(_editingRow, stateObj.chosho_photos, prev && prev.chosho_photos);
+      if(u.left){
+        alert("⚠ 上書き保存していません：この画面の写真のうち " + u.left + " 枚は、元の写真を戸別ファイルから読めなかった小さい写真です。\n  " + fname + "\n\n"
+          + "このまま書くと、元ファイルの元の写真が小さい写真に替わってしまいます。\n"
+          + "同期中などで読めなかったときは、少し待ってから、もう一度「💾 上書き保存」を押してください。"
+          + "ほかの端末でその写真を消したときは、この画面でもその写真を消してから保存してください。\n\n"
+          + "入力した内容はこの画面に残っています。");
+        return;
+      }
+      stateObj.chosho_photos = u.photos;
+    }
     /* ★開いたあとで元ファイルに入った写真を消さない★（版178）
        画面の写真だけを書くと、開いているあいだに現場入力が足した写真（画面に出ていない）が消える。
        画面で見せた写真（photoSeenBy）でないものは残す。画面で消した写真は消す。 */
@@ -15154,7 +15169,9 @@ async function buildIndividualContent(row, existingFh, alsoFh){
      新しい 102 のファイルの写真が0枚になった（元の3枚は 086 のファイルに取り残された）。
      行が写真を確かに持っていると分かっている時（＝エディタで開いて書き戻した時）だけ、
      行の写真を採る。それ以外は元ファイルの写真をそのまま残す。 */
-  const thumbish = !!data.chosho_photos_thumb || !!row._fromProject;   // サムネ＝原寸ではない
+  let parkLeft = 0;                                                    // 戸別ファイルに入れなかった預けた縮小版（版178・3回目）
+  const thumbish = !!data.chosho_photos_thumb || !!row._fromProject   // サムネ＝原寸ではない
+                || rowHasParkedThumb(row, data.chosho_photos);         // 戸別ファイルに預けた写真の縮小版も（印が外れていても・版178・3回目）
   const photosKnown = !!row._photosKnown && !thumbish;
   /* ★戸別ファイルにしか無い写真を落とさない★（版178）
      行の写真を当てにしてよい（エディタで開いて保存した）行でも、戸別ファイルの写真をみな見ているとは限らない
@@ -15197,7 +15214,14 @@ async function buildIndividualContent(row, existingFh, alsoFh){
       const keyOf = x => (x && x.id) || ((x && x.dataUri) ? photoContentId(x.dataUri) : "");
       const baseKeys = new Set((Array.isArray(basePhotos) ? basePhotos : [])
         .filter(x => x && x.dataUri).map(keyOf).filter(Boolean));
-      return rowPhotos.filter(x => x && x.id && !baseKeys.has(x.id));
+      /* ★預けた縮小版を、元の写真の代わりに書かない★（版178・3回目）元のファイルに、その写真の元の写真がもう無い
+         （ほかの端末で消した・動かした）・読み直せなかった。縮小版は物件に残る（何も失わない）。呼び出し側が知らせる。
+         新しく作るファイル（元のファイルが無い）は、呼び出し側が工事フォルダの中の元の写真に替える（替えられなければ作らない） */
+      return rowPhotos.filter(x => {
+        if(!(x && x.id && !baseKeys.has(x.id))) return false;
+        if((existingFh || alsoFh) && photoIsParkedThumb(row, x)){ parkLeft++; return false; }
+        return true;
+      });
     })() : rowPhotos) : null;
     if(!addable || !addable.length){
       // 足せるものが無い → 元のファイルの写真をそのまま残す
@@ -15227,8 +15251,10 @@ async function buildIndividualContent(row, existingFh, alsoFh){
   }
   delete data.chosho_photos_thumb; delete data.chosho_photo_count; // 物件専用メタは個別ファイルに残さない
   delete data._side;          // 📮 預けの印は いつもの名前のファイルに入れない（版176。_sideMerged は残す）
+  if(parkLeft) _indivParkLeft.set(data, parkLeft);
   return data;
 }
+const _indivParkLeft = new WeakMap();   // 書く中身 → 戸別ファイルに入れなかった預けた縮小版の枚数（版178・3回目）
 /* 行の写真を、このファイルから読んで開いたか（版178）。📄 で選んだファイル（File）は、工事フォルダのファイルではない */
 async function indivSameFile(from, fh){
   if(!from || !fh || typeof from.isSameEntry !== "function") return false;
@@ -15544,6 +15570,9 @@ async function writeCurrentCaseToIndividualFile(){
   const row = _editingRow;
   if(!row || _listRows.indexOf(row) < 0) return "";
   if(row.fileType === "full") return "\n（全暗号化戸別のため個別JSONは更新しません）";
+  /* 戸別ファイルに預けた元の写真は、先に読み直す（版178・3回目）。読み直せた行は、預ける前とまったく同じ形で書く。
+     読み直せなかった写真は縮小版のまま（buildIndividualContent が、ファイルの元の写真を縮小版で上書きしない）。 */
+  if(row.fileType === "plain"){ try { await rowTakeBackOriginals(row); } catch(_){} }
   /* ★ファイルが付いている行は、付いているファイルへ書く★（版178）
      「💾 戸別ファイルへ反映」は、管理番号で行にファイルを付ける（名前や場所が、物件の覚えている名前と違ってもよい）。
      物件の覚えている名前（row.file）だけで探すと、付いているファイルを見つけられず、同じ管理番号のファイルを
@@ -15639,10 +15668,26 @@ async function writeCurrentCaseToIndividualFile(){
        閉じると物件の縮小版だけになる）。知らせに ⚠ は付けない（📥 の「書けていません」に数えない）
      見て回っているあいだに、同じ名前のファイルが届いていたら（ほかの端末の同期）、読まずに上書きしない。 */
   let thumbKeptNote = "";
-  if(created && !photoSrcFh && row.fileType === "plain" && ((row.data && row.data.chosho_photos_thumb) || row._fromProject)){
+  const parkNote = n => "\n※ この戸別の写真のうち " + n + " 枚は、戸別ファイルから元の写真を読めなかった（ほかの端末で消した・動かした など）ので、"
+                      + "戸別ファイルには入れていません（小さい写真で置き換えないため）。物件には小さい写真が残っています。";
+  const parkLeft = _indivParkLeft.get(contentObj) || 0;
+  if(parkLeft) thumbKeptNote = parkNote(parkLeft);
+  if(created && !photoSrcFh && row.fileType === "plain" && ((row.data && row.data.chosho_photos_thumb) || row._fromProject || rowHasParkedThumb(row))){
     const oldNo = junkNoFromName(oldBase);
     const before = (contentObj.chosho_photos || []).slice();   // 元の写真を探す前の、行の写真（版178）
     const up = await indivThumbOriginals(dir, [mg].concat(/^戸別$/.test(oldNo) ? [] : [oldNo]), contentObj);
+    /* ★預けた縮小版で、工事フォルダの中に元の写真を見つけられなかったものは、新しいファイルに入れない★（版178・3回目）
+       預けたファイルをほかの端末で消した・控えのフォルダへ動かした等。縮小版を元の写真として書かない（物件には残る）。
+       行の写真がみな縮小版なら作らない（下の「断ってよい」と同じ。物件に同じものがある＝断っても何も失わない） */
+    let parkGone = 0;
+    if(Array.isArray(contentObj.chosho_photos))
+      contentObj.chosho_photos = contentObj.chosho_photos.filter(p => { if(p && p.dataUri && photoIsParkedThumb(row, p)){ parkGone++; return false; } return true; });
+    if(parkGone && !before.some(p => p && p.dataUri && !projThumbLike(p))){
+      return "\n\u26a0 戸別の個別JSONは作っていません：この戸別の写真を入れた戸別ファイルが、工事フォルダの中に見つかりません。\n"
+           + "\u3000 物件には、この戸別の写真を小さくしたものしか入っていません。元の写真を確かめないまま作ると、小さい写真のファイルになってしまいます。\n"
+           + "\u3000 ほかのパソコンで名前を変えた・動かした、などが考えられます。一覧の「📁 フォルダ」で工事フォルダを読み直してから、もう一度保存してください。\n"
+           + "\u3000 ほかの端末でその写真を消したときは、この画面でもその写真を消してから保存してください。";
+    }
     if(!up.ok){
       /* 断ってよいのは、行の写真がみな物件の縮小版そのもののときだけ（物件に同じものがある）。
          ほかのファイルから見つけた元の写真は数えない（それはそのファイルに残っている）。
@@ -15655,8 +15700,10 @@ async function writeCurrentCaseToIndividualFile(){
                  ? "\u3000 同期が終わってから、もう一度保存してください。同期が終わるのを待っても読めないときは、そのファイルが壊れているかもしれません。工事フォルダの外へ移してから、もう一度保存してください。"
                  : "\u3000 そのフォルダが開けるか確かめて、もう一度保存してください。");
       }
-      thumbKeptNote = "\n※ " + up.why + "。この戸別の写真のうち、元の写真を見つけられなかったものは、物件の小さい写真のまま入れました。";
+      if((contentObj.chosho_photos || []).some(p => p && p.dataUri && projThumbLike(p)))
+        thumbKeptNote = "\n※ " + up.why + "。この戸別の写真のうち、元の写真を見つけられなかったものは、物件の小さい写真のまま入れました。";
     }
+    if(parkGone) thumbKeptNote += parkNote(parkGone);
     if(up.walked){
       let now = null;
       try { now = await resolveFileHandleInDir(dir, relpath, false); } catch(_){ now = null; }
@@ -15734,7 +15781,7 @@ async function writeCurrentCaseToIndividualFile(){
       /* 旧の写真が1枚でも新に入っていなければ消さない（版178）。画面で消した写真（行が見せて、行から無くなったもの）だけは除く */
       const inNew = new Set((Array.isArray(newJson.chosho_photos) ? newJson.chosho_photos : [])
         .filter(p => p && p.dataUri).map(p => p.id || photoContentId(p.dataUri)));
-      const shownGone = !!row._photosKnown && !(row._fromProject || (row.data && row.data.chosho_photos_thumb));
+      const shownGone = !!row._photosKnown && !(row._fromProject || (row.data && row.data.chosho_photos_thumb) || rowHasParkedThumb(row));
       if((Array.isArray(oldJson.chosho_photos) ? oldJson.chosho_photos : [])
            .some(p => p && p.dataUri && !inNew.has(p.id || photoContentId(p.dataUri)) && !(shownGone && photoSeenBy(row, p))))
         safeToDelete = false;
@@ -15765,6 +15812,9 @@ async function writeCurrentCaseToIndividualFile(){
   }
   else row.file = relpath; // 以後この個別ファイルに紐づく
   if(row.fileType === "plain") rowSeePhotos(row, (row.data || {}).chosho_photos);   // 行が持っていた写真（ファイルにだけ足した写真は入れない・版178）
+  /* ★書いたファイルを読み返して、写真IDと中身が同じ元の写真は、行に持たせない★（版178・3回目）
+     行には物件の縮小版を置き、どのファイルに入っているかを覚える。要るときにそのファイルから読み直す。 */
+  if(row.fileType === "plain"){ try { await rowParkOriginals(row, fh); } catch(_){} }
   /* 開いている戸別の元ファイルの名前を付け替えた（協力会社諸経費のそろえ直し等）なら、💾 上書き保存 の行き先も付け替える（版178）。
      付け替えないと、次の 💾 上書き保存 が無くなった名前へ行き、いつまでも書けない。 */
   if(legacyRemoved && photoSrcFh && _loadedOrigin && _loadedOrigin.fileHandle && (await indivSameFile(_loadedOrigin.fileHandle, photoSrcFh))){
@@ -18682,6 +18732,7 @@ async function sideRowPhotosWithFile(r, fh){
    物件だけの直しは残る）。入れた（もう入っていた）なら true。 */
 async function sideAdoptRow(r, a){
   if(Array.isArray(r.data._sideMerged) && r.data._sideMerged.indexOf(a.m.stamp) >= 0) return true;   // もう入っている
+  if(r.fileType === "plain"){ try { await rowTakeBackOriginals(r); } catch(_){} }   // 戸別ファイルに預けた元の写真を読み直してから合わせる（版178・3回目）
   const ph = await sideRowPhotosWithFile(r, a.m.fh);
   if(ph === null) return false;
   // 写真は行のものを使う（預けの写真はファイルの方に入れた。行に要るときは ph で入れる）
@@ -19553,6 +19604,12 @@ async function lgwbCreateMissing(dir, rows){
         fails.push("\u30fb" + name + "：同じ名前のファイルが既にあります（重複の整理をしてから、もう一度お試しください）");
         continue;
       }
+      let tb = null;
+      try { tb = await rowTakeBackOriginals(row); } catch(_){ tb = null; }   // 戸別ファイルに預けた元の写真を読み直してから書く（版178・3回目）
+      if(tb && tb.miss){
+        fails.push("\u30fb" + name + "：預けてある元の写真 " + tb.miss + " 枚を戸別ファイルから読めませんでした（縮小版で新しいファイルを作らないため、作っていません。少し待ってから、もう一度お試しください）");
+        continue;
+      }
       const obj = {};
       Object.keys(row.data || {}).forEach(k => {
         if(k.charAt(0) === "_") return;                       // 画面用の覚え書きは書かない
@@ -19570,6 +19627,7 @@ async function lgwbCreateMissing(dir, rows){
       row._dir = dir; row._name = name; row._dirPath = ""; row._size = text.length;
       row.file = name;
       row.fileHandle = fh;          // 次に開くときに、このファイルから読み直せるように
+      try { await rowParkOriginals(row, fh); } catch(_){}   // 確かめた元の写真は行に持たせない（版178・3回目）
       made.push(row);
     } catch(e){
       fails.push("\u30fb" + name + "：" + ((e && e.message) || e));
@@ -19632,6 +19690,7 @@ async function lgwbApply(list){
            ここを付け替え忘れると、消した古いファイルを読みにいって失敗し、
            開いた画面の写真が0枚になる（ファイルには入っているのに見えない）。 */
         it.row.fileHandle = fh;
+        rowParkRelink(it.row, fh);            // 預けた元の写真の預け先も新しいファイルへ（版178・3回目）
         renamed.push(it.name + " → " + it.rename);
       }
       ok++; okRows.push(it.row);
@@ -19732,6 +19791,7 @@ async function lgwbAttachFrom(root, force){
     if(fp && !byPath[fp]) byPath[fp] = f;
   });
   let hit = 0, ambiguous = 0, miss = 0;
+  const relink = [];                                         // 預けた写真のある行（版178・3回目。下で預け先も確かめて移す）
   _listRows.forEach(r => {
     if(!r) return;
     if(!force && r._dir && r._name){ hit++; return; }        // すでに結び付いている
@@ -19748,8 +19808,12 @@ async function lgwbAttachFrom(root, force){
     /* 開くときは fileHandle からファイルを読み直して写真を復元する。
        ここを渡し忘れると、結び付いたのに写真が0枚に見える。 */
     if(m.fileHandle) r.fileHandle = m.fileHandle;
+    if(r._parked && r.fileHandle) relink.push(r);
     hit++;
   });
+  /* 預けた写真の預け先も、結び付いたファイルへ（版178・3回目）。ファイルを読み、同じ写真ID・同じ大きさで入っている写真だけ移す
+     （フォルダの名前を変えた・動かした等で、前の預け先はもう読めない）。移さないと、開いても元の写真を読み直せない */
+  for(const r of relink){ try { await rowParkOriginals(r, r.fileHandle); } catch(_){} }
   if(!hit){
     alert("選んだフォルダの中に、いま一覧に出ている戸別のファイルが見つかりませんでした。\n\n"
       + "フォルダの中の戸別： " + found.length + " 件\n"
@@ -20277,7 +20341,17 @@ async function bulkReencodeTargets(params){
     let currentPw = null;
     let staleFile = false;   // ファイルが、行の封筒を作ったあとで書き替えられていた（鍵の元が違う）
     if(row.fileType === "plain"){
-      stateObj = (await rereadRowSource(row)) || row.data; // 写真込みの完全データ
+      stateObj = await rereadRowSource(row); // 写真込みの完全データ
+      if(!stateObj){
+        /* ★元ファイルを読み直せないときは、行の中身で元ファイルを書き替えない★（版178・3回目）
+           行の写真が、戸別ファイルに預けた縮小版・物件の縮小版・常駐させていない（写真なし）のことがある。そのまま書くと元の写真が消える。
+           元ファイルの無い行（ダウンロードになる）は、預けた元の写真を読み直して書き出す。 */
+        if(row.fileHandle){ photoSkip++; continue; }   // 行が元の写真を持っていても、ファイルにしか無い写真（現場が足した等）を消すので書かない
+        let up = null;
+        try { up = await rowPhotosWithOriginals(row); } catch(_){ up = null; }
+        if(up && up.miss){ photoSkip++; continue; }   // 読み直せなかった預けた縮小版で書き出さない（版178・3回目）
+        stateObj = up ? Object.assign({}, row.data, { chosho_photos: up.photos }) : row.data;
+      }
     } else {
       let env = await getFullEnvelope(row); // 写真ct復元済みの完全envelope
       /* ★行の封筒の写真が剥がした印のとき（まだファイルに無い直しを持っている行）★（版178）
@@ -22668,6 +22742,13 @@ async function aptMgMovePhotos(target, stray){
   const strayHasFile = !!(stray._dir && stray._name) && !stray._detached;
   const targetHasFile = !!(target._dir && target._name) && !target._detached;
   const tmg = String((target.data || {}).chosho_mgmt_no || "");
+  /* 帯の外の行の写真を行から移すとき（ファイルを持たない）は、戸別ファイルに預けた元の写真を先に読み直す（版178・3回目）。
+     読めなければ移さない（縮小版を移して、元の写真のファイルを置き去りにしない） */
+  if(!strayHasFile){
+    let tb = null;
+    try { tb = await rowTakeBackOriginals(stray); } catch(_){ tb = null; }
+    if(tb && tb.miss) throw new Error("移す写真のうち " + tb.miss + " 枚を、預けてある戸別ファイルから読めませんでした（何もしていません）");
+  }
   let strayPhotos = null, sfh = null, sText = "", sj = null;
   if(strayHasFile){
     sfh = await stray._dir.getFileHandle(stray._name);
@@ -22719,6 +22800,13 @@ async function aptMgMovePhotos(target, stray){
      ・もともとファイルから読む行（_slim）… そのまま（開くとこのファイルを読む）
      ・行が写真を持つ行 … ファイルと同じ写真を全部持たせる。古い写真を残すと、開いたときそれだけが出て、保存で消える。
        「ファイルから読む」形に替えてもいけない（行にだけある図面などの直しが、開いたとき出なくなる） */
+  /* まとめる先の預けた元の写真を、ファイルへ入れる前に読み直す（版178・3回目）。読めなければ移さない
+     （預けた縮小版を、元の写真としてファイルへ入れない） */
+  const takeBackTarget = async () => {
+    let tb = null;
+    try { tb = await rowTakeBackOriginals(target); } catch(_){ tb = null; }
+    if(tb && tb.miss) throw new Error("まとめる先の写真のうち " + tb.miss + " 枚を、預けてある戸別ファイルから読めませんでした（何もしていません）");
+  };
   const settle = (back, fromFile) => {
     const d = Object.assign({}, target.data || {});
     delete d.chosho_photos_thumb; delete d.chosho_photo_count;
@@ -22734,11 +22822,13 @@ async function aptMgMovePhotos(target, stray){
     const tfh = await target._dir.getFileHandle(target._name);
     const tText = await (await tfh.getFile()).text();
     const tj = JSON.parse(tText);
+    await takeBackTarget();
     const own = ownLack(tj.chosho_photos, true), fromFile = !!(target._slim && target.fileHandle);
     const back = await writeUnion(tfh, tj, tText, [
       { photos: strayPhotos, thumb: !strayHasFile && !!((stray.data || {}).chosho_photos_thumb) },
       { photos: own, thumb: !!((target.data || {}).chosho_photos_thumb) } ]);
     settle(back, fromFile);
+    if(!fromFile){ try { await rowParkOriginals(target, tfh); } catch(_){} }   // 入れて確かめた元の写真は行に持たせない（版178・3回目）
     if(strayHasFile){
       if(!(await dupEnsureWritable(stray._dir))) throw new Error("元のファイルのフォルダへの書き込み許可が得られませんでした（写真は移してあります）");
       await stray._dir.removeEntry(stray._name);
@@ -22748,6 +22838,7 @@ async function aptMgMovePhotos(target, stray){
   }
   if(strayHasFile){
     // まとめる先はまだファイルを持たない → 元のファイルをそのまま持たせる（まとめる先の写真は、先にそのファイルへ入れる）
+    await takeBackTarget();
     const own = ownLack(strayPhotos, false);
     let back = sj;
     if(own.length){
@@ -22757,12 +22848,14 @@ async function aptMgMovePhotos(target, stray){
     target._dir = stray._dir; target._name = stray._name; target._dirPath = stray._dirPath || "";
     target._size = stray._size; target.fileHandle = stray.fileHandle || sfh; target.file = stray.file;
     settle(back, false);
+    try { await rowParkOriginals(target, target.fileHandle); } catch(_){}   // 入れて確かめた元の写真は行に持たせない（版178・3回目）
     target._manual = false; delete target._detached;
     target._lgEdited = true; try { lgMarkTouched(target); } catch(_){}
     return { moved: n, note: "元のファイル " + stray._name + " を " + tmg + " の持ち物にしました（「💾 戸別ファイルへ反映」で名前が付け替わります）"
       + (own.length ? ("\n" + tmg + " の行にだけあった写真 " + own.length + " 枚も、このファイルへ入れました") : "") };
   }
-  // どちらにもファイルが無い → 手元の写真を合わせる
+  // どちらにもファイルが無い → 手元の写真を合わせる（まとめる先の預けた元の写真も先に読み直す・読めなければ移さない・版178・3回目）
+  await takeBackTarget();
   target.data = Object.assign({}, target.data || {}, { chosho_photos: mergeGenbaPhotos(
     (target.data || {}).chosho_photos, strayPhotos,
     { mainThumb: !!((target.data || {}).chosho_photos_thumb),
@@ -24620,7 +24713,8 @@ async function loadRowPhotos(row){
   try {
     if(row.fileType === "plain"){
       let arr = (row.data && Array.isArray(row.data.chosho_photos)) ? row.data.chosho_photos : null;
-      const isThumb = !!(arr && rowHasThumbPhotos(row.data, row)); // 物件埋め込みのサムネイル（中身の大きさで見る・版178）
+      if(arr){ try { const up = await rowPhotosWithOriginals(row); if(up) arr = up.photos; } catch(_){} }   // 戸別ファイルに預けた元の写真（版178・3回目）
+      const isThumb = !!(arr && (rowHasThumbPhotos(row.data, row) || rowHasParkedThumb(row, arr))); // 物件埋め込みのサムネイル（中身の大きさで見る・版178）
       if(!arr && (row.fileHandle || row.srcFile)){
         const full = await rereadRowSource(row);
         arr = (full && Array.isArray(full.chosho_photos)) ? full.chosho_photos : null;
@@ -24769,12 +24863,18 @@ async function hybEnvFromSrcFile(row, env){
   let sp = null; try { sp = await indivHybridEnvelope(env, hybPhotoSource(row)); } catch(_){ sp = null; }
   return sp || env;
 }
-async function listLoadRow(target){
+async function listLoadRow(target, seq0){
   if(!target) return;
+  /* 開く順番（版178・3回目）。一覧から直に開くとき（seq0 なし）も、暗号の戸別でも番号を取る＝あとから押した戸別を、先に押した戸別で上書きしない */
+  const seq = seq0 || ++_openSeq;
   // --- 平文: 写真を常駐させていないため元ファイルを読み直して完全復元 ---
   if(target.fileType === "plain"){
+    const prev = _editingRow;
+    /* 開く戸別の元の写真を読み直す（版178・3回目。エディタから開くとき＝seq0 は、先に読み直してある） */
+    if(!seq0){ target = await rowOpenTakeBack(target, seq); if(!target) return false; }
     let d = target.data;
     if(target._slim){ const rr = await rereadRowSourceWhy(target);
+      if(seq !== _openSeq) return false;   // 読んでいるあいだに別の戸別を開き始めた（版178・3回目）
       const fresh = (rr.data && typeof rr.data === "object") ? rr.data : null;
       if(!fresh && rr.why !== "none"){ editorUnreadableRefuse(target, rr.why); return false; }   // 写真のあるファイルを読めないまま開かない（版178）
       if(fresh){ d = lgOverlayLedger(fresh, target);
@@ -24784,6 +24884,7 @@ async function listLoadRow(target){
     applyStateData(d);
     setLoadedOrigin(target);
     closeListView();
+    if(!seq0) await rowParkPrevAfterOpen(prev);   // 開けたら、前の戸別をもう一度軽くする（版178・3回目）
     return;
   }
   // --- ハイブリッド（復号済みでも写真は常駐させていないので元ファイルから再復号して復元） ---
@@ -24793,6 +24894,7 @@ async function listLoadRow(target){
         const wasSlim = !!target._slim;
         const env = await hybEnvFromSrcFile(target, await getFullEnvelope(target));
         const full = lgOverlayLedger(await decryptHybrid(env, _sessionPassword), target);
+        if(seq !== _openSeq) return false;   // 読んでいるあいだに別の戸別を開き始めた（版178・3回目）
         const rowPh = hybRowPhotosToShow(full, target);   // 行にだけある写真を画面に出す（版178）
         const lite = Object.assign({}, full); lite.chosho_photos = rowPh; // 一覧側は写真を保持しない（行にだけある写真は持ったまま。版178）
         /* 「ファイルから読む」（_slim）かどうかは、開く前のまま（版178）。行の封筒で開いた行を「ファイルから読む」に替えると、
@@ -25838,6 +25940,10 @@ async function _getCasePhotos(row, pickedDir, pwCandidates){
     }catch(_){}
   }
   if(fresh && Array.isArray(fresh.chosho_photos)) return { photos: fresh.chosho_photos };
+  // 戸別ファイルに預けた元の写真（版178・3回目）。読み直せなかった写真が残れば、サムネとして数える
+  try { const up = await rowPhotosWithOriginals(row);
+        if(up) return (rowHasParkedThumb(row, up.photos) || rowHasThumbPhotos(Object.assign({}, row.data, { chosho_photos: up.photos }), row))
+                      ? { photos: up.photos, thumbOnly: true } : { photos: up.photos }; } catch(_){}
   // 最後の砦：メモリ上（サムネの可能性あり）
   const thumbOnly = !!(row.data && row.data.chosho_photos_thumb) || !!row._fromProject || !!row._slim;
   if(row.data && Array.isArray(row.data.chosho_photos)) return { photos: row.data.chosho_photos, thumbOnly };
@@ -26045,7 +26151,7 @@ function photoSlimWhy(row, dupSet){
   if(!row) return "元ファイルなし";
   if(row._detached) return "元ファイルなし";
   if(row.fileType !== "plain") return "暗号化";
-  if(row._fromProject || (row.data && row.data.chosho_photos_thumb)) return "小さい写真しか無い";
+  if(row._fromProject || (row.data && row.data.chosho_photos_thumb && !rowParkedOnlyThumb(row))) return "小さい写真しか無い";
   if(!(row._dir && row._name && row.fileHandle)) return "元ファイルなし";
   if(row === _editingRow) return "いま開いている";
   const mg = ((row.data || {}).chosho_mgmt_no || "").trim();
@@ -27295,6 +27401,9 @@ async function buildAndPrintChoshoBatch(printable, fileLabelPrefix){
       // 平文ファイルは元ファイルを再読込して写真を復元（物件/暗号は row.data を使用）
       if(row.fileType === "plain"){
         try { const full = await rereadRowSource(row); if(full && full.chosho_mgmt_no !== undefined) data = full; } catch(_){}
+        if(data === row.data){   // 戸別ファイルに預けた元の写真（版178・3回目）
+          try { const up = await rowPhotosWithOriginals(row); if(up) data = Object.assign({}, row.data, { chosho_photos: up.photos }); } catch(_){}
+        }
       }
       applyStateData(JSON.parse(JSON.stringify(data))); // クローンして元データを保護
       await new Promise(r => setTimeout(r, 0)); // 図面SVGの反映待ち
@@ -27443,7 +27552,9 @@ function cdlShown(){
 function rowHasThumbPhotos(d, row){
   if(!(row && row._fromProject) && !(d && d.chosho_photos_thumb)) return false;
   if(!d || !Array.isArray(d.chosho_photos)) return !!(d && d.chosho_photos_thumb);
-  return d.chosho_photos.some(p => { if(!p || !p.dataUri) return false; const e = photoLongEdgeOf(p.dataUri); return e > 0 && e <= PROJ_THUMB_MAXPX; });
+  return d.chosho_photos.some(p => { if(!p || !p.dataUri) return false;
+    if(photoIsParkedThumb(row, p)) return false;   // 戸別ファイルに預けた写真（読み直せる・版178・3回目）
+    const e = photoLongEdgeOf(p.dataUri); return e > 0 && e <= PROJ_THUMB_MAXPX; });
 }
 function cdlPhotoText(e){
   const d = (e.row && e.row.data) || {};
@@ -29278,11 +29389,14 @@ async function prepareProjectThumbs(silent){
     r && r.fileType === "plain" && (r._photoCount > 0 || (r._slim && r.data && Array.isArray(r.data.chosho_photos) && r.data.chosho_photos.some(p => p && p.dataUri)))
     && (!Array.isArray(r._thumbs) || r._thumbsNoFile)
     && (r.fileHandle || r.srcFile || (r.data && Array.isArray(r.data.chosho_photos))));
-  if(targets.length === 0) return;
+  /* 戸別ファイルに預けた元の写真を、開いて見た・読み直したまま持っている行（いま開いている戸別は除く）。
+     もう一度ファイルを読んで確かめてから軽くする（版178・3回目） */
+  const repark = (_listRows || []).filter(r => r && r !== _editingRow && rowHoldsParkedOriginal(r));
+  if(targets.length === 0 && repark.length === 0) return;
   _projThumbsBusy = true;
   let doneRun; _projThumbsRun = new Promise(r => { doneRun = r; });
   let ov = null;
-  if(!silent){
+  if(!silent && targets.length){
     ov = document.getElementById("proj-thumb-progress");
     if(!ov){
       ov = document.createElement("div");
@@ -29309,6 +29423,7 @@ async function prepareProjectThumbs(silent){
       if(!again.length) break;
       for(const r of again){ await new Promise(res => setTimeout(res, 0)); await ensureRowThumbs(r); }
     }
+    for(const r of repark){ try { await rowReparkOriginals(r, true); } catch(_){} }
   } finally {
     _projThumbsBusy = false; _projThumbsRun = null; doneRun();
     if(ov) ov.style.display = "none";
@@ -29681,6 +29796,224 @@ function mergeProjectSnapshots(disk, local, marks){
                         at: dby.at || disk.updatedAt || "", updatedAt: disk.updatedAt || "" };
   return merged;
 }
+/* ============================================================
+   ★戸別ファイルに入れて確かめた元の写真は、行に持たせない★（版178・3回目の見直し）
+   ------------------------------------------------------------
+   版178 から、物件の行（ファイルの無い行）は元の写真を行に持つ（縮小版に置き換えると、それが戸別ファイルに書かれたため）。
+   元の写真が要るのは、戸別ファイル（管理番号.json）に入るまでのあいだだけ。ずっと持つと、写真40枚で約52MB を
+   開いているあいだ抱えたままになる（縮小版だけなら約2.5MB）。
+   ・預ける（rowParkOriginals）… 書いたファイルを読み返し、写真IDと中身（大きさも）が同じ元の写真だけ、行の写真を
+     物件の縮小版（_thumbs と同じもの）に置き換え、どのファイルに入っているかを覚える（row._parked）。縮小版の印も付ける。
+     写真の枚数・並び・名前・印（調書）は変えない。確かめられない写真（読み返せない・中身が違う・写真IDが無い）は元のまま持つ。
+   ・読み直す（rowTakeBackOriginals）… 開く・戸別ファイルへ書く・📥 現場取込・📮 振り分け・世帯の写真を移す・
+     💾 戸別ファイルへ反映で新しく作る、の前に、預けたファイルから元の写真を読み直し、預ける前とまったく同じ形
+     （縮小版の印も前のまま）に戻す。版178 の決まりは、そのまま効く。
+     見るだけのところ（プレビュー・写真台帳・工事調書のまとめ印刷・写真の書き出し）は、行を変えずに読み直す（rowPhotosWithOriginals）。
+   ・読み直せなかった写真は縮小版のまま。縮小版の印があるので、物件から開いた行と同じく、戸別ファイルの元の写真を
+     縮小版で上書きしない。エディタで保存して印が外れても、預けた縮小版そのものは元の写真と見なさない（rowHasParkedThumb）。
+   ・開いて見ただけ・読み直しただけの行は、別の戸別を開くとき・物件を保存するとき、もう一度ファイルを読んで
+     確かめてから軽くする（rowReparkOriginals）。
+   ・物件を作り直したとき（まとめる・最新を取り込む・開き直す）は、預け先の覚えも作り直した行へ渡す（rowsOriginalsRestore）。
+   ============================================================ */
+function rowParkedEntry(row, p){
+  const m = row && row._parked && row._parked.map;
+  return (m && p && p.id) ? (m.get(p.id) || null) : null;
+}
+/* この写真は、この端末が戸別ファイルに預けたときの縮小版そのものか（＝元の写真ではない） */
+function photoIsParkedThumb(row, p){
+  const e = rowParkedEntry(row, p);
+  return !!(e && p && p.dataUri && p.dataUri === e.thumb);
+}
+/* 写真の並び（省略時は行の写真）に、預けた縮小版が1枚でもあるか */
+function rowHasParkedThumb(row, arr){
+  const a = arr || (row && row.data && row.data.chosho_photos);
+  return !!(row && row._parked) && Array.isArray(a) && a.some(p => p && p.dataUri && photoIsParkedThumb(row, p));
+}
+/* 預けられる元の写真を、いま行が持っているか（預けた写真を開いて見た・読み直した／写真を入れたファイルがあるのに、まだ預けていない）。
+   前に確かめて預けられなかったとき（ファイルに無い・中身が違う）は、行が変わるまで確かめ直さない（_parkChecked） */
+function rowHoldsParkedOriginal(row){
+  const a = row && row.data && row.data.chosho_photos;
+  if(!Array.isArray(a) || row._slim || row.fileType !== "plain" || row._parkChecked === row.data) return false;
+  if(row._parked && a.some(p => { const e = rowParkedEntry(row, p); return !!(e && p.dataUri && p.dataUri !== e.thumb); })) return true;
+  return !!row._parkFh && a.some(p => p && p.id && p.dataUri && !photoIsParkedThumb(row, p));
+}
+/* 縮小版の印が、預けたことだけで付いている（もともとは元の写真の行） */
+function rowParkedOnlyThumb(row){
+  return !!(row && row._parked && !row._parked.prevThumb && rowHasParkedThumb(row));
+}
+/* 戸別ファイルを読む。読めなければ undefined（0バイト・BOM だけは null） */
+async function photoFileRead(fh){
+  try { return JSON.parse(String(await (await fh.getFile()).text()).replace(/^\uFEFF/, "").trim() || "null"); }
+  catch(_){ return undefined; }
+}
+/* ★預ける★ fh＝いま書いたファイル（または元の写真の入っているファイル）。必ずファイルを読み返して確かめる。
+   inRun＝物件の縮小版づくり（prepareProjectThumbs）の中から呼ばれた（その回の終わりを待たない）。
+   戻り値＝預けた枚数。何も変えなかったときは 0。 */
+async function rowParkOriginals(row, fh, inRun){
+  if(!row || row.fileType !== "plain" || row._slim || !fh || !row.data || !Array.isArray(row.data.chosho_photos)) return 0;
+  const d0 = row.data;
+  const cand = d0.chosho_photos.filter(p => p && p.id && p.dataUri && !photoIsParkedThumb(row, p));
+  const parked = d0.chosho_photos.filter(p => p && p.dataUri && photoIsParkedThumb(row, p));
+  if(!cand.length && !parked.length) return 0;
+  const j = await photoFileRead(fh);
+  if(!j || typeof j !== "object" || !Array.isArray(j.chosho_photos)) return 0;
+  row._parkFh = fh;                           // この行の写真を入れたファイル（預けが途中で止まっても、あとで確かめて軽くする）
+  if(row.data !== d0) return 0;               // 読んでいるあいだに行が変わった → いまは何もしない（あとで確かめ直す）
+  const inFile = new Map();                   // 写真ID → そのファイルの写真（同じIDがいくつあっても）
+  j.chosho_photos.forEach(f => { if(f && f.id && f.dataUri){ const a = inFile.get(f.id) || []; a.push(f.dataUri); inFile.set(f.id, a); } });
+  const hit = new Set(cand.filter(p => (inFile.get(p.id) || []).some(u => u === p.dataUri)));   // 写真IDと中身が同じ
+  const prevMap = (row._parked && row._parked.map) || new Map();
+  const map = new Map(prevMap);
+  // もう預けてある写真：このファイルにも同じ写真ID・同じ大きさで入っていれば、預け先をこのファイルにする（名前を付け替えた等）
+  parked.forEach(p => { const e = prevMap.get(p.id);
+    if(e && e.fh !== fh && (inFile.get(p.id) || []).some(u => u.length === e.len)) map.set(p.id, Object.assign({}, e, { fh })); });
+  if(hit.size){
+    /* 物件に入れる縮小版。枚数が合わない縮小版は古い（写真を替えたあと作り直していない）→ いまの写真から作り直す。
+       作り直すときだけ、物件の縮小版づくりが動いていれば終わるのを待つ（戸別を開くたびに待たせない） */
+    const real = d0.chosho_photos.filter(p => p && p.dataUri).length;
+    if(!Array.isArray(row._thumbs) || row._thumbs.length !== real){
+      if(!inRun){ for(let i = 0; _projThumbsRun && i < 100; i++){ try { await _projThumbsRun; } catch(_){} } }
+      if(!Array.isArray(row._thumbs) || row._thumbs.length !== real){ row._thumbs = undefined; await ensureRowThumbs(row); }
+    }
+    if(row.data !== d0) return 0;             // 待っているあいだに行が変わった → 何もしない
+  }
+  const th = new Map();
+  (Array.isArray(row._thumbs) ? row._thumbs : []).forEach(t => { if(t && t.id && t.dataUri && !th.has(t.id)) th.set(t.id, t.dataUri); });
+  let n = 0;
+  const swap = new Map();                     // 元の写真 → 置いた縮小版（画面に入れなかった写真の控えも同じに替える）
+  const arr = d0.chosho_photos.map(p => {
+    if(!hit.has(p)) return p;
+    const e0 = prevMap.get(p.id);
+    const t = th.get(p.id) || ((e0 && e0.len === p.dataUri.length) ? e0.thumb : null);
+    if(!t || !(t.length < p.dataUri.length)) return p;   // 縮小版が無い・小さくならない → そのまま持つ
+    map.set(p.id, { fh, len: p.dataUri.length, thumb: t });
+    swap.set(p.dataUri, t);
+    n++;
+    return Object.assign({}, p, { dataUri: t });
+  });
+  /* 縮小版の印の、預ける前の値。預けて付けた印（row._parked があって印がある）なら前に覚えた値、そうでなければ今の印 */
+  const prevThumb = (row._parked && d0.chosho_photos_thumb) ? !!row._parked.prevThumb : !!d0.chosho_photos_thumb;
+  if(!n){
+    if(map.size !== prevMap.size || [...map].some(([k, v]) => prevMap.get(k) !== v)) row._parked = { prevThumb, map };
+    return 0;
+  }
+  row._parked = { prevThumb, map };
+  row.data = Object.assign({}, d0, { chosho_photos: arr, chosho_photos_thumb: true });
+  if(_editorHiddenPhotos && _editorHiddenPhotos.row === row)
+    _editorHiddenPhotos.photos = _editorHiddenPhotos.photos.map(p => (p && swap.has(p.dataUri)) ? Object.assign({}, p, { dataUri: swap.get(p.dataUri) }) : p);
+  return n;
+}
+/* 行のファイルが付け替わった（名前を変えた）とき、預け先もそのファイルへ */
+function rowParkRelink(row, fh){
+  if(row && fh && row._parkFh) row._parkFh = fh;
+  const m = row && row._parked && row._parked.map;
+  if(!m || !fh) return;
+  m.forEach((e, k) => { if(e.fh !== fh) m.set(k, Object.assign({}, e, { fh })); });
+}
+/* 預けた写真 p の元の写真を、写真の並び list（ファイルから読んだもの・画面に出ている写真）から選ぶ（物差しは1つ）。
+   預けたときと同じ大きさのものを採る。無ければ、同じ写真IDのいちばん大きいもの（回した・軽くした写真）。縮小版より大きくなければ null。
+   exact＝預けたときと同じ大きさのものだけ（画面から戻すとき。画面には前に預けた古い縮小版が出ていることがあり、それを元の写真と見なさない） */
+function parkPickOriginal(e, p, list, exact){
+  const fs = (Array.isArray(list) ? list : []).filter(f => f && f.id === p.id && f.dataUri);
+  const f = fs.filter(f => f.dataUri.length === e.len)[0] || (exact ? null : fs.sort((a, b) => b.dataUri.length - a.dataUri.length)[0]);
+  return (f && f.dataUri.length > p.dataUri.length) ? f : null;
+}
+/* 写真の並び photos の中の預けた縮小版を、list の同じ写真（元の写真）に替える。替えられなかった枚数は left */
+function photosUnparkFrom(row, photos, list, exact){
+  let left = 0;
+  const out = (Array.isArray(photos) ? photos : []).map(p => {
+    if(!(p && p.dataUri && photoIsParkedThumb(row, p))) return p;
+    const f = parkPickOriginal(rowParkedEntry(row, p), p, list, exact);
+    if(!f){ left++; return p; }
+    return Object.assign({}, p, { dataUri: f.dataUri });
+  });
+  return { photos: out, left };
+}
+/* 預けた写真を、手元の写真の並び（いま画面に出ている元の写真など）から戻す（ファイルは読まない）。戻した枚数 */
+function rowTakeBackFrom(row, list){
+  const d0 = row && row.data;
+  if(!d0 || !Array.isArray(d0.chosho_photos) || !rowHasParkedThumb(row) || !Array.isArray(list)) return 0;
+  const before = d0.chosho_photos.filter(p => p && p.dataUri && photoIsParkedThumb(row, p)).length;
+  const u = photosUnparkFrom(row, d0.chosho_photos, list, true);   // 預けたときと同じ大きさのものだけ
+  if(u.left >= before) return 0;
+  const d = Object.assign({}, d0, { chosho_photos: u.photos });
+  if(!u.left){ if(row._parked.prevThumb) d.chosho_photos_thumb = true; else delete d.chosho_photos_thumb; }
+  row.data = d;
+  return before - u.left;
+}
+/* 預けた写真を、預けたファイルから読み直した並び（行は変えない）。預けた写真が無ければ null。
+   読めない・見つからない写真は縮小版のまま（miss に数える）。 */
+async function rowPhotosWithOriginals(row){
+  const d = row && row.data;
+  if(!row || row.fileType !== "plain" || !d || !Array.isArray(d.chosho_photos) || !rowHasParkedThumb(row)) return null;
+  const files = new Map();
+  for(const p of d.chosho_photos){
+    if(!(p && p.dataUri && photoIsParkedThumb(row, p))) continue;
+    const fh = rowParkedEntry(row, p).fh;
+    if(!files.has(fh)) files.set(fh, await photoFileRead(fh));
+  }
+  let got = 0, miss = 0;
+  const photos = d.chosho_photos.map(p => {
+    if(!(p && p.dataUri && photoIsParkedThumb(row, p))) return p;
+    const e = rowParkedEntry(row, p);
+    const j = files.get(e.fh);
+    const f = parkPickOriginal(e, p, (j && typeof j === "object") ? j.chosho_photos : null);
+    if(!f){ miss++; return p; }
+    got++;
+    return Object.assign({}, p, { dataUri: f.dataUri });
+  });
+  return { photos, got, miss };
+}
+/* ★読み直す★ 行の写真を、預ける前の形に戻す（読み直せた写真だけ）。縮小版がみな戻れば、縮小版の印も預ける前のまま。 */
+async function rowTakeBackOriginals(row){
+  const d0 = row && row.data;
+  const r = await rowPhotosWithOriginals(row);
+  if(!r || !r.got || row.data !== d0) return r;
+  const d = Object.assign({}, d0, { chosho_photos: r.photos });
+  if(!rowHasParkedThumb(row, r.photos)){
+    if(row._parked.prevThumb) d.chosho_photos_thumb = true; else delete d.chosho_photos_thumb;
+  }
+  row.data = d;
+  return r;
+}
+/* 見ただけ・読み直しただけで元の写真を持っている行を、預けたファイルを読んで確かめてから、もう一度軽くする */
+async function rowReparkOriginals(row, inRun){
+  if(!rowHoldsParkedOriginal(row)) return 0;
+  const fhs = [];
+  row.data.chosho_photos.forEach(p => { const e = rowParkedEntry(row, p);
+    if(e && p.dataUri && p.dataUri !== e.thumb && fhs.indexOf(e.fh) < 0) fhs.push(e.fh); });
+  if(row._parkFh && fhs.indexOf(row._parkFh) < 0) fhs.push(row._parkFh);
+  const d0 = row.data;
+  let n = 0;
+  for(const fh of fhs) n += await rowParkOriginals(row, fh, inRun);
+  if(row.data === d0) row._parkChecked = d0;  // 預けられなかった（ファイルに無い・中身が違う）→ 行が変わるまで確かめ直さない
+  return n;
+}
+/* 戸別を開く順番（版178・3回目）。読み直しを待っているあいだに別の戸別を開き始めたら、先の戸別は開かない
+   （あとから開いた戸別で直し始めたのに、先の戸別の画面に戻ってしまう） */
+let _openSeq = 0;
+/* エディタで戸別を開く前：開く戸別の元の写真を読み直す。前に開いていた戸別は、まだ軽くしない
+   （開けなかったとき＝ファイルを読めない戸別は開かない（版178）、前の戸別が画面に残る）。
+   読み直しているあいだに物件が作り直されたら（ほかの端末の保存とまとめた等）、作り直した同じ戸別の行で読み直す
+   （古い行を開くと、そこで直した中身・足した写真が一覧にも物件にも入らなかった）。
+   戻り値＝開く行。開かないとき（あとから別の戸別を開き始めた・同じ戸別の行が無くなった）は null */
+async function rowOpenTakeBack(row, seq){
+  if(!row) return null;
+  const inList = _listRows.indexOf(row) >= 0;
+  let r = null;
+  if(row.fileType === "plain"){ try { r = await rowTakeBackOriginals(row); } catch(_){ r = null; } }
+  if(seq !== _openSeq) return null;
+  if(inList && _listRows.indexOf(row) < 0){
+    const nr = row._caseId ? _listRows.find(x => x && x._caseId === row._caseId) : null;
+    return nr ? rowOpenTakeBack(nr, seq) : null;
+  }
+  if(r && r.miss) uiToast("戸別ファイルから元の写真を読めなかった " + r.miss + " 枚は、小さい写真のまま出しています（戸別ファイルの写真は消していません）", 6000);
+  return row;
+}
+/* 戸別を開けたあと：前に開いていた戸別を、預けたファイルを読んで確かめてから、もう一度軽くする（開けなかったときは何もしない） */
+async function rowParkPrevAfterOpen(prev){
+  if(prev && prev !== _editingRow && _listRows.indexOf(prev) >= 0){ try { await rowReparkOriginals(prev); } catch(_){} }
+}
 /* マージ結果をこの端末にも反映（共有ファイルへ書いた直後）。編集中エディタは caseId で再リンクして壊さない。
    ※ 保存処理中に来た編集マークを消さないよう applyProject にはマーク非クリア指定(_merge)で渡す。 */
 /* ★同じ物件を開き直すとき（まとめる・🔄 最新を取り込む・開き直す）、行が持っている元の写真を、作り直した行へ持ち越す★（版178）
@@ -29698,9 +30031,10 @@ function rowsOriginalsCapture(rows){
     r.data.chosho_photos.forEach(p => {
       if(!p || !p.dataUri) return;
       const k = p.id || photoContentId(p.dataUri);
-      m.set(k, { dataUri: p.dataUri, thumb: th.has(k) ? th.get(k) : null, p: p });
+      m.set(k, { dataUri: p.dataUri, thumb: th.has(k) ? th.get(k) : null, p: p,
+                 park: rowParkedEntry(r, p) });                                       // 戸別ファイルに預けた写真の預け先（版178・3回目）
     });
-    if(m.size) keep[r._caseId] = m;
+    if(m.size){ if(r._parkFh) m._parkFh = r._parkFh; keep[r._caseId] = m; }   // 写真を入れたファイルも（版178・3回目）
   });
   return keep;
 }
@@ -29708,6 +30042,7 @@ function rowsOriginalsRestore(rows, keep){
   (rows || []).forEach(r => {
     const m = r && r._caseId && keep[r._caseId];
     if(!m || r.fileType !== "plain" || !r.data) return;
+    if(m._parkFh && !r._parkFh) r._parkFh = m._parkFh;   // 写真を入れたファイル（版178・3回目）
     /* ★作り直した行に写真の配列が無い（縮小版を作れないまま物件に入った）のに、枚数はある★（版178）
        ほかの端末が消したのではない（消したなら、減った配列が入っている）。この端末が持っていた元の写真を、そのまま戻す。
        戻さないと、ファイルの無い戸別の写真が どこにも残らない。 */
@@ -29717,12 +30052,20 @@ function rowsOriginalsRestore(rows, keep){
       if(!back.length) return;
       r.data = Object.assign({}, r.data, { chosho_photos: back });
       r._photoCount = back.length; r._thumbs = undefined;
+      /* 戻した写真が戸別ファイルに預けた縮小版なら、預け先も渡す（版178・3回目。渡さないと元の写真を読み直せない）。縮小版の印も付ける */
+      const park0 = new Map();
+      back.forEach(q => { const o = q && q.id && m.get(q.id); if(o && o.park && o.park.thumb === q.dataUri) park0.set(q.id, o.park); });
+      if(park0.size){ r._parked = { prevThumb: !!r.data.chosho_photos_thumb, map: park0 }; r.data.chosho_photos_thumb = true; }
       return;
     }
     let up = 0;
+    const park = new Map();
     const arr = r.data.chosho_photos.map(p => {
       if(!p || !p.dataUri) return p;
       const o = m.get(p.id || photoContentId(p.dataUri));
+      /* 戸別ファイルに預けた写真：作り直した行の写真が、預けたときの縮小版そのものなら、預け先の覚えを渡す（版178・3回目）。
+         前の行が元の写真を持っていた（開いて見た・読み直した）なら、下でその元の写真も戻す（次の物件の保存でもう一度確かめてから軽くする） */
+      if(o && o.park && p.id && o.park.thumb === p.dataUri) park.set(p.id, o.park);
       if(!o) return p;
       /* この端末の縮小版を覚えているときは、大きさでなく「作り直した行の写真が、その縮小版そのものか」で決める（版178）。
          小さい図・画面写し（PNG）は、元の写真のほうが縮小版（JPEG）より短いことがあり、大きさで比べると元の写真を戻さず、
@@ -29734,14 +30077,20 @@ function rowsOriginalsRestore(rows, keep){
       return Object.assign({}, p, { dataUri: o.dataUri });
     });
     if(up) r.data = Object.assign({}, r.data, { chosho_photos: arr });
+    if(park.size) r._parked = { prevThumb: !!r.data.chosho_photos_thumb, map: park };
   });
 }
 async function applyMergedLocally(merged){
   const editId = (_editingRow && _editingRow._caseId) || null;
   try { await projIdbPut(merged); } catch(_){}
   await applyProject(merged, { silent: true, fileHandle: _projFileHandle, _merge: true });   // 元の写真は applyProject の中で持ち越す（版178）
-  if(editId){
-    const nr = _listRows.find(r => r && r._caseId === editId);
+  /* ★待っているあいだに別の戸別を開いたら、その戸別で付け直す★（版178・3回目）
+     始めに覚えた戸別で付け直すと、画面は開いた戸別なのに行は前の戸別になり、次の保存で前の戸別の中身を画面の中身で上書きしていた。
+     作り直したあとの行で開いた（一覧にある）なら、付け直さない */
+  if(_editingRow && _listRows.indexOf(_editingRow) >= 0) return;
+  const curId = (_editingRow && _editingRow._caseId) || editId;
+  if(curId){
+    const nr = _listRows.find(r => r && r._caseId === curId);
     if(nr){
       if(_editorHiddenPhotos && _editorHiddenPhotos.row === _editingRow) _editorHiddenPhotos.row = nr;
       _editingRow = nr; // 同じ戸別の新行へエディタを再リンク（フォームの入力内容はそのまま保持）
@@ -36814,10 +37163,13 @@ function calQuickAdd(dateS, no, time){
    どちらも _editingRow に追跡され、以後 名前・住所等は台帳⇄エディタで双方向反映。 */
 async function openCaseInEditor(row, gotoDiagram){
   if(!row) return;
+  const seq = ++_openSeq, prev = _editingRow;
+  row = await rowOpenTakeBack(row, seq);   // 開く戸別の元の写真を読み直す（版178・3回目。前の戸別は開けてから軽くする）
+  if(!row) return;
   const asbWas = _asbEdited;
   _asbEdited = false;
   if(lgHasDrawing(row) || row.fileType !== "plain"){
-    if((await listLoadRow(row)) === false){ _asbEdited = asbWas; return; }   // ファイルを読めず開かなかった＝いまの画面のまま（版178）
+    if((await listLoadRow(row, seq)) === false){ if(seq === _openSeq) _asbEdited = asbWas; return; }   // ファイルを読めず開かなかった＝いまの画面のまま（版178。あとから別の戸別を開いたときは、その戸別のまま）
   } else {
     // 未作成 → 標準プリセット＋台帳情報の流し込み（写真・測定値・図面操作は初期状態）
     const base = JSON.parse(JSON.stringify(PRESETS.standard || {}));
@@ -36836,6 +37188,7 @@ async function openCaseInEditor(row, gotoDiagram){
        （📮 振り分けで現場の写真を入れた、図面のまだ無い戸別など）。
        物件から開いた行の写真はサムネなので入れない（保存のとき戸別ファイルの写真と合わせる）。 */
     const preset = await editorPresetPhotos(row);
+    if(seq !== _openSeq) return;          // 読んでいるあいだに別の戸別を開き始めた＝その戸別のまま（版178・3回目）
     if(preset === null){ _asbEdited = asbWas; return; }   // ファイルを読めず開かなかった＝いまの画面のまま（版178）
     base.chosho_photos = preset;
     applyStateData(base);
@@ -36859,6 +37212,7 @@ async function openCaseInEditor(row, gotoDiagram){
     const dp = document.querySelector(".diagram-panel");
     if(dp) dp.scrollIntoView({ behavior: "smooth" });
   }
+  await rowParkPrevAfterOpen(prev);         // 開けたら、前に開いていた戸別をもう一度軽くする（版178・3回目）
 }
 /* 図面のまだ無い戸別を開くときの写真（版176・3回目）。行が写真を持っていれば その写真、
    常駐させていない行は元のファイルから。物件から開いた行・読めないときは []（物件から開いた行は、
@@ -37723,6 +38077,7 @@ async function _genbaWriteRowIndividual(row, inImport){
 // 1件のマージを行へ適用（再計算＋書戻し＋物件反映）。
 async function applyGenbaMergeToRow(row, genbaData, opts){
   opts = Object.assign({ genbaToday:_genbaTodayStr() }, opts||{});
+  if(row && row.fileType === "plain"){ try { await rowTakeBackOriginals(row); } catch(_){} }   // 戸別ファイルに預けた元の写真を読み直してから合わせる（版178・3回目）
   const wasEditing = (_editingRow===row);
   /* 📮 現場の預け（版176）：現場で直した欄だけ・工程の印は入れる方向だけ・写真は和集合 */
   const sideMode = !!(opts.side);
@@ -37800,13 +38155,23 @@ async function applyGenbaMergeToRow(row, genbaData, opts){
   if(wasSlim && row.fileType === "plain" && row.fileHandle && /個別JSONも更新しました/.test(String(note || ""))){
     const fb = await indivReadFilePhotos(row.fileHandle);
     if(fb.read && Array.isArray(fb.photos)){
-      row.data = Object.assign({}, row.data, { chosho_photos: null });
-      row._photoCount = fb.photos.filter(p => p && p.dataUri).length;
+      /* ★ファイルに入っていない行の写真は、行に残す★（版178・3回目）預けた縮小版で、元の写真が戸別ファイルから無くなっていたもの
+         （ほかの端末で消した・動かした）は、ファイルに書かない。行から外すと、物件からも消える（その縮小版がただ1つの写し） */
+      const key = p => p.id || photoContentId(p.dataUri);
+      const inFile = new Set(fb.photos.filter(p => p && p.dataUri).map(key));
+      const rowOnly = (Array.isArray(row.data.chosho_photos) ? row.data.chosho_photos : []).filter(p => p && p.dataUri && !inFile.has(key(p)));
+      row.data = Object.assign({}, row.data, { chosho_photos: rowOnly.length ? rowOnly : null });
+      row._photoCount = fb.photos.filter(p => p && p.dataUri).length + rowOnly.length;
       row._thumbs = undefined;
     }
   }
   try { projTouch(); } catch(_){}
   if(wasEditing){
+    /* 書き戻しで戸別ファイルに預けた（行は縮小版）。画面には元の写真を出すので、先に読み直す（版178・3回目） */
+    if(row.fileType === "plain"){ try { await rowTakeBackOriginals(row); } catch(_){} }
+    /* 読み直せなかった（書いた直後に同期ソフトが掴んでいる等）：いま画面に出ている元の写真から戻す（版178・3回目）。
+       戻さないと、画面が預けた縮小版になっていた */
+    if(row.fileType === "plain" && rowHasParkedThumb(row)){ try { rowTakeBackFrom(row, collectState().chosho_photos); } catch(_){} }
     /* 開いている戸別へ取り込んだ：画面にはファイルの写真と現場の写真を合わせて出す（常駐させない行はファイルを読み直す）。
        見せた写真の覚えは、常駐させない行なら入れ直し（いま見せたものがすべて）、写真を持っている行なら足すだけ
        （前に画面で消した写真を「見ていない」にしない＝次の保存で戻ってこない）（版178） */
@@ -37828,8 +38193,12 @@ async function applyGenbaMergeToRow(row, genbaData, opts){
        画面には取り込んだ写真しか出ない★（版178）。「写真の出ていない画面」の印を立てる。
        印が無いと、💾 上書き保存 が取り込んだ写真だけで .hyb を書き、元ファイルの写真が消えていた（印があれば、元ファイルの写真に足して書く） */
     if(row.fileType === "hybrid" && (wasSlim || keepStripped)){ _editorPhotosStripped = true; showPhotoStrippedBanner(true); }
-    /* 元ファイルの行き先とボタンを戻す（版178）。戻さないと「💾」が押せないまま（📁 の戸別は上書き保存できない）になっていた */
-    if(keepOrigin && keepOrigin.fileHandle && !_loadedOrigin) _loadedOrigin = keepOrigin;
+    /* 元ファイルの行き先とボタンを戻す（版178）。戻さないと「💾」が押せないまま（📁 の戸別は上書き保存できない）になっていた。
+       ★預けた縮小版を出しているとき（元の写真を読み直せず、画面にも無い＝取り込んだばかりの写真など）は戻さない★（版178・3回目。
+       開くときの setLoadedOrigin と同じ）。戻すと 💾 上書き保存 が、縮小版で元ファイルの元の写真を上書きしていた */
+    const parkedShown = row.fileType === "plain" && rowHasParkedThumb(row, (shown || {}).chosho_photos);
+    if(keepOrigin && keepOrigin.fileHandle && !_loadedOrigin && !parkedShown) _loadedOrigin = keepOrigin;
+    if(parkedShown) uiToast("戸別ファイルから元の写真を読めなかった写真は、小さい写真のまま出しています（戸別ファイルの写真は消していません）", 6000);
     /* ★全暗号化(.enc)で写真を常駐させない行は、行き先を戻さない★（版178）
        行は元ファイルの写真を持っていない（画面には取り込んだ写真だけ）。戻すと 💾 上書き保存 が取り込んだ写真だけで .enc を書き、
        元の写真が消えていた。版177 と同じく、ここでは上書き保存させない。 */
