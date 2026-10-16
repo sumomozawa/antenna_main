@@ -16782,8 +16782,16 @@ async function overwriteReattach(origin, row, fmt){
 }
 /* 復号に使う完全な envelope を取得（軽量化で剥がした写真ct等を元ファイルから復元） */
 async function getFullEnvelope(row){
-  if(!row._slim && row.envelope) return row.envelope;
+  /* ★物件から作った暗号の行は、写真を剥がした封筒しか持っていない★（版178）
+     その封筒で開くと写真が出ず、「💾 上書き保存」が写真なしで .hyb を書いていた（フォルダのファイルに付いた行）。
+     元ファイルがあれば、そちらの暗号の部分（写真入り・同じ鍵の元でそろっている）で開く。
+     暗号でない部分（図面・積算など）は、行のもの（物件で直したところが入っている）を使う。 */
+  const ef = row.envelope && row.envelope.encrypted_fields;
+  const stripped = !!(ef && ef.chosho_photos && !(ef.chosho_photos.iv && ef.chosho_photos.ct));
+  const fromFile = !row._slim && row.envelope && stripped && !!(row.fileHandle || row.srcFile);
+  if(!row._slim && row.envelope && !fromFile) return row.envelope;
   const fresh = await rereadRowSource(row);
+  if(fresh && fromFile && typeof fresh === "object" && fresh.encrypted_fields) return Object.assign({}, fresh, { plain: row.envelope.plain || fresh.plain });
   if(fresh) return fresh;
   return row.envelope; // 再読込不可ならメモリ上の（剥がし済み）envelopeを返す
 }
