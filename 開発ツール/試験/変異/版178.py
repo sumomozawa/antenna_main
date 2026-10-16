@@ -6,6 +6,9 @@
 #     台帳で作った行・画面に入れなかった写真・「小さい写真」の知らせ）も、写真を減らさないように直した。
 #   ・現場入力：まとめて保存・全部保存し直す・引き継ぎ・受付台帳の取り込みで、始めに読んだ写しで下書きを書き戻して
 #     途中で届いた写真を消していた直し。写真の取り込みの最後の書き込みで、開き直した戸別・別の戸別の下書きを上書きしない。
+#     特別記録の写真の取り込みも、取り込みを始めた記録を丸ごと書かない（端末の記録を読み直して、新しく読んだ写真だけを足す）。
+#     特別記録の「保存」も、書き出しているあいだに中身が変わったら「保存済」にしない・印を付けるときに記録を丸ごと書かない。
+#     特別記録の物は「見た」写真を覚え、書く前に端末の記録のまだ見ていない写真を足す（どの書き込みでも写真を消さない）。
 #   場面を絞って速くする（現場入力は SCENE、メインは ONLY に場面の記号を渡す）。
 #   「メイン」「現場」を引数に渡すと分けて走らせられる。名前の一部を渡すとそれだけ走る。
 import io, subprocess, os
@@ -907,6 +910,139 @@ CASES = [
   (u"★一括で行の写真を足すとき、ファイルの写真を先にする（画面で直した名前が、読んだファイルの名前に戻る）",
    u'''        stateObj.chosho_photos = photosKeepFileOnly(own, base);''',
    u'''        stateObj.chosho_photos = photosKeepFileOnly(base, own);''', TM, "main", u"㉕zk"),
+  # ======== 現場入力：特別記録の写真の取り込み・「保存」（版178） ========
+  # 守りだけの所（いまの道では壊しても試験で見えない）には変異を置かない：spPersist の列（取り込みの書き込みは
+  # 開いている記録なら画面の物を書くので重ならない）・✕ のあとも「見た」ままにする（描いたときに見た写真に入っている）・
+  # 端末の記録より回数を戻さない（古い物が書くのは「戻る」の直前だけ）・一覧から開いたとき／描いたときの「見た写真」（✕ の直前に作られる）。
+  (u"★特別記録の写真の取り込みで、取り込みを始めた記録を丸ごと書く（開き直して消した写真が戻る）",
+   u'''        try{ if(await spPhotoKeep(r, pending)) dup++; else if(small) shrunk++; pending = []; }catch(_){ if(small) shrunk++; }''',
+   u'''        r.photos.push(...pending); pending = []; try{ await spPersist(r); }catch(_){}''', TG, "genba", u"⑰b"),
+  (u"★特別記録の取り込みの終わりに、取り込みを始めた記録を丸ごと書く（もとの直し前の最後の keep。開き直して直した備考が戻る）",
+   u'''    if(spCurOf(r)) renderSpecialEdit(host);             // 描き直すのは''',
+   u'''    await keep(); if(spCurOf(r)) renderSpecialEdit(host);             // 描き直すのは''', TG, "genba", u"⑰d"),
+  (u"★特別記録を書くときに、端末の記録のまだ見ていない写真を足さない（戻る前の控えが、先に並んだ取り込みの写真を消す）",
+   u'''  await spMergeUnseen(rec, prev);
+  if(bump) rec.rev = (rec.rev | 0) + 1;''',
+   u'''  if(bump) rec.rev = (rec.rev | 0) + 1;''', TG, "genba", u"⑰r"),
+  (u"★特別記録の開いている記録を、同じ物かどうかだけで見る（開き直した記録の画面に、取り込みの写真が出ない）",
+   u'''  return (_spCur && rec && (_spCur === rec || (rec.key && _spCur.key === rec.key))) ? _spCur : null;''',
+   u'''  return (_spCur && rec && _spCur === rec) ? _spCur : null;''', TG, "genba", u"⑰"),
+  (u"★特別記録の開いている記録を、同じ記録かどうか見ずに使う（取り込みの写真が、ほかの記録に入る）",
+   u'''  return (_spCur && rec && (_spCur === rec || (rec.key && _spCur.key === rec.key))) ? _spCur : null;''',
+   u'''  return (_spCur && rec) ? _spCur : null;''', TG, "genba", u"⑰p"),
+  (u"★特別記録の取り込みの終わりに描き直さない（取り込んだ写真が、開いている記録の画面に出ない）",
+   u'''    if(spCurOf(r)) renderSpecialEdit(host);             // 描き直すのは''',
+   u'''    if(false) renderSpecialEdit(host);             // 描き直すのは''', TG, "genba", u"⑰"),
+  (u"★特別記録の取り込みが一覧で終わっても、一覧を出し直さない（枚数・保存済の印が古い）",
+   u'''    else if(!_spCur) await renderSpecial();             // 一覧なら''',
+   u'''    else if(false) await renderSpecial();             // 一覧なら''', TG, "genba", u"⑰e"),
+  (u"★特別記録の取り込みで、始めの記録の写真をみな足す（一覧で待つあいだに、消した写真が戻る）",
+   u'''    if(!mergePhotosInto(prev.photos, phs)) return dup;''',
+   u'''    if(!mergePhotosInto(prev.photos, (rec.photos || []).concat(phs))) return dup;''', TG, "genba", u"⑰b2"),
+  (u"★特別記録の取り込みの書き込みを1つずつにしない（一覧で同時に入った写真の片方が消える）",
+   u'''function spPhotoKeep(rec, phs){
+  return spQueue(async () => {''',
+   u'''function spPhotoKeep(rec, phs){
+  return (fn => fn())(async () => {''', TG, "genba", u"⑰c2"),
+  (u"★特別記録を一覧から開くのを、取り込みの書き込みと同じ列に並べない（開くあいだに入った写真が画面に無い）",
+   u'''    const rec = await spQueue(async () => {
+      const x = (await spList()).filter(x => x.id === b.getAttribute("data-sp-open"))[0];''',
+   u'''    const rec = await (fn => fn())(async () => {
+      const x = (await spList()).filter(x => x.id === b.getAttribute("data-sp-open"))[0];''', TG, "genba", u"⑰h"),
+  (u"★特別記録が端末に無く開いてもいないとき、取り込みの写真を書かない（新しい記録で一覧へ戻ると写真が消える）",
+   u'''      await spWrite(rec, true, null);
+      return dup;''', u'''      return dup;''', TG, "genba", u"⑰f2"),
+  (u"★特別記録が開いていないとき、取り込みで回数を進めない（一覧で待つあいだに入った写真が「保存済」に見える）",
+   u'''    prev.rev = Math.max(prev.rev | 0, rec.rev | 0) + 1;''', u'''    prev.rev = prev.rev | 0;''', TG, "genba", u"⑰g2"),
+  (u"★特別記録を開いているとき、取り込みで回数を進めない（入った写真が「保存済」に見える）",
+   u'''      if(n) await spWrite(cur, true, prev);''', u'''      if(n) await spWrite(cur, false, prev);''', TG, "genba", u"⑰g"),
+  (u"★特別記録の取り込みで、開いている記録に足した写真を取り込みの終わりまで控えない（新しい記録の1枚目が端末に無い）",
+   u'''      if(n) await spWrite(cur, true, prev);
+      else await spWriteIfChanged(cur);''', u'''      /* 書かない */''', TG, "genba", u"⑰f"),
+  (u"★特別記録の取り込みで、端末に控えられなかった写真をもう一度控えない（黙って消える）",
+   u'''        try{ if(await spPhotoKeep(r, pending)) dup++; else if(small) shrunk++; pending = []; }catch(_){ if(small) shrunk++; }''',
+   u'''        try{ if(await spPhotoKeep(r, pending)) dup++; else if(small) shrunk++; }catch(_){ if(small) shrunk++; } pending = [];''', TG, "genba", u"⑰l"),
+  (u"★特別記録の取り込みで、ずっと控えられない写真を消える知らせでしか言わない",
+   u'''      uiNoticeWhenIdle("⚠ " + pending.length''', u'''      toast("⚠ " + pending.length''', TG, "genba", u"⑰l"),
+  (u"★特別記録の取り込みで、控えられなかった写真を ✕ で消していても、もう一度送る（消した写真が戻る）",
+   u'''      const add = phs.filter(p => { const k = spPid(p); return k && (p === last || !(seen.has(k) && !have.has(k))); });''',
+   u'''      const add = phs.slice();''', TG, "genba", u"⑰t"),
+  (u"★特別記録の取り込みの終わりに、開いている記録を控えずに描き直す（取り込みのあいだに打った備考が残らない）",
+   u'''    if(cur){ try{ await spQueue(() => spWriteIfChanged(cur)); }catch(_){} }''', u'''''', TG, "genba", u"⑰m"),
+  (u"★特別記録の取り込みの終わりに、中身が同じでも書く（同じ写真だけを選ぶと「未保存」になる）",
+   u'''    if(cur){ try{ await spQueue(() => spWriteIfChanged(cur)); }catch(_){} }''',
+   u'''    if(cur){ try{ await spPersist(cur); }catch(_){} }''', TG, "genba", u"⑰x"),
+  (u"★特別記録の取り込みで何も足さなかったときも、回数を進めて書く（同じ写真だけで「未保存」）",
+   u'''      else await spWriteIfChanged(cur);''', u'''      else await spWrite(cur, true, prev);''', TG, "genba", u"⑰x"),
+  (u"★特別記録の中身が同じかを見ずに書く（同じ写真だけで「未保存」）",
+   u'''  if(prev ? spSig(prev) === spSig(rec)''', u'''  if(prev ? false''', TG, "genba", u"⑰x"),
+  (u"★特別記録で同じ写真を選んでも、足さなかったと知らせない",
+   u'''    if(dup) toast("同じ写真がもう入っているので足しませんでした（" + dup + "枚）");''', u'''''', TG, "genba", u"⑰o"),
+  (u"★特別記録の開いている記録に、同じ写真を2枚目として足す",
+   u'''      const n = mergePhotosInto(cur.photos, add);''', u'''      cur.photos.push(...add); const n = add.length;''', TG, "genba", u"⑰o"),
+  (u"★特別記録の端末の記録にある同じ写真を見分けない（一覧へ戻ったあとの同じ写真を知らせない）",
+   u'''    const dup = has(cur && cur.photos) || has(prev && prev.photos) || (!cur && !prev && has(rec.photos));''',
+   u'''    const dup = has(cur && cur.photos);''', TG, "genba", u"⑰o"),
+  (u"★特別記録の ✕ を、いまの並びの番号で消す（描き直しが遅れると別の写真を消す）",
+   u'''    const ph = shown[+b.getAttribute("data-sp-photodel")];''',
+   u'''    const ph = (r.photos || [])[+b.getAttribute("data-sp-photodel")];''', TG, "genba", u"⑰s"),
+  (u"★特別記録の ✕ のあと、控えを待ってから描き直す（古い並びの ✕ が残る）",
+   u'''    if(_spCur === r) renderSpecialEdit(host); // 控えを待たずに描き直す（古い並びの ✕ を押させない）''', u'''''', TG, "genba", u"⑰s"),
+  (u"★特別記録の保存済の印を、中身ではなく回数で決める（中身が同じでも「途中で変わった」と言う）",
+   u'''        late = !!ok && spSig(cur) !== sig0;''', u'''        late = !!ok && (cur.rev | 0) > rev0;''', TG, "genba", u"⑰w"),
+  (u"★特別記録の保存済の印を付けるとき、開いている記録を書かない（あいだに打った備考・控えられなかった写真が端末に残らない）",
+   u'''      if(cur){
+        await spMergeUnseen(cur, prev);''', u'''      if(false){
+        await spMergeUnseen(cur, prev);''', TG, "genba", u"⑰u2"),
+  (u"★特別記録の保存済の印を付けるとき、開いている記録を書かない（保存のあいだに打った備考を「保存済」にする）",
+   u'''      if(cur){
+        await spMergeUnseen(cur, prev);''', u'''      if(false){
+        await spMergeUnseen(cur, prev);''', TG, "genba", u"⑰v"),
+  (u"★特別記録が開いていないとき、保存の途中で入った写真を見ない（一覧で待つあいだに入った写真が「保存済」）",
+   u'''        late = !!ok && spSig(o) !== sig0;''', u'''        late = false;''', TG, "genba", u"⑰z"),
+  (u"★特別記録の保存の途中で中身が変わっても、ファイルの回数をいまの回数にする（「保存済」に見える）",
+   u'''      else { o.fileRev = Math.min(rev0, o.rev | 0); if((o.rev | 0) <= o.fileRev) o.rev = o.fileRev + 1; }''',
+   u'''      else { o.fileRev = o.rev | 0; }''', TG, "genba", u"⑰i"),
+  (u"★特別記録の保存で読み返しが合わないのに、保存済の印を付ける",
+   u'''      if(!ok) return;
+      o.fileSavedAt = at;''', u'''      o.fileSavedAt = at;''', TG, "genba", u"⑰y"),
+  (u"★特別記録の保存の印を端末に書けなくても、知らせない・閉じる",
+   u'''console.warn("特別記録：保存の印を端末に書けませんでした", e); fail = true; }''',
+   u'''console.warn("特別記録：保存の印を端末に書けませんでした", e); }''', TG, "genba", u"⑰u"),
+  (u"★特別記録の保存で、開き直した記録にファイル名を控えない（種類を替えて保存すると別のファイルができる）",
+   u'''      o.fileName = rec.fileName || o.fileName;''', u'''      if(o === rec) o.fileName = rec.fileName;''', TG, "genba", u"⑰j"),
+  (u"★特別記録の保存で、書き出した記録を丸ごと書く（書き出しているあいだに開き直して撮った写真が消える）",
+   u'''        await spMergeUnseen(cur, prev);
+        late = !!ok && spSig(cur) !== sig0;
+        mark(cur, late);
+        cur.savedAt = at;
+        await idbPut(spRow(cur));''', u'''        late = !!ok && spSig(cur) !== sig0;
+        mark(cur, late);
+        cur.savedAt = at;
+        await idbPut(spRow(rec));''', TG, "genba", u"⑰j"),
+  (u"★特別記録の保存済の印を、取り込みの書き込みと同じ列に並べない（印のあいだに入った写真が消える）",
+   u'''function spMarkSaved(rec, rev0, sig0, ok){
+  return spQueue(async () => {''', u'''function spMarkSaved(rec, rev0, sig0, ok){
+  return (fn => fn())(async () => {''', TG, "genba", u"⑰k"),
+  (u"★特別記録の保存の途中で中身が変わっても知らせない（もう一度押すことに気づけない）",
+   u'''  return (m && m.late) ? ("\\n\\n⚠ 保存の途中で''', u'''  return false ? ("\\n\\n⚠ 保存の途中で''', TG, "genba", u"⑰i"),
+  (u"★特別記録の保存の途中で中身が変わっても、記録を閉じる",
+   u'''    if(res && res.ok && !res.late){''', u'''    if(res && res.ok){''', TG, "genba", u"⑰i"),
+  (u"★特別記録の保存の途中で入った写真を、開いている画面に出さない",
+   u'''      if(res.late && spCurOf(r)) renderSpecialEdit(host);''', u'''      if(false) renderSpecialEdit(host);''', TG, "genba", u"⑰i"),
+  (u"★特別記録の保存が一覧で終わっても、一覧を出し直さない（「未保存」・枚数が古い）",
+   u'''      else if(res.late && !_spCur) await renderSpecial();   // 一覧なら「未保存」を出し直す''',
+   u'''      else if(false) await renderSpecial();   // 一覧なら「未保存」を出し直す''', TG, "genba", u"⑰z"),
+  (u"★特別記録の保存が終わったら、そのとき開いている記録を閉じる（あいだに開いたほかの記録が閉じる）",
+   u'''      if(!_spCur || _spCur === r){ _spCur = null; await renderSpecial(); }''',
+   u'''      _spCur = null; await renderSpecial();''', TG, "genba", u"⑰n"),
+  (u"★特別記録の保存先を選ぶ画面で、途中で中身が変わっても閉じる・知らせない",
+   u'''      return { ok:true, late:m.late, title:"保存しました", msg:(h.name || fname)''',
+   u'''      return { ok:true, late:false, title:"保存しました", msg:(h.name || fname)''', TG, "genba", u"⑰y"),
+  (u"★特別記録を共有で渡したとき、途中で中身が変わっても閉じる",
+   u'''      return { ok:true, late:m.late, title:"共有で渡しました"''', u'''      return { ok:true, late:false, title:"共有で渡しました"''', TG, "genba", u"⑰y"),
+  (u"★特別記録をダウンロードに入れたとき、途中で中身が変わっても閉じる",
+   u'''  return { ok:true, late:m.late, title:"ダウンロードに入れました"''', u'''  return { ok:true, late:false, title:"ダウンロードに入れました"''', TG, "genba", u"⑰y"),
 ]
 
 import sys as _s
