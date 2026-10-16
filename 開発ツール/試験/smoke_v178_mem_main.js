@@ -11,6 +11,9 @@
      ㊳ 読み直せないときは縮小版のまま・元の写真を縮小版で上書きしない：a) 壊れたファイル → 知らせ・書かない → 直ったら元の写真＋現場の写真
         b) 台帳で作った行（物件から開いた行ではない）にファイルが付いた形。読めないまま保存すると縮小版の印が外れる → それでも開き直したとき
            「💾 上書き保存」にしない（縮小版で原寸を上書きしない）
+     ㉗p （#174 との取り決め）㊳b と同じ行（台帳で作った行・預けた縮小版のまま・縮小版の印が外れた・ファイルが読めない）を開き直して、
+        エディタの「💾 保存」（名前を付けて保存）を押す → ファイルを選ぶ画面を開かない（Chrome は選んだファイルを渡す前に空にする＝
+        縮小版で戸別ファイルを置き換えてしまう）。写し（管理番号_写し.json）に預けた縮小版 P縮・「物件に控えた小さい写真」と知らせる
      ㊴ 預けたあとで管理番号を付け替える → 新しいファイルに元の写真・預け先も移る・開くと元の写真
      ㊵ 共有ファイルとまとめて行が作り直されても、預け先を持ち越す（a 預けたまま　b 開いて見ている途中＝元の写真も持ち越し、あとで確かめて軽くする
         c 作り直した行に写真の配列が無い（縮小版を作れないまま物件に入った）＝前の行の写真を戻すとき、預け先も渡す）
@@ -1817,6 +1820,72 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       ok(h1 - h0 < 35, '★㉟40枚を戸別ファイルに入れたあと、JS のメモリが ' + Math.round(h1 - h0) + 'MB 増えた（元の写真を持ち続けている）');
       ok(short(r2.shown) === short(r2.want), '★㉟開き直したエディタに、元の写真が出ない（縮小版のまま） → ' + short(r2));
       ok(r2.mem.nOrig === 0, '★㉟開いて見ただけで戻ると、行が元の写真を持ったまま → ' + short(r2.mem));
+    }
+    await ctx.close();
+  }
+
+  // ---- ㉗p 預けた縮小版を持つ行の「💾 保存」（名前を付けて保存）：ファイルを選ぶ画面を開かない（#174 と #176 の取り決め） ----
+  for(const mode of ['p'].filter(m => want('㉗' + m))){
+    const { ctx, page, said } = await openMain('㉗' + mode);
+    const r = await run(page, async ({ NO, NO2, PN }) => {
+      await __openProj(__proj178('pj178pp', PN, [{ caseId: 'c2', file: NO2 + '.json', lastModified: 0,
+                         payload: { chosho_mgmt_no: NO2, chosho_cust_name: '別 様', chosho_status: 'in_progress', work_type: '' } }]));
+      const row = createManualRow({ chosho_mgmt_no: NO, chosho_cust_name: '台帳 様' }, 'manual');   // 台帳で作った行（物件から開いた行ではない）
+      const row2 = _listRows.filter(r => r.data.chosho_mgmt_no === NO2)[0];
+      const root = __mk('その１', {});
+      window.showDirectoryPicker = async () => root;
+      await openCaseInEditor(row);
+      __setField('amplifier', 'amp_3u43');                            // 図面あり
+      const src = __jpeg(900, 700, 0.85, 331);
+      const ed = await __addPhoto(src, 'p.jpg');
+      await __pressSave();                                            // 物件に保存 → 戸別ファイルへ書いて預ける
+      try { await listDirForget(); } catch(_){}
+      _listDirHandle = null;
+      await lgwbAttachFrom(root, false);                              // ㊳b と同じ：行にファイルが付く
+      await openCaseInEditor(row2);
+      const broken = root.__files[NO + '.json'].slice(0, 60);
+      root.__files[NO + '.json'] = broken;                            // 読めない
+      await openCaseInEditor(row);
+      await __pressSave();                                            // 読めないまま保存 → 書かない・縮小版の印が外れる
+      await openCaseInEditor(row2);
+      await openCaseInEditor(row);                                    // 開き直す（預けた縮小版のまま）
+      const Pt = ((STATE.photos || []).filter(p => p && p.dataUri)[0] || {}).dataUri;
+      const pre = { fromProject: !!row._fromProject, flag: !!row.data.chosho_photos_thumb, parked: rowHasParkedThumb(row),
+                    shownOrig: Pt === src, shownN: (STATE.photos || []).filter(p => p && p.dataUri).length };
+      /* ファイルを選ぶ画面。利用者は工事フォルダの戸別ファイルを選んで置き換える。Chrome と同じく、選んだファイルを こちらへ渡す前に空にする */
+      const picks = [];
+      window.showSaveFilePicker = async o => { picks.push((o && o.suggestedName) || '');
+        root.__files[NO + '.json'] = ''; return await root.getFileHandle(NO + '.json'); };
+      /* ダウンロード（写しの名前と中身）を拾う */
+      const blobs = {}, dls = [];
+      const oc = URL.createObjectURL.bind(URL);
+      URL.createObjectURL = b => { const u = oc(b); blobs[u] = b; return u; };
+      const ck = HTMLAnchorElement.prototype.click;
+      HTMLAnchorElement.prototype.click = function(){
+        if(this.download){ dls.push({ name: this.download, blob: blobs[this.href] }); return; }
+        return ck.call(this); };
+      const w0 = root.__writes.length;
+      await document.getElementById('btn-save').onclick();           // エディタの「💾 保存」
+      const dl = dls[0] || null;
+      let copy = null;
+      try { copy = (dl && dl.blob) ? JSON.parse(await dl.blob.text()) : null; } catch(_){ copy = '(読めない)'; }
+      const tag = p => (ed && p.id === ed.id) ? (p.dataUri === src ? 'P' : (p.dataUri === Pt ? 'P縮' : 'P?')) : '?';
+      return { pre, picks, fileSame: root.__files[NO + '.json'] === broken, writes: root.__writes.length - w0,
+               dls: dls.map(d => d.name), copyNo: (copy && copy.chosho_mgmt_no) || null,
+               copyPh: (copy && typeof copy === 'object') ? (copy.chosho_photos || []).filter(p => p && p.dataUri).map(tag).sort() : copy };
+    }, { NO, NO2, PN });
+    const asked = said.filter(s => s.type === 'prompt').map(s => s.msg);   // 写しの名前を聞く窓
+    console.log('㉗p預けた縮小版の行の名前を付けて保存', short(r), short(asked.map(m => m.slice(0, 160))));
+    ok(!r.error, '㉗p止まった → ' + r.error);
+    if(!r.error){
+      ok(r.pre && !r.pre.fromProject && !r.pre.flag && r.pre.parked && !r.pre.shownOrig && r.pre.shownN === 1,
+         '㉗p試験の前提: 台帳で作った行（物件の行ではない）・縮小版の印が外れた・預けた縮小版のまま開いた → ' + short(r.pre));
+      ok(r.picks.length === 0 && r.fileSame && r.writes === 0,
+         '★㉗p預けた縮小版を持つ行の「💾 保存」で、ファイルを選ぶ画面を開いた（選んだ戸別ファイルが空にされ、縮小版で書かれる） → ' + short(r));
+      ok(r.dls.length === 1 && r.dls[0] === NO + '_写し.json' && r.copyNo === NO && Array.isArray(r.copyPh) && r.copyPh.join() === 'P縮',
+         '★㉗p写しを「' + NO + '_写し.json」でダウンロードの場所へ保存しない・写しの写真が違う（P縮 のはず） → ' + short(r));
+      ok(asked.some(m => /物件から開いています/.test(m) && /物件に控えた小さい写真/.test(m) && /書き替えません/.test(m)),
+         '★㉗p写しの窓で、写真が小さい写真で戸別ファイルは書き替えないと知らせない → ' + short(asked));
     }
     await ctx.close();
   }

@@ -14839,6 +14839,7 @@ function setLoadedOrigin(target){
     : null;
   // 一覧の行から開いた戸別は台帳⇄エディタ双方向反映の対象として追跡
   _editingRow = (target && target.data !== undefined) ? target : null;
+  _editorProjRow = rowOpenedFromProject(_editingRow) ? _editingRow : null;   // 物件から開いた行（版178。行が外れても、保存は写しにする）
   // リアルタイム：この戸別の編集ロックを取得（他端末が編集中なら閲覧のみになる）
   if(_editingRow){ try { rtClaimLock(_editingRow); } catch(_){} }
   clearEditorDirty();   // 開いた直後＝まだ何も触っていない
@@ -15880,11 +15881,23 @@ async function saveState(){
   // 管理番号が入力されていればそれを既定ファイル名に使用（ファイル名NG文字はサニタイズ）
   const mgmtRaw = (document.getElementById("chosho_mgmt_no") || {}).value || "";
   const mgmtSafe = mgmtRaw.trim().replace(/[\\/:*?"<>|]/g, "_");
-  const defaultBase = mgmtSafe || ("アンテナ工事_" + todayLocalYmd());
+  /* ★物件から開いた戸別は、ファイルを選ぶ画面で保存しない★（版178）
+     この画面の写真は物件に控えた小さい写真（長辺512px）で、図面のまだ無い戸別では写真を画面に入れてもいない。
+     前は「管理番号.json」の名前で前に使ったフォルダを出していたので、工事フォルダの戸別ファイルを選んで置き換えると、
+     原寸の写真が縮小版に置き換わり、ファイルにしか無い写真が消えた（図面の無い戸別は写真が0枚）。何も知らせなかった。
+     ファイルを選ぶ画面で選んだ既にあるファイルは、ブラウザがページへ渡す前に中身を空にする（Chrome の決まり）。
+     あとから読んで写真を合わせることはできず、書かずに止めても写真は戻らない。だから画面を開く前に分ける
+     （現場入力の保存も、写真の歯止めを画面を開く前にしている）。
+     写しをダウンロードの場所へ、管理番号.json とは別の名前で保存し（戸別ファイルは書き替えない）、
+     戸別ファイルへは「💾 物件に保存」（工事フォルダの元の写真と合わせて書く）で書くよう知らせる。
+     写しには、画面に入れなかった写真も入れる（写真を減らさない）。🔐 暗号化保存・ハイブリッド保存も同じにする。 */
+  const fromProj = saveStateFromProject();
+  if(fromProj) editorAddHiddenPhotos(s, true);
+  const defaultBase = saveStateBaseName(mgmtSafe, fromProj);
   const content = JSON.stringify(s, null, 2);
 
   // File System Access API 対応ブラウザ (Chrome/Edge): 保存先ダイアログを表示
-  if(window.showSaveFilePicker){
+  if(window.showSaveFilePicker && !fromProj){
     try {
       const opts = {
         suggestedName: defaultBase + ".json",
@@ -15921,7 +15934,8 @@ async function saveState(){
   }
 
   // フォールバック: 従来のダウンロード方式（ブラウザ既定のダウンロードフォルダ）
-  const name = prompt("ファイル名を入力してください（拡張子.jsonは自動付与）\n※保存先はブラウザのダウンロード既定フォルダです", defaultBase);
+  const name = prompt((fromProj ? saveStateProjNote(s, mgmtSafe) + "\n\n" : "")
+    + "ファイル名を入力してください（拡張子.jsonは自動付与）\n※保存先はブラウザのダウンロード既定フォルダです", defaultBase);
   if(name === null) return;
   const fname = (name.trim() || defaultBase).replace(/\.json$/i, "") + ".json";
   const blob = new Blob([content], { type:"application/json" });
@@ -15932,6 +15946,60 @@ async function saveState(){
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
 }
+/* 行が物件から開いたものか（版178）。物件の行（_fromProject）か、物件の縮小版の印（chosho_photos_thumb）を持つ行。
+   戸別ファイルに預けた縮小版（rowHasParkedThumb）を持つ行も同じに扱う（版178・#176 との取り決め）。
+   台帳で作った行は、読めないまま保存すると縮小版の印が外れるが、画面は預けた縮小版のまま（ファイルを選ぶ画面で戸別ファイルを置き換えると縮小版で書く） */
+function rowOpenedFromProject(row){
+  return !!(row && (row._fromProject || (row.data && row.data.chosho_photos_thumb)
+    || (typeof rowHasParkedThumb === "function" && rowHasParkedThumb(row))));
+}
+/* 物件から開いた戸別か（版178）。「💾 保存」「🔐 暗号化保存」「ハイブリッド保存」が、ファイルを選ぶ画面を開くかを決める。
+   ★画面の側でも覚えておく（_editorProjRow）★ 開いている行を一覧で「🧹 未施工」「一覧から消す」・世帯の削除にすると、
+   _editingRow だけが外れ、画面は物件の縮小版のまま残る。行だけを見ていると、そのあとの保存でファイルを選ぶ画面が開いていた。 */
+function saveStateFromProject(){
+  return !!_editorProjRow || rowOpenedFromProject(_editingRow);
+}
+/* 保存するファイルの名前の土台（版178）。物件から開いた戸別の写しは「管理番号_写し」＝戸別ファイルとは別の名前 */
+function saveStateBaseName(mgmtSafe, fromProj){
+  return mgmtSafe ? (mgmtSafe + (fromProj ? "_写し" : "")) : ("アンテナ工事_" + todayLocalYmd());
+}
+/* 物件から開いた戸別の「💾 保存」「🔐 暗号化保存」「ハイブリッド保存」で出す知らせ（版178）。
+   写しの写真が、物件の縮小版か・復元できていない（暗号の戸別で剥がれている＝_editorPhotosStripped）かで言い方を変える。
+   ・縮小版かは、物件の縮小版づくりと同じ物差し（projThumbLike）で見る。PNG の図・大きい JPEG は元の写真のまま物件に残る。
+     暗号の戸別は、物件に縮小版を入れない（暗号の封筒のまま）ので「小さい写真」とは言わない（画面の写真はファイルからほどいた元の写真）。
+   ・剥がれていても、ここで足した写真・📥 で入れた写真は画面に出て、写しに入る。そのときは「この画面の写真だけが入ります」と言う */
+function saveStateProjNote(s, mgmtSafe){
+  /* 戸別ファイルの名前。暗号の戸別は、行が覚えている名前（💾 物件に保存 もその名前へ書く。多くは 管理番号.antenna.hyb）。
+     ふつうの戸別は「管理番号.json」（💾 物件に保存 がこの名前にそろえて書く。管理番号が無いときは行が覚えている名前） */
+  const er = _editingRow, r = er || _editorProjRow;   // 名前は、行が一覧から外れていても開いた行から（版178）
+  const hyb = !!(r && r.fileType === "hybrid");
+  const known = r ? String(r._name || (/^manual:/.test(r.file || "") ? "" : (r.file || ""))).split(/[\\/]/).pop() : "";
+  const fname = ((hyb || !mgmtSafe) && known) ? known : ((mgmtSafe || "管理番号") + (hyb ? ".hyb" : ".json"));
+  const ph = ((s && Array.isArray(s.chosho_photos)) ? s.chosho_photos : []).filter(p => p && p.dataUri);   // 写しに入る写真
+  const small = !hyb && ph.some(p => projThumbLike(p));
+  /* 「💾 物件に保存」の名前は、そのボタンが押せるときだけ出す（updateOverwriteSaveBtn と同じ条件）。
+     押せないとき（ファイルに結び付いて「💾 上書き保存」になっている・閲覧のみ・行が一覧から外れた）は、ほかのボタンへ案内しない
+     （剥がれた写真や縮小版で戸別ファイルを上書きする道へ連れて行かない）。 */
+  const ro = (typeof rtIsCaseReadOnly === "function") && rtIsCaseReadOnly();
+  const projBtn = !ro && !(_loadedOrigin && _loadedOrigin.fileHandle)
+    && (typeof _currentProject !== "undefined") && !!_currentProject && !!er && _listRows.indexOf(er) >= 0;
+  return "\u26a0 この戸別は物件から開いています。\n"
+    + (_editorPhotosStripped ? (ph.length ? "元の暗号の写真は復元できていないので、この写しには入りません（この画面の写真だけが入ります。元の写真は工事フォルダの戸別ファイルにあります）。\n"
+                                          : "写真は復元できていないので、この写しには入りません（暗号の写真は、工事フォルダの戸別ファイルにあります）。\n")
+     : small ? "写真は、物件に控えた小さい写真です（元の写真ではありません）。\n"
+             : "工事フォルダの戸別ファイルにしか無い写真は、この画面には入っていないことがあります。\n")
+    /* 暗号の戸別：「💾 物件に保存」が書くのは暗号でない部分（図面・積算など）だけ。暗号の部分（写真・お客様の欄）は元のファイルのまま */
+    + (projBtn ? (hyb ? "戸別ファイル（" + fname + "）へは「💾 物件に保存」で書いてください（図面・積算が入ります）。\n"
+                        + "ここで足した写真とお客様の欄は、暗号の戸別ファイルには入りません（この写しに残ります）。\n"
+                      : "戸別ファイル（" + fname + "）へは「💾 物件に保存」で書いてください。工事フォルダの元の写真と合わせて書きます。\n")
+                 + "ここでは写しを保存します。戸別ファイルは書き替えません。"
+               : "戸別ファイル（" + fname + "）は、ここからは書き替えません（元の写真を守るため）。\n"
+                 + "ここでは写しだけを保存します。");
+}
+/* 物件から開いた戸別の暗号の写し（🔐 暗号化保存・ハイブリッド保存）を保存する前に、知らせて確かめる（版178）。false＝やめた */
+function saveStateProjConfirm(s, mgmtSafe, fname){
+  return confirm(saveStateProjNote(s, mgmtSafe) + "\n\n写し（" + fname + "）をダウンロードの場所へ保存します。よろしいですか？");
+}
 /* JSONデータを現在のUI/STATEに適用する共通ロジック */
 function applyStateData(s){
   // 上書き保存の対象を一旦解除（フォルダ完全読込のみ listLoadRow で再設定する）
@@ -15941,6 +16009,7 @@ function applyStateData(s){
   // 台帳⇄エディタの双方向反映の対象も一旦解除（listLoadRow / openCaseInEditor が再設定）
   _editingRow = null;
   _editorHiddenPhotos = null;
+  _editorProjRow = null;   // 物件から開いた行の覚えも下ろす（版178）
   if(typeof updateOverwriteSaveBtn === "function") updateOverwriteSaveBtn();
   // 前回が伏字モードだった場合に備え、視覚的なマスクを解除
   if(typeof clearViewOnlyMaskFromForm === "function") clearViewOnlyMaskFromForm();
@@ -16098,6 +16167,17 @@ async function saveStateEncrypted(){
     alert("このブラウザは Web Crypto API に対応していません（https 環境で開いてください）");
     return;
   }
+  /* ★物件から開いた戸別は、ファイルを選ぶ画面で保存しない★（版178。「💾 保存」と同じ。くわしくは saveState の説明）
+     ファイルを選ぶ画面は、選んだ既にあるファイルをページへ渡す前に空にする。工事フォルダの 管理番号.hyb／.enc を選ぶと、
+     元の暗号の写真が消える（画面の写真は物件の縮小版か、復元できていないもの）。写しをダウンロードの場所へ、別の名前で保存する。
+     パスワードを聞く前に知らせて確かめる（やめるなら、パスワードを打つ前に）。 */
+  const fromProj = saveStateFromProject();
+  const mgmtRaw = (document.getElementById("chosho_mgmt_no") || {}).value || "";
+  const mgmtSafe = mgmtRaw.trim().replace(/[\\/:*?"<>|]/g, "_");
+  const defaultBase = saveStateBaseName(mgmtSafe, fromProj);
+  const fname = defaultBase + ".antenna.enc";
+  const s = collectState();
+  if(fromProj){ editorAddHiddenPhotos(s, true); if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }   // 写しには画面に入れなかった写真も入れる
   const password = await promptPassword({
     title: "🔐 暗号化保存",
     desc: "このファイルを暗号化するパスワードを設定してください。\n復号時に同じパスワードが必要です（復旧手段なし）。",
@@ -16105,7 +16185,6 @@ async function saveStateEncrypted(){
   });
   if(!password) return;
 
-  const s = collectState();
   const jsonString = JSON.stringify(s);
   let envelope;
   try {
@@ -16116,12 +16195,7 @@ async function saveStateEncrypted(){
   }
   const content = JSON.stringify(envelope, null, 2);
 
-  const mgmtRaw = (document.getElementById("chosho_mgmt_no") || {}).value || "";
-  const mgmtSafe = mgmtRaw.trim().replace(/[\\/:*?"<>|]/g, "_");
-  const defaultBase = mgmtSafe || ("アンテナ工事_" + todayLocalYmd());
-  const fname = defaultBase + ".antenna.enc";
-
-  if(window.showSaveFilePicker){
+  if(window.showSaveFilePicker && !fromProj){
     try {
       const opts = {
         suggestedName: fname,
@@ -16157,7 +16231,7 @@ async function saveStateEncrypted(){
   a.href = url; a.download = fname;
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
-  alert("🔐 暗号化保存が完了しました");
+  alert(fromProj ? ("🔐 写しをダウンロードの場所へ保存しました：" + fname + "\n戸別ファイルは書き替えていません。") : "🔐 暗号化保存が完了しました");
 }
 
 async function saveStateHybrid(){
@@ -16165,6 +16239,14 @@ async function saveStateHybrid(){
     alert("このブラウザは Web Crypto API に対応していません（https 環境で開いてください）");
     return;
   }
+  /* ★物件から開いた戸別は、ファイルを選ぶ画面で保存しない★（版178。🔐 暗号化保存と同じ。くわしくは saveState の説明） */
+  const fromProj = saveStateFromProject();
+  const mgmtRaw = (document.getElementById("chosho_mgmt_no") || {}).value || "";
+  const mgmtSafe = mgmtRaw.trim().replace(/[\\/:*?"<>|]/g, "_");
+  const defaultBase = saveStateBaseName(mgmtSafe, fromProj);
+  const fname = defaultBase + ".antenna.hyb";
+  const s = collectState();
+  if(fromProj){ editorAddHiddenPhotos(s, true); if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }   // 写しには画面に入れなかった写真も入れる
   const password = await promptPassword({
     title: "🔐🔑 ハイブリッド暗号化保存 (方式C)",
     desc: "氏名・電話番号・住所・現場写真を暗号化します。\n管理番号・工事種別・施工日は平文のまま保存され、一覧画面でパスワードなしで閲覧可能です（必要最小限の取扱い）。",
@@ -16172,7 +16254,6 @@ async function saveStateHybrid(){
   });
   if(!password) return;
 
-  const s = collectState();
   let envelope;
   try {
     envelope = await encryptHybrid(s, password);
@@ -16182,12 +16263,7 @@ async function saveStateHybrid(){
   }
   const content = JSON.stringify(envelope, null, 2);
 
-  const mgmtRaw = (document.getElementById("chosho_mgmt_no") || {}).value || "";
-  const mgmtSafe = mgmtRaw.trim().replace(/[\\/:*?"<>|]/g, "_");
-  const defaultBase = mgmtSafe || ("アンテナ工事_" + todayLocalYmd());
-  const fname = defaultBase + ".antenna.hyb";
-
-  if(window.showSaveFilePicker){
+  if(window.showSaveFilePicker && !fromProj){
     try {
       const opts = {
         suggestedName: fname,
@@ -16223,7 +16299,8 @@ async function saveStateHybrid(){
   a.href = url; a.download = fname;
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
-  alert("🔐🔑 ハイブリッド暗号化保存が完了しました\n(氏名・電話・住所・写真のみ暗号化／他の項目は平文)");
+  alert(fromProj ? ("🔐🔑 写しをダウンロードの場所へ保存しました：" + fname + "\n戸別ファイルは書き替えていません。")
+                 : "🔐🔑 ハイブリッド暗号化保存が完了しました\n(氏名・電話・住所・写真のみ暗号化／他の項目は平文)");
 }
 
 
@@ -22685,7 +22762,7 @@ function aptMgRemoveRow(row){
      台帳の記入（備考・印）は、同じ管理番号の行がほかに残るなら消さない（本物の -01 の備考のため）。 */
   try { const mk = missKeyOf(row); undetach(mk); listCensusForget(mk); if(!shared) missPurgeAnno(mk); } catch(_){}
   _listRows.splice(idx, 1);
-  if(_editingRow === row) _editingRow = null;
+  if(_editingRow === row){ _editingRow = null; try { updateOverwriteSaveBtn(); } catch(_){} }   // ボタンを描き直す（版178）
   try { lgClearTouched([key]); } catch(_){}
 }
 /* 「N世帯目として取り込む」：建物の欄（世帯数・アパート名・大家・不動産…）を写して、何世帯目を枝番にそろえる */
@@ -27380,7 +27457,7 @@ async function buildAndPrintChoshoBatch(printable, fileLabelPrefix){
   if(_panel0 && _panel0.nextElementSibling !== host) _panel0.insertAdjacentElement("afterend", host);
   // 現在の編集状態を退避（印刷後に元へ戻す）
   const saved = collectState();
-  const savedOrigin = _loadedOrigin, savedEditing = _editingRow, savedHidden = _editorHiddenPhotos;
+  const savedOrigin = _loadedOrigin, savedEditing = _editingRow, savedHidden = _editorHiddenPhotos, savedProjRow = _editorProjRow;
   const savedStripped = _editorPhotosStripped;   // 写真の出ていない画面か（applyStateData が外す。版178）
   // 進捗オーバーレイ（重い準備中の操作防止も兼ねる）
   let ov = document.getElementById("chosho-batch-progress");
@@ -27421,7 +27498,7 @@ async function buildAndPrintChoshoBatch(printable, fileLabelPrefix){
     // 編集状態を元へ戻す（上書き保存対象も復元）
     try {
       applyStateData(saved);
-      _loadedOrigin = savedOrigin; _editingRow = savedEditing; _editorHiddenPhotos = savedHidden;
+      _loadedOrigin = savedOrigin; _editingRow = savedEditing; _editorHiddenPhotos = savedHidden; _editorProjRow = savedProjRow;
       if(savedStripped){ _editorPhotosStripped = true; showPhotoStrippedBanner(true); }   // 写真の出ていない画面のまま（版178）
       if(typeof updateOverwriteSaveBtn === "function") updateOverwriteSaveBtn();
     } catch(_){}
@@ -34476,7 +34553,7 @@ function bindLedgerHandlers(container){
             } catch(_){}
           }
           if(idx >= 0) _listRows.splice(idx, 1);
-          if(_editingRow === row) _editingRow = null;
+          if(_editingRow === row){ _editingRow = null; try { updateOverwriteSaveBtn(); } catch(_){} }   // ボタンを描き直す（版178）
           projTouch();
           renderListTable();
           if(choice === "file") alert("🗑 ファイルごと消しました。\n\n" + who
@@ -37104,6 +37181,11 @@ let _editingRow = null;   // エディタ（積算・図面）で開いている
 /* 図面のまだ無い物件の行を開いたとき、画面に入れなかった写真（版178）。{ row, photos }。
    保存で行へ取り込むときに足す（足さないと、行と物件からその写真が消える）。 */
 let _editorHiddenPhotos = null;
+/* 画面の戸別を物件から開いたときの、その行（版178。無ければ null）。setLoadedOrigin・openCaseInEditor と、
+   📥 現場取込で開いている戸別へ入れたとき（applyGenbaMergeToRow）に覚え、applyStateData（画面を替える）でだけ下ろす。
+   工事調書のまとめ印刷では退避して戻す。開いている行を一覧で「🧹 未施工」「一覧から消す」・世帯の削除にして _editingRow が外れても、
+   画面は物件の縮小版のまま残るため（saveStateFromProject・saveStateProjNote の戸別ファイルの名前）。 */
+let _editorProjRow = null;
 /* エディタを開いてから実際に何か触ったか。
    未着工の戸別を開くと、フォームには標準プリセットの工事構成が入る（openCaseInEditor）。
    これを「見ただけで戻った」場合にも行へ書き戻していたため、触っていないのに金額が付いていた。
@@ -37194,6 +37276,7 @@ async function openCaseInEditor(row, gotoDiagram){
     applyStateData(base);
     applyProjectEstimateDefaults(); // 物件時の新規戸別の既定：諸経費なし＋協力会社諸経費オン
     _editingRow = row;
+    _editorProjRow = rowOpenedFromProject(row) ? row : null;   // 物件から開いた行（版178。行が外れても、保存は写しにする）
     /* ★画面に入れなかった写真（物件から開いた行の写真）を覚えておく★（版178）
        保存で行へ取り込むとき足さないと、行と物件からその写真が消える。戸別ファイルにまだ無い写真
        （📥 で取り込んだが工事フォルダを掴めなかった現場の写真など）は、戸別ファイルからも消えていた。 */
@@ -37306,6 +37389,20 @@ function editorKeepFields(s, prev){
   EDITOR_KEEP_FIELDS.forEach(k => { if((k in prev) && !(k in s)) s[k] = prev[k]; });
   return s;
 }
+/* 画面に入れなかった写真（図面のまだ無い物件の行の写真・_editorHiddenPhotos）を、エディタの写真の前に足す（版178）。
+   画面の写真と同じもの（写真IDか中身が同じ）は足さない。一覧の行へ取り込むとき・「💾 保存」などの写しで使う。
+   any＝写し：行が一覧から外れていても足す（_editorHiddenPhotos は画面を替えると applyStateData で消えるので、いつも画面の中身のもの）。
+   行へ取り込むときは、その行の写真のときだけ足す。 */
+function editorAddHiddenPhotos(s, any){
+  const h = _editorHiddenPhotos;
+  if(!s || !h || (!any && h.row !== _editingRow) || !h.photos.length) return s;
+  const ed = Array.isArray(s.chosho_photos) ? s.chosho_photos : [];
+  const have = new Set();
+  ed.forEach(p => { if(p && p.dataUri){ if(p.id) have.add(p.id); have.add(photoContentId(p.dataUri)); } });
+  const keep = h.photos.filter(p => !((p.id && have.has(p.id)) || have.has(photoContentId(p.dataUri))));
+  if(keep.length) s.chosho_photos = keep.concat(ed);
+  return s;
+}
 function syncEditorToRowData(force){
   if(!_editingRow || _listRows.indexOf(_editingRow) < 0) return;
   // 開いてから何も触っていなければ書き戻さない（見ただけで工事内容・金額が入るのを防ぐ）。
@@ -37323,13 +37420,7 @@ function syncEditorToRowData(force){
     // サムネイルを再生成して物件に保存する（エディタで追加/差替した写真も物件に残る）。
     // 行の写真は元の写真のまま（縮小版は物件に入れるときだけ。版178）。
     /* 画面に入れなかった写真（図面のまだ無い物件の行の写真）は前に足す（版178。行と物件から消さない） */
-    if(_editorHiddenPhotos && _editorHiddenPhotos.row === _editingRow && _editorHiddenPhotos.photos.length){
-      const ed = Array.isArray(s.chosho_photos) ? s.chosho_photos : [];
-      const have = new Set();
-      ed.forEach(p => { if(p && p.dataUri){ if(p.id) have.add(p.id); have.add(photoContentId(p.dataUri)); } });
-      const keep = _editorHiddenPhotos.photos.filter(p => !((p.id && have.has(p.id)) || have.has(photoContentId(p.dataUri))));
-      if(keep.length) s.chosho_photos = keep.concat(ed);
-    }
+    editorAddHiddenPhotos(s);
     const _photos = Array.isArray(s.chosho_photos) ? s.chosho_photos.filter(p => p && p.dataUri) : [];
     if(_photos.length === 0) s.chosho_photos = null;
     const oldTk = subCaseKey(_editingRow);
@@ -38186,9 +38277,11 @@ async function applyGenbaMergeToRow(row, genbaData, opts){
         shown = Object.assign({}, row.data, { chosho_photos: slimRowWithMemPhotos({ chosho_photos: Array.isArray(cur) ? cur : [] }, row).chosho_photos });
       }
     }
+    const projRow = _editorProjRow;   // 物件から開いた行の覚え（applyStateData で下りるので、控えて戻す・版178）
     const keepOrigin = _loadedOrigin;   // 開いていた戸別の元ファイル（applyStateData が外す）
     const keepStripped = _editorPhotosStripped;   // 写真の出ていない画面だったか（applyStateData が外す。版178）
     try { applyStateData(shown); _editingRow=row; try{ rtClaimLock(row); }catch(_){} } catch(_){}
+    _editorProjRow = (projRow === row || rowOpenedFromProject(row)) ? row : null;
     /* ★暗号（.hyb）の戸別は、行が元ファイルの写真を持っていない（常駐させない・写真の出ていない画面だった）ので、
        画面には取り込んだ写真しか出ない★（版178）。「写真の出ていない画面」の印を立てる。
        印が無いと、💾 上書き保存 が取り込んだ写真だけで .hyb を書き、元ファイルの写真が消えていた（印があれば、元ファイルの写真に足して書く） */
@@ -38203,7 +38296,7 @@ async function applyGenbaMergeToRow(row, genbaData, opts){
        行は元ファイルの写真を持っていない（画面には取り込んだ写真だけ）。戻すと 💾 上書き保存 が取り込んだ写真だけで .enc を書き、
        元の写真が消えていた。版177 と同じく、ここでは上書き保存させない。 */
     if(row.fileType === "full" && wasSlim) _loadedOrigin = null;
-    try { updateOverwriteSaveBtn(); } catch(_){}
+    try { updateOverwriteSaveBtn(); } catch(_){}   // 「💾 物件に保存」を出し直す（applyStateData のときは行が外れていた）
     if(row.fileType === "plain") rowSeePhotos(row, (shown || {}).chosho_photos, wasSlim);
   }
   return note;
