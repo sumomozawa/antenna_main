@@ -97,9 +97,14 @@ CASES = [
       r.data = Object.assign({}, r.data, { chosho_photos: arr.concat(ex) }); }
   });
 }''', TM, "main", u"④c"),
-  (u"★台帳で作った行を物件から戻すとき、写真の枚数を持たせない（物件から写真が抜ける）",
+  (u"★台帳で作った行を物件から戻すとき、写真の枚数も縮小版も持たせない（物件から写真が抜ける。どちらか片方あれば抜けない）",
    u'''                 _photoCount: ph ? ph.length : (Number.isInteger(data.chosho_photo_count) ? data.chosho_photo_count : 0),
+                 _thumbs: (ph && data.chosho_photos_thumb) ? ph : undefined,
 ''', u'''''', TM, "main", u"⑬a"),
+  (u"★台帳で作った行を物件から戻すとき、写真の枚数も縮小版も持たせない（共有ファイルとまとめたとき）",
+   u'''                 _photoCount: ph ? ph.length : (Number.isInteger(data.chosho_photo_count) ? data.chosho_photo_count : 0),
+                 _thumbs: (ph && data.chosho_photos_thumb) ? ph : undefined,
+''', u'''''', TM, "main", u"⑬b"),
   # ======== メイン：そのほかの道 ========
   (u"★物件の縮小版を持つ行でも、元のファイルへそのまま上書きする（反映のあと、縮小版で原寸を潰す）",
    u'''  _loadedOrigin = (target && target.fileHandle && !thumbRow)''', u'''  _loadedOrigin = (target && target.fileHandle)''', TM, "main", u"⑭a"),
