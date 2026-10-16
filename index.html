@@ -15324,6 +15324,7 @@ async function indivTargetConflict(row, srcFh, fh, relpath, oldRel){
              + "\u3000 同じお宅なら、この戸別を開いて保存してください。そのあと同じ管理番号のファイルが2つ残ったら、"
              + "一覧の「📁 フォルダ」で読み込み、「🧩 重複をまとめる」で1つにしてください。";
       }
+      if(!_indivWriteNotShown){   // まとめて書いているとき（📥・諸経費のそろえ直し）は聞かない＝下で断る（版178）
       const ok = confirm("管理番号 " + (no2 || name) + " のファイルが、もう工事フォルダにあります。\n  " + name + "\n"
         + "  お客様： " + (String(tj.chosho_cust_name || "").trim() || "（名前なし）") + "\n"
         + "  住所： " + (String(tj.chosho_cust_addr || "").trim() || "（なし）") + "\n"
@@ -15338,12 +15339,14 @@ async function indivTargetConflict(row, srcFh, fh, relpath, oldRel){
       if(ok) return "";
       return "\n\u26a0 戸別の個別JSONは書き替えていません：" + name + " は別のお宅のファイルとして、書きませんでした（どちらのファイルも元のままです）。\n"
            + "\u3000 管理番号を確かめてから、もう一度保存してください。";
+      }
     }
   }
   const no = v => toHalfWidthAn(String(v || "")).trim().toUpperCase();
   const twin = !!(sj && tj && no(sj.chosho_mgmt_no) && no(sj.chosho_mgmt_no) === no(tj.chosho_mgmt_no));
   return "\n\u26a0 戸別の個別JSONは書き替えていません：" + name + " が、もう工事フォルダにあります（どちらのファイルも元のままです）。\n"
-       + "\u3000 そのまま書くと、そのファイルにしか無い写真が消えます。\n"
+       + (unknownN ? "\u3000 そのまま書くと、そのファイルにしか無い写真が消えます。\n"
+                   : "\u3000 そのまま書くと、そのファイルの中身を上書きします。\n")
        + (twin
           ? ("\u3000 同じ管理番号のファイルが2つ（" + oldName + "・" + name + "）あります。\n"
              + "\u3000 一覧の「📁 フォルダ」で工事フォルダを読み込み、「🧩 重複をまとめる」で1つにしてから、もう一度お試しください。")
@@ -29307,7 +29310,8 @@ function rowsOriginalsRestore(rows, keep){
          小さい図・画面写し（PNG）は、元の写真のほうが縮小版（JPEG）より短いことがあり、大きさで比べると元の写真を戻さず、
          縮小版が残っていた（あとで戸別ファイルへ縮小版が書かれる）。 */
       if(o.thumb != null){ if(o.thumb !== p.dataUri || o.dataUri === p.dataUri) return p; }   // ほかの端末が直した写真は、そのまま
-      else if(!(String(o.dataUri).length > String(p.dataUri).length)) return p;            // 縮小版を覚えていない：元の写真（縮小版より大きい）だけ
+      else if(!(String(o.dataUri).length > String(p.dataUri).length)                     // 縮小版を覚えていない：元の写真（縮小版より大きい）だけ。
+              && !(!/^data:image\/jpeg/i.test(String(o.dataUri)) && /^data:image\/jpeg/i.test(String(p.dataUri)))) return p;   // ただし元が PNG 等で作り直したのが JPEG（縮小版）なら戻す
       up++;
       return Object.assign({}, p, { dataUri: o.dataUri });
     });
