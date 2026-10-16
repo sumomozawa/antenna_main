@@ -6961,7 +6961,7 @@ async function lsRestoreFromIdb(){
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "177";
+const APP_VERSION = "179";
 /* ============================================================
    ★日時の表示は、必ずこの端末の時刻で★
    保存している日時は世界時のISO文字列（…T01:03:00.000Z）。これを文字のまま
@@ -22058,47 +22058,112 @@ async function aptMgStrayDrop(tag){
    ・両方にファイルがある … まとめる先のファイルに和集合を書き、読み返して全部入ったことを確かめてから、元のファイルを消す
    ・まとめる先にファイルが無い … 元のファイルをまとめる先の持ち物にする（次の「戸別ファイルへ反映」で名前が付け替わる）
    ・元にファイルが無い … 手元にある写真だけを移す
+   ★まとめる先が行に持っている写真も、そのファイルへ入れる★（版179）
+   フォルダをつないでいないときにエディタで足した写真は、行と物件にしか無い。そのまま行を「ファイルから読む」形にすると、
+   次に開いたときファイルの写真だけが出て、保存でその写真が消えていた（ファイルを持つ世帯へまとめたときも同じ）。
+   ファイルへ和集合で入れ（書く → 読み返す → 確かめる）、行にもファイルと同じ写真を全部持たせる。
+   ★物件の縮小版は作り直す・この端末で直した印を付ける★（版179）
+   古い縮小版（_thumbs）のままだと、物件には移す前の写真しか入らず、開き直すと移した写真がどこにも無くなる。
    戻り値＝{ moved:枚数, note:文言 }。失敗は例外で知らせる（その場合は何も消していない）。 */
 async function aptMgMovePhotos(target, stray){
-  const readJson = async row => JSON.parse(await (await row._dir.getFileHandle(row._name)).getFile().then(f => f.text()));
   const cnt = arr => (Array.isArray(arr) ? arr : []).filter(x => x && x.dataUri).length;
+  const keyOf = x => (x && x.id) || ((x && x.dataUri) ? photoContentId(x.dataUri) : "");
   const strayHasFile = !!(stray._dir && stray._name) && !stray._detached;
   const targetHasFile = !!(target._dir && target._name) && !target._detached;
-  let strayPhotos = null;
-  if(strayHasFile){ const sj = await readJson(stray); strayPhotos = Array.isArray(sj.chosho_photos) ? sj.chosho_photos : []; }
+  const tmg = String((target.data || {}).chosho_mgmt_no || "");
+  let strayPhotos = null, sfh = null, sText = "", sj = null;
+  if(strayHasFile){
+    sfh = await stray._dir.getFileHandle(stray._name);
+    sText = await (await sfh.getFile()).text(); sj = JSON.parse(sText);
+    strayPhotos = Array.isArray(sj.chosho_photos) ? sj.chosho_photos : [];
+  }
   else strayPhotos = Array.isArray((stray.data || {}).chosho_photos) ? stray.data.chosho_photos : [];
   const n = cnt(strayPhotos);
   if(!n) return { moved: 0, note: "" };
+  /* まとめる先が行に持っている写真のうち、ファイル（fp）に無いもの。
+     物件の縮小版で、元の写真IDを持たないものは、まとめる先のファイルの写真と突き合わせられない
+     （そのファイルの写真の縮小版のはず）ので足さない＝戸別ファイルへ書き出すときと同じ決まり。 */
+  const ownLack = (fp, ownFile) => {
+    const d = target.data || {};
+    const thumbish = !!d.chosho_photos_thumb || !!target._fromProject;
+    const have = new Set((Array.isArray(fp) ? fp : []).filter(x => x && x.dataUri).map(keyOf));
+    return (Array.isArray(d.chosho_photos) ? d.chosho_photos : [])
+      .filter(x => x && x.dataUri && !have.has(keyOf(x)) && !(ownFile && thumbish && !x.id));
+  };
+  /* fh のファイル（読んだ中身 j・元の文字 text0）へ、写真の組 adds を和集合で書き、読み返して確かめる。
+     足りなければ元の中身に戻す（読み返せなかったときは戻さない）。名前だけの空の枠は残す。戻り値＝読み返した中身。 */
+  const writeUnion = async (fh, j, text0, adds) => {
+    const base = Array.isArray(j.chosho_photos) ? j.chosho_photos : [];
+    let merged = base;
+    adds.forEach(a => { if(cnt(a.photos)) merged = mergeGenbaPhotos(merged, a.photos, { genbaThumb: !!a.thumb }, null); });
+    const ids = new Set(merged.map(x => (x && x.id) || "").filter(Boolean));
+    const slots = base.filter(x => x && !x.dataUri && merged.indexOf(x) < 0 && !(x.id && ids.has(x.id)));
+    if(slots.length) merged = merged.concat(slots);
+    const need = new Set(base.concat(...adds.map(a => a.photos)).filter(x => x && x.dataUri).map(keyOf));
+    const lack = arr => { const h = new Set((Array.isArray(arr) ? arr : []).filter(x => x && x.dataUri).map(keyOf));
+                          return [...need].filter(k => !h.has(k)).length; };
+    if(lack(merged)) throw new Error("写真をまとめた結果が減っています（何もしていません）");
+    const w = await fh.createWritable();
+    await w.write(JSON.stringify(Object.assign({}, j, { chosho_photos: merged, editedAt: new Date().toISOString() }), null, 2));
+    await w.close();
+    let back = null;
+    try { back = JSON.parse(await (await fh.getFile()).text()); } catch(_){ back = null; }
+    if(!back || typeof back !== "object") throw new Error("書いたあと読み返せませんでした（元のファイルは消していません）");
+    const miss = lack(back.chosho_photos);
+    if(miss){
+      let undone = false;
+      try { const w2 = await fh.createWritable(); await w2.write(text0); await w2.close(); undone = true; } catch(_){}
+      throw new Error("書いたあと読み返したら、写真 " + miss + " 枚が入っていませんでした（"
+        + (undone ? "ファイルは元の中身に戻しました。" : "") + "元のファイルは消していません）");
+    }
+    return back;
+  };
+  /* ファイルへ入れたあと、行の写真をファイル（読み返した中身 back）とそろえる。
+     ・もともとファイルから読む行（_slim）… そのまま（開くとこのファイルを読む）
+     ・行が写真を持つ行 … ファイルと同じ写真を全部持たせる。古い写真を残すと、開いたときそれだけが出て、保存で消える。
+       「ファイルから読む」形に替えてもいけない（行にだけある図面などの直しが、開いたとき出なくなる） */
+  const settle = (back, fromFile) => {
+    const d = Object.assign({}, target.data || {});
+    delete d.chosho_photos_thumb; delete d.chosho_photo_count;
+    if(fromFile){ d.chosho_photos = null; target._photosKnown = false; }
+    else { d.chosho_photos = back.chosho_photos; target._slim = false; target._photosKnown = true; }
+    target.data = d;
+    target._photoCount = cnt(back.chosho_photos);
+    target._thumbs = undefined;
+    try { markCaseEdited(target); } catch(_){}
+  };
   if(targetHasFile){
     if(!(await dupEnsureWritable(target._dir))) throw new Error("フォルダへの書き込み許可が得られませんでした");
     const tfh = await target._dir.getFileHandle(target._name);
-    const tj = JSON.parse(await (await tfh.getFile()).text());
-    const merged = mergeGenbaPhotos(tj.chosho_photos, strayPhotos,
-      { genbaThumb: !strayHasFile && !!((stray.data || {}).chosho_photos_thumb) }, null);
-    if(cnt(merged) < Math.max(cnt(tj.chosho_photos), n)) throw new Error("写真をまとめた結果が減っています（何もしていません）");
-    tj.chosho_photos = merged;
-    tj.editedAt = new Date().toISOString();
-    const w = await tfh.createWritable(); await w.write(JSON.stringify(tj, null, 2)); await w.close();
-    const back = JSON.parse(await (await tfh.getFile()).text());
-    const ids = new Set((back.chosho_photos || []).filter(x => x && x.dataUri).map(x => x.id || photoContentId(x.dataUri)));
-    const missing = strayPhotos.filter(x => x && x.dataUri && !ids.has(x.id || photoContentId(x.dataUri)));
-    if(missing.length) throw new Error("書いたあと読み返したら、写真 " + missing.length + " 枚が入っていませんでした（元のファイルは消していません）");
-    target._photoCount = cnt(back.chosho_photos);
-    target._photosKnown = false;         // 行の写真は当てにしない＝書き出しはこのファイルの写真を採る
+    const tText = await (await tfh.getFile()).text();
+    const tj = JSON.parse(tText);
+    const own = ownLack(tj.chosho_photos, true), fromFile = !!(target._slim && target.fileHandle);
+    const back = await writeUnion(tfh, tj, tText, [
+      { photos: strayPhotos, thumb: !strayHasFile && !!((stray.data || {}).chosho_photos_thumb) },
+      { photos: own, thumb: !!((target.data || {}).chosho_photos_thumb) } ]);
+    settle(back, fromFile);
     if(strayHasFile){
       if(!(await dupEnsureWritable(stray._dir))) throw new Error("元のファイルのフォルダへの書き込み許可が得られませんでした（写真は移してあります）");
       await stray._dir.removeEntry(stray._name);
     }
-    return { moved: n, note: "写真 " + n + " 枚を " + target._name + " へ移しました" };
+    return { moved: n, note: "写真 " + n + " 枚を " + target._name + " へ移しました"
+      + (own.length ? ("（" + tmg + " の行にだけあった写真 " + own.length + " 枚も、このファイルへ入れました）") : "") };
   }
   if(strayHasFile){
-    // まとめる先はまだファイルを持たない → 元のファイルをそのまま持たせる
+    // まとめる先はまだファイルを持たない → 元のファイルをそのまま持たせる（まとめる先の写真は、先にそのファイルへ入れる）
+    const own = ownLack(strayPhotos, false);
+    let back = sj;
+    if(own.length){
+      if(!(await dupEnsureWritable(stray._dir))) throw new Error("フォルダへの書き込み許可が得られませんでした");
+      back = await writeUnion(sfh, sj, sText, [{ photos: own, thumb: !!((target.data || {}).chosho_photos_thumb) }]);
+    }
     target._dir = stray._dir; target._name = stray._name; target._dirPath = stray._dirPath || "";
-    target._size = stray._size; target.fileHandle = stray.fileHandle; target.file = stray.file;
-    target._slim = true; target._photoCount = stray._photoCount; target._photosKnown = false;
+    target._size = stray._size; target.fileHandle = stray.fileHandle || sfh; target.file = stray.file;
+    settle(back, false);
     target._manual = false; delete target._detached;
     target._lgEdited = true; try { lgMarkTouched(target); } catch(_){}
-    return { moved: n, note: "元のファイル " + stray._name + " を " + ((target.data || {}).chosho_mgmt_no || "") + " の持ち物にしました（「💾 戸別ファイルへ反映」で名前が付け替わります）" };
+    return { moved: n, note: "元のファイル " + stray._name + " を " + tmg + " の持ち物にしました（「💾 戸別ファイルへ反映」で名前が付け替わります）"
+      + (own.length ? ("\n" + tmg + " の行にだけあった写真 " + own.length + " 枚も、このファイルへ入れました") : "") };
   }
   // どちらにもファイルが無い → 手元の写真を合わせる
   target.data = Object.assign({}, target.data || {}, { chosho_photos: mergeGenbaPhotos(
@@ -22106,6 +22171,8 @@ async function aptMgMovePhotos(target, stray){
     { mainThumb: !!((target.data || {}).chosho_photos_thumb),
       genbaThumb: !strayHasFile && !!((stray.data || {}).chosho_photos_thumb) }, null) });
   target._photoCount = cnt(target.data.chosho_photos); target._photosKnown = true;
+  target._thumbs = undefined;             // 物件の縮小版は、合わせた写真から作り直す（古いままだと移した写真が物件に入らない）
+  try { markCaseEdited(target); } catch(_){}   // 別のPCの保存とまとめても、この行を採る
   return { moved: n, note: "写真 " + n + " 枚を移しました" };
 }
 /* 「まとめて消す」：帯の外の行の 写真・備考・印・時刻 をまとめる先の世帯へ移し、行を消す。
