@@ -390,8 +390,9 @@ CASES = [
    u'''    prev.rev = Math.max(prev.rev | 0, rec.rev | 0) + 1;''', u'''    prev.rev = prev.rev | 0;''', TG, "genba", u"⑰g2"),
   (u"★特別記録を開いているとき、取り込みで回数を進めない（入った写真が「保存済」に見える）",
    u'''      if(n) await spWrite(cur, true, prev);''', u'''      if(n) await spWrite(cur, false, prev);''', TG, "genba", u"⑰g"),
-  (u"★特別記録の取り込みで、新しい記録の1枚目を取り込みの終わりまで控えない",
-   u'''      if(n) await spWrite(cur, true, prev);''', u'''      if(false) await spWrite(cur, true, prev);''', TG, "genba", u"⑰f"),
+  (u"★特別記録の取り込みで、開いている記録に足した写真を取り込みの終わりまで控えない（新しい記録の1枚目が端末に無い）",
+   u'''      if(n) await spWrite(cur, true, prev);
+      else await spWriteIfChanged(cur);''', u'''      /* 書かない */''', TG, "genba", u"⑰f"),
   (u"★特別記録の取り込みで、端末に控えられなかった写真をもう一度控えない（黙って消える）",
    u'''        try{ if(await spPhotoKeep(r, pending)) dup++; else if(small) shrunk++; pending = []; }catch(_){ if(small) shrunk++; }''',
    u'''        try{ if(await spPhotoKeep(r, pending)) dup++; else if(small) shrunk++; }catch(_){ if(small) shrunk++; } pending = [];''', TG, "genba", u"⑰l"),

@@ -52,11 +52,11 @@
      ⑰i ファイルへ書き出しているあいだに、取り込みの写真が入る → 「保存済」にしない・そう知らせる・記録を開いたまま（入った写真が出る）
         もう一度「保存」を押すと、その写真もファイルに入って「保存済」になる
      ⑰j 書き出しているあいだに「戻る」→ 開き直した記録でカメラの1枚 → その写真が端末の記録から消えない・「保存済」にしない
-     ⑰k 「保存済」の印を付けるために端末の記録を読んだところで、取り込みの写真が入る → その写真が端末の記録から消えない
+     ⑰k 書き出しているあいだに一覧へ戻り、「保存済」の印を付けるために端末の記録を読んだところで、取り込みの写真が入る → その写真が端末の記録から消えない
    （ここから 見直しで見つかった道）
      ⑰l 一覧へ戻ったあと、取り込みの写真を端末に控えるのに1回失敗した → 次の1枚と一緒にもう一度控える（黙って落とさない）。
         ずっと控えられないときは、そう知らせる
-     ⑰m 取り込みのあいだに備考を打った（欄を離れない＝控えの合図が出ない）→ 取り込みが終わって描き直しても、備考が端末の記録に残る
+     ⑰m 取り込みのあいだに備考を打った（欄を離れない＝控えの合図が出ない）・最後の1枚は読めなかった → 取り込みが終わって描き直しても、備考が端末の記録に残る
      ⑰n 保存のあいだに「戻る」→ ほかの記録を開いた → 保存が終わっても、その記録を閉じない
      ⑰o もう入っている写真（同じ画像）をもう一度選んだ → 1枚のまま・「同じ写真がもう入っているので足しませんでした（N枚）」と知らせる。
         a) 記録を開いたまま　b) 一覧へ戻ったあとに届いた同じ写真（端末の記録と見比べる）
@@ -1191,7 +1191,7 @@ window.__spRowText = id => { const b = document.querySelector('[data-sp-open="' 
       await __rel(cs[0]);
       /* 書き終えたあと、「保存済」の印のために端末の記録を読んだところで、取り込みの2枚目が入る */
       let arm = 0, fired = 0;
-      window.__onWrite = async () => { arm = 1; };
+      window.__onWrite = async () => { arm = 1; document.getElementById('sp-back').click(); await __sleep(200); };   // 一覧へ戻る
       const og = idbGet;
       idbGet = async k => { const v = await og(k);
         if(arm && k === key){ arm = 0; fired = 1; await __rel(cs[1]); await __sleep(300); }
@@ -1249,17 +1249,20 @@ window.__spRowText = id => { const b = document.querySelector('[data-sp-open="' 
   await scene('⑰m', async page => {
     const r = await page.evaluate(async () => {
       __gatedImport();
-      const cs = ['#fc1', '#fc2'];
+      const cs = ['#fc1', '#bad'];
+      const ogRead = readImageAsDataURI;
+      readImageAsDataURI = async f => { if(f.__c === '#bad'){ await __cgate(f.__c); throw new Error('読めない写真'); } return ogRead(f); };
       const { key } = await __spNew('打った文字');
       __spFire('sp-pick', cs);
       await __rel(cs[0]);
       const el = document.getElementById('sp-note');
       el.value = '取り込み中に打った'; el.dispatchEvent(new Event('input', { bubbles:true }));   // 欄を離れない（change は出ない）
-      await __rel(cs[1]); await __sleep(300);            // 取り込みが終わって描き直す
+      await __rel(cs[1]); await __sleep(300);            // 最後の1枚は読めずに、取り込みが終わって描き直す
+      readImageAsDataURI = ogRead;
       const shown = (document.getElementById('sp-note') || {}).value;
       document.getElementById('sp-back').click(); await __sleep(200);
       const rec = await idbGet(key);
-      return { ps: cs.map(__pidOf), shown, note: rec && rec.note, db: __spIds(rec) };
+      return { ps: [__pidOf(cs[0])], shown, note: rec && rec.note, db: __spIds(rec) };
     });
     console.log('⑰m取り込み中に打った', J(r));
     ok(r.shown === '取り込み中に打った' && hasAll(r.db, r.ps), '⑰m試験の前提: 描き直した欄に打った文字が出て、写真が端末の記録に入る → ' + J(r));
@@ -2053,7 +2056,7 @@ window.__spRowText = id => { const b = document.querySelector('[data-sp-open="' 
   });
 
   await b.close();
-  const e2 = errs.filter(x => !/ResizeObserver|NotFound|DataCloneError|could not be cloned/.test(x));
+  const e2 = errs.filter(x => !/ResizeObserver|NotFound|DataCloneError|could not be cloned|読めない写真/.test(x));   // 読めない写真＝⑰m でわざと読めなくした1枚
   ok(e2.length === 0, '★画面でエラーが出た → ' + e2.slice(0, 4).join(' / '));
   if(fails.length){ console.log('FAIL\n- ' + fails.join('\n- ')); process.exit(1); }
   console.log('PASS 版178（現場入力）');
