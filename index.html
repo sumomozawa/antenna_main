@@ -24439,13 +24439,12 @@ async function listLoadRow(target){
   // --- 平文: 写真を常駐させていないため元ファイルを読み直して完全復元 ---
   if(target.fileType === "plain"){
     let d = target.data;
-    target._photosPartial = false;
-    if(target._slim){ const fresh = await rereadRowSource(target);
+    if(target._slim){ const rr = await rereadRowSourceWhy(target);
+      const fresh = (rr.data && typeof rr.data === "object") ? rr.data : null;
+      if(!fresh && rr.why !== "none"){ editorUnreadableRefuse(target, rr.why); return false; }   // 写真のあるファイルを読めないまま開かない（版178）
       if(fresh){ d = lgOverlayLedger(fresh, target);
-        d = slimRowWithMemPhotos(d, target);
-        rowSeePhotos(target, d.chosho_photos, true); }    // このファイルの写真を見せる（版178）
-      else { rowSeePhotos(target, (d && d.chosho_photos) || [], true);   // 読めなかった＝行の写真だけ見せる（ファイルの写真を「画面で消した」としない・版178）
-             target._photosPartial = true; editorPartialNotice(target); } }
+        d = slimRowWithMemPhotos(d, target); }
+      rowSeePhotos(target, (d && d.chosho_photos) || [], true); }    // このファイルの写真を見せる（版178）
     else rowSeePhotos(target, d && d.chosho_photos);                                                         // 行の写真を見せる（版178）
     applyStateData(d);
     setLoadedOrigin(target);
@@ -36396,9 +36395,10 @@ function calQuickAdd(dateS, no, time){
    どちらも _editingRow に追跡され、以後 名前・住所等は台帳⇄エディタで双方向反映。 */
 async function openCaseInEditor(row, gotoDiagram){
   if(!row) return;
+  const asbWas = _asbEdited;
   _asbEdited = false;
   if(lgHasDrawing(row) || row.fileType !== "plain"){
-    await listLoadRow(row);   // 内部で applyStateData → setLoadedOrigin(＝_editingRow 設定)
+    if((await listLoadRow(row)) === false){ _asbEdited = asbWas; return; }   // ファイルを読めず開かなかった＝いまの画面のまま（版178）
   } else {
     // 未作成 → 標準プリセット＋台帳情報の流し込み（写真・測定値・図面操作は初期状態）
     const base = JSON.parse(JSON.stringify(PRESETS.standard || {}));
@@ -36416,7 +36416,9 @@ async function openCaseInEditor(row, gotoDiagram){
        入れないと、保存で「写真の無い戸別」として行と戸別ファイルを書き、写真が消える
        （📮 振り分けで現場の写真を入れた、図面のまだ無い戸別など）。
        物件から開いた行の写真はサムネなので入れない（保存のとき戸別ファイルの写真と合わせる）。 */
-    base.chosho_photos = await editorPresetPhotos(row);
+    const preset = await editorPresetPhotos(row);
+    if(preset === null){ _asbEdited = asbWas; return; }   // ファイルを読めず開かなかった＝いまの画面のまま（版178）
+    base.chosho_photos = preset;
     applyStateData(base);
     applyProjectEstimateDefaults(); // 物件時の新規戸別の既定：諸経費なし＋協力会社諸経費オン
     _editingRow = row;
@@ -36449,24 +36451,25 @@ async function editorPresetPhotos(row){
   if(row._fromProject) return [];
   let ph = d.chosho_photos;
   if(row._slim && (row.fileHandle || row.srcFile)){
-    const fr = await rereadRowSource(row);
-    const ok = !!(fr && typeof fr === "object");
-    ph = ok ? slimRowWithMemPhotos(fr, row).chosho_photos : d.chosho_photos;   // 読めなければ、行が持っている写真（取り込んだ分）だけ（版178）
-    row._photosPartial = !ok;
-    if(!ok) editorPartialNotice(row);
-    rowSeePhotos(row, ph || [], true);                              // このファイルの写真を見せる・読めなければ行の写真だけ（版178）
+    const rr = await rereadRowSourceWhy(row);
+    const fr = (rr.data && typeof rr.data === "object") ? rr.data : null;
+    if(!fr && rr.why !== "none"){ editorUnreadableRefuse(row, rr.why); return null; }   // 写真のあるファイルを読めないまま開かない（版178）
+    if(fr) ph = slimRowWithMemPhotos(fr, row).chosho_photos;        // ファイルの写真＋行にだけある写真（取り込んだ分。版178）
+    rowSeePhotos(row, ph || [], true);                              // このファイルの写真を見せる（版178）
   }
-  else { row._photosPartial = false; rowSeePhotos(row, ph); }        // 行の写真を見せる（版178）
+  else rowSeePhotos(row, ph);                                       // 行の写真を見せる（版178）
   return Array.isArray(ph) ? JSON.parse(JSON.stringify(ph.filter(p => p && (p.dataUri || p.label)))) : [];
 }
-/* ファイルの写真を読めないまま開いたことを知らせる（版178）。黙って開くと、写真が無いものと思い込んで保存してしまう。 */
-function editorPartialNotice(row){
+/* 写真を元ファイルに置いている戸別（常駐させない行）を、ファイルを読めないまま開かない（版178）。
+   開くと写真の出ない画面になり、そこで足した写真・直した内容が、物件（この端末・共有ファイル）に正しく入らなかった。 */
+function editorUnreadableRefuse(row, why){
   const name = String((row && (row._name || row.file)) || "").split(/[\\/]/).pop();
-  setTimeout(() => {
-    alert("⚠ この戸別の写真を元ファイルから読めませんでした。\n  " + name + "\n\n"
-      + "写真が出ないまま開いています。このまま保存しても、ファイルの写真は消しません。\n"
-      + "写真を見るには、少し待ってから開き直してください（同期中のときは、終わるのを待ってください）。");
-  }, 100);
+  const reason = why === "notfound" ? "ファイルが見つかりません（別の場所へ移したり、名前を変えたりしていませんか）。"
+    : (why === "empty" || why === "broken" || !why) ? "ファイルの中身を読み取れません（保存の途中で切れたか、壊れているかもしれません）。"
+    : "いまファイルを読めません（同期中・ほかのアプリで使用中など）。";
+  alert("⚠ この戸別は開きませんでした（写真がファイルにあり、読めないまま開くと写真が出ないため）。\n  " + name + "\n\n"
+    + reason + "\n\n"
+    + "少し待ってから、もう一度開いてください。ファイルを移したときは、一覧の「📁 フォルダ」で工事フォルダを読み込み直してください。");
 }
 /* 常駐させない行（_slim）でも、📥 現場取込 で入れた写真（まだ戸別ファイルに入っていない）を行が持っていることがある（版178）。
    ファイルから読み直した中身に、ファイルに無いその写真を足す（足さないと、開いて保存したとき取り込んだ写真が消える）。 */
@@ -36562,12 +36565,8 @@ function syncEditorToRowData(force){
        ここで書き戻した写真は「この戸別の写真そのもの」なので、
        行の写真を当てにしてよい印を立てる（＝書き出しで元ファイルの写真を採らない）。
        利用者が写真を全部消した場合も、その意思どおり消えるようにするため。 */
-    /* ★ファイルの写真を読めないまま開いた戸別は、行の写真を当てにしない・常駐させない のまま★（版178）
-       ここで「当てにしてよい」にすると、次の書き出しでファイルの写真（画面に出なかった）が消え、一覧や物件も写真なしになる。 */
-    if(!_editingRow._photosPartial){
-      _editingRow._photosKnown = true;
-      _editingRow._slim = false;
-    }
+    _editingRow._photosKnown = true;
+    _editingRow._slim = false;
     /* アパートの石綿判定は建物で1つ。ここで石綿の欄を直したなら、同じ建物の他の世帯にも同じ判定を入れる。
        触っていないときは配らない（未入力の世帯を開いて保存しただけで、代表の判定を消さないため）。 */
     if(_asbEdited && isApartmentRow(_editingRow) && s.asbestos && typeof s.asbestos === "object"){
@@ -36606,12 +36605,8 @@ function syncEditorToRowData(force){
            if(String((getLedger(ntk) || {}).meetAt || "") !== m) setLedger(ntk, { meetAt: m, meetSrc: m });
          } }catch(_){}
     clearEditorDirty();              // 行へ取り込んだ＝フォームと行が一致した状態
-    /* ファイルの写真を読めないまま開いた戸別は、画面の枚数（読めなかった分が無い）で上書きしない。
-       上書きすると、物件（この端末・共有ファイル）にその戸別が写真0枚で入っていた（版178） */
-    if(!_editingRow._photosPartial){
-      _editingRow._photoCount = _photos.length;
-      _editingRow._thumbs = undefined; // 旧サムネ破棄 → 保存時に最新写真から再生成
-    }
+    _editingRow._photoCount = _photos.length;
+    _editingRow._thumbs = undefined; // 旧サムネ破棄 → 保存時に最新写真から再生成
     _editingRow._amtCache = undefined;
     _editingRow._bomCache = undefined;
     // 管理番号がエディタ側で変わっていた場合は台帳メモ等のキーを移行
@@ -37374,6 +37369,12 @@ async function applyGenbaMergeToRow(row, genbaData, opts){
     if(wasSlim && row.fileType === "plain" && (row.fileHandle || row.srcFile)){
       const fr = await rereadRowSource(row);
       if(fr && typeof fr === "object") shown = Object.assign({}, row.data, { chosho_photos: slimRowWithMemPhotos(fr, row).chosho_photos });
+      else {
+        /* 読み直せなかった：画面に出ている写真（開いたときファイルから読んだ分）に、取り込んだ写真を足して出す（版178）。
+           行の写真（取り込んだ分だけ）で出すと、戻ったとき行と物件の写真がその分だけになっていた */
+        let cur = null; try { cur = collectState().chosho_photos; } catch(_){}
+        shown = Object.assign({}, row.data, { chosho_photos: slimRowWithMemPhotos({ chosho_photos: Array.isArray(cur) ? cur : [] }, row).chosho_photos });
+      }
     }
     const keepOrigin = _loadedOrigin;   // 開いていた戸別の元ファイル（applyStateData が外す）
     try { applyStateData(shown); _editingRow=row; try{ rtClaimLock(row); }catch(_){} } catch(_){}

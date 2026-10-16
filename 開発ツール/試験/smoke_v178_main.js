@@ -76,7 +76,7 @@
            次の日 物件を開き直しても同じファイルへ書く（1 物件は「リスト/管理番号.json」を覚えている　2 物件は「管理番号.json」を覚えている）
      ㊹ 写真IDの無い名前だけの枠を、画面で ✕・名前を直して 💾 上書き保存 → 外した枠・前の名前の枠が戻ってこない
      ㊺ 共有の物件とまとめて行が作り直されたあと、画面で消した写真は 💾 上書き保存 で消える（a 自動保存でまとめる　b 🔄 最新を取り込む）
-     ㊻ 開き直すとき一度だけファイルを読めなかった → 何も見せていない＝あとの保存で写真を消さない（a 図面あり・💾 上書き保存　b 図面なし・💾 物件に保存）
+     ㊻ 開き直すとき一度だけファイルを読めなかった → 開かない・知らせる。読めるときに開いて保存しても写真は消えない（a 図面あり・💾 上書き保存　b 図面なし・💾 物件に保存）
      ㊼ 💾 上書き保存で元ファイルを読み直せない → 書かない・知らせる（開いたあとで現場が足した写真を消さない）。読めるようになって押せば書く
      ㊽ 開いている戸別へ 📥 現場取込 → 直して戻って開き直し 💾 上書き保存 → 前に見せた写真（ファイルにある）を消さない
      ㊾ 📥 現場取込で行にだけ入った写真（ファイルに書けなかった）→ 開くと画面に出る・保存でファイルに入る（a 物件なし・図面あり　b 物件あり・図面なし）
@@ -87,7 +87,7 @@
      ⑯i まとめて書いているとき（📥・諸経費のそろえ直し）は聞かずに書かない・管理番号を確かめ、同じお宅なら開いて保存するよう知らせる
      ⑯j アパートの別の世帯（住所が同じ）のファイル → 住所だけでは同じお宅と見ない（聞いてキャンセル → 書かない）
      ㊸e 💾 反映で リスト を選んで一覧を読み直した → 覚える名前を工事フォルダから見た道のりに → 次の日の保存も リスト/管理番号.json へ
-     ㊻c ファイルを読めないまま開いた（図面なし）→ 行の写真（📥 で入れた分）を出して知らせる・戻っても行は「ファイルから読む」のまま
+     ㊻c ファイルを読めない（図面なし・📥 で入れた写真が行にある）→ 開かない・行は「ファイルから読む」のまま・取り込んだ写真も持ったまま
      ㊼b 💾 上書き保存の元ファイルの名前がほかのPCで変わった → 同じフォルダの 管理番号.json に付け直して書く
      ㊼c 元ファイルが壊れている → この画面の中身で書き直すか聞く　㊼d そろえ直しで開いている戸別の名前が変わった → 行き先も付け替わる
      ㊽ （直し）開いている戸別へ 📥 → 画面にファイルの写真と現場の写真を合わせて出す
@@ -99,11 +99,16 @@
        アプリから外したので場面も外した（控えのフォルダまで数えた・現場のファイルを確かめずに上書きした・まとめて復号のあと古い図面で開いた）
      ⑯k まとめて書いているとき、付け替え先（写真なし・名前の違うファイル）と元のファイルが同じ管理番号（前の 💾 上書き保存で中の番号が変わった）
         → 聞かない・書かない・「同じ管理番号のファイルが2つ」あること、「🧩 重複をまとめる」で1つにすることを知らせる
-     ㊻d 共有の物件・📁 の行（ファイルの写真 A・B）を、ファイルを一度だけ読めないまま開いて直して戻った → 物件（行・端末内・共有ファイル）の写真は2枚のまま
+     ㊻d 共有の物件・📁 の行（ファイルの写真 A・B）。一度だけ読めない → 開かない（物件は2枚のまま）。読めるときに開いて写真 P を足して戻る → 物件（行・端末内・共有ファイル）に3枚
      ㊸g ㊸e と同じ・反映のとき工事フォルダをまだつないでいない（前の日の工事フォルダを覚えている）→ 覚えている工事フォルダから見た道のりにそろえる
      ⑫e ⑫d と同じで、写真が小さい図（PNG。元の写真のほうが縮小版の JPEG より短い）→ 開き直しても元の PNG・戸別ファイルにも元の PNG
      ⑰b 小さい図・画面写し（PNG。元の写真のほうが縮小版の JPEG より短い）を物件にだけ保存 → 物件を開き直す・まとめる → 行は元の PNG のまま →
         物件に保存でフォルダを選ぶ → 戸別ファイルにも元の PNG（前は大きさで比べて、縮小版の JPEG が残り、戸別ファイルに書かれていた）
+   （ここから 6回目の見直しの直し）
+     ※ 写真をファイルに置いている戸別を、ファイルを読めないまま開く仕組みは外した（開かずに知らせる）。㊻・㊻c・㊻d はその形に直した
+     ㊻e 図面のある戸別を開いているところへ 📥 現場取込 → 取り込んだあとの読み直しが一度だけ読めない → 画面はファイルの写真 A・B ＋ 取り込んだ G
+         （行・物件も3枚・あとの保存でファイルも A・B・G）
+     ㊻f 別の戸別 X を開いている → 読めない戸別 Y を開こうとした → 開かない・画面は X のまま（Y の備考が X の画面に入らない・石綿を直した印も残る）
    ★場面ごとに新しいブラウザの入れ物（newContext）を使う★ 前の場面の覚え書き（localStorage・IndexedDB）を持ち越さない。
    フォルダは試験の中で作る作り物（getDirectoryHandle／getFileHandle／removeEntry／entries／values を持つ）。
    フォルダを選ぶ画面は window.showDirectoryPicker を差し替える。
@@ -2241,8 +2246,9 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
     await ctx.close();
   }
 
-  // ---- ㊻ 開き直すとき一度だけファイルを読めなかった（同期ソフトが書き替えている最中など）→ 何も見せていない ----
-  //   前に開いて見せた写真の覚えが残っていると、あとの保存で「画面で消した」と見て、ファイルの写真を全部消していた
+  // ---- ㊻ 開き直すとき一度だけファイルを読めなかった（同期ソフトが書き替えている最中など）→ 開かない・知らせる（6回目の見直しから）----
+  //   読めるときにもう一度開くと A・B が出る・保存してもファイルは A・B のまま
+  //   （前は写真の出ない画面で開いていた。そこで足した写真・直した内容が、物件に正しく入らなかった）
   //   a) 図面あり・物件なし → 💾 上書き保存　b) 図面なし・物件あり（工事フォルダとつながっている）→ 💾 物件に保存
   for(const mode of ['a', 'b'].filter(m => want('㊻' + m))){
     const { ctx, page, said } = await openMain('㊻' + mode);
@@ -2259,6 +2265,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       _listRows = [row];
       const ids = () => (__photosOf(list.__files[NO + '.json']) || []).map(p => p.id).sort().join(',');
       const shown = () => (STATE.photos || []).filter(p => p && p.dataUri).map(p => p.id).sort().join(',');
+      const listOpen = () => document.body.classList.contains('list-view-open');
       const o = {};
       await openCaseInEditor(row);                                     // 1回目：A・B が出る
       o.shown1 = shown();
@@ -2266,22 +2273,29 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       if(_projSaveTimer){ clearTimeout(_projSaveTimer); _projSaveTimer = null; }
       o.slimBack = !!row._slim;
       list.__unreadable[NO + '.json'] = 1;                             // 次に読むときだけ読めない
-      await openCaseInEditor(row);                                     // 開き直す（このとき読めない）
+      await openCaseInEditor(row);                                     // 開き直す（このとき読めない）→ 開かない
       o.readFailed = list.__unreadable[NO + '.json'] === 0;
+      o.refused = { list: listOpen(), slim: !!row._slim, known: !!row._photosKnown };
+      await openCaseInEditor(row);                                     // もう一度開く（今度は読める）
       o.shown2 = shown();
+      o.list2 = listOpen();
       __setTel('090-1111-2222');
-      o.btn = await __pressSave();                                     // このときは読める
+      o.btn = await __pressSave();
       o.file = ids();
       o.tel = JSON.parse(list.__files[NO + '.json']).chosho_cust_tel;
       return o;
     }, { NO, PN, mode });
-    console.log('㊻' + mode + '開き直すとき読めなかった', short(r), short(alerts(said).slice(-1).map(m => m.slice(0, 80))));
+    const a = alerts(said);
+    console.log('㊻' + mode + '開き直すとき読めなかった', short(r), short(a.slice(-1).map(m => m.slice(0, 80))));
     ok(!r.error, '㊻' + mode + '止まった → ' + r.error);
     if(!r.error){
-      ok(r.shown1 === 'A,B' && r.slimBack && r.readFailed && r.shown2 === '' && r.btn.pressed
+      ok(r.shown1 === 'A,B' && r.slimBack && r.readFailed && r.btn.pressed
          && (mode === 'a' ? /上書き保存/ : /物件に保存/).test(r.btn.text) && r.tel === '090-1111-2222',
-         '㊻' + mode + '試験の前提: 1回目は A・B が出る・開き直すときだけ読めず写真が出ない・保存で直しが入る → ' + short(r));
-      ok(r.file === 'A,B', '★㊻' + mode + '開き直すときファイルを読めなかったあとの保存で、ファイルの写真が消えた（前に見せた覚えが残っている） → ' + short(r));
+         '㊻' + mode + '試験の前提: 1回目は A・B が出る・開き直すときだけ読めない・あとで保存できる → ' + short(r));
+      ok(r.refused.list && r.refused.slim && !r.refused.known && a.some(m => /開きませんでした/.test(m)),
+         '★㊻' + mode + 'ファイルを読めないのに戸別を開いた（写真の出ない画面）・開かなかったことを知らせない → ' + short(r.refused) + ' ' + short(a.slice(-1)));
+      ok(r.shown2 === 'A,B' && !r.list2, '★㊻' + mode + '読めるときに開き直しても、ファイルの写真 A・B が出ない → ' + short(r));
+      ok(r.file === 'A,B', '★㊻' + mode + '開けなかったあとの保存で、ファイルの写真が消えた → ' + short(r));
     }
     await ctx.close();
   }
@@ -2682,10 +2696,9 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
   }
 
   // ---- ㊻c 物件あり（工事フォルダとはつながっていない）・📁 の行（図面なし・ファイルの写真 A）へ 📥 現場取込（G。フォルダを掴めず行にだけある）----
-  //   → 開くとき一度だけファイルを読めない → 行の写真 G を出す・読めなかったと知らせる
-  //   → 直して一覧へ戻っても、行は「ファイルから読む」のまま（ファイルの写真があることを忘れない）・G も持ったまま
-  //   → 読めるときに開き直すと A・G → 保存（一度戻ると行に図面の欄が入るので「💾 上書き保存」になる）→ ファイルは A・G
-  //   （前は読めないと何も出さず、戻ると行が「写真なし」になって G が消え、A も見えなくなっていた）
+  //   → 開くとき一度だけファイルを読めない → 開かない・知らせる（6回目の見直しから）
+  //   → 行は「ファイルから読む」のまま（ファイルの写真があることを忘れない）・G も持ったまま
+  //   → 読めるときに開き直すと A・G → 保存 → ファイルは A・G
   if(want('㊻c')){
     const { ctx, page, said } = await openMain('㊻c');
     const r = await run(page, async ({ NO, PN }) => {
@@ -2705,15 +2718,13 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       const genba = { chosho_mgmt_no: NO, _origin: 'genba', chosho_cust_name: '試験 様', chosho_photos: [{ id: 'G', label: 'G', dataUri: G }] };
       o.note = String(await applyGenbaMergeToRow(row, genba, { importRun: true }) || '').slice(0, 60);   // 📥 現場取込
       o.afterImport = { slim: !!row._slim, held: held(), file: ids() };
+      openListView();                                                  // 一覧から開く
+      if(_projSaveTimer){ clearTimeout(_projSaveTimer); _projSaveTimer = null; }
       list.__unreadable[NO + '.json'] = 1;                             // 開くときだけ読めない（同期ソフトが書き替えている最中など）
       await openCaseInEditor(row);
       o.readFailed = list.__unreadable[NO + '.json'] === 0;
-      o.shown1 = shown();
-      await new Promise(res => setTimeout(res, 400));                  // 知らせ（少しあとに出る）を待つ
-      __setTel('090-1111-2222');                                       // 何か直して
-      openListView();                                                  // 一覧へ戻る（行へ取り込む）
-      if(_projSaveTimer){ clearTimeout(_projSaveTimer); _projSaveTimer = null; }
-      o.back = { slim: !!row._slim, known: !!row._photosKnown, held: held() };
+      o.refused = { list: document.body.classList.contains('list-view-open'), editing: _editingRow === row,
+                    slim: !!row._slim, known: !!row._photosKnown, held: held() };
       await openCaseInEditor(row);                                     // 開き直す（今度は読める）
       o.shown2 = shown();
       window.showDirectoryPicker = async () => list;                   // 保存のとき工事フォルダを選ぶ
@@ -2724,17 +2735,16 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       return o;
     }, { NO, PN });
     const a = alerts(said);
-    console.log('㊻c読めないまま開いた戸別（取り込んだ写真あり）', short(r), short(a.map(m => m.slice(0, 40))));
+    console.log('㊻c読めない戸別（取り込んだ写真あり）', short(r), short(a.map(m => m.slice(0, 40))));
     ok(!r.error, '㊻c止まった → ' + r.error);
     if(!r.error){
-      // 一度開いて戻ると行に図面の欄が入る＝開き直すと「💾 上書き保存」になる（どちらのボタンでもよい）
       ok(!r.drawing && /工事フォルダを掴めていません/.test(r.note) && r.afterImport.slim && r.afterImport.held === 'G' && r.afterImport.file === 'A' && r.readFailed
          && r.btn.pressed && /保存/.test(r.btn.text) && r.tel === '090-1111-3333',
          '㊻c試験の前提: 取り込んだ G は行にだけあり（ファイルは A のまま）、開くときだけ読めない・あとで保存できる → ' + short(r));
-      ok(r.shown1 === 'G', '★㊻cファイルを読めないまま開いたとき、行が持っている写真（取り込んだ G）を出さない → ' + short(r.shown1));
-      ok(a.some(m => /読めませんでした/.test(m) && /写真/.test(m)), '★㊻cファイルの写真を読めないまま開いたことを知らせない → ' + short(a.map(m => m.slice(0, 60))));
-      ok(r.back.slim && !r.back.known && r.back.held === 'G',
-         '★㊻c読めないまま開いて直して戻ると、行が「写真はこれで全部」になった（ファイルの写真 A を忘れる・G が消える） → ' + short(r.back));
+      ok(r.refused.list && !r.refused.editing && a.some(m => /開きませんでした/.test(m)),
+         '★㊻cファイルを読めないのに戸別を開いた（図面なし・写真の出ない画面）・開かなかったことを知らせない → ' + short(r.refused) + ' ' + short(a.slice(-1)));
+      ok(r.refused.slim && !r.refused.known && r.refused.held === 'G',
+         '★㊻c開けなかったあと、行が「写真はこれで全部」になった・取り込んだ G を落とした → ' + short(r.refused));
       ok(r.shown2 === 'A,G', '★㊻c読めるときに開き直しても、ファイルの写真 A と取り込んだ G が出ない → ' + short(r.shown2));
       ok(r.file === 'A,G', '★㊻c保存で、戸別ファイルが A・G にならない（取り込んだ写真・ファイルの写真が消えた） → ' + short(r));
     }
@@ -3132,16 +3142,16 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
   /* ===================== ここから 5回目の見直しの直し ===================== */
 
   // ---- ㊻d 物件あり（共有ファイルと連動）・📁 で読んだ行（常駐させない・ファイルの写真 A・B）。物件に保存して、物件では写真2枚 ----
-  //   → 開くとき一度だけファイルを読めない（同期ソフトが書き替えている最中など）→ 電話を直して一覧へ戻る → 物件の保存
-  //   → 行の写真の枚数は2のまま・物件（端末内・共有ファイル）も写真2枚（前の縮小版のまま）・ファイルは A・B のまま
-  //   → 読めるときに開き直すと A・B が出る
-  //   （前は画面の枚数 0 で上書きして、物件に「写真0枚」で入り、どの端末でもこの戸別が写真0枚に見えていた）
+  //   → 開くとき一度だけファイルを読めない → 開かない（行・物件は2枚のまま）
+  //   → 読めるときに開くと A・B → 写真 P を足して電話を直し、一覧へ戻る → 物件の保存
+  //   → 行の写真は3枚・物件（端末内・共有ファイル）にも3枚
+  //   （6回目の見直しから。前は読めないまま開いて足した写真が、物件に入らなかった）
   //   図面あり・図面なし の両方で見る
   for(const mode of ['図面あり', '図面なし'].filter(() => want('㊻d'))){
     const { ctx, page, said } = await openMain('㊻d');
     const r = await run(page, async ({ NO, PN, mode }) => {
       const PID = 'pj178nd' + (mode === '図面あり' ? '1' : '2');
-      const A = __jpeg(900, 700, 0.85, 267), B = __jpeg(900, 700, 0.85, 268);
+      const A = __jpeg(900, 700, 0.85, 267), B = __jpeg(900, 700, 0.85, 268), PP = __jpeg(800, 600, 0.85, 269);
       const base = { chosho_mgmt_no: NO, chosho_cust_name: '試験 様', chosho_status: 'in_progress', work_type: 'uhf_new' };
       if(mode === '図面あり') base.amplifier = 'amp_3u43';
       await __openShared(__proj178(PID, PN, []));
@@ -3153,47 +3163,47 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       _listRows = [row];
       const ids = () => (__photosOf(list.__files[NO + '.json']) || []).map(p => p.id).sort().join(',');
       const shown = () => (STATE.photos || []).filter(p => p && p.dataUri).map(p => p.id).sort().join(',');
-      const proj = async () => { const x = await __idbPhotos(PID, NO);
-        return { idb: x.photos.length, idbCount: x.count, idbThumbs: x.photos.map(p => p.dataUri).join('|'), disk: __diskPhotos(NO),
-                 diskThumbs: ((JSON.parse(window.__disk).cases.filter(c => (c.payload || {}).chosho_mgmt_no === NO)[0] || {}).payload || {}).chosho_photos };
-      };
-      if(_projSaveTimer){ clearTimeout(_projSaveTimer); _projSaveTimer = null; }
-      await projSaveNow();                                             // 物件に保存（写真2枚・縮小版）
-      const p0 = await proj();
-      const o = { drawing: lgHasDrawing(row), slim0: !!row._slim, count0: row._photoCount,
-                  before: { idb: p0.idb, idbCount: p0.idbCount, disk: p0.disk } };
+      const proj = async () => { const x = await __idbPhotos(PID, NO); return { idb: x.photos.length, idbCount: x.count, disk: __diskPhotos(NO) }; };
+      const saveProj = async () => { if(_projSaveTimer){ clearTimeout(_projSaveTimer); _projSaveTimer = null; }
+        await prepareProjectThumbs(true); await projSaveNow(); };
+      await saveProj();                                                // 物件に保存（写真2枚・縮小版）
+      const o = { drawing: lgHasDrawing(row), slim0: !!row._slim, count0: row._photoCount, before: await proj() };
+      openListView();                                                  // 一覧から開く
       list.__unreadable[NO + '.json'] = 1;                             // 開くときだけ読めない
       await openCaseInEditor(row);
       o.readFailed = list.__unreadable[NO + '.json'] === 0;
+      o.refused = { list: document.body.classList.contains('list-view-open'), slim: !!row._slim, count: row._photoCount };
+      await saveProj();
+      o.refusedProj = await proj();
+      await openCaseInEditor(row);                                     // 開き直す（今度は読める）
       o.shown1 = shown();
-      await new Promise(res => setTimeout(res, 400));                  // 知らせ（少しあとに出る）を待つ
+      const added = await __addPhoto(PP, 'P.jpg');                     // 写真 P を足す
+      o.added = !!(added && added.dataUri);
       __setTel('090-1111-2222');                                       // 電話を直して
       openListView();                                                  // 一覧へ戻る（行へ取り込む）
-      if(_projSaveTimer){ clearTimeout(_projSaveTimer); _projSaveTimer = null; }
-      await projSaveNow();                                             // 物件の保存（この端末・共有ファイル）
-      const p1 = await proj();
-      o.after = { count: row._photoCount, tel: (row.data || {}).chosho_cust_tel, idb: p1.idb, idbCount: p1.idbCount, disk: p1.disk,
-                  idbSame: !!p0.idbThumbs && p1.idbThumbs === p0.idbThumbs,
-                  diskSame: JSON.stringify(p1.diskThumbs || null) === JSON.stringify(p0.diskThumbs || null) };
+      await saveProj();                                                // 物件の保存（この端末・共有ファイル）
+      o.after = Object.assign({ count: row._photoCount, tel: (row.data || {}).chosho_cust_tel }, await proj());
       o.file = ids();
-      await openCaseInEditor(row);                                     // 開き直す（今度は読める）
-      o.shown2 = shown();
+      await openCaseInEditor(row);                                     // もう一度開く
+      o.shown2 = (STATE.photos || []).filter(p => p && p.dataUri).length;
       return o;
     }, { NO, PN, mode });
     const a = alerts(said);
-    console.log('㊻d' + mode + '・読めないまま開いて直して戻った戸別の、物件の写真の枚数', short(r), short(a.map(m => m.slice(0, 40))));
+    console.log('㊻d' + mode + '・読めない戸別は開かない／開けたら足した写真が物件に入る', short(r), short(a.map(m => m.slice(0, 40))));
     ok(!r.error, '㊻d' + mode + '止まった → ' + r.error);
     if(!r.error){
       ok(r.drawing === (mode === '図面あり') && r.slim0 && r.count0 === 2 && r.before.idb === 2 && r.before.idbCount === 2
-         && r.before.disk.n === 2 && r.before.disk.count === 2 && r.readFailed && r.shown1 === '' && r.after.tel === '090-1111-2222',
-         '㊻d' + mode + '試験の前提: 物件（端末内・共有ファイル）に写真2枚で入り、開くときだけ読めず写真が出ない・直しが行に入る → ' + short(r));
-      ok(r.after.count === 2, '★㊻d' + mode + '読めないまま開いて直して戻ると、行の写真の枚数が画面の枚数（0）になった → ' + short(r.after));
-      ok(r.after.idb === 2 && r.after.idbCount === 2 && r.after.idbSame,
-         '★㊻d' + mode + '物件（この端末）に、この戸別が写真2枚（前の縮小版）で入っていない → ' + short(r.after));
-      ok(r.after.disk.n === 2 && r.after.disk.count === 2 && r.after.diskSame,
-         '★㊻d' + mode + '共有ファイルの物件に、この戸別が写真2枚（前の縮小版）で入っていない（ほかの端末で写真0枚に見える） → ' + short(r.after));
-      ok(r.file === 'A,B', '★㊻d' + mode + '戸別ファイルの写真が A・B のままではない → ' + short(r.file));
-      ok(r.shown2 === 'A,B', '★㊻d' + mode + '読めるときに開き直しても、ファイルの写真 A・B が出ない → ' + short(r.shown2));
+         && r.before.disk.n === 2 && r.before.disk.count === 2 && r.readFailed && r.shown1 === 'A,B' && r.added && r.after.tel === '090-1111-2222',
+         '㊻d' + mode + '試験の前提: 物件（端末内・共有ファイル）に写真2枚で入り、開くときだけ読めない・あとで開いて写真を足せる → ' + short(r));
+      ok(r.refused.list && r.refused.slim && r.refused.count === 2 && a.some(m => /開きませんでした/.test(m)),
+         '★㊻d' + mode + 'ファイルを読めないのに戸別を開いた・開かなかったことを知らせない → ' + short(r.refused));
+      ok(r.refusedProj.idb === 2 && r.refusedProj.idbCount === 2 && r.refusedProj.disk.n === 2 && r.refusedProj.disk.count === 2,
+         '★㊻d' + mode + '開けなかったあとの物件の保存で、物件の写真が2枚ではなくなった → ' + short(r.refusedProj));
+      ok(r.after.count === 3, '★㊻d' + mode + '開いて写真を足して戻ると、行の写真の枚数が3にならない → ' + short(r.after));
+      ok(r.after.idb === 3 && r.after.idbCount === 3, '★㊻d' + mode + '物件（この端末）に、この戸別が写真3枚で入っていない（足した写真が物件に入らない） → ' + short(r.after));
+      ok(r.after.disk.n === 3 && r.after.disk.count === 3, '★㊻d' + mode + '共有ファイルの物件に、この戸別が写真3枚で入っていない → ' + short(r.after));
+      ok(r.file === 'A,B', '★㊻d' + mode + '戻っただけで戸別ファイルの写真が変わった → ' + short(r.file));
+      ok(r.shown2 === 3, '★㊻d' + mode + 'もう一度開くと、写真が3枚出ない → ' + short(r.shown2));
     }
     await ctx.close();
   }
@@ -3325,6 +3335,104 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       ok(r.merged.row === 'PNG', '★⑰bほかの端末の保存とまとめると、行の元の PNG が縮小版の JPEG に替わった → ' + short(r.merged));
       ok(r.reopened.row === 'PNG', '★⑰b物件を開き直すと、行の元の PNG が縮小版の JPEG に替わった → ' + short(r.reopened));
       ok(r.file === 'PNG', '★⑰b「物件に保存」で、戸別ファイルに元の PNG ではなく縮小版の JPEG が書かれた → ' + short(r.file) + ' 画面 ' + short(r.shown));
+    }
+    await ctx.close();
+  }
+
+  /* ===================== ここから 6回目の見直しの直し ===================== */
+
+  // ---- ㊻e 物件あり（工事フォルダとはつながっていない）・📁 の行（図面あり・ファイルの写真 A・B）を開いている ----
+  //   → 📥 現場取込（G。フォルダを掴めず行にだけある）→ 取り込んだあとの読み直しが一度だけ読めない
+  //   → 画面は A・B（開いたときファイルから読んだ分）＋ G。直して戻ると行は3枚・あとで保存するとファイルも A・B・G
+  //   （前は行が持っている写真 G だけを画面に出し、戻ると行と物件の写真が G だけになっていた）
+  if(want('㊻e')){
+    const { ctx, page, said } = await openMain('㊻e');
+    const r = await run(page, async ({ NO, PN }) => {
+      const A = __jpeg(900, 700, 0.85, 271), B = __jpeg(900, 700, 0.85, 272), G = __jpeg(900, 700, 0.85, 273);
+      await __openProj(__proj178('pj178ne', PN, []));
+      const base = { chosho_mgmt_no: NO, chosho_cust_name: '試験 様', chosho_status: 'in_progress', work_type: 'uhf_new', amplifier: 'amp_3u43' };
+      const list = __mk('リスト', { [NO + '.json']: JSON.stringify(Object.assign({}, base, { chosho_photos: [{ id: 'A', label: 'A', dataUri: A }, { id: 'B', label: 'B', dataUri: B }] }), null, 2) });
+      const fh = await list.getFileHandle(NO + '.json');
+      const row = buildListRow(NO + '.json', 1, JSON.parse(list.__files[NO + '.json']), fh);   // 📁 フォルダで読んだ行
+      slimListRow(row, true);
+      _listRows = [row];
+      const ids = () => (__photosOf(list.__files[NO + '.json']) || []).map(p => p.id).sort().join(',');
+      const shown = () => (STATE.photos || []).filter(p => p && p.dataUri).map(p => p.id).sort().join(',');
+      const o = { drawing: lgHasDrawing(row) };
+      await openCaseInEditor(row);                                     // 開く：A・B
+      o.shown1 = shown();
+      o.editing = _editingRow === row;
+      __abortPicker(); _genbaNoDir = false;                            // 取り込みのときは工事フォルダを掴めなかった
+      list.__unreadable[NO + '.json'] = 1;                             // 取り込んだあとの読み直しが読めない
+      const genba = { chosho_mgmt_no: NO, _origin: 'genba', chosho_cust_name: '試験 様', chosho_photos: [{ id: 'G', label: 'G', dataUri: G }] };
+      o.note = String(await applyGenbaMergeToRow(row, genba, { importRun: true }) || '').slice(0, 60);   // 📥 現場取込
+      o.readFailed = list.__unreadable[NO + '.json'] === 0;
+      o.shown2 = shown();
+      o.fileAfterImport = ids();
+      __setTel('090-1111-1111');                                       // 何か直して
+      openListView();                                                  // 一覧へ戻る（画面を行へ取り込む）
+      if(_projSaveTimer){ clearTimeout(_projSaveTimer); _projSaveTimer = null; }
+      o.back = { count: row._photoCount, held: ((row.data || {}).chosho_photos || []).filter(p => p && p.dataUri).map(p => p.id).sort().join(',') };
+      await openCaseInEditor(row);                                     // 開き直す
+      o.shown3 = shown();
+      window.showDirectoryPicker = async () => list;                   // 保存のとき工事フォルダを選ぶ
+      __setTel('090-1111-2222');
+      o.btn = await __pressSave();
+      o.file = ids();
+      o.tel = JSON.parse(list.__files[NO + '.json']).chosho_cust_tel;
+      return o;
+    }, { NO, PN });
+    console.log('㊻e開いている戸別へ取り込んだあと読み直せない', short(r), short(alerts(said).map(m => m.slice(0, 40))));
+    ok(!r.error, '㊻e止まった → ' + r.error);
+    if(!r.error){
+      ok(r.drawing && r.shown1 === 'A,B' && r.editing && /工事フォルダを掴めていません/.test(r.note) && r.readFailed && r.fileAfterImport === 'A,B'
+         && r.btn.pressed && r.tel === '090-1111-2222',
+         '㊻e試験の前提: 開いている戸別（A・B）へ取り込み、G は行にだけある・取り込んだあとの読み直しが読めない・あとで保存できる → ' + short(r));
+      ok(r.shown2 === 'A,B,G', '★㊻e取り込んだあと読み直せないと、画面にファイルの写真 A・B が出ない（取り込んだ G だけ） → ' + short(r.shown2));
+      ok(r.back.count === 3 && r.back.held === 'A,B,G', '★㊻e戻ると、行の写真が A・B・G にならない（物件にも G だけで入る） → ' + short(r.back));
+      ok(r.shown3 === 'A,B,G' && r.file === 'A,B,G', '★㊻e開き直して保存しても、ファイルが A・B・G にならない → ' + short(r));
+    }
+    await ctx.close();
+  }
+
+  // ---- ㊻f 別の戸別 X（台帳で作った行・備考あり）を開いて、石綿の欄を直した → 一覧から、ファイルを読めない戸別 Y（備考あり）を開こうとした ----
+  //   → 開かない・画面は X のまま（Y の備考が X の画面に入らない）・石綿を直した印も残る（図面あり・図面なし の両方）
+  for(const mode of ['図面あり', '図面なし'].filter(() => want('㊻f'))){
+    const { ctx, page, said } = await openMain('㊻f');
+    const r = await run(page, async ({ NO, mode }) => {
+      const A = __jpeg(900, 700, 0.85, 275);
+      const base = { chosho_mgmt_no: NO, chosho_cust_name: 'ワイ 様', chosho_status: 'in_progress', work_type: 'uhf_new' };
+      if(mode === '図面あり') base.amplifier = 'amp_3u43';
+      const list = __mk('リスト', { [NO + '.json']: JSON.stringify(Object.assign({}, base, { chosho_photos: [{ id: 'A', label: 'A', dataUri: A }] }), null, 2) });
+      const fh = await list.getFileHandle(NO + '.json');
+      const y = buildListRow(NO + '.json', 1, JSON.parse(list.__files[NO + '.json']), fh);   // 📁 フォルダで読んだ行
+      slimListRow(y, true);
+      _listRows = [y];
+      const x = createManualRow({ chosho_mgmt_no: '2612MKM098', chosho_cust_name: 'エックス 様' }, 'manual');
+      x.data.chosho_note = 'X の備考'; noteAdopt(subCaseKey(x), 'X の備考');
+      y.data.chosho_note = 'Y の備考'; noteAdopt(subCaseKey(y), 'Y の備考');
+      await openCaseInEditor(x);                                       // X を開く
+      const note = () => (document.getElementById('chosho_note') || {}).value;
+      const o = { xNote: note(), xEditing: _editingRow === x };
+      openListView();                                                  // 一覧へ（X の画面はそのまま）
+      if(_projSaveTimer){ clearTimeout(_projSaveTimer); _projSaveTimer = null; }
+      _asbEdited = true;                                               // X の石綿の欄を直した印
+      list.__unreadable[NO + '.json'] = 1;                             // Y のファイルを読めない
+      await openCaseInEditor(y);                                       // Y を開こうとする → 開かない
+      o.readFailed = list.__unreadable[NO + '.json'] === 0;
+      o.after = { note: note(), editingX: _editingRow === x, asb: _asbEdited === true, list: document.body.classList.contains('list-view-open'),
+                  name: (document.getElementById('chosho_cust_name') || {}).value };
+      return o;
+    }, { NO, mode });
+    const a = alerts(said);
+    console.log('㊻f' + mode + '・開けなかった戸別の備考が開いている画面に入らない', short(r), short(a.slice(-1).map(m => m.slice(0, 40))));
+    ok(!r.error, '㊻f' + mode + '止まった → ' + r.error);
+    if(!r.error){
+      ok(r.xNote === 'X の備考' && r.xEditing && r.readFailed && a.some(m => /開きませんでした/.test(m)),
+         '㊻f' + mode + '試験の前提: X を開いて備考が出ている・Y は読めず開かなかった → ' + short(r));
+      ok(r.after.note === 'X の備考' && r.after.editingX && r.after.list && r.after.name === 'エックス 様',
+         '★㊻f' + mode + '開けなかった Y の備考などが、開いている X の画面に入った → ' + short(r.after));
+      ok(r.after.asb, '★㊻f' + mode + '開けなかったのに、X の石綿を直した印が消えた（同じ建物の世帯へ配られない） → ' + short(r.after));
     }
     await ctx.close();
   }

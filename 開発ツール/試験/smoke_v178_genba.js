@@ -52,6 +52,12 @@
      ㉕ A を開いて写真を3枚取り込み、1枚目のあとで受付台帳の A の行の「取消」で下書きを消し、受付台帳から A を開き直した
         （新しい下書き・印が違う）→ 残りの写真は一時のキーの下書きに入る（a1・1〜3枚目とも消えない・下書き一覧に出る）・
         取り込みが終わったとき、「写真を、別の下書きに入れました」「下書き一覧」と窓で知らせる
+   （ここから 6回目の見直しの直し：知らせの窓は、ほかの窓を横取りしない・その取り込みの最後に出す）
+     ㉖ ㉕と同じで、取り込みが終わったとき、保存の「このまま保存しますか？」の窓が出ていた → 知らせはその窓を消さずに待つ
+        （問いに答えると、保存の答えが返る・そのあと知らせが出る）。保存しているあいだも知らせは待つ
+     ㉗ 知らせが出ているあいだに、ほかの窓（CSVの「上書きしますか？」など）が来た → 知らせを消さない・答えたあとにその窓が出て、答えが返る
+     ㉘ A の取り込み（写真が別の下書きへ）の途中で、B で写真を取り込み、B のほうが先に終わった
+        → B の終わりには A の知らせを出さない・A の取り込みが終わったときに1回だけ出す
    使い方: node smoke_v178_genba.js [現場入力 index.html の file:// URL]　（SCENE=①,③ で場面を絞れる） */
 const { chromium } = require('playwright-core');
 const fs = require('fs'), path = require('path');
@@ -1191,6 +1197,135 @@ window.__holders = async function(ps, except){
     ok(t.length === 1 && (r.listed || []).indexOf(t[0].key) >= 0, '★㉕写真を入れた一時のキーの下書きが、下書き一覧に出ない → ' + J(r.listed));
     ok((r.said || []).length === 1 && r.said[0].indexOf(NA) >= 0 && /写真/.test(r.said[0]) && /下書き一覧/.test(r.said[0]),
        '★㉕取り込みが終わっても、写真を別の下書きに入れたことを窓で知らせない（または何度も出た・「下書き一覧」を言わない） → ' + J(r.said));
+  });
+
+  /* ---------- ㉖ 取り込みの知らせは、ほかの窓が出ているあいだ・保存しているあいだは待つ ----------
+     （前は知らせが窓を横取りし、保存の問いの答えが返らず「保存中…」のまま止まった） */
+  await scene('㉖', async page => {
+    const r = await page.evaluate(async ({ NA, NB }) => {
+      clearInterval(window.__dlgTimer);                  // この場面は窓を自分で押す
+      const dlg = () => { const m = document.getElementById('ui-dialog');
+        return (m && m.classList.contains('open')) ? ((document.getElementById('ui-dialog-msg') || {}).textContent || '') : ''; };
+      const okClick = () => { const b = document.getElementById('ui-dialog-ok'); if(b) b.click(); };
+      __gatedImport();
+      await __state();                                   // A（写真 a1）・B の下書き（画面は B）
+      await __open('no:' + NA);                          // A を開く
+      const cs = ['#a61', '#a62'], ps = cs.map(__pidOf);
+      const imp = handlePhotoFiles(__files(cs)); let impDone = false; imp.then(() => { impDone = true; });
+      await __rel(cs[0]);                                // 1枚目は A の下書きへ
+      const draftA = async () => __pids(((await idbGet('no:' + NA)) || {}).model);
+      for(let i = 0; i < 150 && (await draftA()).split(',').indexOf(ps[0]) < 0; i++) await __sleep(20);
+      await __open('no:' + NB);                          // B を開く（A の下書きは控えてある）
+      const rec = await idbGet('no:' + NA); rec.model._uid = 'u-other'; await idbPut(rec);   // A の下書きが別の下書きに替わった（取消して作り直した）
+      const cp = uiConfirm('PCのファイルに中身が入っています。このまま保存しますか？（試験）');   // 保存の問いが出ている
+      let cAns; cp.then(v => { cAns = v; });
+      await __rel(cs[1]);                                // 2枚目は別の下書きへ → 取り込みが終わる
+      await __sleep(1200);
+      const o = { pre: { moved: (await __draftsOfNo(NA)).some(x => /^tmp:/.test(x)) }, whileOpen: { dlg: dlg(), impDone } };
+      okClick();                                         // 保存の問いに OK
+      await __sleep(150);
+      o.cAns = cAns;
+      for(let i = 0; i < 60 && !/別の下書き/.test(dlg()); i++) await __sleep(50);
+      o.notice = dlg();
+      okClick();
+      for(let i = 0; i < 60 && !impDone; i++) await __sleep(50);
+      o.impDone = impDone;
+      /* 保存しているあいだ（窓は出ていない）も待つ */
+      const T = {};
+      persistModel._moved = (persistModel._moved || []).concat([{ no: NA, photo: true, tag: T }]);
+      _saving = true;
+      const np = persistMovedNotice(T); let nDone = false; np.then(() => { nDone = true; });
+      await __sleep(1000);
+      o.whileSaving = dlg();
+      _saving = false;
+      for(let i = 0; i < 60 && !/別の下書き/.test(dlg()); i++) await __sleep(50);
+      o.afterSave = dlg();
+      okClick();
+      for(let i = 0; i < 60 && !nDone; i++) await __sleep(50);
+      o.nDone = nDone;
+      return o;
+    }, { NA, NB });
+    console.log('㉖知らせはほかの窓・保存を待つ', J(r));
+    ok(r.pre && r.pre.moved, '㉖試験の前提: 2枚目は別の下書き（一時のキー）に入った → ' + J(r.pre));
+    ok(/このまま保存しますか/.test(r.whileOpen.dlg) && !r.whileOpen.impDone,
+       '★㉖取り込みの知らせが、出ていた保存の問いの窓を横取りした → ' + J(r.whileOpen));
+    ok(r.cAns === true, '★㉖保存の問いに答えても、答えが返らない（保存が「保存中…」のまま止まる） → ' + J(r.cAns));
+    ok(/別の下書き/.test(r.notice) && r.notice.indexOf(NA) >= 0 && r.impDone,
+       '★㉖問いに答えたあと、写真を別の下書きに入れた知らせが出ない（または取り込みが終わらない） → ' + J(r));
+    ok(r.whileSaving === '' && /別の下書き/.test(r.afterSave) && r.nDone,
+       '★㉖保存しているあいだに知らせが出た（または保存が終わっても出ない） → ' + J({ s: r.whileSaving, a: r.afterSave, d: r.nDone }));
+  });
+
+  /* ---------- ㉗ 知らせが出ているあいだに来たほかの窓は、知らせのあとに出す（知らせを消さない・答えが返る） ---------- */
+  await scene('㉗', async page => {
+    const r = await page.evaluate(async ({ NA }) => {
+      clearInterval(window.__dlgTimer);
+      const dlg = () => { const m = document.getElementById('ui-dialog');
+        return (m && m.classList.contains('open')) ? ((document.getElementById('ui-dialog-msg') || {}).textContent || '') : ''; };
+      const okClick = () => { const b = document.getElementById('ui-dialog-ok'); if(b) b.click(); };
+      const T = {};
+      persistModel._moved = [{ no: NA, photo: true, tag: T }];
+      const np = persistMovedNotice(T); let nDone = false; np.then(() => { nDone = true; });
+      for(let i = 0; i < 40 && !/別の下書き/.test(dlg()); i++) await __sleep(50);
+      const o = { n1: dlg() };
+      const cp = uiConfirm('① アンテナ出力には既に測定値があります。CSVの値で上書きしますか？（試験）');   // 裏で動いていた CSV の取り込みの問い
+      let cAns; cp.then(v => { cAns = v; });
+      await __sleep(400);
+      o.n2 = dlg();
+      okClick();                                         // 知らせに OK
+      for(let i = 0; i < 40 && !/上書きしますか/.test(dlg()); i++) await __sleep(50);
+      o.next = dlg(); o.nDone = nDone;
+      okClick();                                         // CSV の問いに OK
+      await __sleep(200);
+      o.cAns = cAns; o.left = dlg();
+      return o;
+    }, { NA });
+    console.log('㉗知らせのあいだに来た窓', J(r));
+    ok(/別の下書き/.test(r.n1), '㉗試験の前提: 知らせが出た → ' + J(r.n1));
+    ok(/別の下書き/.test(r.n2), '★㉗知らせが出ているあいだに来たほかの窓が、知らせを消した → ' + J(r.n2));
+    ok(r.nDone && /上書きしますか/.test(r.next) && r.cAns === true && r.left === '',
+       '★㉗知らせに答えたあと、ほかの窓が出ない・答えが返らない（CSV の取り込みが止まる） → ' + J(r));
+  });
+
+  /* ---------- ㉘ 2つの取り込みが重なった：知らせは、別の下書きに入れた取り込みの最後に出す ---------- */
+  await scene('㉘', async page => {
+    const r = await page.evaluate(async ({ NA, NB }) => {
+      __gatedImport();
+      await __state();                                   // A（写真 a1）・B の下書き（画面は B）
+      await __open('no:' + NA);                          // A を開く
+      const ca = ['#a81', '#a82', '#a83'], cb = ['#b81'], pa = ca.map(__pidOf);
+      const impA = handlePhotoFiles(__files(ca)); let aDone = false; impA.then(() => { aDone = true; });
+      await __rel(ca[0]);                                // A の1枚目は A の下書きへ
+      const draftA = async () => __pids(((await idbGet('no:' + NA)) || {}).model);
+      for(let i = 0; i < 150 && (await draftA()).split(',').indexOf(pa[0]) < 0; i++) await __sleep(20);
+      await __open('no:' + NB);                          // B を開く
+      const rec = await idbGet('no:' + NA); rec.model._uid = 'u-other'; await idbPut(rec);   // A の下書きが別の下書きに替わった
+      const impB = handlePhotoFiles(__files(cb)); let bDone = false; impB.then(() => { bDone = true; });   // B で写真を1枚
+      await __rel(ca[1]);                                // A の2枚目は別の下書きへ（知らせの覚えができる）
+      for(let i = 0; i < 100 && !((persistModel._moved || []).length); i++) await __sleep(20);
+      const o = { moved: (persistModel._moved || []).length };
+      const t0 = __said.length;
+      await __rel(cb[0]);                                // B の取り込みが先に終わる
+      for(let i = 0; i < 100 && !bDone; i++) await __sleep(20);
+      await __sleep(600);
+      o.bDone = bDone; o.aDoneAtB = aDone;
+      o.atB = __said.slice(t0).filter(s => /別の下書き/.test(s));
+      await __rel(ca[2]);                                // A の3枚目。A の取り込みが終わる
+      for(let i = 0; i < 150 && !aDone; i++) await __sleep(20);
+      await __sleep(600);
+      o.aDone = aDone;
+      o.atA = __said.slice(t0).filter(s => /別の下書き/.test(s));
+      o.tmp = (await __draftsOfNo(NA)).filter(x => /^tmp:/.test(x));
+      o.pa = pa;
+      return o;
+    }, { NA, NB });
+    console.log('㉘重なった取り込みの知らせ', J(r));
+    ok(r.moved === 1 && r.bDone && !r.aDoneAtB && r.aDone, '㉘試験の前提: A の2枚目が別の下書きへ・B の取り込みが先に終わる・あとで A も終わる → ' + J(r));
+    ok(r.atB.length === 0, '★㉘B の取り込みの終わりに、A の写真を別の下書きに入れた知らせが出た（A の残りの写真が届く前に保存させてしまう） → ' + J(r.atB));
+    ok(r.atA.length === 1 && r.atA[0].indexOf(NA) >= 0 && /写真/.test(r.atA[0]),
+       '★㉘A の取り込みが終わっても、別の下書きに入れた知らせが1回出ない → ' + J(r.atA));
+    ok(r.tmp.length === 1 && hasAll(r.tmp[0].split('=')[1].replace(/\//g, ','), [r.pa[1], r.pa[2]]),
+       '★㉘A の2枚目・3枚目が、一時のキーの下書き1つにそろわない → ' + J(r.tmp));
   });
 
   await b.close();
