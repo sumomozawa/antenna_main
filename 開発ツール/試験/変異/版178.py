@@ -859,6 +859,9 @@ CASES = [
    u'''            try { const want = lgwbWanted(row);
                   Object.keys(want).forEach(k => { if(sens.indexOf(k) < 0 && String(np[k] == null ? "" : np[k]) !== String(want[k] == null ? "" : want[k])) np[k] = want[k]; }); } catch(_){}
 ''', u'''''', TM, "main", u"㉕ykeep,㉕ynewpw"),
+  (u"★📁 で重なった暗号の行に「台帳を優先」で台帳の値を入れても、まだ戸別ファイルに入っていない印を付けない（🔄 のあと物件から「完了」が消える）",
+   u'''      if(match.fileType === "hybrid"){ match._lgEdited = true; try { lgMarkTouched(match); } catch(_){} }''',
+   u'''''', TM, "main", u"㉕yM"),
   (u"★🔄 一括再暗号化で、この端末が直していない受付台帳の欄まで古い写しでかぶせる（ほかのPCが .hyb に入れた「完了」・備考が物件から消え、あとの 💾 物件に保存 で戻る）",
    u'''          if(row._lgEdited || (row._caseId && _editedCaseKeys.has(row._caseId))){''',
    u'''          if(true){''', TM, "main", u"㉕yLst,㉕yLnote"),

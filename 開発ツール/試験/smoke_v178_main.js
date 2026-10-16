@@ -219,6 +219,7 @@
      ㉕z ほかのPCが物件で「完了」を付けた（この端末はまだ取り込んでいない）→ 🔄 一括再暗号化 → 物件の保存で「完了」を消さない
      ㉕yS ほかのPCが物件なしで .hyb を書き替えた（新しい鍵の元・1U）→ 🔄 → 物件の封筒は、いまのファイルの中身（1U）＋受付台帳の「完了」＋新しい鍵（古い中身に新しい鍵を付けない）
      ㉕yL この端末は受付台帳を直していない・ほかのPCが .hyb に「完了」（備考）を入れた → 🔄 → 物件の封筒にもほかのPCの「完了」（備考）（古い写しをかぶせない）
+     ㉕yM 受付台帳で作った行に「完了」→ 📁 で同じ番号の .hyb と重なって「台帳を優先」（まとめて復号は キャンセル）→ 🔄 → 物件は「完了」・台帳の日程のまま
      ㉕zM ほかのPCが物件を保存（この戸別は直していない）→ 🔄 → まとめても物件のこの戸別は新しい鍵（keep・newpw）
      ㉕zf 📄 ファイルで読んだ .hyb へ 📥（G・1U-BC）→ 開くと A・B・G（読んだファイルの写真を差し込む）・保存の中身も A・B・G（nog：現場の写真なし　gpw：聞かれたパスワードで）
      ㉕zk 📄 ファイルで読んだ .hyb で B を消し A を「玄関」にして戻る → 開き直しても A「玄関」だけ・保存も同じ・一括平文化も A は「玄関」
@@ -6450,6 +6451,73 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
          L + '試験の前提: この端末は受付台帳を直していない・🔄 で .hyb はほかのPCの中身のまま → ' + short(r));
       ok(!(r.disk.saltSame && !want1),
          '★' + L + ' 🔄 のあと物件の封筒が、ファイルと同じ鍵の元なのに、この端末の古い写しの受付台帳の欄（ほかのPCの' + (mode === 'st' ? '「完了」' : '備考') + 'が消える） → ' + short(r.disk));
+    }
+    await ctx.close();
+  }
+
+  // ---- ㉕yM 共有ファイルの物件に、受付台帳で作った行（工事日程予定 10-22）→ 受付台帳で「完了」→ 物件の保存
+  //   → 📁（物件に取り込む）で同じ管理番号の .hyb（受付済・10-20・写真 A・B）→ 重なりの窓で「📒 台帳を優先」→「まとめて復号しますか？」は キャンセル
+  //   → 🔄 一括再暗号化（パスワードは聞かれて入れる）→ 物件の保存 → 物件（共有ファイル）は「完了」・10-22 のまま
+  //   （前は台帳の値を入れた .hyb の行に「まだ戸別ファイルに入っていない」印を付けず、🔄 で物件の封筒をファイルの中身（受付済・10-20）にした）
+  if(want('㉕yM')){
+    const { ctx, page, said } = await openMain('㉕yM');
+    const r = await run(page, async ({ NO }) => {
+      const PW = 'pw-vm-1', FN = NO + '.hyb';
+      const sleep = ms => new Promise(res => setTimeout(res, ms));
+      const stop = () => { if(_projSaveTimer){ clearTimeout(_projSaveTimer); _projSaveTimer = null; } };
+      const X = () => _listRows.find(x => x && x.data && x.data.chosho_mgmt_no === NO);
+      const diskX = () => { const c = JSON.parse(window.__disk).cases.find(c => c.payload && ((c.payload.plain || c.payload).chosho_mgmt_no === NO));
+        const pl = c ? (c.payload.plain || c.payload) : {}; return { hyb: !!(c && c.payload.plain), st: pl.chosho_status, date: pl.chosho_date }; };
+      const o = {};
+      clearSessionPassword('試験');
+      await __openShared(__proj178('pj25yM', '工事V', [{ caseId: 'cM1', file: 'manual:x', lastModified: 0,
+        payload: { chosho_mgmt_no: NO, chosho_cust_name: '戊 様', chosho_status: 'in_progress', chosho_date: '2026-10-22', _manual: true, _origin: 'manual' } }]));
+      stop();
+      openListView(); stop(); setListMode('ledger'); await sleep(400);              // 受付台帳で「完了」
+      { const uid = Object.keys(_ledgerShown).find(k => _ledgerShown[k] === X());
+        const tr = uid ? document.querySelector('tr[data-uid="' + uid + '"]') : null;
+        const cb = tr ? tr.querySelector('input[data-f="done"]') : null;
+        o.ledgerCb = !!cb; if(cb && !cb.disabled){ cb.click(); await sleep(300); } }
+      setListMode('list'); await sleep(200); stop();
+      await projSaveNow();
+      o.disk1 = diskX();
+      await __openShared(JSON.parse(window.__disk)); stop();                         // 次の日：物件を開き直す（直した印は残らない）
+      const base = { chosho_mgmt_no: NO, chosho_cust_name: '戊 様', chosho_cust_tel: '011-222-3333', chosho_status: 'in_progress', chosho_date: '2026-10-20',
+        work_type: 'uhf_new', amplifier: 'amp_3u43',
+        chosho_photos: [{ id: 'qa', label: 'A', dataUri: __jpeg(600, 450, 0.85, 41) }, { id: 'qb', label: 'B', dataUri: __jpeg(620, 460, 0.85, 42) }] };
+      const list = __mk('リスト', { [FN]: JSON.stringify(await encryptHybrid(base, PW)) }, {}, { resolve: true });
+      const root = __mk('工事V', {}, { 'リスト': list }, { resolve: true });
+      window.showDirectoryPicker = async () => root;
+      let merges = 0;
+      const tm = setInterval(() => { const m = document.getElementById('ledger-merge-modal');           // 重なりの窓：「📒 台帳を優先」
+        if(m && m.classList.contains('open') && !m.__b){ m.__b = true; merges++; setTimeout(() => { document.getElementById('lg-merge-ledger').click(); m.__b = false; }, 120); } }, 80);
+      const oConfirm = window.confirm;
+      window.confirm = m => /まとめて復号しますか/.test(String(m)) ? false : oConfirm.call(window, m);  // まとめて復号は キャンセル
+      promptPassword = async () => PW;                                                                  // 聞かれたらパスワード
+      try { openListView(); stop(); await listSelectFolder(); stop(); await sleep(1200); }
+      finally { clearInterval(tm); window.confirm = oConfirm; }
+      const x = X();
+      o.merged = { merges, ft: x && x.fileType, slim: !!(x && x._slim), unlocked: !!(x && x.unlocked), st: x && x.data.chosho_status,
+                   lgEdited: !!(x && x._lgEdited) };
+      stop(); await projSaveNow();
+      o.disk2 = diskX();
+      document.getElementById('bulk-target').value = 'hybrid';                                         // 🔄 一括再暗号化（方式・パスワードそのまま）
+      document.getElementById('bulk-new-format').value = 'keep';
+      document.getElementById('bulk-new-pw-src').value = 'keep';
+      const w0 = list.__writes.length;
+      await applyBulkReenc(); await sleep(300); stop();
+      o.wrote = list.__writes.length - w0;
+      await projSaveNow();
+      o.disk3 = diskX();
+      return o;
+    }, { NO: '2612VM0001' });
+    console.log('㉕yM台帳を優先した .hyb の 🔄', short(r), short(said.map(d => d.type + ':' + String(d.msg).replace(/\s+/g, ' ').slice(0, 60))));
+    ok(!r.error, '㉕yM止まった → ' + r.error);
+    if(!r.error){
+      ok(r.ledgerCb && r.disk1.st === 'completed' && r.merged.merges >= 1 && r.merged.ft === 'hybrid' && r.merged.st === 'completed' && r.disk2.st === 'completed' && r.wrote === 1,
+         '㉕yM試験の前提: 受付台帳の「完了」→ 📁 で .hyb と重なって「台帳を優先」→ 行と物件は「完了」・🔄 で .hyb を書く → ' + short(r));
+      ok(r.disk3.st === 'completed' && r.disk3.date === '2026-10-22',
+         '★㉕yM 「台帳を優先」で入れた「完了」・工事日程予定が、🔄 のあと物件から消えた（まだ戸別ファイルに入っていない印が無い） → ' + short(r.disk3) + ' 印=' + r.merged.lgEdited);
     }
     await ctx.close();
   }
