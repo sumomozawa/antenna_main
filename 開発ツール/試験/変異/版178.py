@@ -853,9 +853,12 @@ CASES = [
   # 11回目の直しで、行の封筒をほどいて書いた行（_slim でない）の「行の封筒のまま」は、書いた中身の暗号でない部分と同じ（壊しても同じ）。
   # ファイルから読む行は、ファイルの中身に受付台帳の欄をかぶせる。そのかぶせを外すと ㉕y が赤くなる。
   (u"★🔄 一括再暗号化で行の封筒を新しくするとき、ファイルから読む行に受付台帳の欄をかぶせない（受付台帳の「完了」が物件から消える）",
-   u'''          try { const want = lgwbWanted(row);
-                Object.keys(want).forEach(k => { if(sens.indexOf(k) < 0 && String(np[k] == null ? "" : np[k]) !== String(want[k] == null ? "" : want[k])) np[k] = want[k]; }); } catch(_){}
+   u'''            try { const want = lgwbWanted(row);
+                  Object.keys(want).forEach(k => { if(sens.indexOf(k) < 0 && String(np[k] == null ? "" : np[k]) !== String(want[k] == null ? "" : want[k])) np[k] = want[k]; }); } catch(_){}
 ''', u'''''', TM, "main", u"㉕ykeep,㉕ynewpw"),
+  (u"★🔄 一括再暗号化で、この端末が直していない受付台帳の欄まで古い写しでかぶせる（ほかのPCが .hyb に入れた「完了」・備考が物件から消え、あとの 💾 物件に保存 で戻る）",
+   u'''          if(row._lgEdited || (row._caseId && _editedCaseKeys.has(row._caseId))){''',
+   u'''          if(true){''', TM, "main", u"㉕yLst,㉕yLnote"),
   (u"★🔄 一括再暗号化で、ファイルから読む行の物件の封筒を、行の古い中身に新しい鍵の元を付けたものにする（ほかのPCの新しい .hyb を、あとの 💾 物件に保存 が戻す）",
    u'''        if(row._slim){
           const np = Object.assign({}, newData.plain || {});''',

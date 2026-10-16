@@ -20384,8 +20384,12 @@ async function bulkReencodeTargets(params){
         const sens = (newData.meta && Array.isArray(newData.meta.sensitive_fields)) ? newData.meta.sensitive_fields : HYBRID_SENSITIVE_FIELDS;
         if(row._slim){
           const np = Object.assign({}, newData.plain || {});
-          try { const want = lgwbWanted(row);
-                Object.keys(want).forEach(k => { if(sens.indexOf(k) < 0 && String(np[k] == null ? "" : np[k]) !== String(want[k] == null ? "" : want[k])) np[k] = want[k]; }); } catch(_){}
+          /* かぶせるのは、この端末が受付台帳で直して、まだファイルに入っていない戸別だけ（版178）。直していない戸別にかぶせると、
+             ほかのPCがファイルに入れた「完了」・工事日程予定・備考を、この端末の古い写し（📁 で読んだときのまま）で戻した */
+          if(row._lgEdited || (row._caseId && _editedCaseKeys.has(row._caseId))){
+            try { const want = lgwbWanted(row);
+                  Object.keys(want).forEach(k => { if(sens.indexOf(k) < 0 && String(np[k] == null ? "" : np[k]) !== String(want[k] == null ? "" : want[k])) np[k] = want[k]; }); } catch(_){}
+          }
           e2.plain = np;
         } else if(row.envelope && row.envelope.plain && typeof row.envelope.plain === "object") e2.plain = Object.assign({}, row.envelope.plain);
         const before = row.envelope;

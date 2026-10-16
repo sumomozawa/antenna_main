@@ -218,6 +218,7 @@
      ㉕y 物件のファイルから読む .hyb に受付台帳で「完了」→ 🔄 一括再暗号化（パスワードそのまま・新しいパスワード）→ 物件に「完了」が残る・物件の封筒も新しい鍵
      ㉕z ほかのPCが物件で「完了」を付けた（この端末はまだ取り込んでいない）→ 🔄 一括再暗号化 → 物件の保存で「完了」を消さない
      ㉕yS ほかのPCが物件なしで .hyb を書き替えた（新しい鍵の元・1U）→ 🔄 → 物件の封筒は、いまのファイルの中身（1U）＋受付台帳の「完了」＋新しい鍵（古い中身に新しい鍵を付けない）
+     ㉕yL この端末は受付台帳を直していない・ほかのPCが .hyb に「完了」（備考）を入れた → 🔄 → 物件の封筒にもほかのPCの「完了」（備考）（古い写しをかぶせない）
      ㉕zM ほかのPCが物件を保存（この戸別は直していない）→ 🔄 → まとめても物件のこの戸別は新しい鍵（keep・newpw）
      ㉕zf 📄 ファイルで読んだ .hyb へ 📥（G・1U-BC）→ 開くと A・B・G（読んだファイルの写真を差し込む）・保存の中身も A・B・G（nog：現場の写真なし　gpw：聞かれたパスワードで）
      ㉕zk 📄 ファイルで読んだ .hyb で B を消し A を「玄関」にして戻る → 開き直しても A「玄関」だけ・保存も同じ・一括平文化も A は「玄関」
@@ -6413,6 +6414,42 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
          '★㉕yS 🔄 のあと物件の封筒が、ファイルと同じ鍵の元なのに古い中身（3U）（あとの 💾 物件に保存 が、ほかのPCの 1U を戻す） → ' + short(r.disk));
       ok(r.disk.saltSame && r.disk.amp === 'amp_1u45' && r.disk.st === 'completed',
          '★㉕yS 🔄 のあと物件の封筒が、いまのファイルの中身（1U）・受付台帳の「完了」・新しい鍵にならない → ' + short(r.disk));
+    }
+    await ctx.close();
+  }
+
+  // ---- ㉕yL 共有ファイルの物件で 📁（物件に取り込む）した .hyb（ファイルから読む行）→ 物件の保存（この端末は受付台帳を直していない）
+  //   → ほかのPCが物件なしで .hyb を書き替えた（st：状態を「完了」に　note：備考を書いた。鍵の元が新しい）→ この端末で 🔄（パスワードそのまま）→ 物件の保存
+  //   → 物件の封筒に、ほかのPCの「完了」（備考）が入る（この端末の古い写しの受付台帳の欄をかぶせない）
+  //   （前は、この端末が直していない受付台帳の欄まで古い写しでかぶせ、ファイルと同じ鍵の元で物件に入れたので、
+  //     あとの 💾 物件に保存 が、ほかのPCの「完了」・備考を戻した）
+  for(const mode of ['st', 'note'].filter(m => want('㉕yL' + m))){
+    const L = '㉕yL' + mode;
+    const { ctx, page, said } = await openMain(L);
+    await page.evaluate(HYB25);
+    const r = await run(page, async ({ NO, mode }) => {
+      const h = await __hyb25(NO, { shared: 'pj25yL' });
+      const o = { loaded: h.loaded, lgEdited: !!h.row._lgEdited };
+      h.stop(); await projSaveNow();
+      const d = await decryptHybrid(JSON.parse(h.list.__files[h.FN]), h.PW);   // ほかのPC：物件なしで 💾 上書き保存（新しい鍵の元）
+      if(mode === 'st') d.chosho_status = 'completed'; else d.chosho_note = '現場：裏口から';
+      h.list.__files[h.FN] = JSON.stringify(await encryptHybrid(d, h.PW), null, 2);
+      o.reenc = await h.reenc(null);
+      h.stop(); await projSaveNow();
+      const pl = h.diskCase() || {};
+      o.disk = { st: (pl.plain || {}).chosho_status, note: (pl.plain || {}).chosho_note, saltSame: pl.salt === JSON.parse(h.list.__files[h.FN]).salt };
+      const fd = await decryptHybrid(JSON.parse(h.list.__files[h.FN]), h.PW);
+      o.file = { st: fd.chosho_status, note: fd.chosho_note };
+      return o;
+    }, { NO, mode });
+    console.log(L + 'ほかのPCがファイルに入れた受付台帳の欄と 🔄', short(r));
+    ok(!r.error, L + '止まった → ' + r.error);
+    if(!r.error){
+      const want1 = mode === 'st' ? (r.disk.st === 'completed') : (r.disk.note === '現場：裏口から');
+      ok(r.loaded.slim && !r.lgEdited && r.reenc.wrote === 1 && (mode === 'st' ? r.file.st === 'completed' : r.file.note === '現場：裏口から'),
+         L + '試験の前提: この端末は受付台帳を直していない・🔄 で .hyb はほかのPCの中身のまま → ' + short(r));
+      ok(!(r.disk.saltSame && !want1),
+         '★' + L + ' 🔄 のあと物件の封筒が、ファイルと同じ鍵の元なのに、この端末の古い写しの受付台帳の欄（ほかのPCの' + (mode === 'st' ? '「完了」' : '備考') + 'が消える） → ' + short(r.disk));
     }
     await ctx.close();
   }
