@@ -15036,6 +15036,10 @@ async function overwriteSaveCurrent(){
         env.encrypted_fields = Object.assign({}, newData.encrypted_fields || {});
         if(env.encrypted_fields.chosho_photos) env.encrypted_fields.chosho_photos = { stripped: true };
         _editingRow.envelope = env;
+        /* 画面の写真はみなファイルに入った。行にだけ持っていた写真は捨てて、次からはファイルを読む（版178。
+           持ったままだと、画面で消して書いた写真が、開き直したとき行から戻ってきた） */
+        _editingRow.data = Object.assign({}, _editingRow.data, { chosho_photos: null });
+        _editingRow._slim = true;
       }
       // 元ファイルにだけあった印（現場入力が後から書いた分など）を、開いている行にも持たせる
       if(_editingRow && _editingRow.fileType !== "full" && _editingRow.data && typeof _editingRow.data === "object"){
@@ -15486,7 +15490,7 @@ let _indivWriteNotShown = false;
    戻り値: { ok, walked＝見て回った, why, file＝読めなかったのがファイル（フォルダではない） } */
 async function indivThumbOriginals(dir, nos, obj){
   const arr = (obj && Array.isArray(obj.chosho_photos)) ? obj.chosho_photos : [];
-  const small = p => { if(!p || !p.id || !p.dataUri) return false; const e = photoLongEdgeOf(p.dataUri); return e > 0 && e <= PROJ_THUMB_MAXPX; };
+  const small = p => projThumbLike(p);   // 物件の縮小版そのもの（PNG の図などは元の写真＝探さない）
   if(!arr.some(small)) return { ok: true, walked: false };
   const key = s => toHalfWidthAn(String(s || "")).trim().toUpperCase();
   const keys = new Set((nos || []).map(key).filter(Boolean));
@@ -15627,9 +15631,13 @@ async function writeCurrentCaseToIndividualFile(){
   let thumbKeptNote = "";
   if(created && !photoSrcFh && row.fileType === "plain" && ((row.data && row.data.chosho_photos_thumb) || row._fromProject)){
     const oldNo = junkNoFromName(oldBase);
+    const before = (contentObj.chosho_photos || []).slice();   // 元の写真を探す前の、行の写真（版178）
     const up = await indivThumbOriginals(dir, [mg].concat(/^戸別$/.test(oldNo) ? [] : [oldNo]), contentObj);
     if(!up.ok){
-      const orig = (contentObj.chosho_photos || []).some(p => { if(!p || !p.dataUri) return false; const e = photoLongEdgeOf(p.dataUri); return !(e > 0 && e <= PROJ_THUMB_MAXPX); });
+      /* 断ってよいのは、行の写真がみな物件の縮小版そのもののときだけ（物件に同じものがある）。
+         ほかのファイルから見つけた元の写真は数えない（それはそのファイルに残っている）。
+         PNG の図・大きい JPEG（この画面で足した等）は、物件には別物しか無い＝作る（版178） */
+      const orig = before.some(p => p && p.dataUri && !projThumbLike(p));
       if(!orig){
         return "\n\u26a0 戸別の個別JSONは作っていません：" + up.why + "。\n"
              + "\u3000 物件には、この戸別の写真を小さくしたものしか入っていません。元の写真を確かめないまま作ると、小さい写真のファイルになってしまいます。\n"
@@ -24572,10 +24580,18 @@ function lgOverlayLedger(fresh, row){
    「写真の出ていない画面」の印は外さない（💾 上書き保存 は、元ファイルの写真に足して書く）。
    戻り値＝出した行の写真（出さないときは null）。 */
 function hybRowPhotosToShow(full, target){
-  if(!full || !full._photosStripped || !target || !target._photosKnown || !target.data) return null;
+  if(!full || !target || !target.data) return null;
   const ph = target.data.chosho_photos;
   if(!Array.isArray(ph) || !ph.some(p => p && p.dataUri)) return null;
-  full.chosho_photos = ph.slice();   // ほどいた中身そのものに入れる（入れ物を替えると、写真を剥がした印が消える）
+  if(full._photosStripped){
+    if(!target._photosKnown) return null;
+    full.chosho_photos = ph.slice();   // ほどいた中身そのものに入れる（入れ物を替えると、写真を剥がした印が消える）
+    return ph;
+  }
+  /* ファイルからほどいた（写真が出る）ときは、ファイルの写真に、行にだけある写真（📥 で入れた・画面で足して一覧へ戻った。
+     暗号のファイルにはまだ無い）を足して出す（版178）。足さないと、開き直したとき消えていた */
+  const base = Array.isArray(full.chosho_photos) ? full.chosho_photos : (full.chosho_photos ? migratePhotosShape(full.chosho_photos) : []);
+  full.chosho_photos = photosKeepFileOnly(base, ph.filter(p => p && p.dataUri));
   return ph;
 }
 async function listLoadRow(target){
@@ -24603,7 +24619,9 @@ async function listLoadRow(target){
         const full = lgOverlayLedger(await decryptHybrid(env, _sessionPassword), target);
         const rowPh = hybRowPhotosToShow(full, target);   // 行にだけある写真を画面に出す（版178）
         const lite = Object.assign({}, full); lite.chosho_photos = rowPh; // 一覧側は写真を保持しない（行にだけある写真は持ったまま。版178）
-        target.data = lite; target.unlocked = true; target._slim = !rowPh;   // 行にだけある写真があるあいだは、行の封筒で開く（版178）
+        /* 写真はファイルにあるので、次に開くとき・一覧の 📷・写真の書き出し・一括再暗号化は、ファイルを読む（_slim）。
+           行にだけある写真は行に持ったまま、開くとき足す（版178。行の封筒（写真を剥がした印）のままにすると、それらが写真を読めなくなった） */
+        target.data = lite; target.unlocked = true; target._slim = true;
         target._amtCache = undefined; target._bomCache = undefined;
         applyStateData(full);
         setLoadedOrigin(target);
@@ -24633,7 +24651,7 @@ async function listLoadRow(target){
       const full = lgOverlayLedger(await decryptHybrid(env, pw), target);
       const rowPh = hybRowPhotosToShow(full, target);   // 行にだけある写真を画面に出す（版178）
       const lite = Object.assign({}, full); lite.chosho_photos = rowPh;
-      target.data = lite; target.unlocked = true; target._slim = !rowPh;
+      target.data = lite; target.unlocked = true; target._slim = true;   // 上と同じ（版178）
       target._amtCache = undefined; target._bomCache = undefined;
       setSessionPassword(pw);
       applyStateData(full);
@@ -28980,6 +28998,15 @@ function makeThumbDataUri(dataUri, maxPx, quality){
   });
 }
 /* 行の現地写真からサムネイル(row._thumbs)を生成してキャッシュ。既に生成済み/対象外なら何もしない。 */
+/* 物件の縮小版づくり（ensureRowThumbs）が、作り直さずにそのまま物件へ入れる写真か（版178。物差しは1つ）。
+   小さめの JPEG だけ。PNG の図・大きい JPEG は、物件には作り直した別物（JPEG・画質0.72）が入る。 */
+function projThumbAsIs(u){ u = String(u || ""); return u.startsWith("data:image/jpeg") && u.length < 150000; }
+/* 物件の縮小版そのものか（版178）：長辺512px以下で、物件にそのまま入る写真（写真IDあり）。
+   これでない写真は、物件には同じものが無い＝戸別ファイルに入れないと失う */
+function projThumbLike(p){
+  if(!p || !p.id || !p.dataUri || !projThumbAsIs(p.dataUri)) return false;
+  const e = photoLongEdgeOf(p.dataUri); return e > 0 && e <= PROJ_THUMB_MAXPX;
+}
 async function ensureRowThumbs(row){
   /* _thumbsNoFile＝ファイルを読まずに作った（引き継いだ）縮小版の印（版178）。次の保存でまたファイルを読んで作り直す */
   if(!row || row.fileType !== "plain" || (Array.isArray(row._thumbs) && !row._thumbsNoFile)) return;
@@ -29012,7 +29039,7 @@ async function ensureRowThumbs(row){
   let thumbs = [];
   for(const p of real){
     // 既にサムネイル相当（小さめJPEG）の画像は再圧縮しない＝保存を繰り返しても画質が劣化しない
-    const t = (p.dataUri.startsWith("data:image/jpeg") && p.dataUri.length < 150000)
+    const t = projThumbAsIs(p.dataUri)
       ? p.dataUri
       : await makeThumbDataUri(p.dataUri, PROJ_THUMB_MAXPX, PROJ_THUMB_QUALITY);
     const th = { label: p.label || "", dataUri: t };
@@ -29029,8 +29056,11 @@ async function ensureRowThumbs(row){
      直して戻るたびに縮小版を捨て、写真なしで物件に保存してしまう（ほかの端末とまとめると、その戸別の写真が全部消えていた）。 */
   if(Array.isArray(row._thumbs) && !row._thumbsNoFile) return;
   const now = row.data ? row.data.chosho_photos : undefined;
-  if(now !== src0 && !photosSameSet(now, src0)) return;
+  /* 付けずに戻るときは、作り直しの印を付ける（版178）。📥 で前の縮小版を引き継いだ行は、縮小版を持ったままなので、
+     印が無いと同じ回で作り直さず、取り込んだ写真の無い縮小版のまま物件に入り、まとめで行が作り直されると写真が消えていた */
+  if(now !== src0 && !photosSameSet(now, src0)){ row._thumbsRetry = true; return; }
   row._thumbs = thumbs;
+  row._thumbsRetry = false;
   row._thumbsNoFile = own && !both;                   // ファイルを読めずに作った（版178。次の保存でまた読む）
   /* ファイルを読めずに作った縮小版は、このファイルの縮小版として覚えない（版178）。
      覚えると、同じ枚数のファイルを読み直したとき、ファイルの写真の代わりに取り込んだ写真が物件に入っていた */
@@ -29095,7 +29125,7 @@ async function prepareProjectThumbs(silent){
     }
     /* 作っているあいだに写真が変わって付けなかった行は、この回のうちに作り直す（版178。写真なしで物件に保存しないため） */
     for(let pass = 0; pass < 2; pass++){
-      const again = targets.filter(r => r && !Array.isArray(r._thumbs));
+      const again = targets.filter(r => r && (!Array.isArray(r._thumbs) || r._thumbsRetry));
       if(!again.length) break;
       for(const r of again){ await new Promise(res => setTimeout(res, 0)); await ensureRowThumbs(r); }
     }
@@ -37504,7 +37534,9 @@ async function applyGenbaMergeToRow(row, genbaData, opts){
     row._amtCache=undefined; row._bomCache=undefined; row._thumbs=keepTh;
     if(keepTh) row._thumbsNoFile = true;
     const n = Array.isArray(merged.chosho_photos)?merged.chosho_photos.filter(p=>p&&p.dataUri).length:0;
-    row._photoCount = row._slim ? (row._photoCount > 0 ? row._photoCount : 0) : n; }
+    /* 暗号（.hyb・.enc）の行の枚数は「分からない」（-1＝🔒）。0 にすると一覧に「―」（写真なし）と出る（版178） */
+    row._photoCount = (row._slim && row.fileType === "plain") ? (row._photoCount > 0 ? row._photoCount : 0)
+      : ((row._slim && row._photoCount === -1 && !n) ? -1 : n); }
   try { resolveRowOutsourceFee(row); } catch(_){}  // 物件の協力会社諸経費を auto 行へ再適用
   try { markCaseEdited(row); } catch(_){}
   if(genbaData && ("chosho_note" in genbaData)
