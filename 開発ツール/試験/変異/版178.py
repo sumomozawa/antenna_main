@@ -334,9 +334,9 @@ CASES = [
    u'''  const hit = new Set(cand.filter(p => inFile.has(p.id)));''', TMM, "main", u"㊲a"),
   (u"★預けるとき、書いたファイルを読み返さない（行の写真をそのまま信じる）",
    u'''  const j = await photoFileRead(fh);
-  if(!j || typeof j !== "object" || !Array.isArray(j.chosho_photos) || row.data !== d0) return 0;''',
+  if(!j || typeof j !== "object" || !Array.isArray(j.chosho_photos)) return 0;''',
    u'''  const j = { chosho_photos: d0.chosho_photos };
-  if(row.data !== d0) return 0;''', TMM, "main", u"㊲a"),
+  if(false) return 0;''', TMM, "main", u"㊲a"),
   (u"★戸別ファイルに入れたあとも、元の写真を行に持ち続ける（メモリが減らない）",
    u'''  if(row.fileType === "plain"){ try { await rowParkOriginals(row, fh); } catch(_){} }
 ''', u'''''', TMM, "main", u"㉟"),
@@ -384,6 +384,23 @@ CASES = [
    u'''    if(row.fileType === "plain"){ try { await rowTakeBackOriginals(row); } catch(_){} }
     /* 開いている戸別へ取り込んだ：画面にはファイルの写真と現場の写真を合わせて出す（常駐させない行はファイルを読み直す）。''',
    u'''    /* 開いている戸別へ取り込んだ：画面にはファイルの写真と現場の写真を合わせて出す（常駐させない行はファイルを読み直す）。''', TMM, "main", u"㊷c"),
+  (u"★💾 反映で新しく作るとき、預けた元の写真を読めなくても縮小版でファイルを作る（元の写真のファイルを置き去りにする）",
+   u'''      if(tb && tb.miss){''', u'''      if(false){''', TMM, "main", u"㊶c"),
+  (u"★🔄 一括再保存で元ファイルを読み直せないとき、預けた縮小版（行の写真）で元ファイルを書き替える",
+   u'''        if(row.fileHandle && (row._slim || rowHasParkedThumb(row) || (row.data && row.data.chosho_photos_thumb))){ photoSkip++; continue; }''',
+   u'''        if(false){ photoSkip++; continue; }''', TMM, "main", u"㊶d"),
+  (u"★写真を入れたファイルを覚えない（初めの預けが途中で止まった行を、あとで軽くできない）",
+   u'''  row._parkFh = fh;                           // この行の写真を入れたファイル（預けが途中で止まっても、あとで確かめて軽くする）
+''', u'''''', TMM, "main", u"㊷d"),
+  (u"★預けられなかった行を覚えない（物件の保存のたびにファイルを読み直す）",
+   u'''  if(row.data === d0) row._parkChecked = d0;''', u'''  if(false) row._parkChecked = d0;''', TMM, "main", u"㊷d"),
+  (u"★帯の外の行の預けた元の写真を読めなくても、縮小版を移す",
+   u'''    if(tb && tb.miss) throw new Error(''', u'''    if(false) throw new Error(''', TMM, "main", u"㊷e"),
+  (u"★前の戸別を軽くするとき、縮小版が足りていても物件の縮小版づくりの終わりを待つ（開くたびに待たされる）",
+   u'''    if(!Array.isArray(row._thumbs) || row._thumbs.length !== real){
+      if(!inRun){''',
+   u'''    if(true){
+      if(!inRun){''', TMM, "main", u"㊷f"),
   # ======== 現場入力：まとめて保存（E・F） ========
   (u"★まとめて保存（フォルダ）：下書きの中身が変わっていても、写しで書き直す・保存済にする",
    u'''    const lateOther = !keep && !!model && model !== M && !!(opt && opt.wrote) && !draftRecSame(rec, (opt && opt.was) || "");''',
