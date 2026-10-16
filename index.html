@@ -15901,17 +15901,19 @@ function saveStateBaseName(mgmtSafe, fromProj){
   return mgmtSafe ? (mgmtSafe + (fromProj ? "_写し" : "")) : ("アンテナ工事_" + todayLocalYmd());
 }
 /* 物件から開いた戸別の「💾 保存」「🔐 暗号化保存」「ハイブリッド保存」で出す知らせ（版178）。
-   写しの写真が、物件の縮小版（長辺512px以下）か・復元できていない（暗号の戸別で剥がれている＝_editorPhotosStripped）かで言い方を変える */
+   写しの写真が、物件の縮小版か・復元できていない（暗号の戸別で剥がれている＝_editorPhotosStripped）かで言い方を変える。
+   ・縮小版かは、物件の縮小版づくりと同じ物差し（projThumbLike）で見る。PNG の図・大きい JPEG は元の写真のまま物件に残る。
+     暗号の戸別は、物件に縮小版を入れない（暗号の封筒のまま）ので「小さい写真」とは言わない（画面の写真はファイルからほどいた元の写真）。
+   ・剥がれていても、ここで足した写真・📥 で入れた写真は画面に出て、写しに入る。そのときは「この画面の写真だけが入ります」と言う */
 function saveStateProjNote(s, mgmtSafe){
-  const small = ((s && Array.isArray(s.chosho_photos)) ? s.chosho_photos : []).some(p => {
-    if(!p || !p.dataUri) return false;
-    const e = photoLongEdgeOf(p.dataUri); return e > 0 && e <= PROJ_THUMB_MAXPX; });
   /* 戸別ファイルの名前。暗号の戸別は、行が覚えている名前（💾 物件に保存 もその名前へ書く。多くは 管理番号.antenna.hyb）。
      ふつうの戸別は「管理番号.json」（💾 物件に保存 がこの名前にそろえて書く。管理番号が無いときは行が覚えている名前） */
   const er = _editingRow, r = er || _editorProjRow;   // 名前は、行が一覧から外れていても開いた行から（版178）
   const hyb = !!(r && r.fileType === "hybrid");
   const known = r ? String(r._name || (/^manual:/.test(r.file || "") ? "" : (r.file || ""))).split(/[\\/]/).pop() : "";
   const fname = ((hyb || !mgmtSafe) && known) ? known : ((mgmtSafe || "管理番号") + (hyb ? ".hyb" : ".json"));
+  const ph = ((s && Array.isArray(s.chosho_photos)) ? s.chosho_photos : []).filter(p => p && p.dataUri);   // 写しに入る写真
+  const small = !hyb && ph.some(p => projThumbLike(p));
   /* 「💾 物件に保存」の名前は、そのボタンが押せるときだけ出す（updateOverwriteSaveBtn と同じ条件）。
      押せないとき（ファイルに結び付いて「💾 上書き保存」になっている・閲覧のみ・行が一覧から外れた）は、ほかのボタンへ案内しない
      （剥がれた写真や縮小版で戸別ファイルを上書きする道へ連れて行かない）。 */
@@ -15919,7 +15921,8 @@ function saveStateProjNote(s, mgmtSafe){
   const projBtn = !ro && !(_loadedOrigin && _loadedOrigin.fileHandle)
     && (typeof _currentProject !== "undefined") && !!_currentProject && !!er && _listRows.indexOf(er) >= 0;
   return "\u26a0 この戸別は物件から開いています。\n"
-    + (_editorPhotosStripped ? "写真は復元できていないので、この写しには入りません（暗号の写真は、工事フォルダの戸別ファイルにあります）。\n"
+    + (_editorPhotosStripped ? (ph.length ? "元の暗号の写真は復元できていないので、この写しには入りません（この画面の写真だけが入ります。元の写真は工事フォルダの戸別ファイルにあります）。\n"
+                                          : "写真は復元できていないので、この写しには入りません（暗号の写真は、工事フォルダの戸別ファイルにあります）。\n")
      : small ? "写真は、物件に控えた小さい写真です（元の写真ではありません）。\n"
              : "工事フォルダの戸別ファイルにしか無い写真は、この画面には入っていないことがあります。\n")
     /* 暗号の戸別：「💾 物件に保存」が書くのは暗号でない部分（図面・積算など）だけ。暗号の部分（写真・お客様の欄）は元のファイルのまま */

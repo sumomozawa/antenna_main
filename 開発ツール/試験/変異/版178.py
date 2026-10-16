@@ -391,8 +391,8 @@ CASES = [
   (u"★写しの名前を 管理番号 のままにする（ハイブリッド保存の写しが戸別ファイルと同じ名前の土台）",
    u'''(mgmtSafe + (fromProj ? "_写し" : ""))''', u'''(mgmtSafe)''', TM, "main", u"㉘a"),
   (u"★写真が復元できていない（剥がれている）ことを知らせない",
-   u'''    + (_editorPhotosStripped ? "写真は復元できていないので、この写しには入りません（暗号の写真は、工事フォルダの戸別ファイルにあります）。\\n"''',
-   u'''    + (false ? "写真は復元できていないので、この写しには入りません（暗号の写真は、工事フォルダの戸別ファイルにあります）。\\n"''', TM, "main", u"㉘a"),
+   u'''    + (_editorPhotosStripped ? (ph.length ?''',
+   u'''    + (false ? (ph.length ?''', TM, "main", u"㉘a"),
   (u"★暗号の戸別で、行が覚えている名前を見ない（管理番号.antenna.hyb の戸別ファイルを 管理番号.hyb と言う）",
    u'''  const fname = ((hyb || !mgmtSafe) && known) ? known : ((mgmtSafe || "管理番号") + (hyb ? ".hyb" : ".json"));''',
    u'''  const fname = (mgmtSafe || "管理番号") + (hyb ? ".hyb" : ".json");''', TM, "main", u"㉘a"),
@@ -477,7 +477,7 @@ CASES = [
   (u"★行が外れたとき、知らせの戸別ファイルの名前を開いた行から作らない（暗号の戸別を 管理番号.json と言う）",
    u'''  const er = _editingRow, r = er || _editorProjRow;''',
    u'''  const er = _editingRow, r = er;''', TM, "main", u"㉘g"),
-  (u"★工事調書のまとめ印刷のあと、「写真が復元できていない」印とバナーを戻さない（💾 上書き保存の確かめが出ない）",
+  (u"★工事調書のまとめ印刷のあと、「写真が復元できていない」印とバナーを戻さない（あとの 💾 上書き保存が画面の写真だけで .hyb を書く・写しの知らせが「復元できていない」と言わない）",
    u'''      if(savedStripped){ _editorPhotosStripped = true; showPhotoStrippedBanner(true); }   // 写真の出ていない画面のまま（版178）
 ''', u'''''', TM, "main", u"㉘h"),
   (u"★暗号の戸別へ「💾 物件に保存」を案内するとき、ここで足した写真とお客様の欄が入らないことを言わない",
@@ -497,6 +497,17 @@ CASES = [
    u'''  if(fromProj){ editorAddHiddenPhotos(s); if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }
   const password = await promptPassword({
     title: "🔐🔑 ハイブリッド暗号化保存 (方式C)",''', TM, "main", u"㉘f"),
+
+  # ---- （G4）版178 の b93342c を取り込んだあとの見直しの直し：写しの知らせを画面の写真に合わせる ----
+  (u"★剥がれた画面に写真が出ていて写しに入るのに、「写真は…この写しには入りません」とだけ言う（この画面の写真は入ると言わない）",
+   u'''    + (_editorPhotosStripped ? (ph.length ?''', u'''    + (_editorPhotosStripped ? (false ?''', TM, "main", u"㉘i"),
+  (u"★写しに写真が1枚も入らないのに「この画面の写真だけが入ります」と言う",
+   u'''    + (_editorPhotosStripped ? (ph.length ?''', u'''    + (_editorPhotosStripped ? (true ?''', TM, "main", u"㉘a"),
+  (u"★暗号の戸別でも「物件に控えた小さい写真（元の写真ではありません）」と言う（暗号の戸別は物件に縮小版を入れない）",
+   u'''  const small = !hyb && ph.some(p => projThumbLike(p));''', u'''  const small = ph.some(p => projThumbLike(p));''', TM, "main", u"㉘j"),
+  (u"★縮小版かを長辺だけで見る（元の写真のまま物件に残る小さい PNG の図を「物件に控えた小さい写真」と言う）",
+   u'''  const small = !hyb && ph.some(p => projThumbLike(p));''',
+   u'''  const small = !hyb && ph.some(p => { const e = photoLongEdgeOf(p.dataUri); return e > 0 && e <= PROJ_THUMB_MAXPX; });''', TM, "main", u"㉘k"),
 
   # ======== 現場入力：まとめて保存（E・F） ========
   (u"★まとめて保存（フォルダ）：下書きの中身が変わっていても、写しで書き直す・保存済にする",
