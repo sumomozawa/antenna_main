@@ -295,26 +295,26 @@ CASES = [
    u'''      flowShareItemsApply(items, byNo, openNo);''', TG, "genba", u"⑯"),
   # ======== 現場入力：特別記録の写真の取り込み ========
   (u"★特別記録の写真の取り込みで、取り込みを始めた記録を丸ごと書く（開き直して撮ったカメラの写真が消える）",
-   u'''        try{ await spPhotoKeep(r, { label:"", dataUri, id }); }catch(_){}''',
-   u'''        r.photos.push({ label:"", dataUri, id }); try{ await spPersist(r); }catch(_){}''', TG, "genba", u"⑰"),
+   u'''        try{ await spPhotoKeep(r, pending); pending = []; }catch(_){}''',
+   u'''        r.photos.push(...pending); pending = []; try{ await spPersist(r); }catch(_){}''', TG, "genba", u"⑰"),
   (u"★特別記録の写真の取り込みで、取り込みを始めた記録を丸ごと書く（一覧へ戻ったままでも、カメラの写真が消える）",
-   u'''        try{ await spPhotoKeep(r, { label:"", dataUri, id }); }catch(_){}''',
-   u'''        r.photos.push({ label:"", dataUri, id }); try{ await spPersist(r); }catch(_){}''', TG, "genba", u"⑰e"),
+   u'''        try{ await spPhotoKeep(r, pending); pending = []; }catch(_){}''',
+   u'''        r.photos.push(...pending); pending = []; try{ await spPersist(r); }catch(_){}''', TG, "genba", u"⑰e"),
   (u"★特別記録の取り込みの写真を、開いている同じ記録に足さない（開き直した記録で備考を直すと、取り込んだ写真が消える）",
-   u'''    if(cur){ if(!Array.isArray(cur.photos)) cur.photos = []; mergePhotosInto(cur.photos, [ph]); }''',
+   u'''    if(cur){ if(!Array.isArray(cur.photos)) cur.photos = []; mergePhotosInto(cur.photos, phs); }''',
    u'''''', TG, "genba", u"⑰"),
   (u"★特別記録の開いている記録を、同じ物かどうかだけで見る（開き直した記録に、取り込みの写真が届かない）",
    u'''  return (_spCur && rec && (_spCur === rec || (rec.key && _spCur.key === rec.key))) ? _spCur : null;''',
    u'''  return (_spCur && rec && _spCur === rec) ? _spCur : null;''', TG, "genba", u"⑰"),
   (u"★特別記録の取り込みの終わりに描き直さない（取り込んだ写真が、開いている記録の画面に出ない）",
-   u'''    if(spCurOf(r)) renderSpecialEdit(host);''', u'''''', TG, "genba", u"⑰"),
+   u'''    if(cur) renderSpecialEdit(host);''', u'''''', TG, "genba", u"⑰"),
   (u"★特別記録の取り込みで、始めの記録の写真をみな足す（開き直して消した写真が戻る）",
-   u'''    if(!mergePhotosInto(prev.photos, [ph])) return;''',
-   u'''    if(!mergePhotosInto(prev.photos, (rec.photos || []).concat([ph]))) return;''', TG, "genba", u"⑰b"),
+   u'''    if(!mergePhotosInto(prev.photos, phs)) return;''',
+   u'''    if(!mergePhotosInto(prev.photos, (rec.photos || []).concat(phs))) return;''', TG, "genba", u"⑰b"),
   (u"★特別記録の取り込みの書き込みを1つずつにしない（同時に入った写真の片方が消える）",
-   u'''function spPhotoKeep(rec, ph){
+   u'''function spPhotoKeep(rec, phs){
   return spQueue(async () => {''',
-   u'''function spPhotoKeep(rec, ph){
+   u'''function spPhotoKeep(rec, phs){
   return (fn => fn())(async () => {''', TG, "genba", u"⑰c"),
   (u"★特別記録の控え（spPersist）を、取り込みの書き込みと同じ列に並べない（直した備考が元に戻る）",
    u'''  await spQueue(async () => {
@@ -349,6 +349,18 @@ CASES = [
    u'''    if(res && res.ok && !res.late){''', u'''    if(res && res.ok){''', TG, "genba", u"⑰i"),
   (u"★特別記録の保存の途中で入った写真を、開いている画面に出さない",
    u'''      if(res.late && spCurOf(r)) renderSpecialEdit(host);''', u'''''', TG, "genba", u"⑰i"),
+  # ======== 現場入力：特別記録（見直しで見つかった道） ========
+  (u"★特別記録の取り込みで、端末に控えられなかった写真をもう一度控えない（黙って消える）",
+   u'''        try{ await spPhotoKeep(r, pending); pending = []; }catch(_){}''',
+   u'''        try{ await spPhotoKeep(r, pending); }catch(_){} pending = [];''', TG, "genba", u"⑰l"),
+  (u"★特別記録の取り込みで、ずっと控えられない写真があっても知らせない",
+   u'''    if(pending.length) toast("⚠ " + pending.length + "枚の写真を、この端末に控えられませんでした（空き容量不足かも）。"''',
+   u'''    if(false) toast("⚠ " + pending.length + "枚の写真を、この端末に控えられませんでした（空き容量不足かも）。"''', TG, "genba", u"⑰l"),
+  (u"★特別記録の取り込みの終わりに、開いている記録を控えずに描き直す（取り込みのあいだに打った備考が残らない）",
+   u'''    if(cur){ try{ await spPersist(cur); }catch(_){} }''', u'''''', TG, "genba", u"⑰m"),
+  (u"★特別記録の保存が終わったら、そのとき開いている記録を閉じる（あいだに開いたほかの記録が閉じる）",
+   u'''      if(!_spCur || _spCur === r){ _spCur = null; await renderSpecial(); }''',
+   u'''      _spCur = null; await renderSpecial();''', TG, "genba", u"⑰n"),
 ]
 
 import sys as _s

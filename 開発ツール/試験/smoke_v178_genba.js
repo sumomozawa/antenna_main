@@ -49,6 +49,11 @@
         もう一度「保存」を押すと、その写真もファイルに入って「保存済」になる
      ⑰j 書き出しているあいだに「戻る」→ 開き直した記録でカメラの1枚 → その写真が端末の記録から消えない・「保存済」にしない
      ⑰k 「保存済」の印を付けるために端末の記録を読んだところで、取り込みの写真が入る → その写真が端末の記録から消えない
+   （ここから 見直しで見つかった道）
+     ⑰l 一覧へ戻ったあと、取り込みの写真を端末に控えるのに1回失敗した → 次の1枚と一緒にもう一度控える（黙って落とさない）。
+        ずっと控えられないときは、そう知らせる
+     ⑰m 取り込みのあいだに備考を打った（欄を離れない＝控えの合図が出ない）→ 取り込みが終わって描き直しても、備考が端末の記録に残る
+     ⑰n 保存のあいだに「戻る」→ ほかの記録を開いた → 保存が終わっても、その記録を閉じない
    使い方: node smoke_v178_genba.js [現場入力 index.html の file:// URL]　（SCENE=①,③ で場面を絞れる） */
 const { chromium } = require('playwright-core');
 const fs = require('fs'), path = require('path');
@@ -1097,6 +1102,85 @@ window.__spImgs = () => document.querySelectorAll('#sp-body .sp-ph img').length;
     ok(r.fired === 1, '⑰k試験の前提: 保存済の印のために端末の記録を読んだところで2枚目が入る → ' + J(r));
     ok(hasAll(r.db, r.ps), '★⑰k保存済の印を付けたときに、そのあいだに入った写真が端末の記録から消えた → ' + J(r));
     ok(r.stale, '★⑰kファイルに無い写真が入ったのに「保存済」に見える → ' + J(r));
+  });
+
+  /* ---------- ⑰l 一覧へ戻ったあと、取り込みの写真を端末に控えるのに失敗した ---------- */
+  await scene('⑰l', async page => {
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const op = idbPut, said = () => ((document.getElementById('savedhint') || {}).textContent || '');
+      /* a) 2枚目の控えに1回だけ失敗する */
+      const cs = ['#fb1', '#fb2', '#fb3'];
+      const A = await __spNew('控えに1回失敗');
+      __spFire('sp-pick', cs);
+      await __rel(cs[0]);
+      document.getElementById('sp-back').click(); await __sleep(200);   // 一覧へ戻ったまま
+      let thrown = 0;
+      idbPut = async rec => { if(rec && rec.key === A.key && !thrown){ thrown = 1; throw new Error('QuotaExceededError'); } return op(rec); };
+      await __rel(cs[1]);
+      idbPut = op;
+      await __rel(cs[2]); await __sleep(300);
+      const dbA = __spIds(await idbGet(A.key));
+      /* b) ずっと控えられない */
+      const ds = ['#fb4', '#fb5'];
+      const B = await __spNew('ずっと控えられない');
+      __spFire('sp-pick', ds);
+      await __rel(ds[0]);
+      document.getElementById('sp-back').click(); await __sleep(200);
+      let tries = 0;
+      idbPut = async rec => { if(rec && rec.key === B.key){ tries++; throw new Error('QuotaExceededError'); } return op(rec); };
+      await __rel(ds[1]); await __sleep(300);
+      const msg = said();
+      idbPut = op;
+      return { thrown, ps: cs.map(__pidOf), dbA, tries, msg };
+    });
+    console.log('⑰l控えに失敗', J(r));
+    ok(r.thrown === 1, '⑰l試験の前提: 2枚目の控えに1回だけ失敗する → ' + J(r));
+    ok(hasAll(r.dbA, r.ps), '★⑰l端末に控えられなかった写真を、もう一度控えない（黙って消える） → ' + J(r));
+    ok(r.tries >= 2 && /控えられませんでした/.test(r.msg), '★⑰lずっと控えられない写真があるのに、知らせない → ' + J(r));
+  });
+
+  /* ---------- ⑰m 取り込みのあいだに備考を打った（欄を離れない）→ 描き直しても端末の記録に残る ---------- */
+  await scene('⑰m', async page => {
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const cs = ['#fc1', '#fc2'];
+      const { key } = await __spNew('打った文字');
+      __spFire('sp-pick', cs);
+      await __rel(cs[0]);
+      const el = document.getElementById('sp-note');
+      el.value = '取り込み中に打った'; el.dispatchEvent(new Event('input', { bubbles:true }));   // 欄を離れない（change は出ない）
+      await __rel(cs[1]); await __sleep(300);            // 取り込みが終わって描き直す
+      const shown = (document.getElementById('sp-note') || {}).value;
+      document.getElementById('sp-back').click(); await __sleep(200);
+      const rec = await idbGet(key);
+      return { ps: cs.map(__pidOf), shown, note: rec && rec.note, db: __spIds(rec) };
+    });
+    console.log('⑰m取り込み中に打った', J(r));
+    ok(r.shown === '取り込み中に打った' && hasAll(r.db, r.ps), '⑰m試験の前提: 描き直した欄に打った文字が出て、写真が端末の記録に入る → ' + J(r));
+    ok(r.note === '取り込み中に打った', '★⑰m取り込みのあいだに打った備考が、描き直したあと端末の記録に残らない → ' + J(r));
+  });
+
+  /* ---------- ⑰n 保存のあいだに「戻る」→ ほかの記録を開いた → 保存が終わっても閉じない ---------- */
+  await scene('⑰n', async page => {
+    await page.evaluate(SP_SAVE_SETUP);
+    const r = await page.evaluate(async () => {
+      const B = await __spNew('ほかの記録');
+      const A = await __spNew('保存する記録');
+      let fired = 0;
+      window.__onWrite = async () => { if(fired) return; fired = 1;
+        document.getElementById('sp-back').click(); await __sleep(200);
+        document.querySelector('[data-sp-open="' + B.id + '"]').click(); await __sleep(250); };
+      document.getElementById('sp-save').click();
+      for(let i = 0; i < 100 && !document.querySelector('#save-ov .save-ov-check'); i++) await __sleep(30);
+      await __sleep(300);
+      window.__onWrite = null;
+      return { fired, openB: !!(_spCur && _spCur.key === B.key), title: (document.getElementById('sp-title') || {}).value || '',
+               savedA: !spStale(await idbGet(A.key)) };
+    });
+    console.log('⑰n保存のあいだにほかの記録', J(r));
+    ok(r.fired === 1 && r.savedA, '⑰n試験の前提: 保存のあいだにほかの記録を開き、保存は終わる → ' + J(r));
+    ok(r.openB && r.title === 'ほかの記録', '★⑰n保存が終わったときに、あいだに開いたほかの記録を閉じた → ' + J(r));
   });
 
   await b.close();
