@@ -12,6 +12,13 @@
      ② 写真が届かないとき → これまでどおり、書いたときの中身（控えつき）で下書きを書き直し、「保存済」にする
      ③ 全部保存し直す：受付台帳を下書きへ入れ直しているあいだに Bの写真が届く → 下書きにもファイルにも入る
      ④ まとめて保存のあいだに Aを開き直した（画面の戸別が A）・そこへ写真が届く → 下書きに残る・「保存済」にしない
+   （ここから 見直しの直し）
+     ①b フォルダに PCのファイル（PCだけの値）がある → 届いた写真は次の保存で渡る・PCの値は消えない
+     ③b 全部保存し直す：管理番号が全角で入っている下書き → 台帳の直しがファイルに入る・「写真が入った」と誤って言わない
+     ⑤ 引き継ぎ（📥）：確かめの窓のあいだに届いた写真を、下書きから消さない
+     ⑥ 受付台帳の取り込み：入れ直しているあいだに届いた写真を、下書きから消さない
+     ⑦ 写真の取り込みの途中でその戸別を開き直し、カメラで1枚足した → 取り込みの残りが届いても、その1枚が消えない
+     ⑧ 管理番号が別の下書きと重なった新しい戸別（一時のキー）に写真を取り込む → 別の戸別の下書きを置き換えない
    使い方: node smoke_v178_genba.js [現場入力 index.html の file:// URL]　（SCENE=①,③ で場面を絞れる） */
 const { chromium } = require('playwright-core');
 const fs = require('fs'), path = require('path');
@@ -115,6 +122,22 @@ window.__info = async function(no){
            saved: !!(rec && rec.fileSavedAt), base: !!(rec && rec.model && rec.model._fileBase), h: handoverOf(draftInfoOf(no)) };
 };
 window.__file = (no) => { try{ return __pids(JSON.parse(__D.__files[no + '.json'])); }catch(_){ return null; } };
+/* 戸別を開く（履歴から開くのと同じ：下書きを読み直した別の物が画面の戸別になる） */
+window.__open = async function(k){
+  clearTimeout(_persistTimer); await persistDraft();
+  const rec = await idbGet(k);
+  M = rec.model; M._lastDraftKey = k; ensureModelShape(M); resetOpenState(); render(); await saveStateLoad();
+};
+/* 本物の写真の取り込み（handlePhotoFiles）を、1枚ずつ好きなときに届かせる道具（⑦⑧だけで使う） */
+window.__gatedImport = function(){
+  window.__cg = {};
+  window.__cgate = c => new Promise(r => { window.__cg[c] = r; });
+  window.__rel = async c => { for(let i = 0; i < 50 && !window.__cg[c]; i++) await __sleep(20); const g = window.__cg[c]; delete window.__cg[c]; if(g) g(); await __sleep(200); };
+  readImageAsDataURI = async function(f){ await __cgate(f.__c); return __png(f.__c || '#000'); };
+  photoFitForStorage = async d => d;
+  window.__files = cs => cs.map(c => { const f = new File([new Uint8Array([1,2,3])], 'p.jpg', { type:'image/jpeg' }); f.__c = c; return f; });
+  window.__pidOf = c => photoContentId(__png(c));
+};
 `;
 
 (async () => {
@@ -244,6 +267,140 @@ window.__file = (no) => { try{ return __pids(JSON.parse(__D.__files[no + '.json'
     ok(r.fired === 1 && r.fileA === 'a1' && r.open === NA, '試験の前提: A を書いたあとに A を開き直し、写真が届く → ' + J(r));
     ok(r.a.photos === 'a1,a3' && r.m === 'a1,a3', '★開き直した A に届いた写真が、下書きから消えた → ' + J(r));
     ok(r.a.h !== 'ok', '★届いた写真を渡していないのに「保存済」にした → ' + J(r.a));
+  });
+
+  /* ---------- ①b フォルダに PCのファイル（PCだけの値）があるときも、届いた写真は次の保存で渡り、PCの値は消えない ---------- */
+  await scene('①b', async page => {
+    const r = await page.evaluate(async ({ NA }) => {
+      await __state();
+      const pc = buildStateOf(Object.assign(freshModel(), { chosho_mgmt_no: NA, chosho_cust_name: '工藤 A', chosho_time: '10:00', chosho_note: 'PCメモ' }));
+      pc.chosho_photos = [ __ph('pc1', '#999') ]; pc._origin = 'main';
+      __D.__files[NA + '.json'] = JSON.stringify(pc);
+      let fired = 0;
+      __onWrite = async n => { if(n === NA + '.json' && !fired++) await __photoArrives(NA, 'a2'); };
+      await saveAllDrafts('unsaved'); await __sleep(600); __onWrite = null;
+      const r1 = { a: await __info(NA), fileA: __file(NA) };
+      await saveAllDrafts('unsaved'); await __sleep(600);
+      let ja = null; try{ ja = JSON.parse(__D.__files[NA + '.json']); }catch(_){}
+      return { fired, r1, r2: { a: await __info(NA), fileA: __file(NA), time: ja && ja.chosho_time } };
+    }, { NA });
+    console.log('①b PCのファイルがある', J(r));
+    ok(r.fired === 1 && r.r1.fileA === 'a1,pc1' && r.r1.a.photos === 'a1,a2' && r.r1.a.h !== 'ok',
+       '★①b 保存の途中で届いた写真が下書きから消えた・保存済になった（PCのファイルがあるとき） → ' + J(r.r1));
+    ok(r.r2.fileA === 'a1,a2,pc1' && r.r2.a.h === 'ok' && r.r2.time === '10:00',
+       '★①b もう一度押しても届いた写真が渡らない・PCの値（時刻）が消えた → ' + J(r.r2));
+  });
+
+  /* ---------- ③b 全部保存し直す：管理番号が全角で入っている下書き → 台帳の直しがファイルに入り、写真が入ったとは言わない ---------- */
+  await scene('③b', async page => {
+    const r = await page.evaluate(async ({ NA }) => {
+      await __state();
+      await saveAllDrafts('unsaved'); await __sleep(600);
+      const z = s => s.replace(/[0-9A-Z]/g, c => String.fromCharCode(c.charCodeAt(0) + 0xFEE0));
+      const rec = await idbGet('no:' + NA);
+      await idbDel('no:' + NA);
+      rec.key = 'no:' + z(NA); rec.mgmt = z(NA); rec.model.chosho_mgmt_no = z(NA); rec.model._lastDraftKey = rec.key;
+      rec.rev = (rec.rev | 0) + 1; rec.model._rev = rec.rev; rec.sig = stateSig(rec.model);
+      await idbPut(rec);
+      await refreshDraftInfo(true);
+      receptionSaveRows(__ledger({ a: { name: '工藤 A（直した）' } }));
+      const s0 = __said.length;
+      await saveAllDrafts('all'); await __sleep(600);
+      const r2 = await idbGet(rec.key);
+      let ja = null; try{ ja = JSON.parse(__D.__files[NA + '.json']); }catch(_){}
+      return { recName: r2.model.chosho_cust_name, saved: !!r2.fileSavedAt && r2.fileRev === r2.rev, fileName: ja && ja.chosho_cust_name,
+               photos: __pids(r2.model), late: __said.slice(s0).filter(t => /途中/.test(t)) };
+    }, { NA });
+    console.log('③b 全角の管理番号', J(r));
+    ok(r.recName === '工藤 A（直した）' && r.photos === 'a1', '③b試験の前提: 下書きに台帳の直しが入る → ' + J(r));
+    ok(r.fileName === '工藤 A（直した）' && r.saved && r.late.length === 0,
+       '★③b 全角の管理番号の下書きで、台帳の直しがファイルに入らない・「写真が入った」と誤って言う → ' + J(r));
+  });
+
+  /* ---------- ⑤ 引き継ぎ（📥）：確かめの窓が出ているあいだに届いた写真を、下書きから消さない ---------- */
+  await scene('⑤', async page => {
+    const r = await page.evaluate(async ({ NA }) => {
+      await __state();
+      const data = { chosho_mgmt_no: NA, work_type: 'x', flyer_done: true, flyer_done_at: '2026-10-15', editedAt: '2026-10-15T00:00:00.000Z', chosho_photos: [] };
+      const file = new File([JSON.stringify(data)], NA + '.json', { type: 'application/json' });
+      const oc = uiConfirm; let fired = 0;
+      uiConfirm = async function(msg){ if(/印が増えます/.test(msg) && !fired++){ await __photoArrives(NA, 'a2'); } return true; };
+      await flowShareRead([{ name: NA + '.json', file }], false);
+      uiConfirm = oc;
+      const rec = await idbGet('no:' + NA);
+      return { fired, photos: __pids(rec.model), flyer: !!rec.model.flyer_done };
+    }, { NA });
+    console.log('⑤引き継ぎ', J(r));
+    ok(r.fired === 1 && r.flyer, '⑤試験の前提: 引き継ぎで印が入り、確かめの窓のあいだに写真が届く → ' + J(r));
+    ok(r.photos === 'a1,a2', '★⑤引き継ぎのあいだに届いた写真が、下書きから消えた → ' + J(r));
+  });
+
+  /* ---------- ⑥ 受付台帳の取り込み：入れ直しているあいだに届いた写真を、下書きから消さない ---------- */
+  await scene('⑥', async page => {
+    const r = await page.evaluate(async ({ NA, NB }) => {
+      await __state();
+      M = freshModel(); ensureModelShape(M); render();
+      receptionSaveRows(__ledger({ a: { name: '工藤 A（直した）' }, b: { name: '工藤 B（直した）' } }));
+      const op = idbPut; let fired = 0;
+      idbPut = async function(rec){ const ret = await op.apply(this, arguments);
+        if(rec && rec.key === 'no:' + NA && !fired){ fired++; await __photoArrives(NB, 'b2'); } return ret; };
+      const n = await receptionApplyToDrafts();
+      idbPut = op;
+      const rec = await idbGet('no:' + NB);
+      return { fired, applied: n, photosB: __pids(rec.model), nameB: rec.model.chosho_cust_name };
+    }, { NA, NB });
+    console.log('⑥台帳の取り込み', J(r));
+    ok(r.fired === 1 && r.nameB === '工藤 B（直した）', '⑥試験の前提: 台帳を入れ直し、そのあいだに写真が届く → ' + J(r));
+    ok(r.photosB === 'b1,b2', '★⑥台帳を入れ直しているあいだに届いた写真が、下書きから消えた → ' + J(r));
+  });
+
+  /* ---------- ⑦ 写真の取り込みの途中でその戸別を開き直し、カメラで1枚足した → 取り込みの残りが届いても、その1枚が消えない ---------- */
+  await scene('⑦', async page => {
+    const r = await page.evaluate(async ({ NA, NB }) => {
+      __gatedImport();
+      await __state();
+      await __open('no:' + NA);                         // A を開く（M = A1）
+      const imp = handlePhotoFiles(__files(['#101', '#202', '#303']));
+      await __rel('#101');                               // 1枚目（A1 を開いている）
+      await __open('no:' + NB);                          // B へ
+      await __rel('#202');                               // 2枚目 → 読込元 A1 を直接控える
+      await __open('no:' + NA);                          // A を開き直す（M = A2、別の物）
+      const cam = handlePhotoFiles(__files(['#0f0']));   // A2 でカメラの1枚
+      await __rel('#0f0'); await cam;
+      await __open('no:' + NB);                          // B へ（A2 はカメラの1枚ごと下書きへ）
+      const mid = __pids((await idbGet('no:' + NA)).model);
+      await __rel('#303'); await imp;                    // 最初の取り込みの3枚目 → 読込元 A1 を直接控える
+      await __sleep(400);
+      const rec = await idbGet('no:' + NA);
+      return { cam: __pidOf('#0f0'), p3: __pidOf('#303'), mid, final: __pids(rec.model) };
+    }, { NA, NB });
+    console.log('⑦開き直した戸別', J(r));
+    ok(r.mid && r.mid.indexOf(r.cam) >= 0, '⑦試験の前提: 開き直した戸別にカメラの1枚が入る → ' + J(r));
+    ok(r.final && r.final.indexOf(r.cam) >= 0 && r.final.indexOf(r.p3) >= 0,
+       '★⑦写真の取り込みの残りが届くと、開き直して足したカメラの写真が下書きから消える → ' + J(r));
+  });
+
+  /* ---------- ⑧ 管理番号が別の下書きと重なった新しい戸別（一時のキー）に写真を取り込む → 別の戸別の下書きを置き換えない ---------- */
+  await scene('⑧', async page => {
+    const r = await page.evaluate(async ({ NA, NB }) => {
+      __gatedImport();
+      await __state();                                   // A（写真 a1）・B を開いている
+      M = freshModel(); ensureModelShape(M); render();   // 新しい戸別
+      M.chosho_mgmt_no = NA; M.chosho_cust_name = '別の人'; M._touched = true;   // もうある番号を打った
+      await persistDraft();
+      const k1 = M._lastDraftKey;
+      const imp = handlePhotoFiles(__files(['#404', '#505']));
+      await __rel('#404');
+      await __open('no:' + NB);
+      await __rel('#505'); await imp; await __sleep(300);
+      const ra = await idbGet('no:' + NA), rt = await idbGet(k1);
+      return { k1, aPhotos: __pids(ra.model), aName: ra.model.chosho_cust_name, tPhotos: rt ? __pids(rt.model) : null,
+               p4: __pidOf('#404'), p5: __pidOf('#505') };
+    }, { NA, NB });
+    console.log('⑧番号が重なった新しい戸別', J(r));
+    ok(/^tmp:/.test(r.k1 || ''), '⑧試験の前提: 番号が重なった新しい戸別は一時のキーに置かれる → ' + J(r));
+    ok(r.aPhotos === 'a1' && r.aName === '工藤 A', '★⑧写真の取り込みで、別の戸別の下書き（写真ごと）が置き換わった → ' + J(r));
+    ok(r.tPhotos && r.tPhotos.indexOf(r.p4) >= 0 && r.tPhotos.indexOf(r.p5) >= 0, '★⑧取り込んだ写真が、その戸別の下書きに入らない → ' + J(r));
   });
 
   await b.close();
