@@ -837,7 +837,7 @@ CASES = [
   # 「鍵の元の違うファイルの写真を差し込む」は、🔄 ではほどけない写真になって結局飛ばす（壊しても同じ結果）。物件に保存の道は ㉕b が見る。
   (u"★🔄 一括再暗号化で、写真の出ていない戸別を飛ばさずに書く（ほかのPCが書き替えた .hyb の写真と中身が、行の古い中身で消える）",
    u'''    if(stateObj && stateObj._photosStripped){''', u'''    if(false){''', TM, "main", u"㉕w"),
-  # 飛ばした戸別の知らせの言い方は ㉕w が見る（同じ行が 🔄 と 📄 の2か所にあり、1か所だけを壊す目印が作れない）。
+  # 飛ばした戸別の知らせの言い方は ㉕w が見る（10回目の直しで bulkPhotoSkipNote の1か所にまとめた。その言い方を壊す変異は下にある）。
   (u"★📥 で暗号の行に入れた現場の欄（増幅器など）を、封筒の暗号でない部分に入れない（開くと古い値・💾 で古い値・物件にも古い値）",
    u'''  if(row.fileType === "hybrid" && row.envelope && merged && typeof merged === "object"){''',
    u'''  if(false){''', TM, "main", u"㉕x"),
@@ -850,6 +850,35 @@ CASES = [
   (u"★暗号の行へ 📥 して戸別ファイルへ書けたのに「ファイルから読む」をやめる（開くとファイルの写真が出ない）",
    u'''  if(row.fileType === "hybrid" && row._slim && !/個別JSONも更新しました/.test(String(note || ""))) row._slim = false;''',
    u'''  if(row.fileType === "hybrid" && row._slim) row._slim = false;''', TM, "main", u"㉕rproj"),
+  # ======== メイン：10回目の見直しの直し（🔄 で受付台帳の「完了」を物件から消さない・ほかのPCの直しを消さない・知らせを分ける・📄 ファイルの行） ========
+  (u"★🔄 一括再暗号化で行の封筒を新しくするとき、暗号でない部分もファイルの古い中身にする（受付台帳の「完了」が物件から消える）",
+   u'''        if(row.envelope && row.envelope.plain && typeof row.envelope.plain === "object") e2.plain = Object.assign({}, row.envelope.plain);''',
+   u'''''', TM, "main", u"㉕ykeep,㉕ynewpw"),
+  (u"★🔄 一括再暗号化で書いた戸別を「この端末が直した戸別」にする（ほかのPCが物件で付けた「完了」を、この端末の古い写しで消す）",
+   u'''        try { if(_currentProject) projTouch(); } catch(_){}''',
+   u'''        try { markCaseEdited(row); } catch(_){}
+        try { if(_currentProject) projTouch(); } catch(_){}''', TM, "main", u"㉕z"),
+  (u"★ファイルがあとで書き替えられて飛ばした戸別を、ほかの飛ばした戸別と一緒に数える（「開いて 💾 上書き保存」の知らせに混ざる）",
+   u'''      if(staleFile) photoSkipStale++; else photoSkip++;''', u'''      photoSkip++;''', TM, "main", u"㉕w"),
+  (u"★ファイルの鍵の元が違う（あとで書き替えられた）ことを見分けない",
+   u'''staleFile = true;''', u'''staleFile = false;''', TM, "main", u"㉕w"),
+  (u"★ファイルがあとで書き替えられていた戸別の知らせを、ほかの飛ばした戸別と同じ言い方にする",
+   u'''"  ファイルが、この一覧を読んだあとで書き替えられていた戸別: "''', u'''"  写真が出ていないので飛ばした戸別: "''', TM, "main", u"㉕w"),
+  (u"★📄 ファイルで読んだ暗号の行に、読んだファイルの写真を差し込まない（開くと A・B が出ない・一括平文化／再暗号化が飛ばす）",
+   u'''  if(row.srcFile) return { getFile: async () => row.srcFile };
+''', u'''''', TM, "main", u"㉕zfg,㉕ze"),
+  (u"★📄 ファイルで読んだ暗号の行を、写真を剥がした封筒で開く（覚えているパスワード：画面に G だけ・保存の中身から A・B が抜ける）",
+   u'''        const env = await hybEnvFromSrcFile(target, await getFullEnvelope(target));
+        const full = lgOverlayLedger(await decryptHybrid(env, _sessionPassword), target);''',
+   u'''        const env = await getFullEnvelope(target);
+        const full = lgOverlayLedger(await decryptHybrid(env, _sessionPassword), target);''', TM, "main", u"㉕zfg"),
+  (u"★📄 ファイルで読んだ暗号の行を、写真を剥がした封筒で開く（聞かれたパスワード：画面に G だけ）",
+   u'''      const env = await hybEnvFromSrcFile(target, await getFullEnvelope(target));
+      const full = lgOverlayLedger(await decryptHybrid(env, pw), target);''',
+   u'''      const env = await getFullEnvelope(target);
+      const full = lgOverlayLedger(await decryptHybrid(env, pw), target);''', TM, "main", u"㉕zfgpw"),
+  (u"★一括平文化・一括再暗号化で、行にだけある写真（画面で足して一覧へ戻った P）を入れない",
+   u'''      if(own.length){''', u'''      if(false){''', TM, "main", u"㉕ze"),
   # ======== 現場入力：特別記録の写真の取り込み・「保存」（版178） ========
   # 守りだけの所（いまの道では壊しても試験で見えない）には変異を置かない：spPersist の列（取り込みの書き込みは
   # 開いている記録なら画面の物を書くので重ならない）・✕ のあとも「見た」ままにする（描いたときに見た写真に入っている）・
