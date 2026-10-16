@@ -54,6 +54,8 @@
         ずっと控えられないときは、そう知らせる
      ⑰m 取り込みのあいだに備考を打った（欄を離れない＝控えの合図が出ない）→ 取り込みが終わって描き直しても、備考が端末の記録に残る
      ⑰n 保存のあいだに「戻る」→ ほかの記録を開いた → 保存が終わっても、その記録を閉じない
+     ⑰o もう入っている写真（同じ画像）をもう一度選んだ → 1枚のまま・「同じ写真がもう入っているので足しませんでした（N枚）」と知らせる。
+        a) 記録を開いたまま　b) 一覧へ戻ったあとに届いた同じ写真（端末の記録と見比べる）
    使い方: node smoke_v178_genba.js [現場入力 index.html の file:// URL]　（SCENE=①,③ で場面を絞れる） */
 const { chromium } = require('playwright-core');
 const fs = require('fs'), path = require('path');
@@ -1181,6 +1183,34 @@ window.__spImgs = () => document.querySelectorAll('#sp-body .sp-ph img').length;
     console.log('⑰n保存のあいだにほかの記録', J(r));
     ok(r.fired === 1 && r.savedA, '⑰n試験の前提: 保存のあいだにほかの記録を開き、保存は終わる → ' + J(r));
     ok(r.openB && r.title === 'ほかの記録', '★⑰n保存が終わったときに、あいだに開いたほかの記録を閉じた → ' + J(r));
+  });
+
+  /* ---------- ⑰o もう入っている写真（同じ画像）をもう一度選んだ → 1枚のまま・知らせる ---------- */
+  await scene('⑰o', async page => {
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const said = () => ((document.getElementById('savedhint') || {}).textContent || '');
+      const ids = rec => ((rec && rec.photos) || []).filter(p => p && p.dataUri).map(p => String(p.id));
+      /* a) 記録を開いたまま：X を入れてから、X と Y を選ぶ */
+      const A = await __spNew('同じ写真 a');
+      __spFire('sp-pick', ['#fd1']); await __rel('#fd1');
+      __spFire('sp-pick', ['#fd1', '#fd2']); await __rel('#fd1'); await __rel('#fd2'); await __sleep(300);
+      const aDb = ids(await idbGet(A.key)), aScr = ids(_spCur), aImgs = __spImgs(), aSaid = said();
+      /* b) Z・W・Z（同じ画像）を選び、1枚目のあとで一覧へ戻る */
+      const B = await __spNew('同じ写真 b');
+      __spFire('sp-pick', ['#fd3', '#fd4', '#fd3']);
+      await __rel('#fd3');
+      document.getElementById('sp-back').click(); await __sleep(200);
+      await __rel('#fd4'); await __rel('#fd3'); await __sleep(300);
+      const bDb = ids(await idbGet(B.key)), bSaid = said();
+      return { X: __pidOf('#fd1'), Y: __pidOf('#fd2'), Z: __pidOf('#fd3'), W: __pidOf('#fd4'), aDb, aScr, aImgs, aSaid, bDb, bSaid };
+    });
+    console.log('⑰o同じ写真', J(r));
+    const one = (a, ps) => Array.isArray(a) && a.length === ps.length && ps.every(p => a.indexOf(p) >= 0);
+    ok(one(r.aDb, [r.X, r.Y]) && one(r.aScr, [r.X, r.Y]) && r.aImgs === 2, '★⑰o a) 開いている記録で同じ写真を選ぶと、2枚になった・Y が入らない → ' + J(r));
+    ok(/同じ写真がもう入っているので足しませんでした（1枚）/.test(r.aSaid), '★⑰o a) 同じ写真を足さなかったことを知らせない → ' + J(r));
+    ok(one(r.bDb, [r.Z, r.W]), '★⑰o b) 一覧へ戻ったあとに届いた同じ写真が、2枚になった・W が入らない → ' + J(r));
+    ok(/同じ写真がもう入っているので足しませんでした（1枚）/.test(r.bSaid), '★⑰o b) 一覧へ戻ったあとの同じ写真を、足さなかったと知らせない → ' + J(r));
   });
 
   await b.close();

@@ -295,10 +295,10 @@ CASES = [
    u'''      flowShareItemsApply(items, byNo, openNo);''', TG, "genba", u"⑯"),
   # ======== 現場入力：特別記録の写真の取り込み ========
   (u"★特別記録の写真の取り込みで、取り込みを始めた記録を丸ごと書く（開き直して撮ったカメラの写真が消える）",
-   u'''        try{ await spPhotoKeep(r, pending); pending = []; }catch(_){}''',
+   u'''        try{ if(await spPhotoKeep(r, pending)) dup++; else if(small) shrunk++; pending = []; }catch(_){ if(small) shrunk++; }''',
    u'''        r.photos.push(...pending); pending = []; try{ await spPersist(r); }catch(_){}''', TG, "genba", u"⑰"),
   (u"★特別記録の写真の取り込みで、取り込みを始めた記録を丸ごと書く（一覧へ戻ったままでも、カメラの写真が消える）",
-   u'''        try{ await spPhotoKeep(r, pending); pending = []; }catch(_){}''',
+   u'''        try{ if(await spPhotoKeep(r, pending)) dup++; else if(small) shrunk++; pending = []; }catch(_){ if(small) shrunk++; }''',
    u'''        r.photos.push(...pending); pending = []; try{ await spPersist(r); }catch(_){}''', TG, "genba", u"⑰e"),
   (u"★特別記録の取り込みの写真を、開いている同じ記録に足さない（開き直した記録で備考を直すと、取り込んだ写真が消える）",
    u'''    if(cur){ if(!Array.isArray(cur.photos)) cur.photos = []; mergePhotosInto(cur.photos, phs); }''',
@@ -309,8 +309,8 @@ CASES = [
   (u"★特別記録の取り込みの終わりに描き直さない（取り込んだ写真が、開いている記録の画面に出ない）",
    u'''    if(cur) renderSpecialEdit(host);''', u'''''', TG, "genba", u"⑰"),
   (u"★特別記録の取り込みで、始めの記録の写真をみな足す（開き直して消した写真が戻る）",
-   u'''    if(!mergePhotosInto(prev.photos, phs)) return;''',
-   u'''    if(!mergePhotosInto(prev.photos, (rec.photos || []).concat(phs))) return;''', TG, "genba", u"⑰b"),
+   u'''    if(!mergePhotosInto(prev.photos, phs)) return dup;''',
+   u'''    if(!mergePhotosInto(prev.photos, (rec.photos || []).concat(phs))) return dup;''', TG, "genba", u"⑰b"),
   (u"★特別記録の取り込みの書き込みを1つずつにしない（同時に入った写真の片方が消える）",
    u'''function spPhotoKeep(rec, phs){
   return spQueue(async () => {''',
@@ -328,7 +328,7 @@ CASES = [
       const x = (await spList()).filter(x => x.id === b.getAttribute("data-sp-open"))[0];''', TG, "genba", u"⑰h"),
   (u"★特別記録が端末にまだ無いとき、取り込みの写真を書かない（新しい記録に選んだ写真が入らない）",
    u'''      await idbPut(spRow(o));
-      return;''', u'''      return;''', TG, "genba", u"⑰f"),
+      return dup;''', u'''      return dup;''', TG, "genba", u"⑰f"),
   (u"★特別記録の取り込みで版を進めない（ファイルに入っていない写真が保存済みに見える）",
    u'''    prev.rev = Math.max(prev.rev | 0, (cur && cur.rev) | 0, rec.rev | 0) + 1;''',
    u'''    prev.rev = prev.rev | 0;''', TG, "genba", u"⑰g"),
@@ -351,8 +351,8 @@ CASES = [
    u'''      if(res.late && spCurOf(r)) renderSpecialEdit(host);''', u'''''', TG, "genba", u"⑰i"),
   # ======== 現場入力：特別記録（見直しで見つかった道） ========
   (u"★特別記録の取り込みで、端末に控えられなかった写真をもう一度控えない（黙って消える）",
-   u'''        try{ await spPhotoKeep(r, pending); pending = []; }catch(_){}''',
-   u'''        try{ await spPhotoKeep(r, pending); }catch(_){} pending = [];''', TG, "genba", u"⑰l"),
+   u'''        try{ if(await spPhotoKeep(r, pending)) dup++; else if(small) shrunk++; pending = []; }catch(_){ if(small) shrunk++; }''',
+   u'''        try{ if(await spPhotoKeep(r, pending)) dup++; else if(small) shrunk++; }catch(_){ if(small) shrunk++; } pending = [];''', TG, "genba", u"⑰l"),
   (u"★特別記録の取り込みで、ずっと控えられない写真があっても知らせない",
    u'''    if(pending.length) toast("⚠ " + pending.length + "枚の写真を、この端末に控えられませんでした（空き容量不足かも）。"''',
    u'''    if(false) toast("⚠ " + pending.length + "枚の写真を、この端末に控えられませんでした（空き容量不足かも）。"''', TG, "genba", u"⑰l"),
@@ -361,6 +361,13 @@ CASES = [
   (u"★特別記録の保存が終わったら、そのとき開いている記録を閉じる（あいだに開いたほかの記録が閉じる）",
    u'''      if(!_spCur || _spCur === r){ _spCur = null; await renderSpecial(); }''',
    u'''      _spCur = null; await renderSpecial();''', TG, "genba", u"⑰n"),
+  (u"★特別記録で同じ写真を選んでも、足さなかったと知らせない",
+   u'''    if(dup) toast("同じ写真がもう入っているので足しませんでした（" + dup + "枚）");''', u'''''', TG, "genba", u"⑰o"),
+  (u"★特別記録の開いている記録に、同じ写真を2枚目として足す",
+   u'''    if(cur){ if(!Array.isArray(cur.photos)) cur.photos = []; mergePhotosInto(cur.photos, phs); }''',
+   u'''    if(cur){ if(!Array.isArray(cur.photos)) cur.photos = []; cur.photos.push(...phs); }''', TG, "genba", u"⑰o"),
+  (u"★特別記録の端末の記録にある同じ写真を見分けない（一覧へ戻ったあとの同じ写真を知らせない）",
+   u'''    dup = dup || has(prev.photos);''', u'''''', TG, "genba", u"⑰o"),
 ]
 
 import sys as _s
