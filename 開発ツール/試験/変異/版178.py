@@ -6,6 +6,7 @@
 #     台帳で作った行・画面に入れなかった写真・「小さい写真」の知らせ）も、写真を減らさないように直した。
 #   ・現場入力：まとめて保存・全部保存し直す・引き継ぎ・受付台帳の取り込みで、始めに読んだ写しで下書きを書き戻して
 #     途中で届いた写真を消していた直し。写真の取り込みの最後の書き込みで、開き直した戸別・別の戸別の下書きを上書きしない。
+#     特別記録の写真の取り込みも、取り込みを始めた記録を丸ごと書かない（端末の記録を読み直して、新しく読んだ写真だけを足す）。
 #   場面を絞って速くする（現場入力は SCENE、メインは ONLY に場面の記号を渡す）。
 #   「メイン」「現場」を引数に渡すと分けて走らせられる。名前の一部を渡すとそれだけ走る。
 import io, subprocess, os
@@ -244,6 +245,45 @@ CASES = [
   (u"★引き継ぎで新しい印が無いとき、行の控えを待たずに書く（2つ目からの行が残らない）",
    u'''      await flowShareItemsApply(items, byNo, openNo);''',
    u'''      flowShareItemsApply(items, byNo, openNo);''', TG, "genba", u"⑯"),
+  # ======== 現場入力：特別記録の写真の取り込み ========
+  (u"★特別記録の写真の取り込みで、取り込みを始めた記録を丸ごと書く（開き直して撮ったカメラの写真が消える）",
+   u'''        try{ await spPhotoKeep(r, { label:"", dataUri, id }); }catch(_){}''',
+   u'''        r.photos.push({ label:"", dataUri, id }); try{ await spPersist(r); }catch(_){}''', TG, "genba", u"⑰"),
+  (u"★特別記録の写真の取り込みで、取り込みを始めた記録を丸ごと書く（一覧へ戻ったままでも、カメラの写真が消える）",
+   u'''        try{ await spPhotoKeep(r, { label:"", dataUri, id }); }catch(_){}''',
+   u'''        r.photos.push({ label:"", dataUri, id }); try{ await spPersist(r); }catch(_){}''', TG, "genba", u"⑰e"),
+  (u"★特別記録の取り込みの写真を、開いている同じ記録に足さない（開き直した記録で備考を直すと、取り込んだ写真が消える）",
+   u'''    if(cur){ if(!Array.isArray(cur.photos)) cur.photos = []; mergePhotosInto(cur.photos, [ph]); }''',
+   u'''''', TG, "genba", u"⑰"),
+  (u"★特別記録の開いている記録を、同じ物かどうかだけで見る（開き直した記録に、取り込みの写真が届かない）",
+   u'''  return (_spCur && rec && (_spCur === rec || (rec.key && _spCur.key === rec.key))) ? _spCur : null;''',
+   u'''  return (_spCur && rec && _spCur === rec) ? _spCur : null;''', TG, "genba", u"⑰"),
+  (u"★特別記録の取り込みの終わりに描き直さない（取り込んだ写真が、開いている記録の画面に出ない）",
+   u'''    if(spCurOf(r)) renderSpecialEdit(host);''', u'''''', TG, "genba", u"⑰"),
+  (u"★特別記録の取り込みで、始めの記録の写真をみな足す（開き直して消した写真が戻る）",
+   u'''    if(!mergePhotosInto(prev.photos, [ph])) return;''',
+   u'''    if(!mergePhotosInto(prev.photos, (rec.photos || []).concat([ph]))) return;''', TG, "genba", u"⑰b"),
+  (u"★特別記録の取り込みの書き込みを1つずつにしない（同時に入った写真の片方が消える）",
+   u'''function spPhotoKeep(rec, ph){
+  return spQueue(async () => {''',
+   u'''function spPhotoKeep(rec, ph){
+  return (fn => fn())(async () => {''', TG, "genba", u"⑰c"),
+  (u"★特別記録の控え（spPersist）を、取り込みの書き込みと同じ列に並べない（直した備考が元に戻る）",
+   u'''  await spQueue(async () => {
+    rec.savedAt = Date.now();''',
+   u'''  await (fn => fn())(async () => {
+    rec.savedAt = Date.now();''', TG, "genba", u"⑰d"),
+  (u"★特別記録を一覧から開くのを、取り込みの書き込みと同じ列に並べない（開くあいだに入った写真が消える）",
+   u'''    const rec = await spQueue(async () => {
+      const x = (await spList()).filter(x => x.id === b.getAttribute("data-sp-open"))[0];''',
+   u'''    const rec = await (fn => fn())(async () => {
+      const x = (await spList()).filter(x => x.id === b.getAttribute("data-sp-open"))[0];''', TG, "genba", u"⑰h"),
+  (u"★特別記録が端末にまだ無いとき、取り込みの写真を書かない（新しい記録に選んだ写真が入らない）",
+   u'''      await idbPut(spRow(o));
+      return;''', u'''      return;''', TG, "genba", u"⑰f"),
+  (u"★特別記録の取り込みで版を進めない（ファイルに入っていない写真が保存済みに見える）",
+   u'''    prev.rev = Math.max(prev.rev | 0, (cur && cur.rev) | 0, rec.rev | 0) + 1;''',
+   u'''    prev.rev = prev.rev | 0;''', TG, "genba", u"⑰g"),
 ]
 
 import sys as _s
