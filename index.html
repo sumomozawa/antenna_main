@@ -6961,7 +6961,7 @@ async function lsRestoreFromIdb(){
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "179";
+const APP_VERSION = "180";
 /* ============================================================
    ★日時の表示は、必ずこの端末の時刻で★
    保存している日時は世界時のISO文字列（…T01:03:00.000Z）。これを文字のまま
@@ -24720,9 +24720,19 @@ async function showPhotoPreviewForRow(row){
    写真・図面・積算・測定値はファイルの側をそのまま使う（台帳は持っていないため）。 */
 function lgOverlayLedger(fresh, row){
   if(!fresh || typeof fresh !== "object" || !row || !row.data) return fresh;
+  /* ★まだほどいていない暗号の行は、伏せ字・作り物の値をかぶせない★（版180）
+     一覧の行は、暗号をほどく前は 氏名・電話・住所 が「★★★★★」（.hyb）。全暗号化（.enc）は管理番号・住所・日付まで作り物で、
+     受付台帳の控えも本当の管理番号で引けない。それをほどいた中身にかぶせると、画面に「★★★★★」などが出て、
+     💾 上書き保存でファイルのお客様の氏名・電話が「★★★★★」になった。
+     .hyb は暗号の欄だけかぶせない（暗号でない欄・受付台帳の控えは今までどおり）。.enc は何もかぶせない */
+  const locked = row.fileType !== "plain" && !row.unlocked;
+  if(locked && row.fileType === "full") return fresh;
+  const sens = (locked && row.fileType === "hybrid")
+    ? ((row.envelope && row.envelope.meta && Array.isArray(row.envelope.meta.sensitive_fields)) ? row.envelope.meta.sensitive_fields : HYBRID_SENSITIVE_FIELDS)
+    : [];
   try {
     const want = lgwbWanted(row);          // 台帳が「こうなっているはず」と思っている内容
-    Object.keys(want).forEach(k => { fresh[k] = want[k]; });
+    Object.keys(want).forEach(k => { if(sens.indexOf(k) < 0) fresh[k] = want[k]; });
   } catch(_){}
   return fresh;
 }
