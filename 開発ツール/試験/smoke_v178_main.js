@@ -18,7 +18,7 @@
      ⑤ このPCの受付台帳で作った行（物件から読んだ行ではない）＋フォルダに現場の 管理番号.json（写真 G・名前だけの枠）
         a) 写真を足さずに名前だけ直して保存 → G と枠が残る（前は「写真なし」を書いて G が消えていた）
         b) 写真を足して保存（2回）→ G と P（元のまま）の2枚のまま
-        c) 写真を足して保存 → エディタで その写真を消して もう一度保存 → ファイルの写真は減らない（G・P とも残る）
+        c) 写真を足して保存 → エディタで その写真を消して もう一度保存 → 画面で消した P だけが消える（G・枠は残る）
         d) ファイルの中身が壊れていて読めない → 書かない・知らせる
         e) 0バイト・BOM だけのファイル（前の保存が途中で切れた残り）→ 読めたものとして書く
      ⑥ 1MB を超える写真を足す → ファイルにはエディタの写真（photoFitForStorage で縮めたもの・1MB以下）がそのまま。物件には縮小版
@@ -28,7 +28,7 @@
         b) 画面に出ていない写真と同じものを入れ直しても二重にならない
      ⑨ 物件の行の縮小版しか無い写真（原寸がどこにも無い）は、新しい戸別ファイルに縮小版のまま入れる（枚数を減らさない）
         a) 図面あり　b) 図面なし　c) 開き直して（写真が画面に出る）消した写真は、行（物件）からは消える
-     ⑩ エディタがそのファイルを読んで開いた行で消した写真は、これまでどおり戸別ファイルからも消える。
+     ⑩ エディタで見せた写真（そのファイルを読んで開いた・行が持っていた）を画面から消すと、これまでどおり戸別ファイルからも消える。
         ファイルが付いているだけの行・ファイルを持たない行は、行の写真（軽くしたもの）を書き、ファイルにしか無い写真・枠も残す
         （埋まった枠は1つにまとめ、名前を引き継ぐ。写真IDの無い名前だけの枠も残す）
    （ここから 見直しの直し）
@@ -44,6 +44,22 @@
      ⑱ 「小さい写真」の知らせは、行の写真の中身で決める（開いて保存しても消えない・元の写真の行には出さない）
      ⑲ 共有ファイルとまとめたあと、もう一度写真を足して保存しても、物件にしか無い写真を落とさない
      ⑳ フォルダから読んだ戸別（図面なし）で画面から消した写真は、これまでどおり戸別ファイルからも消える（版178 で変えていない）
+   （ここから 2回目の見直しの直し）
+     ㉑ 「💾 戸別ファイルへ反映」でファイルが付いた行は、付いているファイルへ書く（同じ管理番号のファイルをもう1つ作らない・縮小版を書かない）
+        a) 台帳で作った行（図面あり）　b) 台帳で作った行（図面なし）　c) ファイルを「リスト/完了」へ移してあった
+        d) Android の名前（管理番号_数字.json）→ 管理番号.json にそろえる（写真がみな移ったので古い名前を消す）・2回目の保存も同じファイルへ
+     ㉒ 名前の大文字・小文字を区別しないフォルダ（Windows・Mac）で、小文字の名前の戸別ファイル → そのファイルへ書く（消さない・断らない）
+     ㉓ 開いたあとで現場入力がファイルに足した写真を、保存で消さない（画面で消した写真だけを消す）
+        a) 図面なし・物件に保存　b) 図面あり・💾 上書き保存（物件なし）　c) 一覧へ戻ったあと、協力会社諸経費のそろえ直しで書く
+        d) 物件に保存のあと開き直して 💾 上書き保存　e) 画面で消した写真は 💾 上書き保存 で消える　f) 足して上書き保存 → 消して上書き保存 → 消える
+     ㉔ 自分のファイルから読んだ行の小さい写真（図など）を「小さい写真」と言わない。物件の行（開いて直して印が外れた）は今までどおり言う
+     ㉕ 暗号の戸別（.hyb）：写真を剥がした封筒をそのまま書かない（a 元のファイルの暗号の写真を戻して書く　b 鍵が違えば書かない・知らせる）
+     ㉖ 物件の縮小版づくりが動いているあいだに次の保存が来たら、終わるのを待つ（縮小版の無い行を「写真なし」で物件に入れない）
+     ⑫d 物件にだけ保存 → 別の欄を直す → 保存せずに物件を開き直す → 物件に保存でフォルダを選ぶ → 元の写真
+     ⑭d 開いて直して戻った（縮小版の印が外れた）物件の行に「💾 戸別ファイルへ反映」でファイルが付いたあと保存 → 原寸と K が残る
+     ⑯c 同じ管理番号のファイルが2つあり、行の知らない写真がある → 書かない・「🧩 重複をまとめる」を案内する
+     ⑯d 付け替え先のファイルの写真を行がみな知っている → 両方の写真で書き、古いファイルを消す（断らない）
+     ⑯e 同じ・物件の行が付け替え先の写真の縮小版しか持っていない → 付け替え先には原寸を残す
    ★場面ごとに新しいブラウザの入れ物（newContext）を使う★ 前の場面の覚え書き（localStorage・IndexedDB）を持ち越さない。
    フォルダは試験の中で作る作り物（getDirectoryHandle／getFileHandle／removeEntry／entries／values を持つ）。
    フォルダを選ぶ画面は window.showDirectoryPicker を差し替える。
@@ -76,20 +92,27 @@ const PN = '令和８年度戸別受信設備設置工事（その１）';
 
 /* ページの中で使う道具 */
 const SETUP = `
-  /* 作り物のフォルダ。書くときは close で中身が入る。 */
-  window.__mk = function(name, files, subs){
+  /* 作り物のフォルダ。書くときは close で中身が入る。
+     opt.ci＝Windows・Mac のように、名前の大文字・小文字を区別しないフォルダ（同じ名前なら同じファイル）。 */
+  window.__mk = function(name, files, subs, opt){
     const d = { kind:'directory', name, __files: Object.assign({}, files || {}), __subs: Object.assign({}, subs || {}),
                 __removed: [], __writes: [] };
+    const ci = !!(opt && opt.ci);
+    const key = n => { if(!ci || (n in d.__files)) return n;
+      const k = Object.keys(d.__files).filter(k => k.toLowerCase() === String(n).toLowerCase())[0];
+      return (k === undefined) ? n : k; };
+    const same = (a, b) => ci ? String(a).toLowerCase() === String(b).toLowerCase() : a === b;
     const fh = n => ({ kind:'file', name:n, __d:d,
-      isSameEntry: async o => !!(o && o.__d === d && o.name === n),
+      isSameEntry: async o => !!(o && o.__d === d && same(o.name, n)),
       getFile: async () => {
-        if(!(n in d.__files)){ const e = new Error('NotFound'); e.name = 'NotFoundError'; throw e; }
-        const t = d.__files[n];
+        const k = key(n);
+        if(!(k in d.__files)){ const e = new Error('NotFound'); e.name = 'NotFoundError'; throw e; }
+        const t = d.__files[k];
         return { name:n, size: new Blob([t]).size, lastModified: Date.parse('2026-10-01T01:00:00Z'), text: async () => t };
       },
       createWritable: async () => { let buf = '';
         return { write: async t => { buf += (typeof t === 'string') ? t : await new Blob([t]).text(); },
-                 close: async () => { d.__files[n] = buf; d.__writes.push({ n, t: buf }); } }; },
+                 close: async () => { const k = key(n); d.__files[k] = buf; d.__writes.push({ n: k, t: buf }); } }; },
       queryPermission: async () => 'granted', requestPermission: async () => 'granted' });
     const list = () => Object.keys(d.__files).map(n => [n, fh(n)]).concat(Object.keys(d.__subs).map(n => [n, d.__subs[n]]));
     const iter = map => () => ({ [Symbol.asyncIterator](){ const rows = list(); let i = 0;
@@ -98,13 +121,13 @@ const SETUP = `
       queryPermission: async () => 'granted', requestPermission: async () => 'granted',
       isSameEntry: async o => o === d,
       getFileHandle: async (n, opt) => {
-        if(!(n in d.__files)){ if(!(opt && opt.create)){ const e = new Error('NotFound'); e.name = 'NotFoundError'; throw e; } d.__files[n] = ''; }
+        if(!(key(n) in d.__files)){ if(!(opt && opt.create)){ const e = new Error('NotFound'); e.name = 'NotFoundError'; throw e; } d.__files[n] = ''; }
         return fh(n); },
       getDirectoryHandle: async (n, opt) => {
-        if(!d.__subs[n]){ if(!(opt && opt.create)){ const e = new Error('NotFound'); e.name = 'NotFoundError'; throw e; } d.__subs[n] = window.__mk(n); }
+        if(!d.__subs[n]){ if(!(opt && opt.create)){ const e = new Error('NotFound'); e.name = 'NotFoundError'; throw e; } d.__subs[n] = window.__mk(n, {}, {}, ci ? { ci: true } : null); }
         return d.__subs[n]; },
-      removeEntry: async n => { if(!(n in d.__files)){ const e = new Error('NotFound'); e.name = 'NotFoundError'; throw e; }
-                                d.__removed.push(n); delete d.__files[n]; },
+      removeEntry: async n => { const k = key(n); if(!(k in d.__files)){ const e = new Error('NotFound'); e.name = 'NotFoundError'; throw e; }
+                                d.__removed.push(k); delete d.__files[k]; },
       entries: iter(x => x), values: iter(x => x[1]), keys: iter(x => x[0])
     });
     return d;
@@ -122,6 +145,17 @@ const SETUP = `
     x.putImageData(im, 0, 0);
     return cv.toDataURL('image/jpeg', q);
   };
+  /* フォルダの中のファイルを全部（下のフォルダも）「リスト/xxx.json」の形で並べる */
+  window.__tree = (d, pre) => { pre = pre || ''; let out = Object.keys(d.__files).map(n => pre + n);
+    Object.keys(d.__subs).forEach(s => { out = out.concat(window.__tree(d.__subs[s], pre + s + '/')); }); return out.sort(); };
+  /* フォルダの中の全部のファイルの写真 */
+  window.__allPhotos = d => { let out = [];
+    Object.keys(d.__files).forEach(n => { out = out.concat(window.__photosOf(d.__files[n]) || []); });
+    Object.keys(d.__subs).forEach(s => { out = out.concat(window.__allPhotos(d.__subs[s])); }); return out; };
+  /* エディタの電話の欄を直す（打ち込んだのと同じ知らせを出す） */
+  window.__setField = (id, v) => { const el = document.getElementById(id);
+    el.value = v; el.dispatchEvent(new Event('input')); el.dispatchEvent(new Event('change')); };
+  window.__setTel = v => window.__setField('chosho_cust_tel', v);
   window.__bytes = u => Math.floor(String(u).split(',')[1].length * 3 / 4);
   window.__edge = u => new Promise(res => { const im = new Image(); im.onload = () => res(Math.max(im.naturalWidth, im.naturalHeight)); im.onerror = () => res(0); im.src = u; });
   /* エディタの 📷 まとめて取り込み から写真を入れる（利用者が写真を選んだのと同じ道） */
@@ -487,6 +521,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       const j = JSON.parse(root.__files[NO + '.json']);
       const g = ph.filter(p => p.id === gid)[0], p = ph.filter(p => ed && p.id === ed.id)[0];
       return Object.assign(o, { n: ph.length, gSame: !!(g && g.dataUri === G), pSame: src ? !!(p && p.dataUri === src) : null,
+               pGone: !!(ed && !ph.some(x => x.id === ed.id)),
                name: j.chosho_cust_name, slot: (j.chosho_photos || []).some(x => x && x.id === 'pslot' && !x.dataUri),
                lens: ph.map(x => x.dataUri.length), writes: root.__writes.length });
     }, { NO, PN, mode });
@@ -501,6 +536,9 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       if(mode === 'a'){
         ok(r5.name === '台帳 様（直した）', '⑤a試験の前提: 直した名前がファイルに入る → ' + short(r5));
         ok(r5.n === 1 && r5.gSame, '★⑤a写真の無い行を保存すると、戸別ファイルにあった現場の写真が消える → ' + short(r5));
+      } else if(mode === 'c'){
+        ok(r5.n === 1 && r5.gSame, '★⑤c戸別ファイルにあった現場の写真が消えた・変わった → ' + short(r5));
+        ok(r5.pGone, '★⑤c画面で消した写真（行が見せて書いた写真）が、戸別ファイルに残る → ' + short(r5));
       } else {
         ok(r5.n === 2 && r5.gSame, '★⑤' + mode + '戸別ファイルにあった現場の写真が消えた・変わった → ' + short(r5));
         ok(r5.pSame, '★⑤' + mode + '足した写真が元の写真ではない（縮小版） → ' + short(r5));
@@ -698,8 +736,8 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
                                     { label: '屋根の上', dataUri: null }] });                          // 写真IDの無い名前だけの枠
       const fh = { getFile: async () => ({ text: async () => file }) };
       fh.isSameEntry = async o => o === fh;
-      // エディタがこのファイルを読んで開いた行（_photosFrom）：画面で消した x1 は消える
-      const src = { fileType: 'plain', fileHandle: fh, _photosFrom: fh, _photosKnown: true,
+      // エディタがこのファイルを読んで開いた行（見せた写真を覚えている＝_photosSeen）：画面で消した x1 は消える
+      const src = { fileType: 'plain', fileHandle: fh, _photosSeen: new Set(['k1', 'x1', 's1']), _photosKnown: true,
                     data: { chosho_mgmt_no: NO, chosho_photos: [ph('k1', 900), { id: 's1', label: '表札', dataUri: null }, { label: '屋根の上', dataUri: null }] } };
       // ファイルが付いているだけの行（このファイルを読んで開いていない）：ファイルにしか無い写真を残す
       const att = { fileType: 'plain', fileHandle: fh, _photosKnown: true, data: { chosho_mgmt_no: NO, chosho_photos: [ph('k1', 900)] } };
@@ -939,7 +977,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
     console.log('⑮' + mode + '📄 で読んだ戸別', short(r));
     ok(!r.error, '⑮' + mode + '止まった → ' + r.error);
     if(!r.error){
-      ok(/^(f1,)?g1,g2$/.test(r.file || ''), '★⑮' + mode + '📄 で読んだ戸別の保存で、工事フォルダの戸別ファイルにしか無い写真が消えた → ' + short(r));
+      ok(r.file === 'f1,g1,g2', '★⑮' + mode + '📄 で読んだ戸別の保存で、工事フォルダの戸別ファイルにしか無い写真が消えた → ' + short(r));
     }
     await ctx.close();
   }
@@ -980,7 +1018,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       ok(r.first.n1 === 1, '⑯' + mode + '試験の前提: 1回目の保存で NO.json ができる → ' + short(r));
       ok(r.ids.join() === 'G2' && r.removed.length === 0 && r.keptOld,
          '★⑯' + mode + 'もうファイルがある番号へ付け替えて保存すると、そのファイルの写真が消える・元のファイルが消える → ' + short(r));
-      ok(a16.some(m => /もう工事フォルダにあります/.test(m) && /重複をまとめる/.test(m)), '★⑯' + mode + '書かなかったことを知らせない → ' + short(a16.slice(-1)));
+      ok(a16.some(m => /もう工事フォルダにあります/.test(m) && /管理番号が合っているか/.test(m) && /📥 現場取込/.test(m)), '★⑯' + mode + '書かなかったことを知らせない・どうすればよいか言わない → ' + short(a16.slice(-1)));
     }
     await ctx.close();
   }
@@ -1118,6 +1156,541 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
     if(!r.error){
       ok(r.shown === 'k1,x1' && r.btn.pressed, '⑳試験の前提: 開くとファイルの写真が画面に出て、物件に保存できる → ' + short(r));
       ok(r.file === 'k1', '★⑳フォルダから読んで開いた戸別で消した写真が、戸別ファイルに戻ってくる（利用者が消したのに） → ' + short(r));
+    }
+    await ctx.close();
+  }
+
+  // ---- ㉑ 「💾 戸別ファイルへ反映」でファイルが付いた行は、付いているファイルへ書く ----
+  //   （物件の覚えている名前で探して、同じ管理番号のファイルをもう1つ作り、そこへ縮小版を書いていた）
+  //   a) 台帳で作った行（図面あり）　b) 台帳で作った行（図面なし）　c) ファイルを「リスト/完了」へ移してあった
+  //   d) Android の名前（管理番号_数字.json）→ 管理番号.json にそろえる（古い名前は写真がみな移ったので消す）・もう一度保存しても同じファイル
+  for(const mode of ['a', 'b', 'c', 'd'].filter(m => want('㉑' + m))){
+    const { ctx, page, said } = await openMain('㉑' + mode);
+    const r = await run(page, async ({ NO, PN, mode }) => {
+      const G = __jpeg(900, 700, 0.85, 101); const gid = photoContentId(G);
+      const K = __jpeg(900, 700, 0.85, 102); const kid = photoContentId(K);
+      const Gt = await makeThumbDataUri(G, PROJ_THUMB_MAXPX, PROJ_THUMB_QUALITY);
+      const pl = { chosho_mgmt_no: NO, chosho_cust_name: '試験 様', chosho_status: 'in_progress', work_type: 'uhf_new',
+                   chosho_photos: [{ id: gid, label: 'G', dataUri: Gt }], chosho_photos_thumb: true, chosho_photo_count: 1 };
+      if(mode === 'a' || mode === 'c') pl.amplifier = 'amp_3u43';            // 図面あり
+      let file = 'リスト/' + NO + '.json';                                   // 物件の覚えている名前
+      if(mode === 'a' || mode === 'b'){ Object.assign(pl, { _manual: true, _origin: 'manual' }); file = 'manual:m178u' + mode; }
+      await __openProj(__proj178('pj178u' + mode, PN, [{ caseId: 'c1', file, lastModified: 0, payload: pl }]));
+      const row = _listRows[0];
+      // 現場入力が書いた戸別ファイル（G は原寸・K はファイルにしか無い）
+      const txt = JSON.stringify({ chosho_mgmt_no: NO, chosho_cust_name: '試験 様', _origin: 'genba', work_type: 'uhf_new',
+        chosho_photos: [{ id: gid, label: 'G', dataUri: G }, { id: kid, label: 'K', dataUri: K }] }, null, 2);
+      const fname = (mode === 'd') ? NO + '_1700000000.json' : NO + '.json';
+      const done = __mk('完了', (mode === 'c') ? { [fname]: txt } : {});
+      const list = __mk('リスト', (mode === 'c') ? {} : { [fname]: txt }, (mode === 'c') ? { '完了': done } : {});
+      const root = __mk('その１', {}, { 'リスト': list });
+      const at = (mode === 'c') ? done : list;                                 // ファイルの置き場所
+      window.showDirectoryPicker = async () => root;                           // 保存のときにフォルダを聞かれたら、この工事フォルダを選ぶ
+      const before = __tree(root);
+      const res = await lgwbAttachFrom(root, false);                           // 💾 戸別ファイルへ反映 の結び付け（管理番号で探す）
+      const o = { hit: res.hit, attached: !!(row._dir === at && row._name === fname && row.fileHandle),
+                  fromProject: !!row._fromProject, manual: !!row._manual, file: row.file };
+      await openCaseInEditor(row);
+      o.shown = (STATE.photos || []).filter(p => p && p.dataUri).length;
+      __setTel('090-2222-3333');
+      o.btn = await __pressSave();
+      const tag = p => p.id === gid ? (p.dataUri === G ? 'G原寸' : (p.dataUri === Gt ? 'G縮' : 'G?')) : (p.id === kid ? (p.dataUri === K ? 'K' : 'K?') : '?');
+      const nf = (mode === 'd') ? NO + '.json' : fname;                       // 書いたあとの名前
+      const j = JSON.parse(at.__files[nf] || '{}');
+      Object.assign(o, { before, after: __tree(root), tel: j.chosho_cust_tel, photos: (__photosOf(j) || []).map(tag),
+                         removed: at.__removed.slice(), thumbAnywhere: __allPhotos(root).some(p => p.dataUri === Gt) });
+      if(mode === 'd'){
+        // もう一度直して保存 → 新しい名前（管理番号.json）へ書く。古い名前を作り直さない
+        o.rowNow = { name: row._name, file: row.file };
+        const w0 = at.__writes.length;
+        __setTel('090-4444-5555');
+        o.btn2 = await __pressSave();
+        const j2 = JSON.parse(at.__files[nf] || '{}');
+        o.second = { tree: __tree(root), tel: j2.chosho_cust_tel, photos: (__photosOf(j2) || []).map(tag),
+                     writes: at.__writes.slice(w0).map(w => w.n), removed: at.__removed.slice(),
+                     thumbAnywhere: __allPhotos(root).some(p => p.dataUri === Gt) };
+      }
+      return o;
+    }, { NO, PN, mode });
+    const a21 = alerts(said);
+    console.log('㉑' + mode + '反映で付いたファイルへ書く', short(r), short(a21.map(m => m.slice(0, 90))));
+    ok(!r.error, '㉑' + mode + '止まった → ' + r.error);
+    if(!r.error){
+      ok(r.hit >= 1 && r.attached && r.fromProject && r.btn.pressed && /物件に保存/.test(r.btn.text),
+         '㉑' + mode + '試験の前提: 反映の結び付けで物件の行にファイルが付き、開いて「物件に保存」できる → ' + short(r));
+      if(mode === 'd'){
+        ok(r.after.join() === 'リスト/' + NO + '.json' && r.removed.join() === NO + '_1700000000.json',
+           '★㉑d管理番号.json にそろえていない・古い名前のファイルを消していない（写真はみな移っている）・別の場所にファイルを作った → ' + short(r));
+      } else {
+        ok(r.after.join() === r.before.join(), '★㉑' + mode + '付いているファイルがあるのに、同じ管理番号のファイルをもう1つ作った → ' + short(r.before) + ' → ' + short(r.after));
+        ok(r.removed.length === 0, '★㉑' + mode + 'ファイルを消した → ' + short(r.removed));
+      }
+      ok(r.tel === '090-2222-3333', '★㉑' + mode + '付いているファイルに直しが入っていない → ' + short(r));
+      ok(r.photos.join() === 'G原寸,K', '★㉑' + mode + '付いているファイルの写真が G（原寸）と K のままではない → ' + short(r.photos));
+      ok(!r.thumbAnywhere, '★㉑' + mode + 'フォルダのどこかに縮小版（長辺512px）が書かれた → ' + short(r));
+      ok(!a21.some(m => /書き替えていません/.test(m)) && a21.some(m => /戸別の個別JSONも更新しました/.test(m)),
+         '★㉑' + mode + '戸別ファイルを書いたと知らせない・書かなかった → ' + short(a21.slice(-1)));
+      if(mode === 'd'){
+        const s = r.second || {};
+        ok(r.rowNow && r.rowNow.name === NO + '.json' && r.rowNow.file === 'リスト/' + NO + '.json',
+           '★㉑d書いたあと、行が新しい名前（管理番号.json）を指していない → ' + short(r.rowNow));
+        ok(s.tree && s.tree.join() === 'リスト/' + NO + '.json' && s.writes.length >= 1 && s.writes.every(n => n === NO + '.json')
+           && s.removed.join() === NO + '_1700000000.json',
+           '★㉑d2回目の保存で、新しい名前のファイルへ書いていない・ファイルを作り直した → ' + short(s));
+        ok(s.tel === '090-4444-5555' && s.photos && s.photos.join() === 'G原寸,K' && !s.thumbAnywhere,
+           '★㉑d2回目の保存で、直しが入らない・写真が G（原寸）と K のままではない → ' + short(s));
+      }
+    }
+    await ctx.close();
+  }
+
+  // ---- ㉒ 名前の大文字・小文字を区別しないフォルダ（Windows・Mac）：小文字の名前の戸別ファイル → そのファイルへ書く ----
+  //   （前は「名前を管理番号.json にそろえる先に、別のファイルがある」と見て、書かずに断っていた）
+  if(want('㉒')){
+    const { ctx, page, said } = await openMain('㉒');
+    const r = await run(page, async ({ NO, PN }) => {
+      const G = __jpeg(900, 700, 0.85, 111); const gid = photoContentId(G);
+      const K = __jpeg(900, 700, 0.85, 112); const kid = photoContentId(K);
+      const Gt = await makeThumbDataUri(G, PROJ_THUMB_MAXPX, PROJ_THUMB_QUALITY);
+      const low = NO.toLowerCase() + '.json';                                 // 2612mkm077.json
+      await __openProj(__proj178('pj178w', PN, [{ caseId: 'c1', file: 'リスト/' + low, lastModified: 0,
+        payload: { chosho_mgmt_no: NO, chosho_cust_name: '試験 様', chosho_status: 'in_progress', work_type: 'uhf_new', amplifier: 'amp_3u43',
+                   chosho_photos: [{ id: gid, label: 'G', dataUri: Gt }], chosho_photos_thumb: true, chosho_photo_count: 1 } }]));
+      const list = __mk('リスト', { [low]: JSON.stringify({ chosho_mgmt_no: NO, chosho_cust_name: '試験 様', _origin: 'genba', work_type: 'uhf_new',
+        chosho_photos: [{ id: gid, label: 'G', dataUri: G }, { id: kid, label: 'K', dataUri: K }] }, null, 2) }, {}, { ci: true });
+      const root = __mk('その１', {}, { 'リスト': list }, { ci: true });
+      window.showDirectoryPicker = async () => root;
+      const pre = { same: await (await list.getFileHandle(NO + '.json')).isSameEntry(await list.getFileHandle(low)) };   // 大文字の名前でも同じファイル
+      await openCaseInEditor(_listRows[0]);
+      __setTel('090-2222-3333');
+      const btn = await __pressSave();
+      const j = JSON.parse(list.__files[low] || '{}');
+      const tag = p => p.id === gid ? (p.dataUri === G ? 'G原寸' : (p.dataUri === Gt ? 'G縮' : 'G?')) : (p.id === kid ? 'K' : '?');
+      return { pre, btn, names: Object.keys(list.__files), tel: j.chosho_cust_tel, photos: (__photosOf(j) || []).map(tag),
+               removed: list.__removed.slice(), writes: list.__writes.map(w => w.n) };
+    }, { NO, PN });
+    const a22 = alerts(said);
+    console.log('㉒大文字・小文字を区別しないフォルダ', short(r), short(a22.map(m => m.slice(0, 90))));
+    ok(!r.error, '㉒止まった → ' + r.error);
+    if(!r.error){
+      ok(r.pre.same && r.btn.pressed, '㉒試験の前提: 大文字の名前でも同じファイルが開ける・物件に保存できる → ' + short(r));
+      ok(r.names.join() === NO.toLowerCase() + '.json' && r.removed.length === 0,
+         '★㉒同じファイル（名前の大文字・小文字が違うだけ）を消した・もう1つ作った → ' + short(r));
+      ok(r.tel === '090-2222-3333' && r.photos.join() === 'G原寸,K',
+         '★㉒小文字の名前の戸別ファイルへ書かない・写真が G（原寸）と K のままではない → ' + short(r));
+      ok(!a22.some(m => /書き替えていません/.test(m)), '★㉒同じファイルなのに「書き替えていません」と断った → ' + short(a22.slice(-1)));
+    }
+    await ctx.close();
+  }
+
+  // ---- ㉓ 開いたあとで現場入力が戸別ファイルに足した写真を、保存で消さない（画面で消した写真だけを消す） ----
+  //   a) 物件・フォルダの行（図面なし）→ 物件に保存　b) 物件なし・フォルダの行（図面あり）→ 💾 上書き保存
+  //   c) 物件・フォルダの行（図面あり）を直して一覧へ戻る → 協力会社諸経費のそろえ直しで書く
+  //   d) 図面なしで写真を足して物件に保存 → 現場が足した → 開き直して 💾 上書き保存
+  //   e) 画面で消した写真は、これまでどおり 💾 上書き保存 で消える
+  //   f) 一度開いて戻った行を開き直す → 写真を足して 💾 上書き保存 → その写真を消して 💾 上書き保存 → 消える
+  for(const mode of ['a', 'b', 'c', 'd', 'e', 'f'].filter(m => want('㉓' + m))){
+    const { ctx, page, said } = await openMain('㉓' + mode);
+    const r = await run(page, async ({ NO, PN, mode }) => {
+      const g1 = __jpeg(900, 700, 0.85, 121), K = __jpeg(900, 700, 0.85, 122), x1 = __jpeg(900, 700, 0.85, 123);
+      const G2 = __jpeg(900, 700, 0.85, 124), P = __jpeg(900, 700, 0.85, 125);
+      const proj = (mode === 'a' || mode === 'c' || mode === 'd');
+      const drawing = (mode !== 'a' && mode !== 'd');
+      const base = { chosho_mgmt_no: NO, chosho_cust_name: '試験 様', chosho_status: 'in_progress', work_type: 'uhf_new' };
+      if(drawing) base.amplifier = 'amp_3u43';
+      const photos0 = [{ id: 'g1', label: 'g1', dataUri: g1 }].concat(mode === 'e' ? [{ id: 'x1', label: 'x1', dataUri: x1 }] : []);
+      if(proj) await __openProj(__proj178('pj178v' + mode, PN, []));
+      const list = __mk('リスト', { [NO + '.json']: JSON.stringify(Object.assign({}, base, { chosho_photos: photos0 }), null, 2) });
+      if(proj) _projDirHandle = list;                                          // 工事フォルダとつながっている
+      const fh = await list.getFileHandle(NO + '.json');
+      const row = buildListRow(NO + '.json', 1, JSON.parse(list.__files[NO + '.json']), fh);   // 📁 フォルダで読んだ行（写真は常駐させない）
+      slimListRow(row, true);
+      _listRows = [row];
+      window.confirm = () => true;                                              // 「元ファイルに上書き保存します」→ はい
+      // 現場入力が、いまのファイルに写真を足して保存した
+      const fieldAdds = add => {
+        const j = JSON.parse(list.__files[NO + '.json']);
+        j.chosho_photos = (j.chosho_photos || []).concat([add]);
+        list.__files[NO + '.json'] = JSON.stringify(j, null, 2);
+      };
+      const ids = () => { const j = JSON.parse(list.__files[NO + '.json']);
+        return (__photosOf(j) || []).map(p => (p.dataUri === P) ? 'P' : p.id).sort().join(','); };
+      const shownIds = () => (STATE.photos || []).filter(p => p && p.dataUri).map(p => (p.dataUri === P) ? 'P' : p.id).sort().join(',');
+      const o = {};
+      if(mode === 'a'){
+        await openCaseInEditor(row);                                            // 図面なし：開くときにファイルを読む（g1）
+        o.shown = shownIds();
+        fieldAdds({ id: 'K', label: 'K', dataUri: K });
+        __setTel('090-2222-3333');
+        o.btn = await __pressSave();                                            // 💾 物件に保存
+      } else if(mode === 'b' || mode === 'e'){
+        await listLoadRow(row);                                                 // 📁 で読んだ戸別を開く（図面あり）
+        o.shown = shownIds();
+        o.btnText = document.getElementById('btn-save-overwrite').textContent;
+        if(mode === 'b') fieldAdds({ id: 'K', label: 'K', dataUri: K });
+        else {
+          STATE.photos = (STATE.photos || []).filter(p => !(p && p.id === 'x1'));   // 画面で x1 を消す
+          try { renderPhotoInputs(); } catch(_){}
+          try { markEditorDirty(); } catch(_){}
+        }
+        __setTel('090-2222-3333');
+        await overwriteSaveCurrent();                                           // 💾 上書き保存
+      } else if(mode === 'c'){
+        await openCaseInEditor(row);
+        o.shown = shownIds();
+        __setTel('090-2222-3333');
+        openListView();                                                         // 一覧へ戻る（行へ取り込む）
+        if(_projSaveTimer){ clearTimeout(_projSaveTimer); _projSaveTimer = null; }
+        o.rowHeld = { slim: !!row._slim, ids: ((row.data && row.data.chosho_photos) || []).filter(p => p && p.dataUri).map(p => p.id).join(',') };
+        fieldAdds({ id: 'K', label: 'K', dataUri: K });
+        o.note = String(await _genbaWriteRowIndividual(row) || '').slice(0, 80);   // 協力会社諸経費のそろえ直しと同じ書き方
+      } else if(mode === 'd'){
+        await openCaseInEditor(row);                                            // 図面なし
+        o.shown = shownIds();
+        await __addPhoto(P, 'p.jpg');
+        o.btn = await __pressSave();                                            // 💾 物件に保存（g1・P）
+        o.first = ids();
+        fieldAdds({ id: 'G2', label: 'G2', dataUri: G2 });
+        await openCaseInEditor(row);                                            // 開き直す（もう図面がある）
+        o.shown2 = shownIds();
+        __setTel('090-2222-3333');
+        o.btn2 = await __pressSave();                                           // 💾 上書き保存
+      } else if(mode === 'f'){
+        await listLoadRow(row);
+        __setTel('090-2222-3333');
+        openListView();                                                         // 一覧へ戻る（行が写真を持つ）
+        o.rowHeld = { slim: !!row._slim, ids: ((row.data && row.data.chosho_photos) || []).filter(p => p && p.dataUri).map(p => p.id).join(',') };
+        await listLoadRow(row);                                                 // 開き直す
+        o.shown = shownIds();
+        o.btnText = document.getElementById('btn-save-overwrite').textContent;
+        await __addPhoto(P, 'p.jpg');
+        await overwriteSaveCurrent();
+        o.first = ids();
+        STATE.photos = (STATE.photos || []).filter(p => !(p && p.dataUri === P));   // 画面で P を消す
+        try { renderPhotoInputs(); } catch(_){}
+        try { markEditorDirty(); } catch(_){}
+        await overwriteSaveCurrent();
+      }
+      const j = JSON.parse(list.__files[NO + '.json']);
+      return Object.assign(o, { file: ids(), tel: j.chosho_cust_tel, writes: list.__writes.length });
+    }, { NO, PN, mode });
+    const a23 = alerts(said);
+    console.log('㉓' + mode + '開いたあとで現場が足した写真', short(r), short(a23.slice(-1).map(m => m.slice(0, 60))));
+    ok(!r.error, '㉓' + mode + '止まった → ' + r.error);
+    if(!r.error){
+      const want23 = { a: 'K,g1', b: 'K,g1', c: 'K,g1', d: 'G2,P,g1', e: 'g1', f: 'g1' }[mode];
+      if(mode === 'a') ok(r.shown === 'g1' && r.btn.pressed && /物件に保存/.test(r.btn.text), '㉓a試験の前提: 開くとファイルの写真が出て、物件に保存できる → ' + short(r));
+      if(mode === 'b' || mode === 'e') ok(r.shown === (mode === 'e' ? 'g1,x1' : 'g1') && /上書き保存/.test(r.btnText), '㉓' + mode + '試験の前提: 📁 で読んだ戸別を開くと、ファイルの写真が出て「💾 上書き保存」になる → ' + short(r));
+      if(mode === 'c') ok(r.shown === 'g1' && !r.rowHeld.slim && r.rowHeld.ids === 'g1' && /戸別の個別JSONも更新しました/.test(r.note),
+                          '㉓c試験の前提: 一覧へ戻ると行が写真を持ち、そろえ直しで戸別ファイルを書く → ' + short(r));
+      if(mode === 'd') ok(r.shown === 'g1' && /物件に保存/.test(r.btn.text) && r.first === 'P,g1' && r.shown2 === 'P,g1' && /上書き保存/.test(r.btn2.text) && r.btn2.pressed,
+                          '㉓d試験の前提: 物件に保存で g1・P が入り、開き直すと「💾 上書き保存」になる → ' + short(r));
+      if(mode === 'f') ok(!r.rowHeld.slim && r.rowHeld.ids === 'g1' && r.shown === 'g1' && /上書き保存/.test(r.btnText) && r.first === 'P,g1',
+                          '㉓f試験の前提: 戻ると行が写真を持ち、開き直して足した P が上書き保存で入る → ' + short(r));
+      ok(r.tel === '090-2222-3333', '㉓' + mode + '試験の前提: 直しが戸別ファイルに入る → ' + short(r));
+      if(mode === 'e' || mode === 'f') ok(r.file === want23, '★㉓' + mode + '画面で消した写真が、戸別ファイルに残る（消えない） → ' + short(r));
+      else ok(r.file === want23, '★㉓' + mode + '開いたあとで現場入力がファイルに足した写真が、保存で消えた → ' + short(r));
+    }
+    await ctx.close();
+  }
+
+  // ---- ㉔ 「小さい写真」の知らせ：自分のファイルから読んだ行の小さい写真（図など）は元の写真。物件の行の縮小版は今までどおり ----
+  if(want('㉔')){
+    const { ctx, page } = await openMain('㉔');
+    const r = await run(page, async ({ NO, PN }) => {
+      const small = __jpeg(480, 360, 0.85, 131), big = __jpeg(900, 700, 0.85, 132);
+      // 📁 で読んだ行（物件から読んだ行ではない・写真を持っている）
+      const row = buildListRow('リスト/' + NO + '.json', 1, { chosho_mgmt_no: NO, chosho_cust_name: '試験 様', chosho_status: 'in_progress', work_type: 'uhf_new',
+        chosho_photos: [{ id: 's1', label: '図', dataUri: small }, { id: 'b1', label: '写真', dataUri: big }] }, null);
+      _listRows = [row];
+      const t1 = cdlPhotoText({ row, printable: true, locked: false });
+      const l1 = await loadRowPhotos(row);
+      const folder = { t: t1.t, warn: t1.warn, thumb: l1.thumb, n: (l1.photos || []).length, smallEdge: await __edge(small) };
+      // 物件の行（縮小版）を開いて直して戻る → 縮小版の印は外れるが、写真は縮小版のまま
+      const G = __jpeg(900, 700, 0.85, 133);
+      const Gt = await makeThumbDataUri(G, PROJ_THUMB_MAXPX, PROJ_THUMB_QUALITY);
+      await __openProj(__proj178('pj178x', PN, [{ caseId: 'c1', file: 'リスト/' + NO + '.json', lastModified: 0,
+        payload: { chosho_mgmt_no: NO, chosho_cust_name: '試験 様', chosho_status: 'in_progress', work_type: 'uhf_new', amplifier: 'amp_3u43',
+                   chosho_photos: [{ id: photoContentId(G), label: 'G', dataUri: Gt }], chosho_photos_thumb: true, chosho_photo_count: 1 } }]));
+      const prow = _listRows[0];
+      await openCaseInEditor(prow);
+      __setTel('090-2222-3333');
+      openListView();
+      if(_projSaveTimer){ clearTimeout(_projSaveTimer); _projSaveTimer = null; }
+      const t2 = cdlPhotoText({ row: prow, printable: true, locked: false });
+      const l2 = await loadRowPhotos(prow);
+      const proj = { flag: !!(prow.data && prow.data.chosho_photos_thumb), fromProject: !!prow._fromProject,
+                     same: ((prow.data.chosho_photos || []).filter(p => p && p.dataUri)[0] || {}).dataUri === Gt,
+                     t: t2.t, warn: t2.warn, thumb: l2.thumb };
+      return { folder, proj };
+    }, { NO, PN });
+    console.log('㉔小さい写真の知らせ', short(r));
+    ok(!r.error, '㉔止まった → ' + r.error);
+    if(!r.error){
+      ok(r.folder.smallEdge === 480 && r.folder.n === 2, '㉔試験の前提: 長辺480pxの写真と大きい写真の2枚 → ' + short(r.folder));
+      ok(r.folder.t === '2枚' && !r.folder.warn, '★㉔自分のファイルから読んだ行の小さい写真を「小さい写真」と言う → ' + short(r.folder));
+      ok(r.folder.thumb === false, '★㉔自分のファイルから読んだ行の写真を、物件の縮小版として見せる → ' + short(r.folder));
+      ok(!r.proj.flag && r.proj.fromProject && r.proj.same, '㉔試験の前提: 物件の行を開いて直して戻ると、縮小版の印は外れ、写真は縮小版のまま → ' + short(r.proj));
+      ok(/小さい写真/.test(r.proj.t) && r.proj.warn, '★㉔物件の行の縮小版を「小さい写真」と言わなくなった（印が外れたあと） → ' + short(r.proj));
+      ok(r.proj.thumb === true, '★㉔物件の行の縮小版を、縮小版として見せない（印が外れたあと） → ' + short(r.proj));
+    }
+    await ctx.close();
+  }
+
+  // ---- ㉕ 暗号の戸別（.hyb）：物件の行は写真を剥がした封筒を持つ。そのまま書くと戸別ファイルの写真が全部消える ----
+  //   a) 元のファイル（同じ鍵）の暗号の写真を戻して書く　b) 元のファイルの鍵（salt）が違う → 書かない・知らせる
+  for(const mode of ['a', 'b'].filter(m => want('㉕' + m))){
+    const { ctx, page } = await openMain('㉕' + mode);
+    const r = await run(page, async ({ NO, PN, mode }) => {
+      const ph = __jpeg(600, 450, 0.85, 141);
+      const state = { chosho_mgmt_no: NO, chosho_cust_name: '暗号 様', chosho_status: 'in_progress', work_type: 'uhf_new', amplifier: 'amp_3u43',
+                      chosho_photos: [{ id: 'h1', label: '写真1', dataUri: ph }] };
+      const env = await encryptHybrid(state, 'pw1234');
+      const fileEnv = (mode === 'b') ? await encryptHybrid(state, 'pw1234') : env;   // b) 暗号をかけ直した（鍵が違う）ファイル
+      const fileText = JSON.stringify(fileEnv, null, 2);
+      const list = __mk('リスト', { [NO + '.hyb']: fileText });
+      const root = __mk('その１', {}, { 'リスト': list });
+      // 物件の行は、写真を剥がした封筒（slimListRow と同じ形）
+      const slim = Object.assign({}, env, { encrypted_fields: Object.assign({}, env.encrypted_fields, { chosho_photos: { stripped: true } }) });
+      await __openProj(__proj178('pj178y' + mode, PN, [{ caseId: 'c1', file: 'リスト/' + NO + '.hyb', lastModified: 0, payload: slim }]));
+      const row = _listRows[0];
+      _projDirHandle = root;                                 // 工事フォルダとつながっている
+      _editingRow = row;                                     // 協力会社諸経費のそろえ直しと同じ（画面に出ていない戸別を書く）
+      const msg = String(await writeCurrentCaseToIndividualFile() || '');
+      const now = list.__files[NO + '.hyb'];
+      const o = { fileType: row.fileType, rowStripped: !!((row.envelope.encrypted_fields || {}).chosho_photos || {}).stripped,
+                  saltDiff: fileEnv.salt !== env.salt, msg: msg.slice(0, 120), unchanged: now === fileText, writes: list.__writes.length };
+      let j = null; try { j = JSON.parse(now); } catch(_){}
+      const ep = j && j.encrypted_fields && j.encrypted_fields.chosho_photos;
+      o.encPhotos = !!(ep && ep.iv && ep.ct);
+      try { const dec = await decryptHybrid(j, 'pw1234');
+            const ps = (dec.chosho_photos || []).filter(p => p && p.dataUri);
+            o.dec = { n: ps.length, same: ps.length === 1 && ps[0].dataUri === ph, name: dec.chosho_cust_name, no: dec.chosho_mgmt_no }; }
+      catch(e){ o.decErr = String((e && e.message) || e).slice(0, 80); }
+      return o;
+    }, { NO, PN, mode });
+    console.log('㉕' + mode + '暗号の戸別', short(r));
+    ok(!r.error, '㉕' + mode + '止まった → ' + r.error);
+    if(!r.error){
+      ok(r.fileType === 'hybrid' && r.rowStripped && r.saltDiff === (mode === 'b'), '㉕' + mode + '試験の前提: 物件の行は写真を剥がした暗号の封筒 → ' + short(r));
+      if(mode === 'a'){
+        ok(/戸別の個別JSONも更新しました/.test(r.msg) && r.writes >= 1, '㉕a試験の前提: 戸別ファイル（.hyb）を書く → ' + short(r));
+        ok(r.encPhotos && r.dec && r.dec.n === 1 && r.dec.same && r.dec.name === '暗号 様',
+           '★㉕a写真を剥がした封筒をそのまま書き、.hyb の写真が消えた → ' + short(r));
+      } else {
+        ok(r.unchanged && r.writes === 0, '★㉕b鍵の違う .hyb に、写真を剥がした封筒を書いた（写真が消える） → ' + short(r));
+        ok(/書き替えていません/.test(r.msg), '★㉕b書かなかったことを知らせない → ' + short(r));
+      }
+    }
+    await ctx.close();
+  }
+
+  // ---- ㉖ 物件の縮小版づくりが動いているあいだに次の保存が来たら、終わるのを待つ（縮小版の無い行を「写真なし」で物件に入れない） ----
+  if(want('㉖')){
+    const { ctx, page } = await openMain('㉖');
+    const r = await run(page, async ({ PN }) => {
+      const nos = ['2612MKM081', '2612MKM082', '2612MKM083'];
+      await __openProj(__proj178('pj178z', PN, nos.map((no, i) => ({ caseId: 'c' + i, file: 'リスト/' + no + '.json', lastModified: 0,
+        payload: { chosho_mgmt_no: no, chosho_cust_name: '試験' + i + ' 様', chosho_status: 'in_progress', work_type: '',
+                   chosho_photos: [{ id: 'q' + i, label: '写真', dataUri: __jpeg(900, 700, 0.85, 150 + i) }] } }))));
+      if(_projSaveTimer){ clearTimeout(_projSaveTimer); _projSaveTimer = null; }
+      const targets = _listRows.filter(r => r.fileType === 'plain' && r._photoCount > 0 && !Array.isArray(r._thumbs));
+      // 1回目の縮小版づくりを、1件目のところで止めておく（写真が多くて時間がかかっている）
+      const orig = ensureRowThumbs;
+      let release; const gate = new Promise(res => { release = res; });
+      let first = true;
+      ensureRowThumbs = async row => { if(first){ first = false; await gate; } return orig(row); };
+      let done1 = false, done2 = false, snap = null;
+      const p1 = prepareProjectThumbs(true).then(() => { done1 = true; });
+      await new Promise(res => setTimeout(res, 50));
+      // 次の保存（自動保存）：縮小版がそろってから物件の中身を作る
+      const p2 = prepareProjectThumbs(true).then(() => { done2 = true; snap = buildProjectSnapshot({ id: 'pj178z', name: PN }); });
+      await new Promise(res => setTimeout(res, 300));
+      const early = { done1, done2 };
+      release();
+      await p1; await p2;
+      ensureRowThumbs = orig;
+      const bad = ((snap && snap.cases) || []).filter(c => c.payload && c.payload.chosho_photo_count > 0 && c.payload.chosho_photos == null)
+        .map(c => c.payload.chosho_mgmt_no);
+      return { n: targets.length, early, thumbs: targets.map(r => Array.isArray(r._thumbs) ? r._thumbs.length : -1),
+               bad, snapN: snap ? snap.cases.length : -1 };
+    }, { PN });
+    console.log('㉖縮小版づくりが重なった', short(r));
+    ok(!r.error, '㉖止まった → ' + r.error);
+    if(!r.error){
+      ok(r.n === 3 && r.snapN === 3, '㉖試験の前提: 写真のある行が3つ（縮小版はまだ無い） → ' + short(r));
+      ok(r.early.done1 === false && r.early.done2 === false, '★㉖前の縮小版づくりが終わる前に、次の保存へ進んだ → ' + short(r.early));
+      ok(r.thumbs.every(n => n === 1), '★㉖縮小版のできていない行が残った → ' + short(r.thumbs));
+      ok(r.bad.length === 0, '★㉖縮小版のできていない行を「写真なし」で物件に入れた（枚数だけ残る） → ' + short(r.bad));
+    }
+    await ctx.close();
+  }
+
+  // ---- ⑫d 物件にだけ保存 → 別の欄を直す（縮小版の控えが消える）→ 保存しないまま物件を開き直す → 物件に保存でフォルダを選ぶ → 元の写真 ----
+  if(want('⑫d')){
+    const { ctx, page } = await openMain('⑫d');
+    const r = await run(page, async ({ NO, PN }) => {
+      await __openProj(__proj178('pj178ld', PN, [{ caseId: 'c1', file: 'リスト/' + NO + '.json', lastModified: 0,
+        payload: { chosho_mgmt_no: NO, chosho_cust_name: '試験 様', chosho_status: 'in_progress', work_type: '' } }]));
+      const row = _listRows[0];
+      await openCaseInEditor(row);
+      const src = __jpeg(900, 700, 0.85, 171);
+      const ed = await __addPhoto(src, 'p.jpg');
+      __abortPicker();
+      await __pressSave();                                    // 物件にだけ保存（フォルダは選ばなかった）
+      const idb = await __idbPhotos('pj178ld', NO);
+      const o = { edSame: !!(ed && ed.dataUri === src), thumbs1: Array.isArray(row._thumbs), idbThumb: idb.thumb && idb.photos.length === 1 };
+      __setTel('090-3333-4444');                              // 別の欄を直す
+      syncEditorToRowData();                                  // 行へ取り込む（縮小版の控え _thumbs が消える）
+      if(_projSaveTimer){ clearTimeout(_projSaveTimer); _projSaveTimer = null; }   // まだ保存していない
+      o.thumbsCleared = !Array.isArray(row._thumbs);
+      await applyProject(await projIdbGet('pj178ld'), { silent: true });          // 端末内の物件を開き直す
+      const row2 = _listRows.filter(r => r.data.chosho_mgmt_no === NO)[0];
+      o.rebuilt = row2 !== row;
+      o.row2Orig = ((row2.data.chosho_photos || []).filter(p => p && p.dataUri)[0] || {}).dataUri === src;
+      const list = __mk('リスト', {});
+      window.showDirectoryPicker = async () => __mk('その１', {}, { 'リスト': list });
+      await openCaseInEditor(row2);
+      o.btn = await __pressSave();
+      const ph = __photosOf(list.__files[NO + '.json'] || '{}') || [];
+      o.n = ph.length; o.same = ph.length === 1 && ph[0].dataUri === src; o.edge = ph.length ? await __edge(ph[0].dataUri) : 0;
+      return o;
+    }, { NO, PN });
+    console.log('⑫d保存せずに開き直す', short(r));
+    ok(!r.error, '⑫d止まった → ' + r.error);
+    if(!r.error){
+      ok(r.edSame && r.thumbs1 && r.idbThumb && r.thumbsCleared && r.rebuilt && r.btn.pressed,
+         '⑫d試験の前提: 物件には縮小版・行の縮小版の控えが消えたあとに開き直す → ' + short(r));
+      ok(r.row2Orig, '★⑫d開き直すと、行の元の写真が縮小版に替わる（縮小版の控えが無かったので） → ' + short(r));
+      ok(r.n === 1 && r.same && r.edge > 512, '★⑫d開き直したあとの「物件に保存」で、戸別ファイルに縮小版が書かれた → ' + short(r));
+    }
+    await ctx.close();
+  }
+
+  // ---- ⑭d 物件の行（図面あり）を開いて直して戻った（縮小版の印が外れた）→ 💾 戸別ファイルへ反映 でファイルが付く → 開いて保存 → 原寸と K が残る ----
+  if(want('⑭d')){
+    const { ctx, page } = await openMain('⑭d');
+    const r = await run(page, async ({ NO, PN }) => {
+      const G = __jpeg(900, 700, 0.85, 181); const gid = photoContentId(G);
+      const K = __jpeg(900, 700, 0.85, 182); const kid = photoContentId(K);
+      const Gt = await makeThumbDataUri(G, PROJ_THUMB_MAXPX, PROJ_THUMB_QUALITY);
+      const base = { chosho_mgmt_no: NO, chosho_cust_name: '試験 様', chosho_status: 'in_progress', work_type: 'uhf_new', amplifier: 'amp_3u43' };
+      await __openProj(__proj178('pj178nd', PN, [{ caseId: 'c1', file: 'リスト/' + NO + '.json', lastModified: 0,
+        payload: Object.assign({}, base, { chosho_photos: [{ id: gid, label: 'G', dataUri: Gt }], chosho_photos_thumb: true, chosho_photo_count: 1 }) }]));
+      const row = _listRows[0];
+      await openCaseInEditor(row);
+      __setTel('090-0000-0001');
+      openListView();                                         // 一覧へ戻る（行へ取り込む＝縮小版の印が外れる）
+      if(_projSaveTimer){ clearTimeout(_projSaveTimer); _projSaveTimer = null; }
+      const o = { flag: !!row.data.chosho_photos_thumb, fromProject: !!row._fromProject };
+      const list = __mk('リスト', { [NO + '.json']: JSON.stringify(Object.assign({}, base, { _origin: 'genba',
+        chosho_photos: [{ id: gid, label: 'G', dataUri: G }, { id: kid, label: 'K', dataUri: K }] }), null, 2) });
+      const root = __mk('その１', {}, { 'リスト': list });
+      window.showDirectoryPicker = async () => root;
+      try { await listDirForget(); } catch(_){}
+      _listDirHandle = null;
+      listReloadFolder = async () => {};
+      await lgwbButton();                                     // 💾 戸別ファイルへ反映（行にファイルが付く・電話を書き戻す）
+      o.fh = !!row.fileHandle;
+      await openCaseInEditor(row);
+      __setTel('090-1111-2222');
+      o.btn = await __pressSave();
+      const j = JSON.parse(list.__files[NO + '.json']);
+      o.tel = j.chosho_cust_tel;
+      o.file = (__photosOf(j) || []).map(p => p.id === gid ? (p.dataUri === G ? 'G原寸' : (p.dataUri === Gt ? 'G縮' : 'G?')) : (p.id === kid ? 'K' : '?'));
+      o.tree = __tree(root);
+      return o;
+    }, { NO, PN });
+    console.log('⑭d印が外れた物件の行に反映', short(r));
+    ok(!r.error, '⑭d止まった → ' + r.error);
+    if(!r.error){
+      ok(!r.flag && r.fromProject && r.fh && r.btn.pressed && r.tel === '090-1111-2222',
+         '⑭d試験の前提: 縮小版の印が外れた物件の行にファイルが付き、開いて保存できる → ' + short(r));
+      ok(r.file.join() === 'G原寸,K' && r.tree.join() === 'リスト/' + NO + '.json',
+         '★⑭d縮小版の印が外れた物件の行を保存すると、原寸を縮小版で上書きする・ファイルにしか無い写真が消える → ' + short(r));
+    }
+    await ctx.close();
+  }
+
+  // ---- ⑯c 同じ管理番号のファイルが2つ（NO.antenna.json と NO.json）・行の知らない写真が NO.json にある → 書かない・まとめ方を案内する ----
+  if(want('⑯c')){
+    const { ctx, page, said } = await openMain('⑯c');
+    const r = await run(page, async ({ NO, PN }) => {
+      const A = __jpeg(900, 700, 0.85, 191); const aid = photoContentId(A);
+      const B = __jpeg(900, 700, 0.85, 192); const bid = photoContentId(B);
+      const At = await makeThumbDataUri(A, PROJ_THUMB_MAXPX, PROJ_THUMB_QUALITY);
+      const base = { chosho_mgmt_no: NO, chosho_cust_name: '試験 様', chosho_status: 'in_progress', work_type: 'uhf_new', amplifier: 'amp_3u43' };
+      await __openProj(__proj178('pj178pc', PN, [{ caseId: 'c1', file: 'リスト/' + NO + '.antenna.json', lastModified: 0,
+        payload: Object.assign({}, base, { chosho_photos: [{ id: aid, label: 'A', dataUri: At }], chosho_photos_thumb: true, chosho_photo_count: 1 }) }]));
+      const tA = JSON.stringify(Object.assign({}, base, { chosho_photos: [{ id: aid, label: 'A', dataUri: A }] }), null, 2);
+      const tB = JSON.stringify(Object.assign({}, base, { _origin: 'genba', chosho_photos: [{ id: bid, label: 'B', dataUri: B }] }), null, 2);
+      const list = __mk('リスト', { [NO + '.antenna.json']: tA, [NO + '.json']: tB });
+      const root = __mk('その１', {}, { 'リスト': list });
+      window.showDirectoryPicker = async () => root;
+      await openCaseInEditor(_listRows[0]);
+      __setTel('090-2222-3333');
+      const btn = await __pressSave();
+      return { btn, keptA: list.__files[NO + '.antenna.json'] === tA, keptB: list.__files[NO + '.json'] === tB,
+               writes: list.__writes.length, removed: list.__removed.slice(), tree: __tree(root) };
+    }, { NO, PN });
+    const a = alerts(said);
+    console.log('⑯c同じ管理番号のファイルが2つ', short(r), short(a.slice(-1).map(m => m.slice(m.indexOf('⚠'), m.indexOf('⚠') + 200))));
+    ok(!r.error, '⑯c止まった → ' + r.error);
+    if(!r.error){
+      ok(r.btn.pressed, '⑯c試験の前提: 物件に保存できる → ' + short(r));
+      ok(r.keptA && r.keptB && r.writes === 0 && r.removed.length === 0 && r.tree.length === 2,
+         '★⑯c同じ管理番号のファイルが2つあるのに書いた・消した（行の知らない写真 B が消える） → ' + short(r));
+      ok(a.some(m => /書き替えていません/.test(m) && /同じ管理番号のファイルが2つ/.test(m) && /重複をまとめる/.test(m)),
+         '★⑯c同じ管理番号のファイルが2つあると知らせない・「🧩 重複をまとめる」を案内しない → ' + short(a.slice(-1)));
+    }
+    await ctx.close();
+  }
+
+  // ---- ⑯d 管理番号の付け替え先にファイルがあるが、その写真を行がみな知っている → 両方の写真で書く・古いファイルを消す（断らない） ----
+  // ---- ⑯e 同じ・行は物件の行で、付け替え先の写真の縮小版しか持っていない → 付け替え先には原寸を残す ----
+  for(const mode of ['d', 'e'].filter(m => want('⑯' + m))){
+    const { ctx, page, said } = await openMain('⑯' + mode);
+    const r = await run(page, async ({ NO, NO2, PN, mode }) => {
+      const G2 = __jpeg(900, 700, 0.85, 201); const g2 = photoContentId(G2);
+      const G2t = await makeThumbDataUri(G2, PROJ_THUMB_MAXPX, PROJ_THUMB_QUALITY);
+      let row;
+      if(mode === 'd'){
+        await __openProj(__proj178('pj178pd', PN, []));
+        row = createManualRow({ chosho_mgmt_no: NO, chosho_cust_name: '台帳 様' }, 'manual');   // 台帳で作った行
+      } else {
+        await __openProj(__proj178('pj178pe', PN, [{ caseId: 'c1', file: NO + '.json', lastModified: 0,
+          payload: { chosho_mgmt_no: NO, chosho_cust_name: '台帳 様', chosho_status: 'in_progress', work_type: 'uhf_new', amplifier: 'amp_3u43',
+                     chosho_photos: [{ id: g2, label: '現場で撮った', dataUri: G2t }], chosho_photos_thumb: true, chosho_photo_count: 1 } }]));
+        row = _listRows[0];                                    // 物件の行（G2 の縮小版だけ）
+      }
+      const root = __mk('その１', { [NO2 + '.json']: JSON.stringify({ chosho_mgmt_no: NO2, chosho_cust_name: '台帳 様', _origin: 'genba',
+                        chosho_photos: [{ id: g2, label: '現場で撮った', dataUri: G2 }] }, null, 2) });
+      window.showDirectoryPicker = async () => root;
+      await openCaseInEditor(row);
+      const P = __jpeg(900, 700, 0.85, 202);
+      const eP = await __addPhoto(P, 'p.jpg');
+      let eG = null;
+      if(mode === 'd') eG = await __addPhoto(G2, 'g2.jpg');   // 現場の写真と同じもの（同じ写真ID・同じ中身）
+      await __pressSave();                                   // NO.json を作る
+      const tag = p => p.id === g2 ? (p.dataUri === G2 ? 'G2' : (p.dataUri === G2t ? 'G2縮' : 'G2?')) : (eP && p.id === eP.id ? (p.dataUri === P ? 'P' : 'P?') : '?');
+      const first = (__photosOf(root.__files[NO + '.json'] || '{}') || []).map(tag).sort();
+      __setField('chosho_mgmt_no', NO2);                     // 現場が使っている番号へ直す
+      await __pressSave();
+      const ph = __photosOf(root.__files[NO2 + '.json'] || '{}') || [];
+      return { eG: eG ? (eG.id === g2 && eG.dataUri === G2) : null, first, ids: ph.map(tag).sort(), removed: root.__removed.slice(),
+               keptOld: (NO + '.json') in root.__files, tree: __tree(root) };
+    }, { NO, NO2, PN, mode });
+    const a = alerts(said);
+    console.log('⑯' + mode + '付け替え先の写真を行が知っている', short(r), short(a.slice(-1).map(m => m.slice(0, 160))));
+    ok(!r.error, '⑯' + mode + '止まった → ' + r.error);
+    if(!r.error){
+      ok(r.first.join() === (mode === 'd' ? 'G2,P' : 'G2縮,P') && (mode !== 'd' || r.eG === true),
+         '⑯' + mode + '試験の前提: 1回目の保存で NO.json ができる（G2 は現場の写真と同じ写真ID） → ' + short(r));
+      ok(r.ids.indexOf('G2') >= 0 && r.ids.indexOf('G2縮') < 0 && r.ids.indexOf('G2?') < 0,
+         '★⑯' + mode + '付け替え先の現場の写真（原寸）が無くなった・縮小版に置き換わった → ' + short(r));
+      ok(r.ids.join() === 'G2,P' && r.removed.join() === NO + '.json' && !r.keptOld && r.tree.join() === NO2 + '.json',
+         '★⑯' + mode + '付け替え先の写真を行がみな知っているのに、書かずに断った・古いファイルを残した → ' + short(r));
+      ok(!a.some(m => /書き替えていません/.test(m)), '★⑯' + mode + '断る必要が無いのに「書き替えていません」と知らせた → ' + short(a.slice(-1)));
     }
     await ctx.close();
   }

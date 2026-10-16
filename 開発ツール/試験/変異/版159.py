@@ -38,10 +38,8 @@ CASES = [
    u'''  if(!contentObj){''', u'''  if(false && !contentObj){''', "smoke_v159_main.js", "main"),
 
   ("★0バイト・BOM付きのファイルがあると、その戸別が二度と書けない",
-   u'''        const t = String(await (await existingFh.getFile()).text()).replace(/^\\uFEFF/, "").trim();
-        if(!t){ basePhotos = undefined; baseRead = true; }        // 空＝失うものが無い
-        else { const j = JSON.parse(t); basePhotos = j && j.chosho_photos; baseRead = true; }''',
-   u'''        const j = JSON.parse(await (await existingFh.getFile()).text()); basePhotos = j.chosho_photos; baseRead = true;''',
+   u'''    if(!t) return { read: true, photos: undefined };''',          # 版178 で読み方を indivReadFilePhotos にまとめた
+   u'''    if(!t) return { read: false, photos: undefined };''',
    "smoke_v159_main.js", "main"),
   ("★物件から開いた行（サムネ）で、取り込んだ現場の写真を捨てる",
    u'''      return rowPhotos.filter(x => x && x.id && !baseKeys.has(x.id));''',
