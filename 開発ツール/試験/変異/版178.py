@@ -242,11 +242,12 @@ CASES = [
    u'''    if(fr) ph = slimRowWithMemPhotos(fr, row).chosho_photos;        // ファイルの写真＋行にだけある写真（取り込んだ分。版178）''',
    u'''    if(fr) ph = fr.chosho_photos;''', TM, "main", u"㊾b"),
   (u"★縮小版を作っているあいだに行の写真が変わっても、縮小版を付ける（足した写真が物件に入らない）",
-   u'''  if(now !== src0 && !photosSameSet(now, src0)) return;''', u'''''', TM, "main", u"㊿"),
+   u'''  if(now !== src0 && !photosSameSet(now, src0)){ row._thumbsRetry = true; return; }''', u'''''', TM, "main", u"㊿"),
   (u"★縮小版を付けなかった行を、同じ回で作り直さない（写真なしで物件に保存する）",
-   u'''      const again = targets.filter(r => r && !Array.isArray(r._thumbs));''', u'''      const again = [];''', TM, "main", u"㊿"),
+   u'''      const again = (_listRows || []).filter(r => r && r.fileType === "plain"
+        && (r._thumbsRetry || (targets.indexOf(r) >= 0 && !Array.isArray(r._thumbs))));''', u'''      const again = [];''', TM, "main", u"㊿"),
   (u"★画面から戻っただけ（写真は同じ）でも縮小版を捨てる（直して戻るたびに写真なしで物件に保存し、まとめると写真が全部消える）",
-   u'''  if(now !== src0 && !photosSameSet(now, src0)) return;''', u'''  if(now !== src0) return;''', TM, "main", u"㊿b"),
+   u'''  if(now !== src0 && !photosSameSet(now, src0)){ row._thumbsRetry = true; return; }''', u'''  if(now !== src0){ row._thumbsRetry = true; return; }''', TM, "main", u"㊿b"),
   (u"★作り直した行に写真の配列が無い（縮小版が物件に入っていない）のに枚数があるとき、この端末の元の写真を戻さない",
    u'''    if(!Array.isArray(r.data.chosho_photos)){
       if(!(Number(r.data.chosho_photo_count) > 0 || r._photoCount > 0)) return;''',
@@ -396,10 +397,12 @@ CASES = [
    u'''  if(created && !photoSrcFh && row.fileType === "plain" && ((row.data && row.data.chosho_photos_thumb) || row._fromProject)){''',
    u'''  if(false){''', TM, "main", u"㊸ha"),
   (u"★見つけた元の写真を、縮小版の代わりに使わない（📥 現場取込）",
-   u'''    return (b && photoLongEdgeOf(b.p.dataUri) > photoLongEdgeOf(p.dataUri)) ? Object.assign({}, p, { dataUri: b.p.dataUri }) : p;''',
+   u'''    return (b && b.p.dataUri !== p.dataUri && (photoLongEdgeOf(b.p.dataUri) > photoLongEdgeOf(p.dataUri) || !projThumbLike(b.p)))
+      ? Object.assign({}, p, { dataUri: b.p.dataUri }) : p;''',
    u'''    return p;''', TM, "main", u"㊸hc"),
   (u"★見つけた元の写真を、縮小版の代わりに使わない（協力会社諸経費のそろえ直し）",
-   u'''    return (b && photoLongEdgeOf(b.p.dataUri) > photoLongEdgeOf(p.dataUri)) ? Object.assign({}, p, { dataUri: b.p.dataUri }) : p;''',
+   u'''    return (b && b.p.dataUri !== p.dataUri && (photoLongEdgeOf(b.p.dataUri) > photoLongEdgeOf(p.dataUri) || !projThumbLike(b.p)))
+      ? Object.assign({}, p, { dataUri: b.p.dataUri }) : p;''',
    u'''    return p;''', TM, "main", u"㊸hd"),
   (u"★同じ管理番号のファイルを読めなかったことを覚えない（行の写真がみな縮小版でも、縮小版のファイルを作る）",
    u'''    if(!fb.read){ unread.push({ path: it.path, file: true }); continue; }''',
@@ -455,7 +458,9 @@ CASES = [
   obj.chosho_photos = arr.map(p => {
     if(!small(p)) return p;
     const b = best.get(p.id);
-    return (b && photoLongEdgeOf(b.p.dataUri) > photoLongEdgeOf(p.dataUri)) ? Object.assign({}, p, { dataUri: b.p.dataUri }) : p;
+    /* 縮小版より大きい・または物件の縮小版でない（PNG の図など＝元の写真）ときに使う（版178） */
+    return (b && b.p.dataUri !== p.dataUri && (photoLongEdgeOf(b.p.dataUri) > photoLongEdgeOf(p.dataUri) || !projThumbLike(b.p)))
+      ? Object.assign({}, p, { dataUri: b.p.dataUri }) : p;
   });''',
    u'''      if(!q || !q.id || !q.dataUri) return;
       const c = { p: q, from: "file", thumb: false }, b = best.get(q.id);
@@ -465,7 +470,9 @@ CASES = [
   obj.chosho_photos = arr.map(p => {
     if(!small(p)) return p;
     const b = best.get(p.id);
-    return (b && photoLongEdgeOf(b.p.dataUri) > photoLongEdgeOf(p.dataUri)) ? Object.assign({}, p, { dataUri: b.p.dataUri }) : p;
+    /* 縮小版より大きい・または物件の縮小版でない（PNG の図など＝元の写真）ときに使う（版178） */
+    return (b && b.p.dataUri !== p.dataUri && (photoLongEdgeOf(b.p.dataUri) > photoLongEdgeOf(p.dataUri) || !projThumbLike(b.p)))
+      ? Object.assign({}, p, { dataUri: b.p.dataUri }) : p;
   }).concat(Array.from(best.entries()).filter(([k]) => !arr.some(p => p && p.id === k)).map(([k, b]) => ({ id: k, label: "", dataUri: b.p.dataUri })));''',
    TM, "main", u"㊸k"),
   (u"★名前の通りの「管理番号.json」しか探さない（Android の名前を見落とす）",
@@ -481,7 +488,8 @@ CASES = [
    u'''      best.set(q.id, b ? pickBetterPhoto(b, c) : c);''',
    u'''      best.set(q.id, (b && photoLongEdgeOf(b.p.dataUri) >= photoLongEdgeOf(q.dataUri)) ? b : c);''', TM, "main", u"㊸q"),
   (u"★見つけた写真が縮小版より小さくても置き換える",
-   u'''    return (b && photoLongEdgeOf(b.p.dataUri) > photoLongEdgeOf(p.dataUri)) ? Object.assign({}, p, { dataUri: b.p.dataUri }) : p;''',
+   u'''    return (b && b.p.dataUri !== p.dataUri && (photoLongEdgeOf(b.p.dataUri) > photoLongEdgeOf(p.dataUri) || !projThumbLike(b.p)))
+      ? Object.assign({}, p, { dataUri: b.p.dataUri }) : p;''',
    u'''    return b ? Object.assign({}, p, { dataUri: b.p.dataUri }) : p;''', TM, "main", u"㊸q"),
   (u"★見て回っているあいだに届いたファイルを、確かめずに上書きする（現場の写真が消える）",
    u'''      if(now) return "\\n\\u26a0 戸別の個別JSONは書いていません：''',
@@ -544,25 +552,32 @@ CASES = [
   (u"★開き直したとき、行にだけある写真を行から外す（何もせずに戻ってもう一度開くと消える）",
    u'''        const lite = Object.assign({}, full); lite.chosho_photos = rowPh; // 一覧側は写真を保持しない（行にだけある写真は持ったまま。版178）''',
    u'''        const lite = Object.assign({}, full); lite.chosho_photos = null;''', TM, "main", u"㉕m"),
-  (u"★開き直したとき、行をファイルから読む形に戻す（次に開くとファイルだけを読み、足した写真が消える）",
-   u'''        target.data = lite; target.unlocked = true; target._slim = !rowPh;   // 行にだけある写真があるあいだは、行の封筒で開く（版178）''',
-   u'''        target.data = lite; target.unlocked = true; target._slim = true;''', TM, "main", u"㉕mproj"),
+  # 8回目の見直しの直しで形が変わった：開いても行の「ファイルから読む」（_slim）は開く前のまま（wasSlim）。
+  #   壊し方は「開くと、ファイルから読む形に替える」（次に開くと、まだファイルに無い直しをファイルの古い中身で戻す：㉕t）
+  (u"★開き直したとき、行をファイルから読む形に替える（見るだけで戻ってもう一度開くと、直した増幅器 1U がファイルの古い 3U に戻る）",
+   u'''        target.data = lite; target.unlocked = true; target._slim = wasSlim;
+''', u'''        target.data = lite; target.unlocked = true; target._slim = true;
+''', TM, "main", u"㉕t"),
   (u"★パスワードを聞いて開き直すとき、行にだけある写真を画面に出さない",
    u'''      const rowPh = hybRowPhotosToShow(full, target);   // 行にだけある写真を画面に出す（版178）
       const lite = Object.assign({}, full); lite.chosho_photos = rowPh;
 ''', u'''      const rowPh = null;
       const lite = Object.assign({}, full); lite.chosho_photos = rowPh;
 ''', TM, "main", u"㉕mpw"),
-  (u"★パスワードを聞いて開き直したとき、行をファイルから読む形に戻す（次に開くと足した写真が消える）",
-   u'''      target.data = lite; target.unlocked = true; target._slim = !rowPh;
-''', u'''      target.data = lite; target.unlocked = true; target._slim = true;
-''', TM, "main", u"㉕mpw"),
-  (u"★写真を剥がした封筒で開いたのでなくても、行の写真を出す（ファイルからほどいた写真を行の写真で置き換える）",
-   u'''  if(!full || !full._photosStripped || !target || !target._photosKnown || !target.data) return null;''',
-   u'''  if(!full || !target || !target._photosKnown || !target.data) return null;''', TM, "main", u"㉕p"),
-  (u"★行の写真を当てにしてよいか見ずに、行の写真を出す",
-   u'''  if(!full || !full._photosStripped || !target || !target._photosKnown || !target.data) return null;''',
-   u'''  if(!full || !full._photosStripped || !target || !target.data) return null;''', TM, "main", u"㉕p"),
+  # 上と同じ（8回目の見直し）：パスワードを聞いて開いたときも、開く前のまま
+  (u"★パスワードを聞いて開き直したとき、行をファイルから読む形に替える（次に開くと、直した増幅器 1U がファイルの古い 3U に戻る）",
+   u'''      target.data = lite; target.unlocked = true; target._slim = wasSlim;   // 上と同じ（版178）''',
+   u'''      target.data = lite; target.unlocked = true; target._slim = true;''', TM, "main", u"㉕tpw"),
+  # （8回目の見直し）ファイルからほどいたときも行の写真を出す（ファイルの写真に足す）のが正しい形になった。壊し方は「足さずに置き換える」
+  (u"★ファイルからほどいたとき、ファイルの写真を行の写真で置き換える（ファイルの写真が画面から消える）",
+   u'''  full.chosho_photos = photosKeepFileOnly(base, ph.filter(p => p && p.dataUri));''',
+   u'''  full.chosho_photos = ph.slice();''', TM, "main", u"㉕p"),
+  # （8回目の見直し）写真を剥がした封筒で開いたときは、行の写真をいつも出す（当てにしてよい印を見ない）のが正しい形になった
+  (u"★写真を剥がした封筒で開いたとき、行の写真を当てにしてよいときだけ出す（印の無い行の写真＝📥 で入れた写真を出さない）",
+   u'''  if(full._photosStripped){
+''', u'''  if(full._photosStripped){
+    if(!target._photosKnown) return null;
+''', TM, "main", u"㉕p"),
   (u"★名前だけの枠しか無い行でも、行の写真として出す",
    u'''  if(!Array.isArray(ph) || !ph.some(p => p && p.dataUri)) return null;''', u'''  if(!Array.isArray(ph)) return null;''', TM, "main", u"㉕p"),
   # ======== メイン：7回目の直し（📥で入れた写真だけが物件の写真になるのを直す） ========
@@ -624,14 +639,17 @@ CASES = [
    u'''    row._amtCache=undefined; row._bomCache=undefined; row._thumbs=keepTh;''',
    u'''    row._amtCache=undefined; row._bomCache=undefined; row._thumbs=undefined;''', TM, "main", u"㊾k"),
   (u"★📥 で残した物件の縮小版に、作り直す印を付けない（ファイルの写真だけのまま G が物件に入らない）",
-   u'''    if(keepTh) row._thumbsNoFile = true;
-''', u'''''', TM, "main", u"㊾ja"),
+   u'''    if(keepTh){ row._thumbsNoFile = true; row._thumbsRetry = true; }''',
+   u'''    if(keepTh){ row._thumbsRetry = true; }''', TM, "main", u"㊾ja"),
   (u"★📥 で常駐させない行の枚数を、取り込んだ写真の数にする（写真の無い取り込みで一覧が「なし」）",
-   u'''    row._photoCount = row._slim ? (row._photoCount > 0 ? row._photoCount : 0) : n; }''',
+   u'''    row._photoCount = (row._slim && row.fileType === "plain") ? (row._photoCount > 0 ? row._photoCount : 0)
+      : (row._slim ? (n ? Math.max(n, row._photoCount) : row._photoCount) : n); }''',
    u'''    row._photoCount = n; }''', TM, "main", u"㊾da"),
   (u"★📥 で常駐させない行の枚数に、取り込んだ写真の数を足す（🧩 重複をまとめる が古いほうを残す方に選ぶ）",
-   u'''    row._photoCount = row._slim ? (row._photoCount > 0 ? row._photoCount : 0) : n; }''',
-   u'''    row._photoCount = row._slim ? (row._photoCount > 0 ? row._photoCount : 0) + n : n; }''', TM, "main", u"㊾l"),
+   u'''    row._photoCount = (row._slim && row.fileType === "plain") ? (row._photoCount > 0 ? row._photoCount : 0)
+''',
+   u'''    row._photoCount = (row._slim && row.fileType === "plain") ? (row._photoCount > 0 ? row._photoCount : 0) + n
+''', TM, "main", u"㊾l"),
   (u"★ファイルの写真と合わせた縮小版の枚数を、行の枚数にする（🧩 重複をまとめる が古いほうを残す方に選ぶ）",
    u'''  row._thumbsNoFile = own && !both;                   // ファイルを読めずに作った（版178。次の保存でまた読む）
 ''', u'''  row._thumbsNoFile = own && !both;                   // ファイルを読めずに作った（版178。次の保存でまた読む）
@@ -649,6 +667,172 @@ CASES = [
   (u"★アパートでファイルを持たせた世帯の、物件の縮小版を作り直さない",
    u'''    target._thumbs = undefined;
 ''', u'''''', TM, "main", u"㊾h"),
+  # ======== メイン：7回目・8回目の見直しの直し（古い名前の戸別：断るかどうかは行の写真で・物件にそのまま入る写真だけが「物件の縮小版」・
+  #          見つけた同じ写真は、縮小版より大きいか物件の縮小版でないなら使う） ========
+  (u"★断るかどうかを、ほかのファイルで見つけた元の写真を入れたあとの写真で決める（G の原寸を画面にしか無い写真と数えて作り、H がずっと縮小版のまま）",
+   u'''      const orig = before.some(p => p && p.dataUri && !projThumbLike(p));''',
+   u'''      const orig = (contentObj.chosho_photos || []).some(p => p && p.dataUri && !projThumbLike(p));''', TM, "main", u"㊸r"),
+  (u"★物件の縮小版そのものかを長辺だけで見る（小さい図の PNG を縮小版と取り違えて断る）",
+   u'''  if(!p || !p.id || !p.dataUri || !projThumbAsIs(p.dataUri)) return false;''',
+   u'''  if(!p || !p.id || !p.dataUri) return false;''', TM, "main", u"㊸su"),
+  (u"★物件の縮小版そのものかを長辺だけで見る（150000字を超える長辺512px の JPEG を縮小版と取り違えて断る）",
+   u'''  if(!p || !p.id || !p.dataUri || !projThumbAsIs(p.dataUri)) return false;''',
+   u'''  if(!p || !p.id || !p.dataUri) return false;''', TM, "main", u"㊸tu"),
+  (u"★物件の縮小版そのものかを長辺だけで見る（見つけた PNG の図を縮小版と取り違えて使わない）",
+   u'''  if(!p || !p.id || !p.dataUri || !projThumbAsIs(p.dataUri)) return false;''',
+   u'''  if(!p || !p.id || !p.dataUri) return false;''', TM, "main", u"㊸u"),
+  (u"★元の写真を探しに見て回るかを長辺だけで見る（PNG の図だけの行でも見て回り、「小さい写真のまま入れた」と知らせる）",
+   u'''  const small = p => projThumbLike(p);   // 物件の縮小版そのもの（PNG の図などは元の写真＝探さない）''',
+   u'''  const small = p => { if(!p || !p.id || !p.dataUri) return false; const e = photoLongEdgeOf(p.dataUri); return e > 0 && e <= PROJ_THUMB_MAXPX; };''', TM, "main", u"㊸sb"),
+  (u"★元の写真を探しに見て回るかを長辺だけで見る（大きい JPEG だけの行でも見て回る）",
+   u'''  const small = p => projThumbLike(p);   // 物件の縮小版そのもの（PNG の図などは元の写真＝探さない）''',
+   u'''  const small = p => { if(!p || !p.id || !p.dataUri) return false; const e = photoLongEdgeOf(p.dataUri); return e > 0 && e <= PROJ_THUMB_MAXPX; };''', TM, "main", u"㊸tu"),
+  (u"★断るかどうかを長辺だけで見る（G の縮小版と小さい図の PNG の行で、PNG を縮小版と取り違えて断る）",
+   u'''      const orig = before.some(p => p && p.dataUri && !projThumbLike(p));''',
+   u'''      const orig = before.some(p => { if(!p || !p.dataUri) return false; const e = photoLongEdgeOf(p.dataUri); return !(e > 0 && e <= PROJ_THUMB_MAXPX); });''', TM, "main", u"㊸sg"),
+  (u"★断るかどうかを長辺だけで見る（G の縮小版と 150000字を超える JPEG の行で断る）",
+   u'''      const orig = before.some(p => p && p.dataUri && !projThumbLike(p));''',
+   u'''      const orig = before.some(p => { if(!p || !p.dataUri) return false; const e = photoLongEdgeOf(p.dataUri); return !(e > 0 && e <= PROJ_THUMB_MAXPX); });''', TM, "main", u"㊸tg"),
+  (u"★物件の縮小版づくりが、縮小版そのものかを見る物差しより大きい JPEG もそのまま物件に入れる（物差しが2つ）",
+   u'''    const t = projThumbAsIs(p.dataUri)
+      ? p.dataUri''',
+   u'''    const t = (p.dataUri.startsWith("data:image/jpeg") && p.dataUri.length < 1500000)
+      ? p.dataUri''', TM, "main", u"㊸tu"),
+  (u"★物件の縮小版づくりが、大きい JPEG もそのまま物件に入れる（物件に縮小版でなく元の写真が入る）",
+   u'''    const t = projThumbAsIs(p.dataUri)
+      ? p.dataUri''',
+   u'''    const t = (p.dataUri.startsWith("data:image/jpeg") && p.dataUri.length < 1500000)
+      ? p.dataUri''', TM, "main", u"①"),
+  (u"★物件の縮小版づくりが、縮小版そのものと見る小さい JPEG まで作り直す（物差しが2つ・断ったあと閉じると足した写真が消える）",
+   u'''    const t = projThumbAsIs(p.dataUri)
+      ? p.dataUri''',
+   u'''    const t = (p.dataUri.startsWith("data:image/jpeg") && p.dataUri.length < 1500)
+      ? p.dataUri''', TM, "main", u"㊸sj"),
+  (u"★見つけた同じ写真を、縮小版より大きいときだけ使う（PNG の図の元の写真を使わず物件の JPEG を入れる・縮小版が残ったと数えて断る）",
+   u'''    return (b && b.p.dataUri !== p.dataUri && (photoLongEdgeOf(b.p.dataUri) > photoLongEdgeOf(p.dataUri) || !projThumbLike(b.p)))''',
+   u'''    return (b && b.p.dataUri !== p.dataUri && (photoLongEdgeOf(b.p.dataUri) > photoLongEdgeOf(p.dataUri)))''', TM, "main", u"㊸u"),
+  # 「見つけた写真が行の写真と1文字も違わないときも置き換える」（b.p.dataUri !== p.dataUri を外す）は足さない。
+  # 同じ写真IDで中身も同じなら、物件の縮小版そのものかの見立ても長辺も行の写真と同じで、どのみち置き換えない（外しても動きが変わらない）。
+  # ======== メイン：7回目・8回目の見直しの直し（縮小版づくりのあいだに 📥 が入った行を、同じ回で作り直す） ========
+  # 「遅れて見る所（ensureRowThumbs の終わり）で作り直しの印を付けない」だけの変異は入れない。📥 で縮小版を引き継ぐとき
+  #  （applyGenbaMergeToRow）にも同じ印を付けるので、片方だけ外しても試験は緑のまま（引き継いだ縮小版を持ったまま写真が変わる道は
+  #  ほかに無い＝二重の備え）。両方を外すと ㊾m が赤くなることは確かめた（8回目の見直し）。遅れて見る所そのものは ㊿・㊿b の件で見る。
+  (u"★📥 で縮小版を引き継いだ行に、作り直しの印を付けない（ほかの戸別の縮小版づくりのあいだに入ると同じ回で作り直さず、取り込んだ写真がまとめで消える）",
+   u'''    if(keepTh){ row._thumbsNoFile = true; row._thumbsRetry = true; }''',
+   u'''    if(keepTh){ row._thumbsNoFile = true; }''', TM, "main", u"㊾m2"),
+  (u"★同じ回の作り直しを、縮小版づくりを始めたときに選んだ行だけにする（あいだに 📥 が入った別の戸別を作り直さず、取り込んだ写真がまとめで消える）",
+   u'''      const again = (_listRows || []).filter(r => r && r.fileType === "plain"''',
+   u'''      const again = targets.filter(r => r && r.fileType === "plain"''', TM, "main", u"㊾m2"),
+  (u"★同じ回の作り直しで、作り直しの印の付いた行を拾わない（縮小版を引き継いだ行は作り直さず、取り込んだ写真がまとめで消える）",
+   u'''        && (r._thumbsRetry || (targets.indexOf(r) >= 0 && !Array.isArray(r._thumbs))));''',
+   u'''        && (targets.indexOf(r) >= 0 && !Array.isArray(r._thumbs)));''', TM, "main", u"㊾m"),
+  (u"★作り直せたあとも作り直しの印を消さない（ファイルを読めないあいだ、同じ保存のうちに同じ写真を何度も縮める）",
+   u'''  row._thumbs = thumbs;
+  row._thumbsRetry = false;
+''', u'''  row._thumbs = thumbs;
+''', TM, "main", u"㊾m"),
+  # ======== メイン：7回目・8回目の見直しの直し（📥 のあとの暗号の戸別の一覧の枚数。㊾n） ========
+  (u"★📥 で暗号の常駐させない行（.hyb・.enc）にも「ファイルの枚数のまま」を当てる（分からない（-1）が 0 になり、一覧が「―」で押せない）",
+   u'''    row._photoCount = (row._slim && row.fileType === "plain") ? (row._photoCount > 0 ? row._photoCount : 0)
+''',
+   u'''    row._photoCount = row._slim ? (row._photoCount > 0 ? row._photoCount : 0)
+''', TM, "main", u"㊾n"),
+  (u"★📥 で写真の無い取り込みのとき、暗号の常駐させない行の分かっている枚数を取り込んだ数（0）にする（🔒 も 💾 上書き保存のあとの 📷 2 も「―」）",
+   u'''      : (row._slim ? (n ? Math.max(n, row._photoCount) : row._photoCount) : n); }''',
+   u'''      : (row._slim ? (n ? Math.max(n, row._photoCount) : n) : n); }''', TM, "main", u"㊾n"),
+  (u"★📥 で写真を取り込んだとき、暗号の常駐させない行の枚数を取り込んだ数だけにする（分かっているファイルの枚数 2 が 1 に減る）",
+   u'''      : (row._slim ? (n ? Math.max(n, row._photoCount) : row._photoCount) : n); }''',
+   u'''      : (row._slim ? (n ? n : row._photoCount) : n); }''', TM, "main", u"㊾nr"),
+  # ======== メイン：8回目の見直しの直し（暗号の戸別 .hyb：開いても「ファイルから読む」に替えない・📷 と書き出しと一括再暗号化は
+  #          剥がした封筒ならファイルの写真を読む・暗号の行が持つ写真はいつも出す・💾 のあとは行の写真を捨てる） ========
+  (u"★開き直したとき、行をファイルから読む形に替える（物件：3回目に開いて直して戻ると、共有ファイルの増幅器 1U が 3U に戻る）",
+   u'''        target.data = lite; target.unlocked = true; target._slim = wasSlim;
+''', u'''        target.data = lite; target.unlocked = true; target._slim = true;
+''', TM, "main", u"㉕tproj"),
+  (u"★📷・📸・📄・🔄 が、剥がした封筒をそのまま読む（直して戻ったあと、写真が出ない・この戸別を飛ばす）",
+   u'''async function getEnvelopeForPhotos(row){
+  const env = await getFullEnvelope(row);
+''', u'''async function getEnvelopeForPhotos(row){
+  const env = await getFullEnvelope(row); return env;
+''', TM, "main", u"㉕qedit"),
+  (u"★📷・📸・📄・🔄 が、剥がした封筒をそのまま読む（物件の行：💾 上書き保存して戻ったあと 📷 に写真が出ない）",
+   u'''async function getEnvelopeForPhotos(row){
+  const env = await getFullEnvelope(row);
+''', u'''async function getEnvelopeForPhotos(row){
+  const env = await getFullEnvelope(row); return env;
+''', TM, "main", u"㉕mproj"),
+  (u"★一覧の 📷 写真のプレビューが、剥がした封筒をそのまま読む（直して戻ったあと「写真が登録されていません」）",
+   u'''      const env = await getEnvelopeForPhotos(row);   // 剥がした封筒ならファイルの写真（版178）''',
+   u'''      const env = await getFullEnvelope(row);''', TM, "main", u"㉕qedit"),
+  (u"★📸 写真の一括書き出しが、剥がした封筒をそのまま読む（直して戻ったあと「鍵がなくスキップ」）",
+   u'''    try { env = await getEnvelopeForPhotos(row); } catch(_){}''',
+   u'''    try { env = await getFullEnvelope(row); } catch(_){}''', TM, "main", u"㉕qedit"),
+  (u"★🔄 一括再暗号化・📄 一括平文化が、剥がした封筒をそのまま読む（直して戻ったあと「写真未復元のため保全スキップ」）",
+   u'''      const env = await getEnvelopeForPhotos(row); // 写真ct復元済みの完全envelope（剥がした封筒ならファイルの写真。版178）''',
+   u'''      const env = await getFullEnvelope(row);''', TM, "main", u"㉕qedit"),
+  (u"★📷・📸・📄・🔄 の封筒の暗号でない部分を、行（直したところ）でなくファイルから取る（🔄・📄 で増幅器 1U が 3U に戻る）",
+   u'''  return Object.assign({}, fresh, { plain: (env && env.plain) || fresh.plain });''',
+   u'''  return fresh;''', TM, "main", u"㉕qedit"),
+  (u"★📷・📸・📄・🔄 の封筒の暗号でない部分を、行でなくファイルから取る（開き直して戻ったあと、🔄・📄 で増幅器 1U が 3U に戻る）",
+   u'''  return Object.assign({}, fresh, { plain: (env && env.plain) || fresh.plain });''',
+   u'''  return fresh;''', TM, "main", u"㉕qreopen"),
+  (u"★ファイルからほどいたとき、行にだけある写真を足さない（📥 で入れた写真 G が、開くと消える）",
+   u'''  const base = Array.isArray(full.chosho_photos) ? full.chosho_photos : (full.chosho_photos ? migratePhotosShape(full.chosho_photos) : []);
+  full.chosho_photos = photosKeepFileOnly(base, ph.filter(p => p && p.dataUri));
+  return ph;
+}''', u'''  return null;
+}''', TM, "main", u"㉕r"),
+  (u"★ファイルからほどいたとき、行にだけある写真を足さない（決まりの確かめ）",
+   u'''  const base = Array.isArray(full.chosho_photos) ? full.chosho_photos : (full.chosho_photos ? migratePhotosShape(full.chosho_photos) : []);
+  full.chosho_photos = photosKeepFileOnly(base, ph.filter(p => p && p.dataUri));
+  return ph;
+}''', u'''  return null;
+}''', TM, "main", u"㉕p"),
+  (u"★ファイルからほどいたとき、行にだけある写真を足さない（開くとき読めなかったファイルを、読めるようになって開くと G が消える）",
+   u'''  const base = Array.isArray(full.chosho_photos) ? full.chosho_photos : (full.chosho_photos ? migratePhotosShape(full.chosho_photos) : []);
+  full.chosho_photos = photosKeepFileOnly(base, ph.filter(p => p && p.dataUri));
+  return ph;
+}''', u'''  return null;
+}''', TM, "main", u"㉕uU"),
+  (u"★ファイルからほどいたときも、ファイルの写真を行の写真で置き換える（📥 で入れた G だけが出て、上書き保存で A・B が消える）",
+   u'''  full.chosho_photos = photosKeepFileOnly(base, ph.filter(p => p && p.dataUri));''',
+   u'''  full.chosho_photos = ph.slice();''', TM, "main", u"㉕r"),
+  (u"★ファイルからほどいて開いたとき、行にだけある写真を行から外す（📥 で入れた G が、もう一度開くと消える）",
+   u'''        const lite = Object.assign({}, full); lite.chosho_photos = rowPh; // 一覧側は写真を保持しない（行にだけある写真は持ったまま。版178）''',
+   u'''        const lite = Object.assign({}, full); lite.chosho_photos = null;''', TM, "main", u"㉕r"),
+  (u"★ファイルを読めずに写真を剥がした封筒で開いたとき、行にだけある写真を行から外す（📥 で入れた G が、次に開くと消える）",
+   u'''        const lite = Object.assign({}, full); lite.chosho_photos = rowPh; // 一覧側は写真を保持しない（行にだけある写真は持ったまま。版178）''',
+   u'''        const lite = Object.assign({}, full); lite.chosho_photos = null;''', TM, "main", u"㉕uU"),
+  (u"★物件の行を写真を剥がした封筒で開いたとき、行にだけある写真を行から外す（📥 で入れた G が、もう一度開くと消える）",
+   u'''        const lite = Object.assign({}, full); lite.chosho_photos = rowPh; // 一覧側は写真を保持しない（行にだけある写真は持ったまま。版178）''',
+   u'''        const lite = Object.assign({}, full); lite.chosho_photos = null;''', TM, "main", u"㉕uA"),
+  (u"★パスワードを聞いて開き直したとき、行にだけある写真を行から外す（もう一度開くと、足して戻った P が消える）",
+   u'''      const lite = Object.assign({}, full); lite.chosho_photos = rowPh;
+      target.data = lite; target.unlocked = true; target._slim = wasSlim;   // 上と同じ（版178）''',
+   u'''      const lite = Object.assign({}, full); lite.chosho_photos = null;
+      target.data = lite; target.unlocked = true; target._slim = wasSlim;   // 上と同じ（版178）''', TM, "main", u"㉕mpw"),
+  (u"★写真を剥がした封筒で開いたとき、行の写真を当てにしてよいときだけ出す（物件の行に 📥 で入れた写真 G が、開くと消える）",
+   u'''  if(full._photosStripped){
+''', u'''  if(full._photosStripped){
+    if(!target._photosKnown) return null;
+''', TM, "main", u"㉕uA"),
+  (u"★写真を剥がした封筒で開いたとき、行の写真を当てにしてよいときだけ出す（開くときファイルを読めないと、📥 で入れた写真 G が消える）",
+   u'''  if(full._photosStripped){
+''', u'''  if(full._photosStripped){
+    if(!target._photosKnown) return null;
+''', TM, "main", u"㉕uU"),
+  (u"★暗号の戸別を 💾 上書き保存したあと、行にだけ持っていた写真を捨てない（画面で消して書いた P が、開き直すと戻る）",
+   u'''        _editingRow.data = Object.assign({}, _editingRow.data, { chosho_photos: null });
+''', u'''''', TM, "main", u"㉕s"),
+  (u"★暗号の戸別を 💾 上書き保存したあと、行にだけ持っていた写真を捨てない（ボタンを押したとき：行に写真が残る）",
+   u'''        _editingRow.data = Object.assign({}, _editingRow.data, { chosho_photos: null });
+''', u'''''', TM, "main", u"㉕sclick"),
+  (u"★暗号の戸別を 💾 上書き保存したあと、行をファイルから読む形にしない（開き直すと写真の出ていない画面・写真が出ない）",
+   u'''        _editingRow._slim = true;
+''', u'''''', TM, "main", u"㉕s"),
+  (u"★暗号の戸別を 💾 上書き保存したあと、行をファイルから読む形にしない（ボタンを押したとき：開き直すと写真が出ない）",
+   u'''        _editingRow._slim = true;
+''', u'''''', TM, "main", u"㉕sclick"),
 ]
 
 import sys as _s
