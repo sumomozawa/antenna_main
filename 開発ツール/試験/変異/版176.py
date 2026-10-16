@@ -730,13 +730,13 @@ CASES = [
   (u"★新しく置いたとき、置いた戸別ファイルを渡さない",
    u'''  out.merged.fh = fh;''', u'''  out.merged.fhX = fh;''', TM, "main", u"㉖c"),
   (u"★図面のまだ無い戸別を開くとき、行の写真を画面に入れない",
-   u'''    base.chosho_photos = await editorPresetPhotos(row);''', u'''    base.chosho_photos = [];''', TM, "main", u"㉖c"),
+   u'''    base.chosho_photos = preset;''', u'''    base.chosho_photos = [];''', TM, "main", u"㉖c"),   # 版178 で開けなかったときに止まる行を足した
   # 「★図面のまだ無い戸別を開くとき、物件の保存でサムネにした写真を画面に入れない」は版178 で外した
   # （版178 から物件の保存で行の写真をサムネに置き換えないので、壊しても同じ動き＝見分けようが無い）
   (u"★図面のまだ無い戸別を開くとき、常駐させない写真を元のファイルから読まない",
    u'''  if(row._slim && (row.fileHandle || row.srcFile)){
-    const fr = await rereadRowSource(row);''', u'''  if(false){
-    const fr = null;''', TM, "main", u"㉖f"),   # 版178 で見せた写真を覚える行を足した（else が続くので if だけ壊す）
+    const rr = await rereadRowSourceWhy(row);''', u'''  if(false){
+    const rr = { data: null, why: "none" };''', TM, "main", u"㉖f"),   # 版178 で見せた写真を覚える行を足した（else が続くので if だけ壊す）
   (u"★新しく置けないとき、どうすれば置けるか言わない",
    u'''      + sideSortNewHint(it, acc, p) };''', u'''      };''', TM, "main", u"㉗a"),
   (u"★上のフォルダを選んでいても「上のフォルダを選ぶと置けます」と言う",
