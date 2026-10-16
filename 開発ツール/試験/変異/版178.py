@@ -418,6 +418,17 @@ CASES = [
    u'''    if(cur){ if(!Array.isArray(cur.photos)) cur.photos = []; cur.photos.push(...phs); }''', TG, "genba", u"⑰o"),
   (u"★特別記録の端末の記録にある同じ写真を見分けない（一覧へ戻ったあとの同じ写真を知らせない）",
    u'''    dup = dup || has(prev.photos);''', u'''''', TG, "genba", u"⑰o"),
+  (u"★特別記録の開いている記録を、同じ記録かどうか見ずに使う（取り込みの写真が、ほかの記録に入る）",
+   u'''  return (_spCur && rec && (_spCur === rec || (rec.key && _spCur.key === rec.key))) ? _spCur : null;''',
+   u'''  return (_spCur && rec) ? _spCur : null;''', TG, "genba", u"⑰p"),
+  (u"★特別記録が端末に無く開いてもいないとき、取り込みの写真を書かない（新しい記録で一覧へ戻ると写真が消える）",
+   u'''      const o = cur || rec;''', u'''      const o = cur;''', TG, "genba", u"⑰f2"),
+  (u"★特別記録が端末に無いとき（消した記録）、回数を進めずに書く（ファイルに無い写真が「保存済」に見える）",
+   u'''      o.savedAt = Date.now(); o.rev = (o.rev | 0) + 1;''', u'''      o.savedAt = Date.now();''', TG, "genba", u"⑰f3"),
+  (u"★特別記録の取り込みで、開き直した記録の回数をそろえない（保存のあいだに何も入らなくても「保存済」にならない）",
+   u'''    if(cur){ cur.rev = prev.rev; cur.savedAt = prev.savedAt; }''', u'''''', TG, "genba", u"⑰q"),
+  (u"★特別記録の取り込みの終わりに、取り込みを始めた記録を丸ごと書く（もとの直し前の最後の keep）",
+   u'''    if(cur) renderSpecialEdit(host);''', u'''    await keep(); if(cur) renderSpecialEdit(host);''', TG, "genba", u"⑰"),
 ]
 
 import sys as _s
