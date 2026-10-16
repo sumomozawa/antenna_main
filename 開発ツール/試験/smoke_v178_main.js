@@ -81,6 +81,20 @@
      ㊽ 開いている戸別へ 📥 現場取込 → 直して戻って開き直し 💾 上書き保存 → 前に見せた写真（ファイルにある）を消さない
      ㊾ 📥 現場取込で行にだけ入った写真（ファイルに書けなかった）→ 開くと画面に出る・保存でファイルに入る（a 物件なし・図面あり　b 物件あり・図面なし）
      ㊿ 縮小版づくり（自動保存）のあいだに行の写真が変わった → 古い縮小版を付けない（足した写真の縮小版も物件に入る）
+   （ここから 4回目の見直しの直し）
+     ⑯f （直し）付け替え先が写真なし・名前の違うファイル → 同じお宅か聞く（両方の名前を見せる）。キャンセル → 書かない
+     ⑯g （直し）名前が同じなら聞かずに書く　⑯h 聞いて OK → そのファイルへ書く（キャンセルのときは書かない）
+     ⑯i まとめて書いているとき（📥・諸経費のそろえ直し）は聞かずに書かない・開いて「💾 物件に保存」するよう知らせる
+     ⑯j アパートの別の世帯（住所が同じ）のファイル → 住所だけでは同じお宅と見ない（聞いてキャンセル → 書かない）
+     ㊸e 💾 反映で リスト を選んで一覧を読み直した → 覚える名前を工事フォルダから見た道のりに → 次の日の保存も リスト/管理番号.json へ
+     ㊸f 物件の覚えている名前で見つからない → 工事フォルダの中の 管理番号.json へ書く（f2 2つあれば書かない）
+     ㊻c ファイルを読めないまま開いた（図面なし）→ 行の写真（📥 で入れた分）を出して知らせる・戻っても行は「ファイルから読む」のまま
+     ㊼b 💾 上書き保存の元ファイルの名前がほかのPCで変わった → 同じフォルダの 管理番号.json に付け直して書く
+     ㊼c 元ファイルが壊れている → この画面の中身で書き直すか聞く　㊼d そろえ直しで開いている戸別の名前が変わった → 行き先も付け替わる
+     ㊽ （直し）開いている戸別へ 📥 → 画面にファイルの写真と現場の写真を合わせて出す
+     ㊽b 画面で消した写真は、開いている戸別へ 📥 したあとの保存でも戻らない　㊽c 常駐させない行へ 📥 して書けた → 行は「ファイルから読む」に戻る
+     ㊿b 縮小版づくりのあいだに直して戻った・物件に保存を押した（写真は同じ）→ 作った縮小版を使う（共有ファイルとまとめても写真が残る）
+     ㊿c 縮小版を作れないまま物件に入り、まとめで行が作り直された → この端末の元の写真を戻す・次の保存で縮小版が入る
    ★場面ごとに新しいブラウザの入れ物（newContext）を使う★ 前の場面の覚え書き（localStorage・IndexedDB）を持ち越さない。
    フォルダは試験の中で作る作り物（getDirectoryHandle／getFileHandle／removeEntry／entries／values を持つ）。
    フォルダを選ぶ画面は window.showDirectoryPicker を差し替える。
@@ -1762,10 +1776,13 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
 
   // ---- ⑯f 管理番号を打ち間違えて、ほかのお宅の番号（写真のまだ無い 管理番号.json がある）にして保存 → 書かない・どちらのファイルも元のまま ----
   //   （前は付け替え先に「行の知らない写真」が無いだけで、ほかのお宅のファイルに このお宅の中身を書き、元のファイルも消していた）
-  // ---- ⑯g 同じ・付け替え先のファイルに写真が無く、お客様の名前が同じ（空白・「様」の違いは同じと見る）→ そのファイルへ書く ----
+  //   （4回目の見直しから）写真の無い・名前の違うファイルのときは、同じお宅か聞く（両方の名前・住所を見せる）。キャンセル → 書かない
+  // ---- ⑯g 同じ・付け替え先のファイルに写真が無く、お客様の名前が同じ（空白・「様」の違いは同じと見る）→ 聞かずにそのファイルへ書く ----
   //   古いファイルは、その写真（あとで現場が足した K も）がみな新しいファイルに入ってから消す
+  // ---- ⑯h ⑯f と同じ（写真の無い・名前の違うファイル）。聞かれて「キャンセル」→ 書かない → もう一度押して「OK」（同じお宅）→ そのファイルへ書く ----
+  //   書いたファイルには この戸別の写真 P と直した電話が入り、古いファイルは写真が移ってから消す（「統一」と知らせる）
   //   a) 受付台帳で作った行　b) 物件の行
-  for(const sc of ['⑯fa', '⑯fb', '⑯ga', '⑯gb'].filter(want)){
+  for(const sc of ['⑯fa', '⑯fb', '⑯ga', '⑯gb', '⑯ha', '⑯hb'].filter(want)){
     const { ctx, page, said } = await openMain(sc);
     const kind = sc.charAt(1), mode = sc.charAt(2);
     const r = await run(page, async ({ NO, NO2, PN, kind, mode }) => {
@@ -1780,8 +1797,8 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
         row = _listRows[0];
       }
       // 付け替え先のファイル（写真はまだ無い）
-      const tgt = (kind === 'f')
-        ? { chosho_mgmt_no: NO2, chosho_cust_name: '鈴木 様', chosho_cust_addr: '川町9-9', chosho_cust_tel: '090-7777-8888',   // ほかのお宅：現場が工事完了・電話・測定を入れた
+      const tgt = (kind !== 'g')
+        ? { chosho_mgmt_no: NO2, chosho_cust_name: '鈴木 様', chosho_cust_addr: '川町9-9', chosho_cust_tel: '090-7777-8888',   // 名前も住所も違う：現場が工事完了・電話・測定を入れた
             _origin: 'genba', work_type: 'uhf_new', amplifier: 'amp_3u43', chosho_status: 'done', meas_note: '鈴木様の測定値' }
         : { chosho_mgmt_no: NO2, chosho_cust_name: '山田　太郎様', _origin: 'genba', work_type: 'uhf_new' };                  // 同じお宅（全角の空白・「様」が続く）
       const tgtText = JSON.stringify(tgt, null, 2);
@@ -1801,25 +1818,56 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       }
       const oldText = root.__files[NO + '.json'];
       const w0 = root.__writes.length;
-      __setField('chosho_mgmt_no', NO2);                     // NO2 に直す（f＝打ち間違い　g＝同じお宅の番号）
+      __setField('chosho_mgmt_no', NO2);                     // NO2 に直す（f・h＝名前の違うファイルの番号　g＝同じお宅の番号）
+      if(kind === 'h') __setTel('090-1212-3434');            // h) 電話も直す（書いたファイルに入るか見る）
+      // 「同じお宅のファイルですか？」の問い：f・h（1回目）はキャンセル、h（2回目）は OK。g は聞かれないはず（聞かれたら OK）
+      const asked = [];
+      let answer = (kind === 'g');
+      window.confirm = m => { asked.push(String(m)); return /同じお宅/.test(String(m)) ? answer : true; };
       o.b2 = await __pressSave();
+      o.asked = asked.slice();
+      if(kind === 'h'){
+        // キャンセルした直後：どちらのファイルも元のまま
+        o.cancel = { writes: root.__writes.slice(w0).map(w => w.n), removed: root.__removed.slice(), oldSame: root.__files[NO + '.json'] === oldText,
+                     tgtSame: root.__files[NO2 + '.json'] === tgtText, tree: __tree(root) };
+        answer = true; asked.length = 0;
+        o.b3 = await __pressSave();                          // もう一度押して「OK」（同じお宅）
+        o.asked3 = asked.slice();
+      }
       const t2 = root.__files[NO2 + '.json'];
       let j2 = {}; try { j2 = JSON.parse(t2 || '{}'); } catch(_){}
       return Object.assign(o, { tree: __tree(root), removed: root.__removed.slice(), writes: root.__writes.slice(w0).map(w => w.n),
                oldSame: root.__files[NO + '.json'] === oldText, tgtSame: t2 === tgtText,
-               tgt: { no: j2.chosho_mgmt_no, name: j2.chosho_cust_name, photos: (__photosOf(j2) || []).map(tag).sort().join() } });
+               tgt: { no: j2.chosho_mgmt_no, name: j2.chosho_cust_name, tel: j2.chosho_cust_tel, photos: (__photosOf(j2) || []).map(tag).sort().join() } });
     }, { NO, NO2, PN, kind, mode });
     const a = alerts(said);
-    console.log(sc + '番号の付け替え先（写真の無いファイル）', short(r), short(a.slice(-1).map(m => m.slice(0, 260))));
+    console.log(sc + '番号の付け替え先（写真の無いファイル）', short(Object.assign({}, r, { asked: (r.asked || []).map(m => m.slice(0, 80)), asked3: (r.asked3 || []).map(m => m.slice(0, 80)) })),
+                short(a.slice(-2).map(m => m.slice(0, 200))));
     ok(!r.error, sc + '止まった → ' + r.error);
     if(!r.error){
       ok(r.b1.pressed && r.b2.pressed && r.first === 'P', sc + '試験の前提: 1回目の保存で NO.json（写真 P）ができ、番号を直して保存できる → ' + short(r));
-      if(kind === 'f'){
-        ok(r.writes.length === 0 && r.removed.length === 0 && r.oldSame && r.tgtSame && r.tree.join() === [NO + '.json', NO2 + '.json'].join(),
-           '★' + sc + 'ほかのお宅のファイル（写真なし・名前も住所も違う）に、このお宅の中身を書いた・元のファイルを消した → ' + short(r));
-        ok(a.some(m => /書き替えていません/.test(m) && /管理番号が合っているか/.test(m) && /ほかのお宅のものかもしれません/.test(m)),
-           '★' + sc + '書かなかったことを知らせない・番号を確かめるよう言わない → ' + short(a.slice(-1)));
-      } else {
+      const sameQ = arr => (arr || []).filter(m => /同じお宅/.test(m));
+      if(kind === 'f' || kind === 'h'){
+        const q = sameQ(r.asked);
+        ok(r.asked.length === 1 && q.length === 1 && /鈴木 様/.test(q[0]) && /山田 太郎 様/.test(q[0]) && /川町9-9/.test(q[0]) && /本町1-1/.test(q[0]),
+           '★' + sc + '名前の違う写真なしのファイルへ書く前に、同じお宅か（両方の名前・住所を見せて）1回だけ聞いていない → ' + short(r.asked.map(m => m.slice(0, 300))));
+        const c = (kind === 'h') ? r.cancel : r;
+        ok(c.writes.length === 0 && c.removed.length === 0 && c.oldSame && c.tgtSame && c.tree.join() === [NO + '.json', NO2 + '.json'].join(),
+           '★' + sc + '「キャンセル」なのに、ほかのお宅かもしれないファイルに このお宅の中身を書いた・元のファイルを消した → ' + short(c));
+        const m0 = (kind === 'h') ? a[a.length - 2] : a[a.length - 1];
+        ok(/書き替えていません/.test(m0 || '') && /管理番号を確かめ/.test(m0 || '') && !/📥 現場取込/.test(m0 || ''),
+           '★' + sc + 'キャンセルで書かなかったことを知らせない・番号を確かめるよう言わない・（取り込んでも変わらない）📥 現場取込を案内した → ' + short(m0));
+      }
+      if(kind === 'h'){
+        const q3 = sameQ(r.asked3);
+        ok(r.b3 && r.b3.pressed && q3.length === 1, '⑯h試験の前提: もう一度押すと、また同じお宅か聞かれる → ' + short(r.asked3));
+        ok(r.tree.join() === NO2 + '.json' && r.removed.join() === NO + '.json' && r.tgt.no === NO2 && r.tgt.name === '山田 太郎 様'
+           && r.tgt.tel === '090-1212-3434' && r.tgt.photos === 'P',
+           '★' + sc + '「OK」（同じお宅）なのに そのファイルへ書かない・写真 P／直した電話が入らない・古いファイルが残った → ' + short(r));
+        ok(/戸別の個別JSONも更新しました/.test(a[a.length - 1] || '') && /統一/.test(a[a.length - 1] || '') && !/書き替えていません/.test(a[a.length - 1] || ''),
+           '★' + sc + '「OK」で書いたのに、1つにまとめた（統一）と知らせない → ' + short(a.slice(-1)));
+      } else if(kind === 'g'){
+        ok(r.asked.length === 0, '★' + sc + '名前が同じお宅のファイルなのに、同じお宅か聞いた → ' + short(r.asked.map(m => m.slice(0, 200))));
         ok(r.tree.join() === NO2 + '.json' && r.removed.join() === NO + '.json' && r.tgt.no === NO2 && r.tgt.photos === 'K,P',
            '★' + sc + '同じお宅（名前が同じ・写真の無い）ファイルへ書かない・古いファイルの写真（P・現場の K）が移っていない・古いファイルが残った → ' + short(r));
         ok(!a.some(m => /書き替えていません/.test(m)) && a.some(m => /戸別の個別JSONも更新しました/.test(m) && /統一/.test(m)),
@@ -2032,6 +2080,8 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
          '㊸d' + mode + '試験の前提: リスト を選んで付き、1日目・2日目とも保存できる（2日目はファイルの結び付きが無く、工事フォルダ その１ とつなぐ） → ' + short(r));
       ok(r.day1.tree.join() === 'リスト/' + NO + '.json' && r.day1.tel === '090-2222-3333' && r.day1.photos.join() === 'G原寸,K原寸',
          '★㊸d' + mode + '1日目：付いているファイルに書かない・写真が原寸のままではない → ' + short(r.day1));
+      ok(r.fileAfter === 'リスト/' + NO + '.json',
+         '★㊸d' + mode + '1日目の保存のあと、行の覚える名前が工事フォルダ（その１）から見た「リスト/' + NO + '.json」になっていない → ' + short(r.fileAfter));
       ok(r.fileAfter === 'リスト/' + NO + '.json' && r.projFile.join() === 'リスト/' + NO + '.json' && r.day2file === 'リスト/' + NO + '.json',
          '★㊸d' + mode + '物件の覚える道のりが、工事フォルダ（その１）から見た「リスト/管理番号.json」になっていない → ' + short(r));
       ok(r.day2.tree.join() === 'リスト/' + NO + '.json' && r.day2.tel === '090-4444-5555' && r.day2.photos.join() === 'G原寸,K原寸' && !r.day2.thumb,
@@ -2219,7 +2269,8 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
     await ctx.close();
   }
 
-  // ---- ㊽ 開いている戸別（📁 の行・図面あり・物件あり）へ 📥 現場取込 → 画面には取り込んだあとの行の写真（G）だけ ----
+  // ---- ㊽ 開いている戸別（📁 の行・図面あり・物件あり）へ 📥 現場取込 → 画面にはファイルの写真（A・B）と現場の写真（G）を合わせて出す ----
+  //   （前は取り込んだあとの行の写真 G だけを出していた＝直して戻ると、一覧・物件・工事調書が G だけになった）
   //   直して一覧へ戻る → 開き直して 💾 上書き保存 → 前に見せた写真（A・B。ファイルにある）を「画面で消した」としない
   if(want('㊽')){
     const { ctx, page } = await openMain('㊽');
