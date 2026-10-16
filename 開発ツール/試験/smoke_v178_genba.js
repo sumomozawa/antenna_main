@@ -34,6 +34,47 @@
      ⑮ 画面に出ていない同じ戸別に、2つの取り込みの写真が同時に届く → 両方とも下書きに残る
      ⑮b 同じく、2つの取り込みが別々の写し（開き直す前と後）から始まっている → 両方とも下書きに残る
      ⑯ 引き継ぎ（📥）で新しく付く印が無いとき → 読んだ戸別ファイル全部の控えが端末（IndexedDB）に残る（1件目だけにならない）
+   （ここから 特別記録の写真の取り込みも、端末の記録を読み直して「新しく読んだ写真だけ」を写真IDで足す。同じ記録を開いていれば、そこにも足す）
+     ⑰ 写真を3枚選び、1枚目が入ったところで「戻る」→ 一覧から同じ記録を開き直してカメラで1枚 → 残りの2枚が入っても、
+        カメラの写真が端末の記録から消えない・開いている画面に4枚出る。そのあと開き直した記録で備考を直しても、2枚目・3枚目が消えない
+     ⑰b 同じく、開き直した記録で取り込んだ1枚目を消した → 残りが入っても、消した1枚目が戻らない
+     ⑰b2 同じく、消したあと一覧へ戻ったまま残りが入る → 消した1枚目が端末の記録に戻らない
+     ⑰c 開き直した記録のカメラの写真と、取り込みの残りの写真が同時に入る → 両方とも端末の記録に残る（読んで足して書くのを1つずつ）
+     ⑰c2 同じく、一覧へ戻ったまま2つが同時に入る → 両方とも端末の記録に残る
+     ⑰d 取り込みの写真を書いているあいだに、開き直した記録で備考を直した → 備考が元に戻らない（控えるのも同じ順番に並ぶ）。取り込みの途中でも
+     ⑰e カメラで撮ったあと一覧へ戻ったまま、取り込みの残りが入る → 端末の記録に4枚そろう・開くと4枚出る
+     ⑰f 新しい記録（まだ一度も控えていない）で写真を2枚選び、そのまま待つ → 1枚目から端末の記録に入る・2枚とも画面に入る・「未保存」
+     ⑰g ファイルに保存した記録で、取り込みの途中に開き直した → 1枚目から「未保存」になる（保存済に見せない）
+   （⑰b2・⑰c2・⑰d・⑰f・⑰g の「途中」「一覧で」の確かめは、取り込みの終わりに開いている記録を控える直し（⑰m）が
+     あとから直してしまう前の、端末の記録そのものを見るためのもの）
+     ⑰h 一覧から記録を開いているあいだに、取り込みの写真が入る → 開いた記録にもその写真がある（備考を直しても消えない）
+   （ここから 特別記録の「保存」：書き出しているあいだに中身が変わったら「保存済」にしない・始めの記録を丸ごと書かない）
+     ⑰i ファイルへ書き出しているあいだに、取り込みの写真が入る → 「保存済」にしない・そう知らせる・記録を開いたまま（入った写真が出る）
+        もう一度「保存」を押すと、その写真もファイルに入って「保存済」になる
+     ⑰j 書き出しているあいだに「戻る」→ 開き直した記録でカメラの1枚 → その写真が端末の記録から消えない・「保存済」にしない
+     ⑰k 書き出しているあいだに一覧へ戻り、「保存済」の印を付けるために端末の記録を読んだところで、取り込みの写真が入る → その写真が端末の記録から消えない
+   （ここから 見直しで見つかった道）
+     ⑰l 一覧へ戻ったあと、取り込みの写真を端末に控えるのに1回失敗した → 次の1枚と一緒にもう一度控える（黙って落とさない）。
+        ずっと控えられないときは、そう知らせる
+     ⑰m 取り込みのあいだに備考を打った（欄を離れない＝控えの合図が出ない）・最後の1枚は読めなかった → 取り込みが終わって描き直しても、備考が端末の記録に残る
+     ⑰n 保存のあいだに「戻る」→ ほかの記録を開いた → 保存が終わっても、その記録を閉じない
+     ⑰o もう入っている写真（同じ画像）をもう一度選んだ → 1枚のまま・「同じ写真がもう入っているので足しませんでした（N枚）」と知らせる。
+        a) 記録を開いたまま　b) 一覧へ戻ったあとに届いた同じ写真（端末の記録と見比べる）
+     ⑰p 取り込みの途中で「戻る」→ ほかの記録 B を開いた → 取り込みの写真は B に入らない（画面・端末の記録とも）。元の記録にそろう
+     ⑰f2 まだ一度も控えていない新しい記録で写真を選び、1枚目が入る前に「戻る」→ 写真が端末の記録に入り、一覧に出る
+     ⑰f3 保存した記録で写真を選び、1枚目が入る前に「この記録を消す」→ あとから入った写真は捨てない（写真を減らさない）・「未保存」
+     ⑰q 取り込みの途中で開き直した記録で「保存」（取り込みはまだ続く）→ 保存のあいだに何も入らなければ「保存済」（途中で変わったと言わない）
+   （ここから 最後の見直し：物が見た写真を覚え、書く前に端末の記録の「まだ見ていない写真」を足す。中身の指紋で「途中で変わった」を見る）
+     ⑰r 書き込みが混んでいるときに、欄を打って「戻る」→ 戻る前の控え（記録を書く）が、先に並んだ取り込みの写真を消さない
+     ⑰s 書き込みが混んでいるときに ✕ を2つ続けて押す → 押した写真を消す（描き直しを待たない・別の写真を消さない）
+     ⑰t 控えに失敗した写真を画面で ✕ で消した → もう一度送るときに戻さない
+     ⑰u 「保存」の印を端末に書けない → 知らせて、記録を開いたまま（閉じるとファイルにしか無い写真ができる）
+     ⑰u2 控えに失敗した写真があるまま「保存」→ ファイルにも端末の記録にも入る・「保存済」
+     ⑰v 書き出しているあいだに欄を離れずに打った → 「保存済」にしない・開いたまま・端末に残る。もう一度押せばファイルにも入る
+     ⑰w 書き出しているあいだに、選んである種類をもう一度押した（中身は同じ）→ 「途中で変わった」と言わない・「保存済」
+     ⑰x 保存した記録で、もう入っている写真だけを選んだ → 「保存済」のまま
+     ⑰y ほかの保存の道（保存先を選ぶ画面・共有・ダウンロード）と、読み返しが合わないとき
+     ⑰z 書き出しているあいだに一覧へ戻り、写真が入った → 保存が終わったら一覧を出し直す（枚数・「未保存」）
    （ここから 3回目の見直しの直し：下書きを見分ける印。下書きのキーの引っ越しは、同じ下書きのときだけ引く）
      ⑳ 新しい戸別で管理番号を 033 と打ち間違えて 034 に直した（下書きが 033 → 034 へ移った）。あとで本当の 033 の戸別を
         受付台帳から開き、写真を3枚取り込み、途中で別の戸別へ → 3枚とも 033 の下書き・ファイルに入る（034 の別のお宅に入らない）
@@ -221,6 +262,33 @@ window.__holders = async function(ps, except){
   }
   return out;
 };
+/* （⑰で使う）特別記録の道具。写真の並び・📷 撮る／🖼 選ぶ に写真を渡す・欄に打つ・一覧から開く */
+window.__spIds = rec => ((rec && rec.photos) || []).filter(p => p && p.dataUri).map(p => String(p.id)).sort().join(',');
+window.__spFire = function(inpId, cs){
+  const inp = document.getElementById(inpId);
+  const fl = __files(cs);
+  Object.defineProperty(inp, 'files', { configurable:true, get: () => fl });
+  inp.dispatchEvent(new Event('change', { bubbles:true }));
+};
+window.__spType = async function(id, v){
+  const el = document.getElementById(id);
+  el.value = v; el.dispatchEvent(new Event('input', { bubbles:true })); el.dispatchEvent(new Event('change', { bubbles:true }));
+  await __sleep(200);
+};
+window.__spOpen = async function(id){
+  document.getElementById('sp-back').click(); await __sleep(200);
+  document.querySelector('[data-sp-open="' + id + '"]').click(); await __sleep(250);
+};
+window.__spNew = async function(title){
+  await openSpecialModal();
+  document.getElementById('sp-new').click(); await __sleep(150);
+  if(title) await __spType('sp-title', title);
+  return { key: _spCur.key, id: _spCur.id };
+};
+window.__spImgs = () => document.querySelectorAll('#sp-body .sp-ph img').length;
+/* 端末への書き込みの列をふさぐ（ほかの書き込みを待たされている＝写真の多い記録で書き込みが遅い、のふり）。返す関数で開ける */
+window.__spBlock = () => { let rel; const p = new Promise(r => { rel = r; }); spQueue(() => p); return rel; };
+window.__spRowText = id => { const b = document.querySelector('[data-sp-open="' + id + '"]'); return b ? ((b.closest('.sp-row') || {}).textContent || '') : ''; };
 `;
 
 (async () => {
@@ -793,6 +861,871 @@ window.__holders = async function(ps, except){
     ok(r.rows === NA + ',' + NB, '★⑯読んだ戸別ファイルの控えが、端末（IndexedDB）に全部残らない（控えを書き終える前に残した） → ' + J(r));
   });
 
+  /* ---------- ⑰ 特別記録：取り込みの途中で「戻る」→ 同じ記録を開き直してカメラで1枚 → 残りが入っても消えない ----------
+     取り込み（take）が覚えている記録は、取り込みを始めたときのもの。一覧から開き直した記録は別の物
+     （_spCur = Object.assign(spBlank(), rec)）。始めの記録を丸ごと書くと、開き直した記録で足した写真が消える。 */
+  await scene('⑰', async page => {
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const cs = ['#f01', '#f02', '#f03'], cC = '#0c0';
+      const { key, id } = await __spNew('アンテナ 検収');
+      const r1 = _spCur;
+      __spFire('sp-pick', cs);                           // 写真を3枚選ぶ（取り込みは r1 に入っていく）
+      await __rel(cs[0]);                                // 1枚目が入った
+      await __spOpen(id);                                // 「戻る」→ 一覧から同じ記録を開き直す（別の物）
+      const r2 = _spCur;
+      __spFire('sp-cam', [cC]); await __rel(cC);         // 開き直した記録でカメラの1枚
+      const mid = __spIds(await idbGet(key));
+      await __rel(cs[1]); await __rel(cs[2]); await __sleep(300);   // 取り込みの2枚目・3枚目が入る
+      const after = __spIds(await idbGet(key)), scr = __spIds(_spCur), imgs = __spImgs(), same = (_spCur === r2);
+      await __spType('sp-note', '備考を直した');          // 開き直した記録で備考を直す
+      const rec = await idbGet(key);
+      return { ps: cs.map(__pidOf), pC: __pidOf(cC), other: r1 !== r2, mid, after, scr, imgs, same,
+               final: __spIds(rec), note: rec && rec.note, title: rec && rec.title };
+    });
+    console.log('⑰特別記録の開き直し', J(r));
+    ok(r.other && r.same && hasAll(r.mid, [r.ps[0], r.pC]), '⑰試験の前提: 開き直した記録は別の物で、1枚目とカメラの1枚が端末の記録に入る → ' + J(r));
+    ok(hasAll(r.after, r.ps.concat([r.pC])), '★⑰取り込みの残りが入ると、開き直して撮ったカメラの写真が端末の記録から消える → ' + J(r));
+    ok(hasAll(r.scr, r.ps.concat([r.pC])) && r.imgs === 4, '★⑰取り込みの残りの写真が、開いている記録の画面に出ない → ' + J(r));
+    ok(hasAll(r.final, r.ps.concat([r.pC])), '★⑰開き直した記録で備考を直すと、取り込んだ2枚目・3枚目が端末の記録から消える → ' + J(r));
+    ok(r.note === '備考を直した' && r.title === 'アンテナ 検収', '★⑰開き直した記録の備考・件名が端末の記録に残らない → ' + J(r));
+  });
+
+  /* ---------- ⑰b 開き直した記録で取り込んだ1枚目を消した → 残りが入っても、消した1枚目が戻らない ---------- */
+  await scene('⑰b', async page => {
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const cs = ['#f11', '#f12', '#f13'];
+      const { key, id } = await __spNew('消す');
+      __spFire('sp-pick', cs);
+      await __rel(cs[0]);
+      await __spOpen(id);                                // 開き直す（1枚目が出ている）
+      const ps = cs.map(__pidOf);
+      const i = _spCur.photos.findIndex(p => p && p.id === ps[0]);
+      const b = document.querySelector('[data-sp-photodel="' + i + '"]');
+      if(b) b.click();                                   // ✕ → 確かめの窓は「OK」
+      await __sleep(400);
+      const mid = __spIds(await idbGet(key));
+      await __rel(cs[1]); await __rel(cs[2]); await __sleep(300);
+      return { ps, btn: !!b, mid, scr: __spIds(_spCur), final: __spIds(await idbGet(key)) };
+    });
+    console.log('⑰b消した1枚目', J(r));
+    ok(r.btn && r.mid === '', '⑰b試験の前提: 開き直した記録で1枚目を消すと、端末の記録からも消える → ' + J(r));
+    ok(hasAll(r.final, [r.ps[1], r.ps[2]]) && hasAll(r.scr, [r.ps[1], r.ps[2]]), '★⑰b取り込みの残り（2枚目・3枚目）が端末の記録・画面に入らない → ' + J(r));
+    ok(hasNone(r.final, [r.ps[0]]) && hasNone(r.scr, [r.ps[0]]), '★⑰b開き直して消した1枚目が、取り込みの残りが入ったときに戻った → ' + J(r));
+  });
+  await scene('⑰b2', async page => {
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const cs = ['#f14', '#f15', '#f16'];
+      const { key, id } = await __spNew('消して一覧で待つ');
+      __spFire('sp-pick', cs);
+      await __rel(cs[0]);
+      await __spOpen(id);
+      const ps = cs.map(__pidOf);
+      const i = _spCur.photos.findIndex(p => p && p.id === ps[0]);
+      const b = document.querySelector('[data-sp-photodel="' + i + '"]');
+      if(b) b.click();
+      await __sleep(400);
+      const mid = __spIds(await idbGet(key));
+      document.getElementById('sp-back').click(); await __sleep(200);   // 一覧へ戻ったまま
+      await __rel(cs[1]); await __rel(cs[2]); await __sleep(300);
+      return { ps, btn: !!b, mid, list: !_spCur, final: __spIds(await idbGet(key)) };
+    });
+    console.log('⑰b2消して一覧で待つ', J(r));
+    ok(r.btn && r.mid === '' && r.list, '⑰b2試験の前提: 開き直した記録で1枚目を消し、一覧へ戻る → ' + J(r));
+    ok(hasAll(r.final, [r.ps[1], r.ps[2]]) && hasNone(r.final, [r.ps[0]]), '★⑰b2一覧で待つあいだに残りが入ると、消した1枚目が端末の記録に戻った・残りが入らない → ' + J(r));
+  });
+
+  /* ---------- ⑰c 開き直した記録のカメラの写真と、取り込みの残りが同時に入る → 両方とも残る ---------- */
+  await scene('⑰c', async page => {
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const cs = ['#f21', '#f22'], cC = '#0c2';
+      const { key, id } = await __spNew('同時');
+      __spFire('sp-pick', cs);
+      await __rel(cs[0]);
+      await __spOpen(id);
+      __spFire('sp-cam', [cC]);
+      await __relAll([cs[1], cC]);                       // 2つの取り込みの写真が同時に入る
+      await __sleep(300);
+      return { ps: cs.map(__pidOf), pC: __pidOf(cC), db: __spIds(await idbGet(key)), scr: __spIds(_spCur) };
+    });
+    console.log('⑰c同時に入る', J(r));
+    ok(hasAll(r.scr, r.ps.concat([r.pC])), '⑰c試験の前提: 開いている記録に3枚出る → ' + J(r));
+    ok(hasAll(r.db, r.ps.concat([r.pC])), '★⑰c2つの取り込みの写真が同時に入ると、片方が端末の記録から消える → ' + J(r));
+  });
+  await scene('⑰c2', async page => {
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const cs = ['#f24', '#f25'], cC = '#0c5';
+      const { key, id } = await __spNew('同時に一覧で');
+      __spFire('sp-pick', cs);
+      await __rel(cs[0]);
+      await __spOpen(id);
+      __spFire('sp-cam', [cC]);
+      for(let i = 0; i < 50 && !(window.__cg && window.__cg[cC]); i++) await __sleep(20);   // カメラの1枚を読み始めた
+      document.getElementById('sp-back').click(); await __sleep(200);   // 一覧へ戻ったまま
+      await __relAll([cs[1], cC]); await __sleep(300);
+      return { ps: cs.map(__pidOf), pC: __pidOf(cC), list: !_spCur, db: __spIds(await idbGet(key)) };
+    });
+    console.log('⑰c2一覧で同時に入る', J(r));
+    ok(r.list, '⑰c2試験の前提: 一覧へ戻ったまま → ' + J(r));
+    ok(hasAll(r.db, r.ps.concat([r.pC])), '★⑰c2一覧へ戻ったまま2つの写真が同時に入ると、片方が端末の記録から消える → ' + J(r));
+  });
+
+  /* ---------- ⑰d 取り込みの写真を書いているあいだに、開き直した記録で備考を直した → 備考が元に戻らない ---------- */
+  await scene('⑰d', async page => {
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const cs = ['#f31', '#f32', '#f33'];
+      const { key, id } = await __spNew('並ぶ');
+      __spFire('sp-pick', cs);
+      await __rel(cs[0]);
+      await __spOpen(id);
+      /* 取り込みが端末の記録を読み直したところで、備考を直す（控えは取り込みの書き込みのあとに並ぶはず） */
+      const og = idbGet; let fired = 0;
+      idbGet = async k => { const v = await og(k);
+        if(k === key && !fired){ fired = 1; const el = document.getElementById('sp-note');
+          el.value = '備考を直した'; el.dispatchEvent(new Event('input', { bubbles:true })); el.dispatchEvent(new Event('change', { bubbles:true })); }
+        return v; };
+      await __rel(cs[1]); await __sleep(400);
+      idbGet = og;
+      const mid = await idbGet(key);                      // 取り込みの途中（3枚目はまだ）
+      await __rel(cs[2]); await __sleep(300);
+      const rec = await idbGet(key);
+      return { fired, ps: cs.map(__pidOf), midNote: mid && mid.note, final: __spIds(rec), note: rec && rec.note, scr: _spCur && _spCur.note };
+    });
+    console.log('⑰d備考が戻らない', J(r));
+    ok(r.fired === 1 && r.scr === '備考を直した', '⑰d試験の前提: 取り込みが端末の記録を読み直したところで備考を直す → ' + J(r));
+    ok(hasAll(r.final, r.ps), '★⑰d取り込んだ写真が端末の記録にそろわない → ' + J(r));
+    ok(r.midNote === '備考を直した' && r.note === '備考を直した', '★⑰d取り込みの写真を書いたときに、開き直した記録で直した備考が元に戻った（取り込みの途中・終わり） → ' + J(r));
+  });
+
+  /* ---------- ⑰e カメラで撮ったあと一覧へ戻ったまま、取り込みの残りが入る → 端末の記録に4枚そろう ---------- */
+  await scene('⑰e', async page => {
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const cs = ['#f41', '#f42', '#f43'], cC = '#0c4';
+      const { key, id } = await __spNew('一覧で待つ');
+      __spFire('sp-pick', cs);
+      await __rel(cs[0]);
+      await __spOpen(id);
+      __spFire('sp-cam', [cC]); await __rel(cC);
+      document.getElementById('sp-back').click(); await __sleep(200);   // 一覧へ戻ったまま
+      await __rel(cs[1]); await __rel(cs[2]); await __sleep(300);
+      const db = __spIds(await idbGet(key)), list = !_spCur && !!document.querySelector('[data-sp-open="' + id + '"]'), row = __spRowText(id);
+      document.querySelector('[data-sp-open="' + id + '"]').click(); await __sleep(250);
+      return { ps: cs.map(__pidOf), pC: __pidOf(cC), db, list, row, scr: __spIds(_spCur), imgs: __spImgs() };
+    });
+    console.log('⑰e一覧で待つ', J(r));
+    ok(/写真 4枚/.test(r.row || ''), '★⑰e一覧で待つあいだに取り込みが終わっても、一覧の枚数を出し直さない → ' + J(r));
+    ok(r.list, '⑰e試験の前提: 取り込みの残りが入っても一覧のまま → ' + J(r));
+    ok(hasAll(r.db, r.ps.concat([r.pC])), '★⑰e一覧へ戻ったあとに取り込みの残りが入ると、カメラの写真が端末の記録から消える → ' + J(r));
+    ok(hasAll(r.scr, r.ps.concat([r.pC])) && r.imgs === 4, '★⑰eあとで開いた記録に4枚出ない → ' + J(r));
+  });
+
+  /* ---------- ⑰f 新しい記録（まだ控えていない）で写真を2枚選び、そのまま待つ ---------- */
+  await scene('⑰f', async page => {
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const cs = ['#f51', '#f52'];
+      const { key } = await __spNew('');                 // 件名も打たない（端末にまだ記録が無い）
+      const before = await idbGet(key);
+      __spFire('sp-pick', cs);
+      await __rel(cs[0]);
+      const mid = __spIds(await idbGet(key));             // 取り込みの途中（2枚目はまだ）
+      await __rel(cs[1]); await __sleep(300);
+      const rec = await idbGet(key);
+      return { ps: cs.map(__pidOf), before: !!before, mid, db: __spIds(rec), scr: __spIds(_spCur), imgs: __spImgs(),
+               stale: !!(rec && spStale(rec)), rev: (rec && rec.rev) | 0 };
+    });
+    console.log('⑰f新しい記録', J(r));
+    ok(r.before === false, '⑰f試験の前提: 新しい記録は端末にまだ無い → ' + J(r));
+    ok(r.mid === r.ps[0], '★⑰f新しい記録の1枚目が、取り込みの途中で端末の記録に入っていない（取り込みが終わるまで控えない） → ' + J(r));
+    ok(hasAll(r.db, r.ps) && hasAll(r.scr, r.ps) && r.imgs === 2, '★⑰f新しい記録に選んだ写真が、端末の記録・画面に入らない → ' + J(r));
+    ok(r.stale && r.rev > 0, '★⑰f写真を入れた新しい記録が「未保存」にならない → ' + J(r));
+  });
+
+  /* ---------- ⑰g ファイルに保存した記録で、取り込みの途中に開き直した → 残りが入ると「未保存」 ---------- */
+  await scene('⑰g', async page => {
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const cs = ['#f61', '#f62'];
+      const D = __mkdir('リスト', {});
+      window.showSaveFilePicker = undefined; saveDirGet = async () => D; saveDirSettle = async d => d;
+      const { key, id } = await __spNew('保存した');
+      const res = await spSaveFile(_spCur); await __sleep(100);
+      const saved0 = !spStale(await idbGet(key));
+      await __spOpen(id);                                // 保存した記録を開き直して
+      __spFire('sp-pick', cs);
+      await __rel(cs[0]);
+      const mid = await idbGet(key);                      // 取り込みの途中（2枚目はまだ）
+      const midStale = !!(mid && spStale(mid));
+      await __spOpen(id);                                // 取り込みの途中でまた開き直す
+      await __rel(cs[1]); await __sleep(300);
+      const rec = await idbGet(key);
+      document.getElementById('sp-back').click(); await __sleep(200);
+      const row = document.querySelector('[data-sp-open="' + id + '"]');
+      const badge = row ? ((row.closest('.sp-row') || {}).textContent || '') : '';
+      return { ok: !!(res && res.ok), saved0, midStale, ps: cs.map(__pidOf), db: __spIds(rec), stale: !!(rec && spStale(rec)),
+               rev: rec && rec.rev, fileRev: rec && rec.fileRev, unsaved: /未保存/.test(badge) };
+    });
+    console.log('⑰g保存した記録', J(r));
+    ok(r.ok && r.saved0, '⑰g試験の前提: 記録をファイルに保存すると「保存済」 → ' + J(r));
+    ok(hasAll(r.db, r.ps), '★⑰g保存した記録に取り込んだ写真が、端末の記録に入らない → ' + J(r));
+    ok(r.midStale && r.stale && r.unsaved, '★⑰gファイルに入っていない写真が入ったのに「保存済」に見える（取り込みの途中・終わり） → ' + J(r));
+  });
+
+  /* ---------- ⑰h 一覧から記録を開いているあいだに、取り込みの写真が入る → 開いた記録にもその写真がある ---------- */
+  await scene('⑰h', async page => {
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const cs = ['#f71', '#f72'];
+      const { key, id } = await __spNew('開くあいだ');
+      __spFire('sp-pick', cs);
+      await __rel(cs[0]);
+      document.getElementById('sp-back').click(); await __sleep(200);
+      /* 一覧から開く：端末の記録を読み終えたところで、取り込みの2枚目が入る */
+      for(let i = 0; i < 50 && !(window.__cg && window.__cg[cs[1]]); i++) await __sleep(20);
+      const og = spList; let fired = 0;
+      spList = async () => { const v = await og();
+        if(!fired){ fired = 1; await __rel(cs[1]); }
+        return v; };
+      document.querySelector('[data-sp-open="' + id + '"]').click(); await __sleep(500);
+      spList = og;
+      const scr = __spIds(_spCur);
+      await __spType('sp-note', '開いてから直した');
+      const rec = await idbGet(key);
+      return { fired, ps: cs.map(__pidOf), scr, final: __spIds(rec), note: rec && rec.note };
+    });
+    console.log('⑰h開くあいだ', J(r));
+    ok(r.fired === 1 && r.note === '開いてから直した', '⑰h試験の前提: 一覧から開くあいだに2枚目が入り、開いた記録で備考を直す → ' + J(r));
+    ok(hasAll(r.scr, r.ps), '★⑰h一覧から開くあいだに入った写真が、開いた記録に無い → ' + J(r));
+    ok(hasAll(r.final, r.ps), '★⑰h一覧から開くあいだに入った写真が、開いた記録で備考を直すと端末の記録から消える → ' + J(r));
+  });
+
+  /* ---------- ⑰i〜⑰k 特別記録の「保存」：書き出しているあいだに中身が変わる ----------
+     書き出すファイルの中身は「保存」を押したときに作る。書き出しているあいだ（フォルダ・保存先を選ぶ画面・共有・読み返し）に
+     入った写真はファイルに無いので、「保存済」にしてはいけない。印を付けるときに始めの記録を丸ごと書いてもいけない。 */
+  const SP_SAVE_SETUP = async () => {
+    const D = __mkdir('リスト', {});
+    window.showSaveFilePicker = undefined; saveDirGet = async () => D; saveDirSettle = async d => d;
+    window.__spD = D;
+  };
+  await scene('⑰i', async page => {
+    await page.evaluate(SP_SAVE_SETUP);
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const D = window.__spD, cs = ['#f81', '#f82', '#f83'];
+      const { key, id } = await __spNew('保存の途中');
+      __spFire('sp-pick', cs);
+      await __rel(cs[0]);                                // 1枚目が入った
+      let fired = 0;
+      window.__onWrite = async () => { if(fired) return; fired = 1; await __rel(cs[1]); };   // 書き出しているあいだに2枚目が入る
+      document.getElementById('sp-save').click();
+      for(let i = 0; i < 100 && !document.querySelector('#save-ov .save-ov-check'); i++) await __sleep(30);
+      await __sleep(200);
+      window.__onWrite = null;
+      const fname = Object.keys(D.__files)[0] || '';
+      const f1 = fname ? __spIds({ photos: JSON.parse(D.__files[fname]).chosho_photos }) : null;
+      const rec1 = await idbGet(key);
+      const ov = (document.getElementById('save-ov') || {}).textContent || '';
+      const open = !!(_spCur && _spCur.key === key), imgs = __spImgs();
+      await __rel(cs[2]); await __sleep(300);            // 取り込みの3枚目
+      const x = document.getElementById('save-ov-x2'); if(x) x.click();
+      /* もう一度「保存」（開いたままでなければ、一覧から開いて押す） */
+      if(!(_spCur && _spCur.key === key)) document.querySelector('[data-sp-open="' + id + '"]').click();
+      await __sleep(250);
+      const w0 = D.__wrote.length;
+      document.getElementById('sp-save').click();
+      for(let i = 0; i < 100 && D.__wrote.length === w0; i++) await __sleep(30);
+      await __sleep(400);
+      const rec2 = await idbGet(key);
+      return { fired, ps: cs.map(__pidOf), f1, db1: __spIds(rec1), stale1: !!(rec1 && spStale(rec1)),
+               said: /保存の途中/.test(ov) && /もう一度「保存」/.test(ov), open, imgs,
+               f2: __spIds({ photos: JSON.parse(D.__files[fname] || '{}').chosho_photos }), stale2: !!(rec2 && spStale(rec2)),
+               sameName: Object.keys(D.__files).length === 1 };
+    });
+    console.log('⑰i保存の途中で写真が入る', J(r));
+    ok(r.fired === 1 && r.f1 === r.ps[0], '⑰i試験の前提: 書き出すファイルは1枚目だけで、書き出しているあいだに2枚目が入る → ' + J(r));
+    ok(hasAll(r.db1, [r.ps[0], r.ps[1]]), '★⑰i書き出しているあいだに入った写真が、端末の記録から消えた → ' + J(r));
+    ok(r.stale1, '★⑰i書き出しているあいだに写真が入ったのに「保存済」になった（ファイルにその写真が無い） → ' + J(r));
+    ok(r.said, '★⑰i保存の途中で中身が変わったことを知らせない → ' + J(r));
+    ok(r.open && r.imgs === 2, '★⑰i保存の途中で中身が変わったのに、記録を閉じた・入った写真が画面に出ない → ' + J(r));
+    ok(hasAll(r.f2, r.ps) && !r.stale2 && r.sameName, '★⑰iもう一度「保存」を押しても、写真がそろわない・「保存済」にならない・別の名前のファイルができた → ' + J(r));
+  });
+
+  await scene('⑰j', async page => {
+    await page.evaluate(SP_SAVE_SETUP);
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const cC = '#0c9';
+      const { key, id } = await __spNew('保存の途中で開き直す');
+      __spFire('sp-pick', ['#f91']); await __rel('#f91');
+      let fired = 0;
+      window.__onWrite = async () => { if(fired) return; fired = 1;
+        await __spOpen(id);                              // 書き出しているあいだに「戻る」→ 開き直して
+        __spFire('sp-cam', [cC]); await __rel(cC); };     // カメラで1枚
+      document.getElementById('sp-save').click();
+      for(let i = 0; i < 100 && !document.querySelector('#save-ov .save-ov-check'); i++) await __sleep(30);
+      await __sleep(300);
+      window.__onWrite = null;
+      const rec = await idbGet(key);
+      const out = { fired, p1: __pidOf('#f91'), pC: __pidOf(cC), db: __spIds(rec), stale: !!(rec && spStale(rec)),
+               scr: __spIds(_spCur), open: !!(_spCur && _spCur.key === key) };
+      /* 開き直した記録で種類を替えて、もう一度「保存」→ 同じファイルに書く（名前を作り直さない） */
+      const D = window.__spD, w0 = D.__wrote.length;
+      const kb = document.querySelector('[data-sp-kind]:not(.on)'); if(kb) kb.click(); await __sleep(300);
+      document.getElementById('sp-save').click();
+      for(let i = 0; i < 100 && D.__wrote.length === w0; i++) await __sleep(30);
+      await __sleep(400);
+      out.files = Object.keys(D.__files).length;
+      return out;
+    });
+    console.log('⑰j保存の途中で開き直す', J(r));
+    ok(r.fired === 1, '⑰j試験の前提: 書き出しているあいだに開き直してカメラで撮る → ' + J(r));
+    ok(hasAll(r.db, [r.p1, r.pC]), '★⑰j書き出しているあいだに開き直して撮った写真が、保存の印を付けたときに端末の記録から消えた → ' + J(r));
+    ok(r.stale, '★⑰j書き出しているあいだに写真が入ったのに「保存済」になった → ' + J(r));
+    ok(r.open && hasAll(r.scr, [r.p1, r.pC]), '★⑰j開き直した記録が閉じられた・撮った写真が出ない → ' + J(r));
+    ok(r.files === 1, '★⑰j開き直した記録で種類を替えてもう一度保存すると、別の名前のファイルができた（ファイル名を控えていない） → ' + J(r));
+  });
+
+  await scene('⑰k', async page => {
+    await page.evaluate(SP_SAVE_SETUP);
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const cs = ['#fa1', '#fa2'];
+      const { key, id } = await __spNew('印のあいだ');
+      __spFire('sp-pick', cs);
+      await __rel(cs[0]);
+      /* 書き終えたあと、「保存済」の印のために端末の記録を読んだところで、取り込みの2枚目が入る */
+      let arm = 0, fired = 0;
+      window.__onWrite = async () => { arm = 1; document.getElementById('sp-back').click(); await __sleep(200); };   // 一覧へ戻る
+      const og = idbGet;
+      idbGet = async k => { const v = await og(k);
+        if(arm && k === key){ arm = 0; fired = 1; await __rel(cs[1]); await __sleep(300); }
+        return v; };
+      document.getElementById('sp-save').click();
+      for(let i = 0; i < 100 && !document.querySelector('#save-ov .save-ov-check'); i++) await __sleep(30);
+      await __sleep(600);
+      idbGet = og; window.__onWrite = null;
+      const rec = await idbGet(key);
+      return { fired, ps: cs.map(__pidOf), db: __spIds(rec), stale: !!(rec && spStale(rec)) };
+    });
+    console.log('⑰k印のあいだに写真が入る', J(r));
+    ok(r.fired === 1, '⑰k試験の前提: 保存済の印のために端末の記録を読んだところで2枚目が入る → ' + J(r));
+    ok(hasAll(r.db, r.ps), '★⑰k保存済の印を付けたときに、そのあいだに入った写真が端末の記録から消えた → ' + J(r));
+    ok(r.stale, '★⑰kファイルに無い写真が入ったのに「保存済」に見える → ' + J(r));
+  });
+
+  /* ---------- ⑰l 一覧へ戻ったあと、取り込みの写真を端末に控えるのに失敗した ---------- */
+  await scene('⑰l', async page => {
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const op = idbPut, said = () => ((document.getElementById('savedhint') || {}).textContent || '');
+      /* a) 2枚目の控えに1回だけ失敗する */
+      const cs = ['#fb1', '#fb2', '#fb3'];
+      const A = await __spNew('控えに1回失敗');
+      __spFire('sp-pick', cs);
+      await __rel(cs[0]);
+      document.getElementById('sp-back').click(); await __sleep(200);   // 一覧へ戻ったまま
+      let thrown = 0;
+      idbPut = async rec => { if(rec && rec.key === A.key && !thrown){ thrown = 1; throw new Error('QuotaExceededError'); } return op(rec); };
+      await __rel(cs[1]);
+      idbPut = op;
+      await __rel(cs[2]); await __sleep(300);
+      const dbA = __spIds(await idbGet(A.key));
+      /* b) ずっと控えられない */
+      const ds = ['#fb4', '#fb5'];
+      const B = await __spNew('ずっと控えられない');
+      __spFire('sp-pick', ds);
+      await __rel(ds[0]);
+      document.getElementById('sp-back').click(); await __sleep(200);
+      let tries = 0;
+      idbPut = async rec => { if(rec && rec.key === B.key){ tries++; throw new Error('QuotaExceededError'); } return op(rec); };
+      await __rel(ds[1]); await __sleep(300);
+      const msg = (window.__said || []).join(' ');      // 窓で知らせる（消える知らせだけでは気づけない）
+      idbPut = op;
+      return { thrown, ps: cs.map(__pidOf), dbA, tries, msg };
+    });
+    console.log('⑰l控えに失敗', J(r));
+    ok(r.thrown === 1, '⑰l試験の前提: 2枚目の控えに1回だけ失敗する → ' + J(r));
+    ok(hasAll(r.dbA, r.ps), '★⑰l端末に控えられなかった写真を、もう一度控えない（黙って消える） → ' + J(r));
+    ok(r.tries >= 2 && /控えられませんでした/.test(r.msg), '★⑰lずっと控えられない写真があるのに、知らせない → ' + J(r));
+  });
+
+  /* ---------- ⑰m 取り込みのあいだに備考を打った（欄を離れない）→ 描き直しても端末の記録に残る ---------- */
+  await scene('⑰m', async page => {
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const cs = ['#fc1', '#bad'];
+      const ogRead = readImageAsDataURI;
+      readImageAsDataURI = async f => { if(f.__c === '#bad'){ await __cgate(f.__c); throw new Error('読めない写真'); } return ogRead(f); };
+      const { key } = await __spNew('打った文字');
+      __spFire('sp-pick', cs);
+      await __rel(cs[0]);
+      const el = document.getElementById('sp-note');
+      el.value = '取り込み中に打った'; el.dispatchEvent(new Event('input', { bubbles:true }));   // 欄を離れない（change は出ない）
+      await __rel(cs[1]); await __sleep(300);            // 最後の1枚は読めずに、取り込みが終わって描き直す
+      readImageAsDataURI = ogRead;
+      const shown = (document.getElementById('sp-note') || {}).value;
+      document.getElementById('sp-back').click(); await __sleep(200);
+      const rec = await idbGet(key);
+      return { ps: [__pidOf(cs[0])], shown, note: rec && rec.note, db: __spIds(rec) };
+    });
+    console.log('⑰m取り込み中に打った', J(r));
+    ok(r.shown === '取り込み中に打った' && hasAll(r.db, r.ps), '⑰m試験の前提: 描き直した欄に打った文字が出て、写真が端末の記録に入る → ' + J(r));
+    ok(r.note === '取り込み中に打った', '★⑰m取り込みのあいだに打った備考が、描き直したあと端末の記録に残らない → ' + J(r));
+  });
+
+  /* ---------- ⑰n 保存のあいだに「戻る」→ ほかの記録を開いた → 保存が終わっても閉じない ---------- */
+  await scene('⑰n', async page => {
+    await page.evaluate(SP_SAVE_SETUP);
+    const r = await page.evaluate(async () => {
+      const B = await __spNew('ほかの記録');
+      const A = await __spNew('保存する記録');
+      let fired = 0;
+      window.__onWrite = async () => { if(fired) return; fired = 1;
+        document.getElementById('sp-back').click(); await __sleep(200);
+        document.querySelector('[data-sp-open="' + B.id + '"]').click(); await __sleep(250); };
+      document.getElementById('sp-save').click();
+      for(let i = 0; i < 100 && !document.querySelector('#save-ov .save-ov-check'); i++) await __sleep(30);
+      await __sleep(300);
+      window.__onWrite = null;
+      return { fired, openB: !!(_spCur && _spCur.key === B.key), title: (document.getElementById('sp-title') || {}).value || '',
+               savedA: !spStale(await idbGet(A.key)) };
+    });
+    console.log('⑰n保存のあいだにほかの記録', J(r));
+    ok(r.fired === 1 && r.savedA, '⑰n試験の前提: 保存のあいだにほかの記録を開き、保存は終わる → ' + J(r));
+    ok(r.openB && r.title === 'ほかの記録', '★⑰n保存が終わったときに、あいだに開いたほかの記録を閉じた → ' + J(r));
+  });
+
+  /* ---------- ⑰o もう入っている写真（同じ画像）をもう一度選んだ → 1枚のまま・知らせる ---------- */
+  await scene('⑰o', async page => {
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const said = () => ((document.getElementById('savedhint') || {}).textContent || '');
+      const ids = rec => ((rec && rec.photos) || []).filter(p => p && p.dataUri).map(p => String(p.id));
+      /* a) 記録を開いたまま：X を入れてから、X と Y を選ぶ */
+      const A = await __spNew('同じ写真 a');
+      __spFire('sp-pick', ['#fd1']); await __rel('#fd1');
+      __spFire('sp-pick', ['#fd1', '#fd2']); await __rel('#fd1'); await __rel('#fd2'); await __sleep(300);
+      const aDb = ids(await idbGet(A.key)), aScr = ids(_spCur), aImgs = __spImgs(), aSaid = said();
+      /* b) Z・W・Z（同じ画像）を選び、1枚目のあとで一覧へ戻る */
+      const B = await __spNew('同じ写真 b');
+      __spFire('sp-pick', ['#fd3', '#fd4', '#fd3']);
+      await __rel('#fd3');
+      document.getElementById('sp-back').click(); await __sleep(200);
+      await __rel('#fd4'); await __rel('#fd3'); await __sleep(300);
+      const bDb = ids(await idbGet(B.key)), bSaid = said();
+      return { X: __pidOf('#fd1'), Y: __pidOf('#fd2'), Z: __pidOf('#fd3'), W: __pidOf('#fd4'), aDb, aScr, aImgs, aSaid, bDb, bSaid };
+    });
+    console.log('⑰o同じ写真', J(r));
+    const one = (a, ps) => Array.isArray(a) && a.length === ps.length && ps.every(p => a.indexOf(p) >= 0);
+    ok(one(r.aDb, [r.X, r.Y]) && one(r.aScr, [r.X, r.Y]) && r.aImgs === 2, '★⑰o a) 開いている記録で同じ写真を選ぶと、2枚になった・Y が入らない → ' + J(r));
+    ok(/同じ写真がもう入っているので足しませんでした（1枚）/.test(r.aSaid), '★⑰o a) 同じ写真を足さなかったことを知らせない → ' + J(r));
+    ok(one(r.bDb, [r.Z, r.W]), '★⑰o b) 一覧へ戻ったあとに届いた同じ写真が、2枚になった・W が入らない → ' + J(r));
+    ok(/同じ写真がもう入っているので足しませんでした（1枚）/.test(r.bSaid), '★⑰o b) 一覧へ戻ったあとの同じ写真を、足さなかったと知らせない → ' + J(r));
+  });
+
+  /* ---------- ⑰p 取り込みの途中で ほかの記録 B を開いた → B に入らない ---------- */
+  await scene('⑰p', async page => {
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const cs = ['#fe1', '#fe2'];
+      const B = await __spNew('ほかの記録 B');
+      const A = await __spNew('取り込む記録 A');
+      __spFire('sp-pick', cs);
+      await __rel(cs[0]);
+      document.getElementById('sp-back').click(); await __sleep(200);
+      document.querySelector('[data-sp-open="' + B.id + '"]').click(); await __sleep(250);   // B を開く
+      await __rel(cs[1]); await __sleep(300);
+      const bScr = __spIds(_spCur), bImgs = __spImgs();
+      await __spType('sp-note', 'B の備考');            // B で備考を直す（B を控える）
+      return { ps: cs.map(__pidOf), openB: !!(_spCur && _spCur.key === B.key), bScr, bImgs,
+               bDb: __spIds(await idbGet(B.key)), aDb: __spIds(await idbGet(A.key)) };
+    });
+    console.log('⑰pほかの記録', J(r));
+    ok(r.openB, '⑰p試験の前提: 取り込みの途中で B を開いている → ' + J(r));
+    ok(r.bScr === '' && r.bImgs === 0 && r.bDb === '', '★⑰p取り込みの写真が、ほかの記録 B（画面・端末の記録）に入った → ' + J(r));
+    ok(hasAll(r.aDb, r.ps), '★⑰p取り込みの写真が、取り込んだ記録 A の端末の記録にそろわない → ' + J(r));
+  });
+
+  /* ---------- ⑰f2 まだ控えていない新しい記録で、1枚目が入る前に「戻る」 ---------- */
+  await scene('⑰f2', async page => {
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const cs = ['#ff1', '#ff2'];
+      const { key, id } = await __spNew('');             // 件名なし（端末にまだ無い）
+      const before = await idbGet(key);
+      __spFire('sp-pick', cs);
+      document.getElementById('sp-back').click(); await __sleep(200);   // 1枚目が入る前に一覧へ
+      await __rel(cs[0]); await __rel(cs[1]); await __sleep(300);
+      await renderSpecial();
+      return { ps: cs.map(__pidOf), before: !!before, db: __spIds(await idbGet(key)),
+               row: !!document.querySelector('[data-sp-open="' + id + '"]') };
+    });
+    console.log('⑰f2控えていない新しい記録', J(r));
+    ok(r.before === false, '⑰f2試験の前提: 新しい記録は端末にまだ無い → ' + J(r));
+    ok(hasAll(r.db, r.ps) && r.row, '★⑰f2まだ控えていない新しい記録で一覧へ戻ると、取り込みの写真が端末の記録に入らない・一覧に出ない → ' + J(r));
+  });
+
+  /* ---------- ⑰f3 保存した記録で、1枚目が入る前に「この記録を消す」 ---------- */
+  await scene('⑰f3', async page => {
+    await page.evaluate(SP_SAVE_SETUP);
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const cs = ['#ff3', '#ff4'];
+      const { key, id } = await __spNew('消す記録');
+      const res = await spSaveFile(_spCur); await __sleep(100);
+      await __spOpen(id);
+      const saved0 = !spStale(await idbGet(key));
+      __spFire('sp-pick', cs);
+      const del = document.getElementById('sp-delrec');
+      if(del) del.click();                               // 確かめの窓は「OK」
+      await __sleep(400);
+      const gone = !(await idbGet(key));
+      await __rel(cs[0]);
+      const mid = await idbGet(key);
+      await __rel(cs[1]); await __sleep(300);
+      const rec = await idbGet(key);
+      return { ok: !!(res && res.ok), saved0, del: !!del, gone, ps: cs.map(__pidOf),
+               midDb: __spIds(mid), midStale: !!(mid && spStale(mid)), db: __spIds(rec), stale: !!(rec && spStale(rec)) };
+    });
+    console.log('⑰f3消した記録に写真が入る', J(r));
+    ok(r.ok && r.saved0 && r.del && r.gone, '⑰f3試験の前提: 保存した記録を端末から消した → ' + J(r));
+    ok(r.midDb === r.ps[0] && hasAll(r.db, r.ps), '★⑰f3消したあとに入った写真を捨てた（写真が減る） → ' + J(r));
+    ok(r.midStale && r.stale, '★⑰f3ファイルに無い写真が入った記録が「保存済」に見える → ' + J(r));
+  });
+
+  /* ---------- ⑰q 取り込みの途中で開き直した記録で「保存」→ 何も入らなければ「保存済」 ---------- */
+  await scene('⑰q', async page => {
+    await page.evaluate(SP_SAVE_SETUP);
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const D = window.__spD, cs = ['#ff5', '#ff6', '#ff7'];
+      const { key, id } = await __spNew('開き直して保存');
+      __spFire('sp-pick', cs);
+      await __rel(cs[0]);
+      await __spOpen(id);                                // 開き直す（取り込みは始めの記録に続く）
+      await __rel(cs[1]);                                // 2枚目は開き直した記録にも入る
+      document.getElementById('sp-save').click();       // 3枚目はまだ
+      for(let i = 0; i < 100 && !document.querySelector('#save-ov .save-ov-check'); i++) await __sleep(30);
+      await __sleep(200);
+      const ov = (document.getElementById('save-ov') || {}).textContent || '';
+      const rec = await idbGet(key);
+      const fname = Object.keys(D.__files)[0] || '';
+      const file = fname ? __spIds({ photos: JSON.parse(D.__files[fname]).chosho_photos }) : null;
+      await __rel(cs[2]); await __sleep(300);
+      return { ps: cs.map(__pidOf), file, late: /保存の途中/.test(ov), stale: !!(rec && spStale(rec)), rev: rec && rec.rev, fileRev: rec && rec.fileRev };
+    });
+    console.log('⑰q開き直して保存', J(r));
+    ok(hasAll(r.file, [r.ps[0], r.ps[1]]), '⑰q試験の前提: ファイルに1枚目・2枚目が入る → ' + J(r));
+    ok(!r.late && !r.stale, '★⑰q保存のあいだに何も入っていないのに「保存の途中で変わった」「未保存」になる（開き直した記録の回数がずれている） → ' + J(r));
+  });
+
+  /* ---------- ⑰r 書き込みが混んでいるときに、欄を打って「戻る」 ---------- */
+  await scene('⑰r', async page => {
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const cs = ['#1a1', '#1a2'];
+      const { key } = await __spNew('戻るときの控え');
+      __spFire('sp-pick', cs);
+      await __rel(cs[0]);
+      const unblock = __spBlock();                       // 端末への書き込みが混んでいる
+      await __rel(cs[1]);                                // 2枚目の控えは順番待ち
+      const el = document.getElementById('sp-note');
+      el.value = '戻る前に打った'; el.dispatchEvent(new Event('input', { bubbles:true }));
+      el.dispatchEvent(new Event('change', { bubbles:true }));   // 「戻る」を押すと欄を離れる＝控える（これも順番待ち）
+      document.getElementById('sp-back').click(); await __sleep(150);
+      unblock(); await __sleep(500);
+      const rec = await idbGet(key);
+      return { ps: cs.map(__pidOf), list: !_spCur, db: __spIds(rec), note: rec && rec.note };
+    });
+    console.log('⑰r戻るときの控え', J(r));
+    ok(r.list, '⑰r試験の前提: 一覧へ戻った → ' + J(r));
+    ok(hasAll(r.db, r.ps), '★⑰r戻る前の控え（記録を書く）が、先に並んだ取り込みの写真を消した → ' + J(r));
+    ok(r.note === '戻る前に打った', '★⑰r戻る前に打った備考が端末の記録に残らない → ' + J(r));
+  });
+
+  /* ---------- ⑰s 書き込みが混んでいるときに ✕ を2つ続けて押す ---------- */
+  await scene('⑰s', async page => {
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const cs = ['#2b1', '#2b2', '#2b3'];
+      const { key } = await __spNew('消す写真');
+      __spFire('sp-pick', cs);
+      for(const c of cs) await __rel(c);
+      await __sleep(300);
+      const order = _spCur.photos.map(p => String(p.id));
+      const old = Array.from(document.querySelectorAll('[data-sp-photodel]'));   // いま出ている ✕
+      const unblock = __spBlock();                       // 控えが順番待ち
+      old[0].click(); await __sleep(300);                // 1つ目を消す（確かめの窓は OK）
+      const imgs1 = __spImgs();                          // 控えを待たずに描き直している
+      old[1].click(); await __sleep(300);                // 前に出ていた並びの2つ目（その写真）を押す
+      unblock(); await __sleep(400);
+      return { order, imgs1, scr: __spIds(_spCur), db: __spIds(await idbGet(key)) };
+    });
+    console.log('⑰s続けて消す', J(r));
+    ok(r.imgs1 === 2, '★⑰s ✕ で消したのに、控えを待って描き直さない（古い並びの ✕ が残る） → ' + J(r));
+    ok(r.scr === r.order[2] && r.db === r.order[2], '★⑰s押した写真とは別の写真を消した → ' + J(r));
+  });
+
+  /* ---------- ⑰t 控えに失敗した写真を ✕ で消した → もう一度送るときに戻さない ---------- */
+  await scene('⑰t', async page => {
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const cs = ['#3c1', '#3c2', '#3c3'];
+      const { key } = await __spNew('消した写真を戻さない');
+      const op = idbPut; let n = 0;
+      idbPut = async rec => { if(rec && rec.key === key && n < 1){ n++; throw new Error('QuotaExceededError'); } return op(rec); };
+      __spFire('sp-pick', cs);
+      await __rel(cs[0]);                                // 1枚目の控えに失敗（画面の記録には入っている）
+      idbPut = op;
+      const kb = document.querySelector('[data-sp-kind]:not(.on)'); if(kb) kb.click(); await __sleep(300);   // 種類を替える（描き直して1枚目が出る）
+      const ps = cs.map(__pidOf);
+      const i = _spCur.photos.findIndex(p => String(p.id) === ps[0]);
+      const b = document.querySelector('[data-sp-photodel="' + i + '"]'); if(b) b.click(); await __sleep(400);   // 1枚目を消す
+      await __rel(cs[1]); await __sleep(300);            // 2枚目（控えに失敗した1枚目も一緒にもう一度送る）
+      const mid = { scr: __spIds(_spCur), db: __spIds(await idbGet(key)) };
+      await __rel(cs[2]); await __sleep(300);
+      return { ps, n, btn: !!b, mid, scr: __spIds(_spCur), db: __spIds(await idbGet(key)) };
+    });
+    console.log('⑰t消した写真を戻さない', J(r));
+    ok(r.n === 1 && r.btn, '⑰t試験の前提: 1枚目の控えに失敗し、画面で1枚目を消す → ' + J(r));
+    ok(hasNone(r.mid.scr, [r.ps[0]]) && hasNone(r.mid.db, [r.ps[0]]) && hasNone(r.scr, [r.ps[0]]) && hasNone(r.db, [r.ps[0]]),
+       '★⑰t画面で消した写真が、もう一度送ったときに戻った → ' + J(r));
+    ok(hasAll(r.db, [r.ps[1], r.ps[2]]), '★⑰t残りの写真が端末の記録に入らない → ' + J(r));
+  });
+
+  /* ---------- ⑰u 「保存」の印を端末に書けない → 知らせて開いたまま ---------- */
+  await scene('⑰u', async page => {
+    await page.evaluate(SP_SAVE_SETUP);
+    const r = await page.evaluate(async () => {
+      const { key } = await __spNew('端末に書けない');
+      const op = idbPut; let arm = 0;
+      window.__onWrite = async () => { arm = 1; };
+      idbPut = async rec => { if(arm && rec && rec.key === key) throw new Error('QuotaExceededError'); return op(rec); };
+      document.getElementById('sp-save').click();
+      for(let i = 0; i < 100 && !document.querySelector('#save-ov .save-ov-check'); i++) await __sleep(30);
+      await __sleep(300);
+      idbPut = op; window.__onWrite = null;
+      const ov = (document.getElementById('save-ov') || {}).textContent || '';
+      return { arm, said: /この端末の控えに失敗/.test(ov), open: !!(_spCur && _spCur.key === key), wrote: window.__spD.__wrote.length };
+    });
+    console.log('⑰u印を書けない', J(r));
+    ok(r.arm === 1 && r.wrote >= 1, '⑰u試験の前提: ファイルは書けて、印を端末に書くときに失敗する → ' + J(r));
+    ok(r.said && r.open, '★⑰u保存の印を端末に書けなかったのに、知らせない・記録を閉じた → ' + J(r));
+  });
+
+  /* ---------- ⑰u2 控えに失敗した写真があるまま「保存」→ ファイルにも端末にも入る ---------- */
+  await scene('⑰u2', async page => {
+    await page.evaluate(SP_SAVE_SETUP);
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const D = window.__spD;
+      const { key } = await __spNew('控えに失敗してから保存');
+      __spFire('sp-pick', ['#4d1']); await __rel('#4d1'); await __sleep(200);   // 1枚目は控えた
+      const op = idbPut; let block = 1;
+      idbPut = async rec => { if(block && rec && rec.key === key) throw new Error('QuotaExceededError'); return op(rec); };
+      __spFire('sp-pick', ['#4d2']); await __rel('#4d2'); await __sleep(400);   // 2枚目はずっと控えられない
+      const warned = (window.__said || []).some(t => /控えられませんでした/.test(t));
+      block = 0;                                         // 空きができた
+      document.getElementById('sp-save').click();
+      for(let i = 0; i < 100 && !document.querySelector('#save-ov .save-ov-check'); i++) await __sleep(30);
+      await __sleep(300);
+      idbPut = op;
+      const fname = Object.keys(D.__files)[0] || '';
+      const rec = await idbGet(key);
+      return { ps: [__pidOf('#4d1'), __pidOf('#4d2')], warned,
+               file: fname ? __spIds({ photos: JSON.parse(D.__files[fname]).chosho_photos }) : null,
+               db: __spIds(rec), stale: !!(rec && spStale(rec)) };
+    });
+    console.log('⑰u2控えに失敗してから保存', J(r));
+    ok(r.warned && hasAll(r.file, r.ps), '⑰u2試験の前提: 控えられないと窓で知らせ、保存でファイルに2枚入る → ' + J(r));
+    ok(hasAll(r.db, r.ps) && !r.stale, '★⑰u2保存したのに、控えに失敗した写真が端末の記録に無い（次の保存で消える）・「保存済」にならない → ' + J(r));
+  });
+
+  /* ---------- ⑰v 書き出しているあいだに欄を離れずに打った ---------- */
+  await scene('⑰v', async page => {
+    await page.evaluate(SP_SAVE_SETUP);
+    const r = await page.evaluate(async () => {
+      const D = window.__spD, T = '保存のあいだに打った';
+      const { key } = await __spNew('保存のあいだに打つ');
+      window.__onWrite = async () => { const el = document.getElementById('sp-note');
+        el.value = T; el.dispatchEvent(new Event('input', { bubbles:true })); };   // 欄を離れない
+      document.getElementById('sp-save').click();
+      for(let i = 0; i < 100 && !document.querySelector('#save-ov .save-ov-check'); i++) await __sleep(30);
+      await __sleep(300);
+      window.__onWrite = null;
+      const ov = (document.getElementById('save-ov') || {}).textContent || '';
+      const rec1 = await idbGet(key);
+      const a = { late: /保存の途中/.test(ov), open: !!(_spCur && _spCur.key === key), note: rec1 && rec1.note, stale: !!(rec1 && spStale(rec1)) };
+      const fname = Object.keys(D.__files)[0] || '', w0 = D.__wrote.length;
+      document.getElementById('sp-save').click();       // もう一度
+      for(let i = 0; i < 100 && D.__wrote.length === w0; i++) await __sleep(30);
+      await __sleep(400);
+      const rec2 = await idbGet(key);
+      return { a, fileNote: fname ? JSON.parse(D.__files[fname]).special_note : null, stale2: !!(rec2 && spStale(rec2)) };
+    });
+    console.log('⑰v保存のあいだに打つ', J(r));
+    ok(r.a.late && r.a.open && r.a.stale, '★⑰v保存のあいだに打った備考があるのに「保存済」にした・閉じた → ' + J(r));
+    ok(r.a.note === '保存のあいだに打った', '★⑰v保存のあいだに打った備考が端末の記録に残らない → ' + J(r));
+    ok(r.fileNote === '保存のあいだに打った' && !r.stale2, '★⑰vもう一度「保存」を押しても、備考がファイルに入らない・「保存済」にならない → ' + J(r));
+  });
+
+  /* ---------- ⑰w 書き出しているあいだに、選んである種類をもう一度押した（中身は同じ） ---------- */
+  await scene('⑰w', async page => {
+    await page.evaluate(SP_SAVE_SETUP);
+    const r = await page.evaluate(async () => {
+      const { key } = await __spNew('同じ種類を押す');
+      let fired = 0;
+      window.__onWrite = async () => { if(fired) return; fired = 1;
+        const b = document.querySelector('[data-sp-kind].on'); if(b) b.click(); await __sleep(150); };
+      document.getElementById('sp-save').click();
+      for(let i = 0; i < 100 && !document.querySelector('#save-ov .save-ov-check'); i++) await __sleep(30);
+      await __sleep(300);
+      window.__onWrite = null;
+      const ov = (document.getElementById('save-ov') || {}).textContent || '';
+      const rec = await idbGet(key);
+      return { fired, late: /保存の途中/.test(ov), stale: !!(rec && spStale(rec)), rev: rec && rec.rev, fileRev: rec && rec.fileRev };
+    });
+    console.log('⑰w同じ種類を押す', J(r));
+    ok(r.fired === 1, '⑰w試験の前提: 書き出しているあいだに種類を押す → ' + J(r));
+    ok(!r.late && !r.stale, '★⑰w中身が同じなのに「保存の途中で変わった」「未保存」になる → ' + J(r));
+  });
+
+  /* ---------- ⑰x 保存した記録で、もう入っている写真だけを選んだ → 「保存済」のまま ---------- */
+  await scene('⑰x', async page => {
+    await page.evaluate(SP_SAVE_SETUP);
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const { key, id } = await __spNew('同じ写真だけ');
+      __spFire('sp-pick', ['#5e1']); await __rel('#5e1'); await __sleep(200);
+      const res = await spSaveFile(_spCur); await __sleep(100);
+      const saved0 = !spStale(await idbGet(key));
+      __spFire('sp-pick', ['#5e1']); await __rel('#5e1'); await __sleep(400);   // 同じ写真だけ
+      const rec = await idbGet(key);
+      return { ok: !!(res && res.ok), saved0, db: __spIds(rec), stale: !!(rec && spStale(rec)),
+               said: ((document.getElementById('savedhint') || {}).textContent || '') };
+    });
+    console.log('⑰x同じ写真だけ', J(r));
+    ok(r.ok && r.saved0 && /同じ写真がもう入っている/.test(r.said), '⑰x試験の前提: 保存したあと同じ写真だけを選び、足さなかったと知らせる → ' + J(r));
+    ok(!r.stale, '★⑰x何も増えていないのに「未保存」になった → ' + J(r));
+  });
+
+  /* ---------- ⑰y ほかの保存の道（保存先を選ぶ画面・共有・ダウンロード）と、読み返しが合わないとき ---------- */
+  await scene('⑰y', async page => {
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const out = {};
+      const wait = async () => { for(let i = 0; i < 100 && !document.querySelector('#save-ov .save-ov-check'); i++) await __sleep(30); await __sleep(300); };
+      const ov = () => (document.getElementById('save-ov') || {}).textContent || '';
+      const closeOv = () => { const x = document.getElementById('save-ov-x2'); if(x) x.click(); };
+      const ogShare = shareFilesSmart;
+      saveDirGet = async () => null;
+      /* a) 保存先を選ぶ画面：選んでいるあいだに写真が入る */
+      { const P = __mkdir('選んだ所', {});
+        const { key } = await __spNew('保存先を選ぶ');
+        __spFire('sp-pick', ['#6a1', '#6a2']); await __rel('#6a1');
+        window.showSaveFilePicker = async o => { await __rel('#6a2'); return await P.getFileHandle((o && o.suggestedName) || 'x.json', { create:true }); };
+        document.getElementById('sp-save').click(); await wait();
+        const rec = await idbGet(key);
+        out.a = { late: /保存の途中/.test(ov()), open: !!(_spCur && _spCur.key === key), stale: !!(rec && spStale(rec)), files: Object.keys(P.__files).length };
+        closeOv(); }
+      window.showSaveFilePicker = undefined;
+      /* b) 共有：共有の画面のあいだに写真が入る */
+      { const { key } = await __spNew('共有で渡す');
+        __spFire('sp-pick', ['#6a3', '#6a4']); await __rel('#6a3');
+        shareFilesSmart = async items => { await __rel('#6a4'); return { ok:true, name:[items[0].name], as:'' }; };
+        document.getElementById('sp-save').click(); await wait();
+        const rec = await idbGet(key);
+        out.b = { late: /保存の途中/.test(ov()), open: !!(_spCur && _spCur.key === key), stale: !!(rec && spStale(rec)) };
+        closeOv(); }
+      /* c) ダウンロード：中身が変わらなければ「保存済」・d) 共有に失敗してダウンロードへ落ちる（共有の画面のあいだに写真が入る） */
+      shareFilesSmart = async () => ({ ok:false, aborted:false, name:[] });
+      { const { key } = await __spNew('ダウンロード');
+        document.getElementById('sp-save').click(); await wait();
+        const rec = await idbGet(key);
+        out.c = { late: /保存の途中/.test(ov()), list: !_spCur, stale: !!(rec && spStale(rec)) };
+        closeOv(); }
+      { const { key } = await __spNew('ダウンロードの途中');
+        __spFire('sp-pick', ['#6a5', '#6a6']); await __rel('#6a5');
+        shareFilesSmart = async () => { await __rel('#6a6'); return { ok:false, aborted:false, name:[] }; };
+        document.getElementById('sp-save').click(); await wait();
+        shareFilesSmart = async () => ({ ok:false, aborted:false, name:[] });
+        const rec = await idbGet(key);
+        out.d = { late: /保存の途中/.test(ov()), open: !!(_spCur && _spCur.key === key), stale: !!(rec && spStale(rec)) };
+        closeOv(); }
+      /* e) 覚えているフォルダで、読み返しが合わない → 「保存済」にしない・ファイル名は控える */
+      { const D = __mkdir('リスト', {});
+        saveDirGet = async () => D; saveDirSettle = async d => d;
+        window.__onWrite = async n => { D.__files[n] = '{}'; };   // 書いた中身が読み返すと違う
+        const { key } = await __spNew('読み返しが合わない');
+        __spFire('sp-pick', ['#6a7']); await __rel('#6a7'); await __sleep(200);   // 写真の入った記録（読み返しで写真を確かめる）
+        document.getElementById('sp-save').click(); await wait();
+        window.__onWrite = null;
+        const rec = await idbGet(key);
+        out.e = { stale: !!(rec && spStale(rec)), name: (rec && rec.fileName) || '', open: !!(_spCur && _spCur.key === key) };
+        closeOv(); }
+      shareFilesSmart = ogShare;
+      return out;
+    });
+    console.log('⑰yほかの保存の道', J(r));
+    ok(r.a && r.a.files === 1 && r.a.late && r.a.open && r.a.stale, '★⑰y a) 保存先を選ぶ画面のあいだに写真が入ったのに「保存済」・閉じた → ' + J(r));
+    ok(r.b && r.b.late && r.b.open && r.b.stale, '★⑰y b) 共有のあいだに写真が入ったのに「保存済」・閉じた → ' + J(r));
+    ok(r.c && !r.c.late && r.c.list && !r.c.stale, '★⑰y c) ダウンロードで中身が変わらないのに「保存済」にならない・閉じない → ' + J(r));
+    ok(r.d && r.d.late && r.d.open && r.d.stale, '★⑰y d) ダウンロードの途中で写真が入ったのに「保存済」・閉じた → ' + J(r));
+    ok(r.e && r.e.stale && /^特別記録_/.test(r.e.name) && r.e.open, '★⑰y e) 読み返しが合わないのに「保存済」・ファイル名を控えない・閉じた → ' + J(r));
+  });
+
+  /* ---------- ⑰z 書き出しているあいだに一覧へ戻り、写真が入った → 一覧を出し直す ---------- */
+  await scene('⑰z', async page => {
+    await page.evaluate(SP_SAVE_SETUP);
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const cs = ['#7b1', '#7b2', '#7b3'];
+      const { key, id } = await __spNew('一覧で保存が終わる');
+      __spFire('sp-pick', cs); await __rel(cs[0]);
+      let fired = 0;
+      window.__onWrite = async () => { if(fired) return; fired = 1;
+        document.getElementById('sp-back').click(); await __sleep(200); await __rel(cs[1]); };
+      document.getElementById('sp-save').click();
+      for(let i = 0; i < 100 && !document.querySelector('#save-ov .save-ov-check'); i++) await __sleep(30);
+      await __sleep(300);
+      window.__onWrite = null;
+      const row = __spRowText(id), rec = await idbGet(key);
+      await __rel(cs[2]); await __sleep(300);
+      return { fired, list: !_spCur, row, stale: !!(rec && spStale(rec)) };
+    });
+    console.log('⑰z一覧で保存が終わる', J(r));
+    ok(r.fired === 1 && r.list, '⑰z試験の前提: 書き出しているあいだに一覧へ戻り、2枚目が入る → ' + J(r));
+    ok(r.stale && /未保存/.test(r.row) && /写真 2枚/.test(r.row), '★⑰z保存が終わっても一覧を出し直さない（枚数・「未保存」が古い）・「保存済」になった → ' + J(r));
+  });
+
+  /* ---------- ⑰g2 保存した記録で写真を選び、1枚目が入る前に一覧へ → 入ると「未保存」 ---------- */
+  await scene('⑰g2', async page => {
+    await page.evaluate(SP_SAVE_SETUP);
+    const r = await page.evaluate(async () => {
+      __gatedImport();
+      const cs = ['#f63'];
+      const { key, id } = await __spNew('保存して一覧で待つ');
+      const res = await spSaveFile(_spCur); await __sleep(100);
+      await __spOpen(id);
+      const saved0 = !spStale(await idbGet(key));
+      __spFire('sp-pick', cs);
+      document.getElementById('sp-back').click(); await __sleep(200);   // 1枚目が入る前に一覧へ
+      await __rel(cs[0]); await __sleep(300);
+      const rec = await idbGet(key);
+      return { ok: !!(res && res.ok), saved0, db: __spIds(rec), p: __pidOf(cs[0]), stale: !!(rec && spStale(rec)), row: __spRowText(id) };
+    });
+    console.log('⑰g2保存して一覧で待つ', J(r));
+    ok(r.ok && r.saved0, '⑰g2試験の前提: 記録をファイルに保存すると「保存済」 → ' + J(r));
+    ok(r.db === r.p && r.stale && /未保存/.test(r.row), '★⑰g2一覧で待つあいだに写真が入ったのに「保存済」に見える → ' + J(r));
+  });
+
+
   /* 写真の並び（a,b,c）に、ps の写真がどれも入っていないか（写真が1枚も無い '' でもよい） */
   const lacks = (s, ps) => typeof s === 'string' && ps.every(p => s.split(',').indexOf(p) < 0);
   const NC = '2612MKM033', ND = '2612MKM034';
@@ -1329,7 +2262,7 @@ window.__holders = async function(ps, except){
   });
 
   await b.close();
-  const e2 = errs.filter(x => !/ResizeObserver|NotFound|DataCloneError|could not be cloned/.test(x));
+  const e2 = errs.filter(x => !/ResizeObserver|NotFound|DataCloneError|could not be cloned|読めない写真/.test(x));   // 読めない写真＝⑰m でわざと読めなくした1枚
   ok(e2.length === 0, '★画面でエラーが出た → ' + e2.slice(0, 4).join(' / '));
   if(fails.length){ console.log('FAIL\n- ' + fails.join('\n- ')); process.exit(1); }
   console.log('PASS 版178（現場入力）');
