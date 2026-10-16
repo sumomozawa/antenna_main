@@ -38293,6 +38293,9 @@ async function mergeRowsWithManual(newRows, opts){
         if(match.data.chosho_status) match.envelope.plain.chosho_status = match.data.chosho_status;
       }
       match._amtCache = undefined; match._bomCache = undefined;
+      /* 暗号（.hyb）の行に入れた台帳の値（「完了」・工事日程予定など）は、戸別ファイルにはまだ入っていない（版178）。
+         印を付けないと、🔄 一括再暗号化で物件の封筒にかぶせず「完了」が物件から消え、📁 の読み直しでも黙って消えた */
+      if(match.fileType === "hybrid"){ match._lgEdited = true; try { lgMarkTouched(match); } catch(_){} }
     } else if(choice === "skip"){
       // この件は読み込まない（台帳行を維持・ファイル行を除外）
       keep.push(mr);
