@@ -211,10 +211,10 @@ CASES = [
    u'''    if(preset === null){ _asbEdited = asbWas; return; }   // ファイルを読めず開かなかった＝いまの画面のまま（版178）''',
    u'''    if(false){ _asbEdited = asbWas; return; }''', TM, "main", u"㊻c,㊻f"),
   (u"★図面のある戸別を開けなかったのに、いま開いている画面にその戸別の備考などを入れる",
-   u'''    if((await listLoadRow(row, seq)) === false){ _asbEdited = asbWas; return; }   // ファイルを読めず開かなかった＝いまの画面のまま（版178）''',
+   u'''    if((await listLoadRow(row, seq)) === false){ if(seq === _openSeq) _asbEdited = asbWas; return; }   // ファイルを読めず開かなかった＝いまの画面のまま（版178。あとから別の戸別を開いたときは、その戸別のまま）''',
    u'''    await listLoadRow(row, seq);''', TM, "main", u"㊻f"),
   (u"★図面のある戸別を開けなかったのに、いま開いている戸別の石綿を直した印を消す",
-   u'''    if((await listLoadRow(row, seq)) === false){ _asbEdited = asbWas; return; }   // ファイルを読めず開かなかった＝いまの画面のまま（版178）''',
+   u'''    if((await listLoadRow(row, seq)) === false){ if(seq === _openSeq) _asbEdited = asbWas; return; }   // ファイルを読めず開かなかった＝いまの画面のまま（版178。あとから別の戸別を開いたときは、その戸別のまま）''',
    u'''    if((await listLoadRow(row, seq)) === false){ return; }''', TM, "main", u"㊻f"),
   (u"★図面のまだ無い戸別を開けなかったのに、いま開いている戸別の石綿を直した印を消す",
    u'''    if(preset === null){ _asbEdited = asbWas; return; }   // ファイルを読めず開かなかった＝いまの画面のまま（版178）''',
@@ -387,7 +387,7 @@ CASES = [
   (u"★💾 反映で新しく作るとき、預けた元の写真を読めなくても縮小版でファイルを作る（元の写真のファイルを置き去りにする）",
    u'''      if(tb && tb.miss){''', u'''      if(false){''', TMM, "main", u"㊶c"),
   (u"★🔄 一括再保存で元ファイルを読み直せないとき、行の写真（預けた縮小版・物件の縮小版）で元ファイルを書き替える",
-   u'''        if(row.fileHandle && (row._slim || rowHasParkedThumb(row) || (row.data && row.data.chosho_photos_thumb))){ photoSkip++; continue; }''',
+   u'''        if(row.fileHandle){ photoSkip++; continue; }''',
    u'''        if(false){ photoSkip++; continue; }''', TMM, "main", u"㊶d"),
   (u"★写真を入れたファイルを覚えない（初めの預けが途中で止まった行を、あとで軽くできない）",
    u'''  row._parkFh = fh;                           // この行の写真を入れたファイル（預けが途中で止まっても、あとで確かめて軽くする）
@@ -435,6 +435,38 @@ CASES = [
    u'''  const thumbish = !!data.chosho_photos_thumb || !!row._fromProject;''', TMM, "main", u"㊶f"),
   (u"★💾 反映で結び付けても、預け先を結び付いたファイルへ移さない（開くと読み直せない）",
    u'''  for(const r of relink){ try { await rowParkOriginals(r, r.fileHandle); } catch(_){} }''', u'''''', TMM, "main", u"㊶g"),
+  # ---- 3回目の見直し（Opus 5.5・3回目）の直し ----
+  (u"★画面から戻すとき、預けたときと違う大きさの写真（画面に出ている前の縮小版）を元の写真と見なす",
+   u'''  const u = photosUnparkFrom(row, d0.chosho_photos, list, true);''', u'''  const u = photosUnparkFrom(row, d0.chosho_photos, list, false);''', TMM, "main", u"㊷m"),
+  (u"★🔄 一括再保存で、ファイルの付いた行の元ファイルを読めないとき、行が元の写真を持っていれば書く（ファイルにしか無い写真が消える）",
+   u'''        if(row.fileHandle){ photoSkip++; continue; }''',
+   u'''        if(row.fileHandle && (row._slim || rowHasParkedThumb(row) || (row.data && row.data.chosho_photos_thumb))){ photoSkip++; continue; }''', TMM, "main", u"㊶dc"),
+  (u"★まとめのあいだに別の戸別を開き終えても、始めに覚えた戸別に付け直す（前の戸別を画面の中身で上書きする）",
+   u'''  if(_editingRow && _listRows.indexOf(_editingRow) >= 0) return;
+  const curId = (_editingRow && _editingRow._caseId) || editId;''',
+   u'''  const curId = editId;''', TMM, "main", u"㊷ib"),
+  (u"★一覧から直に暗号の戸別を開くとき、開く順番の番号を取らない（先に押した戸別がそのあとで開く）",
+   u'''  const seq = seq0 || ++_openSeq;''', u'''  const seq = seq0 || (target.fileType === "plain" ? ++_openSeq : _openSeq);''', TMM, "main", u"㊷jd"),
+  (u"★写真をファイルに置いている戸別を読んでいるあいだに別の戸別を開いても、読み終えたら先の戸別を開く（図面あり）",
+   u'''    if(target._slim){ const rr = await rereadRowSourceWhy(target);
+      if(seq !== _openSeq) return false;''',
+   u'''    if(target._slim){ const rr = await rereadRowSourceWhy(target);''', TMM, "main", u"㊷jb"),
+  (u"★写真をファイルに置いている戸別を読んでいるあいだに別の戸別を開いても、読み終えたら先の戸別を開く（図面なし）",
+   u'''    if(seq !== _openSeq) return;          // 読んでいるあいだに別の戸別を開き始めた＝その戸別のまま（版178・3回目）
+''', u'''''', TMM, "main", u"㊷jc"),
+  (u"★暗号の戸別を読んでいるあいだに別の戸別を開いても、読み終えたら暗号の戸別を開く",
+   u'''        const full = lgOverlayLedger(await decryptHybrid(env, _sessionPassword), target);
+        if(seq !== _openSeq) return false;''',
+   u'''        const full = lgOverlayLedger(await decryptHybrid(env, _sessionPassword), target);''', TMM, "main", u"㊷je"),
+  (u"★先に押した戸別の開きをやめたとき、前の戸別の「石綿を直した」印を、あとから開いた戸別に付ける",
+   u'''    if((await listLoadRow(row, seq)) === false){ if(seq === _openSeq) _asbEdited = asbWas; return; }''',
+   u'''    if((await listLoadRow(row, seq)) === false){ _asbEdited = asbWas; return; }''', TMM, "main", u"㊷jb"),
+  (u"★一覧から直に開くとき、預けた元の写真を読み直さない（縮小版のまま出す）",
+   u'''    if(!seq0){ target = await rowOpenTakeBack(target, seq); if(!target) return false; }
+''', u'''''', TMM, "main", u"㊷l"),
+  (u"★一覧から直に別の戸別を開いても、前の戸別を軽くしない",
+   u'''    if(!seq0) await rowParkPrevAfterOpen(prev);   // 開けたら、前の戸別をもう一度軽くする（版178・3回目）
+''', u'''''', TMM, "main", u"㊷l"),
   # ======== 現場入力：まとめて保存（E・F） ========
   (u"★まとめて保存（フォルダ）：下書きの中身が変わっていても、写しで書き直す・保存済にする",
    u'''    const lateOther = !keep && !!model && model !== M && !!(opt && opt.wrote) && !draftRecSame(rec, (opt && opt.was) || "");''',
