@@ -140,12 +140,10 @@ CASES = [
   (u"★暗号の戸別（.hyb）で、鍵の違うファイルの写真を混ぜて書く（ほどけない写真になる）",
    u'''  if(!f || typeof f !== "object" || f.salt !== env.salt || f.iter !== env.iter) return null;''',
    u'''  if(!f || typeof f !== "object") return null;''', TM, "main", u"㉕b"),
-  (u"★ファイルが付いている行でも、物件の覚えている名前で探す（同じ番号のファイルをもう1つ作り、縮小版を書く）",
-   u'''  const att = !!(row._dir && row._name && !row._detached && row.fileHandle);''', u'''  const att = false;''', TM, "main", u"㉑a"),
-  (u"★ファイルが付いている行（図面なし）でも、物件の覚えている名前で探す",
-   u'''  const att = !!(row._dir && row._name && !row._detached && row.fileHandle);''', u'''  const att = false;''', TM, "main", u"㉑b"),
-  (u"★ファイルを動かした戸別でも、物件の覚えている名前で探す（動かした先に直しが入らない）",
-   u'''  const att = !!(row._dir && row._name && !row._detached && row.fileHandle);''', u'''  const att = false;''', TM, "main", u"㉑c"),
+  # ★付いているファイルへ書く★ 4回目の見直しで「工事フォルダの中の 管理番号.json を探す」が入り、㉑a・b・c（同じ名前のファイル）は
+  #  ここを壊しても探して同じファイルへ行く（写真は守られる）。名前の違う付いたファイル（㉑d：Android の名前）で見る。
+  (u"★ファイルが付いている行でも、物件の覚えている名前で探す（名前の違う付いたファイルを見ず、同じ番号のファイルをもう1つ作って縮小版を書く）",
+   u'''  const att = !!(row._dir && row._name && !row._detached && row.fileHandle);''', u'''  const att = false;''', TM, "main", u"㉑d"),
   (u"★名前をそろえたあと、行のファイルを付け替えない（2回目の保存が古い名前へ行く）",
    u'''    row._name = relpath; row.fileHandle = fh;
     let rp = null;''',
@@ -188,9 +186,8 @@ CASES = [
   (u"★📁 の行を開くときファイルを読めなかったのに、前に見せた写真の覚えを残す（上書き保存で写真が全部消える）",
    u'''      else { rowSeePhotos(target, (d && d.chosho_photos) || [], true);   // 読めなかった＝行の写真だけ見せる（ファイルの写真を「画面で消した」としない・版178）''',
    u'''      else {''', TM, "main", u"㊻a"),
-  (u"★図面のまだ無い戸別を開くときファイルを読めなかったのに、前に見せた写真の覚えを残す",
-   u'''    rowSeePhotos(row, ph || [], true);                              // このファイルの写真を見せる・読めなければ行の写真だけ（版178）''',
-   u'''    if(ok) rowSeePhotos(row, ph, true);''', TM, "main", u"㊻b"),
+  # 「図面のまだ無い戸別を開くときファイルを読めなかったのに、前に見せた写真の覚えを残す」は外した（4回目の見直し）。
+  #  読めないまま開いた戸別は _photosPartial で「行の写真を当てにしない」になり、書き出しはファイルとの和集合＝覚えを空にしなくても同じ結果。
   (u"★図面のまだ無い戸別を開くときファイルを読めなかったら、行が持っている写真（取り込んだ分）も出さない（保存で消える）",
    u'''    ph = ok ? slimRowWithMemPhotos(fr, row).chosho_photos : d.chosho_photos;   // 読めなければ、行が持っている写真（取り込んだ分）だけ（版178）''',
    u'''    ph = ok ? slimRowWithMemPhotos(fr, row).chosho_photos : null;''', TM, "main", u"㊻c"),
@@ -313,9 +310,8 @@ CASES = [
   (u"★下書きのキーを移した先を覚えない（開き直して置き直した下書きに写真が届かない）",
    u'''      draftMoves().set(M._lastDraftKey, { to: key, uid: M._uid }); }   // 取り込み中の写真の行き先（版178）''',
    u'''      }''', TG, "genba", u"⑩b"),
-  (u"★開いている戸別かどうかを管理番号だけで見る（番号の無い新しい戸別に番号を入れた写しへ届かない）",
-   u'''  if(mk ? !!(M && M._lastDraftKey === mk && draftSameUid(M, model)) : !!(a && a === b)){   // 同じ戸別を開き直した''',
-   u'''  if(!!(a && a === b)){''', TG, "genba", u"⑪"),
+  # 「開いている戸別かどうかを管理番号だけで見る」は外した（3回目の見直し）。persistModel が自分で移った先を引き、
+  #  開き直した画面の写しにも足すようになったので、photoKeepInto の見分けを壊しても同じ結果（⑪ は緑のまま＝写真は届く）。
   (u"★開き直した画面へ、取り込みの写真をみな足す（画面で消した写真が戻る）",
    u'''    mergePhotosInto(M.chosho_photos, Array.isArray(added) ? added : model.chosho_photos);''',
    u'''    mergePhotosInto(M.chosho_photos, model.chosho_photos);''', TG, "genba", u"⑫b"),
@@ -334,9 +330,7 @@ CASES = [
   (u"★取り込みが2つ重なったとき（開き直した写しから始めた取り込み）、1つずつにしない（片方の写真が消える）",
    u'''  return await photoKeepQueue(() => persistModel(model, Array.isArray(added) ? added : undefined));''',
    u'''  return await persistModel(model, Array.isArray(added) ? added : undefined);''', TG, "genba", u"⑮b"),
-  (u"★取り込みが覚えている下書きのキーの、移った先を引かない（開いている写しに届かない）",
-   u'''  const mk = model._lastDraftKey ? draftKeyNow(model._lastDraftKey, model._uid) : "";''',
-   u'''  const mk = model._lastDraftKey || "";''', TG, "genba", u"⑩"),
+  # 「取り込みが覚えている下書きのキーの、移った先を引かない」も同じ理由で外した（persistModel が引く）。
   (u"★下書きに入れた写真を、まだ入れていない写真として持ち越す（画面で消した写真が戻る）",
    u'''      try{ if(await photoKeepInto(model, pending)) pending=[]; }catch(_){}''',
    u'''      try{ await photoKeepInto(model, pending); }catch(_){}''', TG, "genba", u"⑫b"),
