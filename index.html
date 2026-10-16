@@ -15668,13 +15668,26 @@ async function writeCurrentCaseToIndividualFile(){
        閉じると物件の縮小版だけになる）。知らせに ⚠ は付けない（📥 の「書けていません」に数えない）
      見て回っているあいだに、同じ名前のファイルが届いていたら（ほかの端末の同期）、読まずに上書きしない。 */
   let thumbKeptNote = "";
+  const parkNote = n => "\n※ この戸別の写真のうち " + n + " 枚は、戸別ファイルから元の写真を読めなかった（ほかの端末で消した・動かした など）ので、"
+                      + "戸別ファイルには入れていません（小さい写真で置き換えないため）。物件には小さい写真が残っています。";
   const parkLeft = _indivParkLeft.get(contentObj) || 0;
-  if(parkLeft) thumbKeptNote = "\n※ この戸別の写真のうち " + parkLeft + " 枚は、戸別ファイルから元の写真を読めなかった（ほかの端末で消した・動かした など）ので、"
-                             + "戸別ファイルには入れていません（小さい写真で置き換えないため）。物件には小さい写真が残っています。";
+  if(parkLeft) thumbKeptNote = parkNote(parkLeft);
   if(created && !photoSrcFh && row.fileType === "plain" && ((row.data && row.data.chosho_photos_thumb) || row._fromProject || rowHasParkedThumb(row))){
     const oldNo = junkNoFromName(oldBase);
     const before = (contentObj.chosho_photos || []).slice();   // 元の写真を探す前の、行の写真（版178）
     const up = await indivThumbOriginals(dir, [mg].concat(/^戸別$/.test(oldNo) ? [] : [oldNo]), contentObj);
+    /* ★預けた縮小版で、工事フォルダの中に元の写真を見つけられなかったものは、新しいファイルに入れない★（版178・3回目）
+       預けたファイルをほかの端末で消した・控えのフォルダへ動かした等。縮小版を元の写真として書かない（物件には残る）。
+       行の写真がみな縮小版なら作らない（下の「断ってよい」と同じ。物件に同じものがある＝断っても何も失わない） */
+    let parkGone = 0;
+    if(Array.isArray(contentObj.chosho_photos))
+      contentObj.chosho_photos = contentObj.chosho_photos.filter(p => { if(p && p.dataUri && photoIsParkedThumb(row, p)){ parkGone++; return false; } return true; });
+    if(parkGone && !before.some(p => p && p.dataUri && !projThumbLike(p))){
+      return "\n\u26a0 戸別の個別JSONは作っていません：この戸別の写真を入れた戸別ファイルが、工事フォルダの中に見つかりません。\n"
+           + "\u3000 物件には、この戸別の写真を小さくしたものしか入っていません。元の写真を確かめないまま作ると、小さい写真のファイルになってしまいます。\n"
+           + "\u3000 ほかのパソコンで名前を変えた・動かした、などが考えられます。一覧の「📁 フォルダ」で工事フォルダを読み直してから、もう一度保存してください。\n"
+           + "\u3000 ほかの端末でその写真を消したときは、この画面でもその写真を消してから保存してください。";
+    }
     if(!up.ok){
       /* 断ってよいのは、行の写真がみな物件の縮小版そのもののときだけ（物件に同じものがある）。
          ほかのファイルから見つけた元の写真は数えない（それはそのファイルに残っている）。
@@ -15687,8 +15700,10 @@ async function writeCurrentCaseToIndividualFile(){
                  ? "\u3000 同期が終わってから、もう一度保存してください。同期が終わるのを待っても読めないときは、そのファイルが壊れているかもしれません。工事フォルダの外へ移してから、もう一度保存してください。"
                  : "\u3000 そのフォルダが開けるか確かめて、もう一度保存してください。");
       }
-      thumbKeptNote = "\n※ " + up.why + "。この戸別の写真のうち、元の写真を見つけられなかったものは、物件の小さい写真のまま入れました。";
+      if((contentObj.chosho_photos || []).some(p => p && p.dataUri && projThumbLike(p)))
+        thumbKeptNote = "\n※ " + up.why + "。この戸別の写真のうち、元の写真を見つけられなかったものは、物件の小さい写真のまま入れました。";
     }
+    if(parkGone) thumbKeptNote += parkNote(parkGone);
     if(up.walked){
       let now = null;
       try { now = await resolveFileHandleInDir(dir, relpath, false); } catch(_){ now = null; }
@@ -38056,8 +38071,13 @@ async function applyGenbaMergeToRow(row, genbaData, opts){
   if(wasSlim && row.fileType === "plain" && row.fileHandle && /個別JSONも更新しました/.test(String(note || ""))){
     const fb = await indivReadFilePhotos(row.fileHandle);
     if(fb.read && Array.isArray(fb.photos)){
-      row.data = Object.assign({}, row.data, { chosho_photos: null });
-      row._photoCount = fb.photos.filter(p => p && p.dataUri).length;
+      /* ★ファイルに入っていない行の写真は、行に残す★（版178・3回目）預けた縮小版で、元の写真が戸別ファイルから無くなっていたもの
+         （ほかの端末で消した・動かした）は、ファイルに書かない。行から外すと、物件からも消える（その縮小版がただ1つの写し） */
+      const key = p => p.id || photoContentId(p.dataUri);
+      const inFile = new Set(fb.photos.filter(p => p && p.dataUri).map(key));
+      const rowOnly = (Array.isArray(row.data.chosho_photos) ? row.data.chosho_photos : []).filter(p => p && p.dataUri && !inFile.has(key(p)));
+      row.data = Object.assign({}, row.data, { chosho_photos: rowOnly.length ? rowOnly : null });
+      row._photoCount = fb.photos.filter(p => p && p.dataUri).length + rowOnly.length;
       row._thumbs = undefined;
     }
   }

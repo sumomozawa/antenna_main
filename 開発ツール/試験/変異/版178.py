@@ -478,6 +478,18 @@ CASES = [
   (u"★戸別ファイルに入れなかった預けた縮小版を知らせない",
    u'''  if(parkLeft) _indivParkLeft.set(data, parkLeft);
 ''', u'''''', TMM, "main", u"㊷o"),
+  (u"★📥 で常駐させない行に戻すとき、戸別ファイルに入らなかった預けた縮小版まで行から外す（物件からも消える）",
+   u'''      row.data = Object.assign({}, row.data, { chosho_photos: rowOnly.length ? rowOnly : null });''',
+   u'''      row.data = Object.assign({}, row.data, { chosho_photos: null });''', TMM, "main", u"㊷p"),
+  (u"★新しく作る戸別ファイルに、元の写真を見つけられなかった預けた縮小版を入れる",
+   u'''    if(Array.isArray(contentObj.chosho_photos))
+      contentObj.chosho_photos = contentObj.chosho_photos.filter(p => { if(p && p.dataUri && photoIsParkedThumb(row, p)){ parkGone++; return false; } return true; });
+''', u'''''', TMM, "main", u"㊷q"),
+  (u"★預けた縮小版しか無いのに、新しい戸別ファイルを（写真無しで）作る",
+   u'''    if(parkGone && !before.some(p => p && p.dataUri && !projThumbLike(p))){''', u'''    if(false){''', TMM, "main", u"㊷qa"),
+  (u"★新しく作る戸別ファイルに入れなかった預けた縮小版を知らせない",
+   u'''    if(parkGone) thumbKeptNote += parkNote(parkGone);
+''', u'''''', TMM, "main", u"㊷qb"),
   # ======== 現場入力：まとめて保存（E・F） ========
   (u"★まとめて保存（フォルダ）：下書きの中身が変わっていても、写しで書き直す・保存済にする",
    u'''    const lateOther = !keep && !!model && model !== M && !!(opt && opt.wrote) && !draftRecSame(rec, (opt && opt.was) || "");''',
