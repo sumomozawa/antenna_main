@@ -55,7 +55,7 @@ CASES = [
    u'''    if(!t) return { read: true, photos: undefined };''', u'''    if(!t) return { read: false, photos: undefined };''', TM, "main", u"⑤e"),
   (u"★行の知っている写真を見分けない（同じ写真が2枚になる）",
    u'''      if((p.id && known.has(p.id)) || known.has(photoContentId(p.dataUri))) return;   // 行が知っている写真''',
-   u'''      if(false) return;''', TM, "main", u"⑤b"),
+   u'''      if(false) return;''', TM, "main", u"⑩"),   # 2回目の見直しで、⑤b は「見せた写真」で先にふるわれるようになった（⑩ のファイルが付いているだけの行で見る）
   (u"★戻ってきた写真を、行の名前だけの枠に入れない（枠と写真が二重になる）",
    u'''      const i = p.id ? out.findIndex(q => q && !q.dataUri && q.id === p.id) : -1;''',
    u'''      const i = -1;''', TM, "main", u"⑩"),
