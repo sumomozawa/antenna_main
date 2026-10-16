@@ -80,16 +80,12 @@ CASES = [
 
   # ---- 現場入力：読み込み中に同じ戸別を開き直す ----
   (u"★同じ戸別を開き直したときに、読み込んだ写真を画面へ足さない（あとで消える）",
-   u'''  if(a && a === b){                       // 同じ戸別を開き直した
-    mergePhotosInto(M.chosho_photos, model.chosho_photos);''',
-   u'''  if(false){
-    mergePhotosInto(M.chosho_photos, model.chosho_photos);''',
+   u'''  if(mk ? !!(M && M._lastDraftKey === mk && draftSameUid(M, model)) : !!(a && a === b)){   // 同じ戸別を開き直した''',   # 版178 で下書きのキーで見る形にした
+   u'''  if(false){''',
    "smoke_v161_genba.js", "genba"),
   (u"★別の戸別へ移ったときも、画面のほうへ写真を足す（よその戸別に混ざる）",
-   u'''  const a = photoMgmtKeyOf(M), b = photoMgmtKeyOf(model);
-  if(a && a === b){                       // 同じ戸別を開き直した''',
-   u'''  const a = photoMgmtKeyOf(M), b = photoMgmtKeyOf(model);
-  if(true){''',
+   u'''  if(mk ? !!(M && M._lastDraftKey === mk && draftSameUid(M, model)) : !!(a && a === b)){   // 同じ戸別を開き直した''',   # 版178 で下書きのキーで見る形にした
+   u'''  if(true){''',
    "smoke_v161_genba.js", "genba"),
 ]
 

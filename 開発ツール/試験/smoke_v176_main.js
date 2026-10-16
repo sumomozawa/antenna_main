@@ -1616,7 +1616,7 @@ const brief = o => JSON.stringify(o === undefined ? null : o).slice(0, 260);   /
         o.file[no] = __pids(l1.__files[no + '.json'] || '{}');
         o.rowPh[no] = __pids(rows[no].data);
       }
-      // 物件の自動保存が先に走った（物件に入れるサムネを作り、ファイルを持たない行の写真はサムネに替わる）
+      // 物件の自動保存が先に走った（物件に入れるサムネを作る。版178 からは、ファイルを持たない行の写真もサムネに替えない）
       try { await projSaveNow(); } catch(e){ o.autoErr = String(e && e.message || e); }
       o.thumbed = nos.map(no => !!rows[no].data.chosho_photos_thumb);
       // 振り分けたあと、その戸別を開いて「物件に保存」
@@ -1639,7 +1639,7 @@ const brief = o => JSON.stringify(o === undefined ? null : o).slice(0, 260);   /
                         d: { 'W8A008-01': 'g1', 'W8A008-02': 'g2,g3' } }[mode];
     const pre = Object.keys(wantF).every(no => r.file[no] === wantF[no]) && !(r.left || []).length && !r.open1Err && !r.save1Err
       && (mode !== 'b' || (r.rowM1 && r.rowM1.ph === 'f1,m1' && !r.rowM1.thumb && r.rowM1.known)) && !r.autoErr
-      && (mode !== 'c' || (r.thumbed && r.thumbed[0] === true))
+      && (mode !== 'c' || (r.thumbed && r.thumbed[0] === false))
       && (mode === 'c' || Object.keys(wantF).every(no => r.known[no] === true && r.file1[no] === (mode === 'b' ? 'f1' : '')));
     ok(pre, '㉖' + mode + '試験の前提: いちど保存した戸別ファイル・振り分けで写真が戸別ファイルへ入る → ' + short(r));
     ok(Object.keys(wantF).every(no => wantF[no].split(',').every(id => (r.rowPh[no] || '').split(',').indexOf(id) >= 0))
