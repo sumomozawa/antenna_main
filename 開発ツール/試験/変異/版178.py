@@ -850,9 +850,17 @@ CASES = [
    u'''  if(row.fileType === "hybrid" && row._slim && !/個別JSONも更新しました/.test(String(note || ""))) row._slim = false;''',
    u'''  if(row.fileType === "hybrid" && row._slim) row._slim = false;''', TM, "main", u"㉕rproj"),
   # ======== メイン：10回目の見直しの直し（🔄 で受付台帳の「完了」を物件から消さない・ほかのPCの直しを消さない・知らせを分ける・📄 ファイルの行） ========
-  (u"★🔄 一括再暗号化で行の封筒を新しくするとき、暗号でない部分もファイルの古い中身にする（受付台帳の「完了」が物件から消える）",
-   u'''        if(row.envelope && row.envelope.plain && typeof row.envelope.plain === "object") e2.plain = Object.assign({}, row.envelope.plain);''',
-   u'''''', TM, "main", u"㉕ykeep,㉕ynewpw"),
+  # 11回目の直しで、行の封筒をほどいて書いた行（_slim でない）の「行の封筒のまま」は、書いた中身の暗号でない部分と同じ（壊しても同じ）。
+  # ファイルから読む行は、ファイルの中身に受付台帳の欄をかぶせる。そのかぶせを外すと ㉕y が赤くなる。
+  (u"★🔄 一括再暗号化で行の封筒を新しくするとき、ファイルから読む行に受付台帳の欄をかぶせない（受付台帳の「完了」が物件から消える）",
+   u'''          try { const want = lgwbWanted(row);
+                Object.keys(want).forEach(k => { if(sens.indexOf(k) < 0 && String(np[k] == null ? "" : np[k]) !== String(want[k] == null ? "" : want[k])) np[k] = want[k]; }); } catch(_){}
+''', u'''''', TM, "main", u"㉕ykeep,㉕ynewpw"),
+  (u"★🔄 一括再暗号化で、ファイルから読む行の物件の封筒を、行の古い中身に新しい鍵の元を付けたものにする（ほかのPCの新しい .hyb を、あとの 💾 物件に保存 が戻す）",
+   u'''        if(row._slim){
+          const np = Object.assign({}, newData.plain || {});''',
+   u'''        if(false){
+          const np = Object.assign({}, newData.plain || {});''', TM, "main", u"㉕yS"),
   (u"★🔄 一括再暗号化で書いた戸別を「この端末が直した戸別」にする（ほかのPCが物件で付けた「完了」を、この端末の古い写しで消す）",
    u'''        try { if(_currentProject) projTouch(); } catch(_){}''',
    u'''        try { markCaseEdited(row); } catch(_){}
@@ -878,6 +886,21 @@ CASES = [
       const full = lgOverlayLedger(await decryptHybrid(env, pw), target);''', TM, "main", u"㉕zfgpw"),
   (u"★一括平文化・一括再暗号化で、行にだけある写真（画面で足して一覧へ戻った P）を入れない",
    u'''      if(own.length){''', u'''      if(false){''', TM, "main", u"㉕ze"),
+  # ======== メイン：11回目の見直しの直し（ファイルから読む行の物件の封筒・マージで新しい鍵を残す・📄 の行で画面の写真を戻さない） ========
+  (u"★🔄 で鍵を新しくした戸別を、マージのとき新しい封筒にしない（ほかのPCの保存があると、鍵が物件で前に戻る）",
+   u'''  if(rk && rk.size){''', u'''  if(false){''', TM, "main", u"㉕zMkeep,㉕zMnewpw"),
+  (u"★🔄 で鍵を新しくした戸別を覚えない（マージで前の鍵に戻る）",
+   u'''        try { if(row._caseId && !_editedCaseKeys.has(row._caseId) && !_reencCases.has(row._caseId)) _reencCases.set(row._caseId, hybEnvMark(before)); } catch(_){}''',
+   u'''''', TM, "main", u"㉕zMnewpw"),
+  (u"★マージのとき、ほかのPCが直した戸別でも 🔄 の新しい封筒にする（ほかのPCが付けた「完了」が消える）",
+   u'''      if(dc && dc.caseId === c.caseId && dc.payload && hybEnvMark(dc.payload) === rk.get(c.caseId)) diskCases[idx] = c;''',
+   u'''      diskCases[idx] = c;''', TM, "main", u"㉕z"),
+  (u"★📄 ファイルの行で、画面で写真を直して戻った行にも、読んだファイルの写真を差し込む（消した写真が戻る・名前が元に戻る）",
+   u'''  if(!row || row.fileType !== "hybrid" || row.fileHandle || !row.srcFile || row._photosKnown) return env;''',
+   u'''  if(!row || row.fileType !== "hybrid" || row.fileHandle || !row.srcFile) return env;''', TM, "main", u"㉕zk"),
+  (u"★一括で行の写真を足すとき、ファイルの写真を先にする（画面で直した名前が、読んだファイルの名前に戻る）",
+   u'''        stateObj.chosho_photos = photosKeepFileOnly(own, base);''',
+   u'''        stateObj.chosho_photos = photosKeepFileOnly(base, own);''', TM, "main", u"㉕zk"),
 ]
 
 import sys as _s
