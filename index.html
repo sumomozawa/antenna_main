@@ -15307,6 +15307,14 @@ function rowsSeenRestore(rows, m){
    一覧を軽くするため、行の封筒は暗号の写真を「剥がした印」に置き換えてある（slimListRow）。物件にもその封筒が入る。
    そのまま .hyb に書くと、暗号の写真が印に置き換わり、その戸別の写真が全部消えていた。
    元のファイル（同じ鍵＝salt・回数が同じ）の暗号の写真を戻して書く。読めない・鍵が違うときは書かない（null）。 */
+/* 暗号の行の写真を差し込むファイル（版178）。📁 フォルダの行はそのファイル。📄 ファイルで読んだ行（書き戻せない）は、
+   読んだときの写し（srcFile）。写しはあとから書き替わらないので、行の封筒と同じ鍵の元のまま */
+function hybPhotoSource(row){
+  if(!row) return null;
+  if(row.fileHandle) return row.fileHandle;
+  if(row.srcFile) return { getFile: async () => row.srcFile };
+  return null;
+}
 async function indivHybridEnvelope(env, fh){
   const ef = (env && env.encrypted_fields) || {};
   const ph = ef.chosho_photos;
@@ -20331,7 +20339,7 @@ async function bulkReencodeTargets(params){
   const candidates = [];
   if(_sessionPassword) candidates.push(_sessionPassword);
 
-  let ok = 0, ng = 0, skip = 0, photoSkip = 0;
+  let ok = 0, ng = 0, skip = 0, photoSkip = 0, photoSkipStale = 0;
   let overwriteCount = 0, downloadCount = 0;
   for(let i = 0; i < targets.length; i++){
     const row = targets[i];
@@ -20341,10 +20349,25 @@ async function bulkReencodeTargets(params){
     // 1. 復号して平文オブジェクトを得る（写真を欠落させないよう元ファイルから完全取得）
     let stateObj = null;
     let currentPw = null;
+    let staleFile = false;   // ファイルが、行の封筒を作ったあとで書き替えられていた（鍵の元が違う）
     if(row.fileType === "plain"){
       stateObj = (await rereadRowSource(row)) || row.data; // 写真込みの完全データ
     } else {
-      const env = await getEnvelopeForPhotos(row); // 写真ct復元済みの完全envelope（剥がした封筒ならファイルの写真。版178）
+      let env = await getFullEnvelope(row); // 写真ct復元済みの完全envelope
+      /* ★行の封筒の写真が剥がした印のとき（まだファイルに無い直しを持っている行）★（版178）
+         ファイルが同じ鍵の元（salt）のまま＝ほかで書き替えていないときだけ、ファイルの暗号の写真を差し込んで書く（💾 物件に保存と同じ
+         indivHybridEnvelope）。鍵の元が違う（ほかのPCが書き替えた）・読めないときは、今までどおり飛ばして知らせる
+         （ファイルのほうが新しい図面を、行の古い中身で戻さない） */
+      /* 📄 ファイルで読んだ行は、読んだときの写し（書き替わらない）から差し込む（版178） */
+      const src = (row.fileType === "hybrid") ? hybPhotoSource(row) : null;
+      if(src){
+        let sp = null; try { sp = await indivHybridEnvelope(env, src); } catch(_){ sp = null; }
+        if(sp) env = sp;
+        else {
+          try { const f = JSON.parse(String(await (await src.getFile()).text()).replace(/^\uFEFF/, "").trim());
+                if(f && typeof f === "object" && env && (f.salt !== env.salt || f.iter !== env.iter)) staleFile = true; } catch(_){}
+        }
+      }
       // 候補試行
       for(const cand of candidates){
         try {
@@ -20375,8 +20398,17 @@ async function bulkReencodeTargets(params){
     // 写真が復元できなかった戸別（共有物件由来などで剥がれた）をそのまま再エンコードすると、
     // 元ファイルの写真を無言で失う → この戸別はスキップして元ファイルを保全する。
     if(stateObj && stateObj._photosStripped){
-      photoSkip++;
+      if(staleFile) photoSkipStale++; else photoSkip++;
       continue;
+    }
+    /* ★行にだけある写真（画面で足して一覧へ戻った・📥 で入れた）も入れて書く★（版178）
+       ファイルの写真だけで書くと、その写真が書いたファイルに入らず、終わったあとの「📁 フォルダ」の読み直しで消えた。減らすことはしない */
+    if(stateObj && row.fileType === "hybrid" && !row._slim && row._photosKnown && row.data && Array.isArray(row.data.chosho_photos)){
+      const own = row.data.chosho_photos.filter(p => p && p.dataUri);
+      if(own.length){
+        const base = Array.isArray(stateObj.chosho_photos) ? stateObj.chosho_photos : (stateObj.chosho_photos ? migratePhotosShape(stateObj.chosho_photos) : []);
+        stateObj.chosho_photos = photosKeepFileOnly(base, own);
+      }
     }
 
     // 2. 新しい方式・パスワードで再エンコード
@@ -20410,6 +20442,21 @@ async function bulkReencodeTargets(params){
     // 3. 書込み
     try {
       const res = await writeRowFile(row, newData, newExt);
+      /* 暗号のまま書き替えたら、行の封筒も新しい鍵の元のものにする（写真は剥がした印）（版178）。
+         古いままだと、そのあと開くと古い封筒で開き、💾 上書き保存は「写真を取り出せない」で書けず、物件にも古い鍵が残った */
+      if(res.mode === "overwrite" && row.fileType === "hybrid" && useFormat === "hybrid" && newData && typeof newData === "object"){
+        const e2 = Object.assign({}, newData);
+        e2.encrypted_fields = Object.assign({}, newData.encrypted_fields || {});
+        if(e2.encrypted_fields.chosho_photos) e2.encrypted_fields.chosho_photos = { stripped: true };
+        /* 暗号でない部分（受付台帳の「完了」・工事日程予定・管理番号、画面で直したところ）は、行の封筒のまま（版178）。
+           ファイルから読む行（_slim）はファイルの古い中身をほどいて書いているので、それで置き換えると、
+           .hyb には入らない受付台帳の直し（「完了」など）が物件から消えていた */
+        if(row.envelope && row.envelope.plain && typeof row.envelope.plain === "object") e2.plain = Object.assign({}, row.envelope.plain);
+        row.envelope = e2;
+        /* 「この端末が直した戸別」にはしない（版178）。すると物件の保存で、ほかのPCが物件で直した分（受付台帳の「完了」・
+           💾 物件に保存 した直し）を、この端末の古い写しで消していた。ほかのPCの保存が無ければ、次の保存でこの封筒が物件に入る */
+        try { if(_currentProject) projTouch(); } catch(_){}
+      }
       if(res.mode === "overwrite") overwriteCount++;
       else if(res.mode === "download") downloadCount++;
       ok++;
@@ -20419,9 +20466,21 @@ async function bulkReencodeTargets(params){
     }
   }
 
-  return { ok, ng, skip, photoSkip, overwriteCount, downloadCount };
+  return { ok, ng, skip, photoSkip, photoSkipStale, overwriteCount, downloadCount };
 }
 
+/* 一括再暗号化・一括平文化で飛ばした戸別の知らせ（版178）。
+   ・ファイルが、この一覧を読んだあとで書き替えられていた（ほかの保存・ほかのPC）：一覧の古い中身で戻さないよう書いていない。
+     開いて 💾 上書き保存 すると、その古い中身で書いてしまうので勧めない。📁 フォルダで読み直してもらう
+   ・ファイルを読めない・ファイルのつながっていない戸別：写真が無いまま書かない */
+function bulkPhotoSkipNote(r){
+  let s = "";
+  if(r && r.photoSkipStale) s += "  ファイルが、この一覧を読んだあとで書き替えられていた戸別: " + r.photoSkipStale
+    + " 件（ほかのパソコンなどで保存されています。一覧の古い中身で戻さないよう、書いていません。「📁 フォルダ」で読み直してから、もう一度お試しください）\n";
+  if(r && r.photoSkip) s += "  写真が出ていないので飛ばした戸別: " + r.photoSkip
+    + " 件（ファイルを読めない・ファイルのつながっていない戸別です。「📁 フォルダ」で工事フォルダを読んでから、もう一度お試しください）\n";
+  return s;
+}
 /* 実行ボタンハンドラ（一括再暗号化モーダル） */
 async function applyBulkReenc(){
   const statusEl = document.getElementById("bulk-status");
@@ -20461,7 +20520,7 @@ async function applyBulkReenc(){
     + "  成功: " + r.ok + " 件（上書き " + r.overwriteCount + " / ダウンロード " + r.downloadCount + "）\n"
     + "  失敗: " + r.ng + " 件\n"
     + "  スキップ: " + r.skip + " 件\n"
-    + (r.photoSkip ? "  写真未復元のため保全スキップ: " + r.photoSkip + " 件（元の.hybから開き直してください）\n" : "")
+    + bulkPhotoSkipNote(r)
     + "\n再読込するにはもう一度 📁 フォルダ を実行してください");
   closeBulkReencModal();
 }
@@ -20508,7 +20567,7 @@ async function bulkConvertToPlain(){
     + "  成功: " + r.ok + " 件（上書き " + r.overwriteCount + " / ダウンロード " + r.downloadCount + "）\n"
     + "  失敗: " + r.ng + " 件\n"
     + "  スキップ: " + r.skip + " 件\n"
-    + (r.photoSkip ? "  写真未復元のため保全スキップ: " + r.photoSkip + " 件（元の.hybから開き直してください）\n" : "")
+    + bulkPhotoSkipNote(r)
     + "\n再読込するにはもう一度 📁 フォルダ を実行してください");
 }
 
@@ -24683,6 +24742,15 @@ function hybRowPhotosToShow(full, target){
   full.chosho_photos = photosKeepFileOnly(base, ph.filter(p => p && p.dataUri));
   return ph;
 }
+/* ★📄 ファイルで読んだ暗号の行（ファイルに書き戻せない）は、写真を剥がした封筒で開かない★（版178）
+   読んだときの写し（srcFile）の暗号の写真を差し込んで開く。剥がした封筒で開くと、画面には行の写真（📥 で入れた G など）しか出ず、
+   「💾 保存」「🔑 ハイブリッド保存」で書き出したファイルからも元の写真が抜けていた（💾 上書き保存は押せない）。
+   📁 フォルダの行（ファイルがあとで書き替わりうる）は今までどおり（💾 上書き保存で、ファイルの写真に足して書く） */
+async function hybEnvFromSrcFile(row, env){
+  if(!row || row.fileType !== "hybrid" || row.fileHandle || !row.srcFile) return env;
+  let sp = null; try { sp = await indivHybridEnvelope(env, hybPhotoSource(row)); } catch(_){ sp = null; }
+  return sp || env;
+}
 async function listLoadRow(target){
   if(!target) return;
   // --- 平文: 写真を常駐させていないため元ファイルを読み直して完全復元 ---
@@ -24705,7 +24773,7 @@ async function listLoadRow(target){
     if(_sessionPassword){
       try {
         const wasSlim = !!target._slim;
-        const env = await getFullEnvelope(target);
+        const env = await hybEnvFromSrcFile(target, await getFullEnvelope(target));
         const full = lgOverlayLedger(await decryptHybrid(env, _sessionPassword), target);
         const rowPh = hybRowPhotosToShow(full, target);   // 行にだけある写真を画面に出す（版178）
         const lite = Object.assign({}, full); lite.chosho_photos = rowPh; // 一覧側は写真を保持しない（行にだけある写真は持ったまま。版178）
@@ -24739,7 +24807,7 @@ async function listLoadRow(target){
     }
     try {
       const wasSlim = !!target._slim;
-      const env = await getFullEnvelope(target);
+      const env = await hybEnvFromSrcFile(target, await getFullEnvelope(target));
       const full = lgOverlayLedger(await decryptHybrid(env, pw), target);
       const rowPh = hybRowPhotosToShow(full, target);   // 行にだけある写真を画面に出す（版178）
       const lite = Object.assign({}, full); lite.chosho_photos = rowPh;
@@ -37629,6 +37697,15 @@ async function applyGenbaMergeToRow(row, genbaData, opts){
     : genbaMergeCaseData(row.data||{}, genbaData, opts);
   const merged = mres.merged;
   row.data = merged;
+  /* ★暗号（.hyb）の行は、封筒の暗号でない部分（図面・機器・測定値など）にも入れる★（版178）
+     入れないと、開いたとき封筒の古い中身で開き（現場の機器・長さ・測定値が戻る）、💾 で古い値を書き、物件にも古い値が入っていた。
+     画面で直したときと同じ（syncEditorToRowData）。氏名・電話・住所・写真（暗号の部分）は入れない */
+  if(row.fileType === "hybrid" && row.envelope && merged && typeof merged === "object"){
+    const sens = (row.envelope.meta && Array.isArray(row.envelope.meta.sensitive_fields)) ? row.envelope.meta.sensitive_fields : HYBRID_SENSITIVE_FIELDS;
+    const np = Object.assign({}, row.envelope.plain || {});
+    for(const k in merged){ if(sens.indexOf(k) < 0) np[k] = merged[k]; }
+    row.envelope = Object.assign({}, row.envelope, { plain: np });
+  }
   row._manual = false;
   /* ★常駐させない行（_slim）に取り込んだとき★（版178）
      行の写真は取り込んだ分だけ（ファイルの写真は入っていない）。戸別ファイルへ書けなかったときも、物件からファイルの写真を落とさない。
@@ -37679,6 +37756,10 @@ async function applyGenbaMergeToRow(row, genbaData, opts){
   } catch(_){}
   const wasSlim = !!row._slim;
   const note = await _genbaWriteRowIndividual(row, !!opts.importRun);  // 原寸写真は温存して個別JSONへ書戻し
+  /* ★暗号（.hyb）の行で、戸別ファイルへ書けなかったとき★（版178）行は、まだファイルに無い現場の欄（機器・測定値など）を持っている。
+     「ファイルから読む」のままだと、開いたときファイルの古い中身で開き、💾 で古い値を書いていた。画面で直したときと同じく、行の封筒で開く
+     （写真の出ていない画面になり、💾 上書き保存はファイルの写真に足して書く） */
+  if(row.fileType === "hybrid" && row._slim && !/個別JSONも更新しました/.test(String(note || ""))) row._slim = false;
   /* ★常駐させない行（_slim）に取り込んで、戸別ファイルへ書けたとき★（版178）
      行には現場の写真しか入っていない（ファイルの写真と合わせたのはファイルの中だけ）。そのままだと一覧・物件・工事調書に
      現場の写真しか出ない。ファイルに全部入ったので、行は「ファイルから読む」に戻す（枚数はファイルのもの）。 */
