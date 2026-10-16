@@ -3,3 +3,4 @@ package-lock.json
 package.json
 全件.out
 変異/mut_*.html
+__pycache__/
