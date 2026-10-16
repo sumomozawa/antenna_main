@@ -20401,13 +20401,14 @@ async function bulkReencodeTargets(params){
       if(staleFile) photoSkipStale++; else photoSkip++;
       continue;
     }
-    /* ★行にだけある写真（画面で足して一覧へ戻った・📥 で入れた）も入れて書く★（版178）
-       ファイルの写真だけで書くと、その写真が書いたファイルに入らず、終わったあとの「📁 フォルダ」の読み直しで消えた。減らすことはしない */
+    /* ★行の写真（画面で見て直して一覧へ戻った。行の写真を当てにしてよい）も入れて書く★（版178）
+       ファイルの写真だけで書くと、画面で足した写真が書いたファイルに入らず、終わったあとの「📁 フォルダ」の読み直しで消えた。
+       行の写真を先に（名前・調書の印・並びは画面で直したもの）。ファイルにしか無い写真は足す（減らすことはしない） */
     if(stateObj && row.fileType === "hybrid" && !row._slim && row._photosKnown && row.data && Array.isArray(row.data.chosho_photos)){
       const own = row.data.chosho_photos.filter(p => p && p.dataUri);
       if(own.length){
         const base = Array.isArray(stateObj.chosho_photos) ? stateObj.chosho_photos : (stateObj.chosho_photos ? migratePhotosShape(stateObj.chosho_photos) : []);
-        stateObj.chosho_photos = photosKeepFileOnly(base, own);
+        stateObj.chosho_photos = photosKeepFileOnly(own, base);
       }
     }
 
@@ -20448,13 +20449,29 @@ async function bulkReencodeTargets(params){
         const e2 = Object.assign({}, newData);
         e2.encrypted_fields = Object.assign({}, newData.encrypted_fields || {});
         if(e2.encrypted_fields.chosho_photos) e2.encrypted_fields.chosho_photos = { stripped: true };
-        /* 暗号でない部分（受付台帳の「完了」・工事日程予定・管理番号、画面で直したところ）は、行の封筒のまま（版178）。
-           ファイルから読む行（_slim）はファイルの古い中身をほどいて書いているので、それで置き換えると、
-           .hyb には入らない受付台帳の直し（「完了」など）が物件から消えていた */
-        if(row.envelope && row.envelope.plain && typeof row.envelope.plain === "object") e2.plain = Object.assign({}, row.envelope.plain);
+        /* ★暗号でない部分★（版178）
+           ・ファイルから読む行（_slim）：いま書いたファイルの中身（ファイルをほどいて書いた）に、受付台帳が持ち主の欄（「完了」・
+             工事日程予定・管理番号など。.hyb には入らない）をかぶせる（開くときと同じ lgOverlayLedger の形）。
+             行の古い中身に新しい鍵の元を付けると、ほかのPCが書き替えた .hyb を、あとの 💾 物件に保存 が古い中身で戻した。
+             ファイルの古い中身だけにすると、受付台帳の「完了」が物件から消えた。
+           ・それ以外（行の封筒をほどいて書いた）：行の封筒のまま（画面で直したところ） */
+        const sens = (newData.meta && Array.isArray(newData.meta.sensitive_fields)) ? newData.meta.sensitive_fields : HYBRID_SENSITIVE_FIELDS;
+        if(row._slim){
+          const np = Object.assign({}, newData.plain || {});
+          /* かぶせるのは、この端末が受付台帳で直して、まだファイルに入っていない戸別だけ（版178）。直していない戸別にかぶせると、
+             ほかのPCがファイルに入れた「完了」・工事日程予定・備考を、この端末の古い写し（📁 で読んだときのまま）で戻した */
+          if(row._lgEdited || (row._caseId && _editedCaseKeys.has(row._caseId))){
+            try { const want = lgwbWanted(row);
+                  Object.keys(want).forEach(k => { if(sens.indexOf(k) < 0 && String(np[k] == null ? "" : np[k]) !== String(want[k] == null ? "" : want[k])) np[k] = want[k]; }); } catch(_){}
+          }
+          e2.plain = np;
+        } else if(row.envelope && row.envelope.plain && typeof row.envelope.plain === "object") e2.plain = Object.assign({}, row.envelope.plain);
+        const before = row.envelope;
         row.envelope = e2;
         /* 「この端末が直した戸別」にはしない（版178）。すると物件の保存で、ほかのPCが物件で直した分（受付台帳の「完了」・
-           💾 物件に保存 した直し）を、この端末の古い写しで消していた。ほかのPCの保存が無ければ、次の保存でこの封筒が物件に入る */
+           💾 物件に保存 した直し）を、この端末の古い写しで消していた。代わりに、書き替える前の封筒の目印を覚えておき、
+           マージのとき共有ファイルのその戸別が前のままなら新しい封筒にする（mergeProjectSnapshots） */
+        try { if(row._caseId && !_editedCaseKeys.has(row._caseId) && !_reencCases.has(row._caseId)) _reencCases.set(row._caseId, hybEnvMark(before)); } catch(_){}
         try { if(_currentProject) projTouch(); } catch(_){}
       }
       if(res.mode === "overwrite") overwriteCount++;
@@ -24747,7 +24764,9 @@ function hybRowPhotosToShow(full, target){
    「💾 保存」「🔑 ハイブリッド保存」で書き出したファイルからも元の写真が抜けていた（💾 上書き保存は押せない）。
    📁 フォルダの行（ファイルがあとで書き替わりうる）は今までどおり（💾 上書き保存で、ファイルの写真に足して書く） */
 async function hybEnvFromSrcFile(row, env){
-  if(!row || row.fileType !== "hybrid" || row.fileHandle || !row.srcFile) return env;
+  /* 画面で写真を見て直して一覧へ戻った行（行の写真を当てにしてよい）は差し込まない（版178）。行の写真がその戸別の写真そのもの
+     （消した・名前を直した・調書の印・並び）。差し込むと、読んだファイルの写真が勝ち、消した写真が戻り、名前などが元に戻った */
+  if(!row || row.fileType !== "hybrid" || row.fileHandle || !row.srcFile || row._photosKnown) return env;
   let sp = null; try { sp = await indivHybridEnvelope(env, hybPhotoSource(row)); } catch(_){ sp = null; }
   return sp || env;
 }
@@ -29404,6 +29423,21 @@ function buildProjectSnapshot(base){
    ・物件全体設定(単価/プリセット/施工会社マスター)は disk を維持＝他端末の設定を潰さない。
    ============================================================ */
 let _editedCaseKeys = new Set();  // この端末が編集した戸別の caseId（マージで上乗せする対象）
+/* 🔄 一括再暗号化で、物件の中の封筒を新しい鍵にした戸別の caseId → 書き替える前の封筒の目印（hybEnvMark）（版178）。
+   「この端末が直した戸別」にはしない（ほかのPCが物件で直した分を、この端末の古い写しで消さない）。マージのとき、
+   共有ファイルのその戸別が書き替える前のまま（ほかのPCが直していない）なら、この端末の新しい封筒にする */
+let _reencCases = new Map();
+/* 暗号の封筒の目印：鍵の元・回数・暗号でない部分・写真を除く暗号の部分（キーの並びによらない）（版178） */
+function hybEnvMark(env){
+  if(!env || typeof env !== "object") return "";
+  const st = v => {
+    if(Array.isArray(v)) return "[" + v.map(st).join(",") + "]";
+    if(v && typeof v === "object") return "{" + Object.keys(v).sort().map(k => JSON.stringify(k) + ":" + st(v[k])).join(",") + "}";
+    return JSON.stringify(v === undefined ? null : v);
+  };
+  const ef = Object.assign({}, env.encrypted_fields || {}); delete ef.chosho_photos;
+  return st({ s: env.salt || "", i: env.iter || 0, p: env.plain || {}, e: ef });
+}
 let _editedAnnoKeys = new Set();  // この端末が編集した注釈(台帳/持出/確認/施工会社割当)の subCaseKey
 let _editedProjMeta = new Set();  // この端末が編集した物件全体設定のキー名（例 "outsourceFee"）。マージで local を優先
 /* 物件全体の設定＝戸別ごとではなく物件に1つだけ持つ値。競合マージでは、この端末が実際に編集した
@@ -29454,6 +29488,7 @@ function markAnnoDeleted(subKey){ if(subKey){ try { _deletedAnnoKeys.add(subKey)
 function clearEditedMarks(){
   _editedCaseKeys = new Set(); _editedAnnoKeys = new Set(); _editedProjMeta = new Set();
   _deletedCaseKeys = new Set(); _deletedAnnoKeys = new Set();
+  _reencCases = new Map();
   _mapsEditSeq = 0; _mapsEditSeqSaved = 0; // Phase2地図: 物件切替/切り離し＝地図の編集追跡もリセット
   _projTouchSeq = 0; _projTouchSeqSaved = 0; // 保存の予約の追跡もリセット（開き直した時点が新しい基準）
   try { _listRows.forEach(r => { if(r) delete r._prevSubKey; }); } catch(_){}
@@ -29465,7 +29500,8 @@ function captureMarks(){
            deletedCases: new Set(_deletedCaseKeys), deletedAnno: new Set(_deletedAnnoKeys),
            editedMaps: (_mapsEditSeq > _mapsEditSeqSaved),   // このスナップショットに織り込むmerge判定用の確定boolean
            editedMapsSeq: _mapsEditSeq,                      // subtractMarks消化用（保存中に来た新規編集は残す）
-           touchSeq: _projTouchSeq };                        // この保存で書き切る「保存の予約」の分（保存中に来た分は残す）
+           touchSeq: _projTouchSeq,                          // この保存で書き切る「保存の予約」の分（保存中に来た分は残す）
+           reencCases: new Map(_reencCases) };               // 🔄 で鍵を新しくした戸別（版178）
 }
 function subtractMarks(cap){
   if(!cap) return;
@@ -29476,6 +29512,7 @@ function subtractMarks(cap){
   cap.deletedAnno.forEach(k => _deletedAnnoKeys.delete(k));
   if(typeof cap.editedMapsSeq === "number" && cap.editedMapsSeq > _mapsEditSeqSaved) _mapsEditSeqSaved = cap.editedMapsSeq;
   if(typeof cap.touchSeq === "number" && cap.touchSeq > _projTouchSeqSaved) _projTouchSeqSaved = cap.touchSeq;
+  if(cap.reencCases) cap.reencCases.forEach((v, k) => { if(_reencCases.get(k) === v) _reencCases.delete(k); });
   try { _listRows.forEach(r => { if(r && r._caseId && cap.editedCases.has(r._caseId)) delete r._prevSubKey; }); } catch(_){}
 }
 /* 戸別ラッパ(cases[i])から subCaseKey(row) 相当のキーを得る（突合用・subCaseKeyと一致させる）。 */
@@ -29586,6 +29623,18 @@ function mergeProjectSnapshots(disk, local, marks){
       const sk = caseSubKeyOf(c); if(!bySub.has(sk)) bySub.set(sk, []); bySub.get(sk).push(diskCases.length - 1);
     }
   });
+  /* ★🔄 一括再暗号化で鍵を新しくした戸別★（版178）
+     共有ファイルのその戸別が、この端末が書き替える前のまま（ほかのPCが直していない）ときだけ、この端末の新しい封筒にする。
+     しないと、ほかのPCの保存（受付台帳のメモだけ・別の戸別だけでも）があるたびに、鍵を新しくした戸別がみな前の鍵に戻った。
+     ほかのPCが直していたら、そちら（「完了」・💾 物件に保存 した直し）を残す（鍵は前のまま。💾 は断って 📁 の読み直しを頼む） */
+  const rk = marks.reencCases;
+  if(rk && rk.size){
+    (Array.isArray(local.cases) ? local.cases : []).forEach(c => {
+      if(!c || !c.caseId || !rk.has(c.caseId) || editedIds.has(c.caseId) || !byId.has(c.caseId)) return;
+      const idx = byId.get(c.caseId), dc = diskCases[idx];
+      if(dc && dc.caseId === c.caseId && dc.payload && hybEnvMark(dc.payload) === rk.get(c.caseId)) diskCases[idx] = c;
+    });
+  }
   // 注釈：この端末が「設定/変更」したキーだけ上書き、「削除」したキーだけ削除（本体だけ触ったキーは disk を維持）
   const mergeMap = (dm, lm) => {
     const out = Object.assign({}, dm || {});
@@ -38334,6 +38383,9 @@ async function mergeRowsWithManual(newRows, opts){
         if(match.data.chosho_status) match.envelope.plain.chosho_status = match.data.chosho_status;
       }
       match._amtCache = undefined; match._bomCache = undefined;
+      /* 暗号（.hyb）の行に入れた台帳の値（「完了」・工事日程予定など）は、戸別ファイルにはまだ入っていない（版178）。
+         印を付けないと、🔄 一括再暗号化で物件の封筒にかぶせず「完了」が物件から消え、📁 の読み直しでも黙って消えた */
+      if(match.fileType === "hybrid"){ match._lgEdited = true; try { lgMarkTouched(match); } catch(_){} }
     } else if(choice === "skip"){
       // この件は読み込まない（台帳行を維持・ファイル行を除外）
       keep.push(mr);
