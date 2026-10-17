@@ -22762,7 +22762,14 @@ function aptMgRemoveRow(row){
      台帳の記入（備考・印）は、同じ管理番号の行がほかに残るなら消さない（本物の -01 の備考のため）。 */
   try { const mk = missKeyOf(row); undetach(mk); listCensusForget(mk); if(!shared) missPurgeAnno(mk); } catch(_){}
   _listRows.splice(idx, 1);
-  if(_editingRow === row){ _editingRow = null; try { updateOverwriteSaveBtn(); } catch(_){} }   // ボタンを描き直す（版178）
+  /* この行を開いていた画面は、もう書く先が無い。行き先（_loadedOrigin）も外す（版181）。
+     残すと、古い画面の「💾 上書き保存」が、まとめる先が引き取ったファイル（移した写真が入っている）を古い中身で上書きしていた。 */
+  if(_editingRow === row){
+    try { rtReleaseLock(row); } catch(_){}
+    _editingRow = null; _loadedOrigin = null;
+    try { clearEditorDirty(); } catch(_){}
+    try { updateOverwriteSaveBtn(); } catch(_){}   // ボタンを描き直す（版178）
+  }
   try { lgClearTouched([key]); } catch(_){}
 }
 /* 「N世帯目として取り込む」：建物の欄（世帯数・アパート名・大家・不動産…）を写して、何世帯目を枝番にそろえる */
@@ -22794,13 +22801,29 @@ async function aptMgStrayDrop(tag){
   const info = aptMgStrayInfo(b, r);
   if(!info.empty){ alert("この行には写真・図面・備考のどれかが入っています。「まとめて消す」か、✏️ で開いて確かめてください。"); return; }
   const who = info.mg + (((r.data || {}).chosho_cust_name) ? ("　" + r.data.chosho_cust_name) : "");
-  const choice = info.hasFile ? await lgDelDialog(r, who) : (confirm(who + " を消します。\n\n写真・図面・備考・印は入っていません。\n消すと戻せません。") ? "list" : null);
+  /* まとめる先の世帯と同じファイルに付いている行（同じ番号の手作りの行が「💾 戸別ファイルへ反映」で同じファイルに付いた）は、
+     「ファイルごと消す」を出さない。そのファイルは世帯のもの（版181） */
+  const sameFile = !!(info.hasFile && info.target && (await aptMgSameFile(r, info.target)));
+  const choice = (info.hasFile && !sameFile) ? await lgDelDialog(r, who)
+    : (confirm(who + " を消します。\n\n写真・図面・備考・印は入っていません。\n"
+        + (sameFile ? ("この行のファイルは " + String(((info.target || {}).data || {}).chosho_mgmt_no || "") + " の世帯と同じファイルなので、ファイルは消しません（一覧から外すだけです）。\n") : "")
+        + "消すと戻せません。") ? "list" : null);
   if(!choice) return;
   if(!(await lgDelApply(r, choice))) return;
   aptMgRemoveRow(r);
   try { projTouch(); } catch(_){}
   try { renderListTable(); } catch(_){}
   aptMgRender();
+}
+/* 2つの行が同じファイルを指しているか（版181）。確かめられないときは「同じ」と見なす（消さない向き） */
+async function aptMgSameFile(a, b){
+  if(!(a && b && a._dir && b._dir && a._name && b._name)) return false;
+  const nk = x => String(x || "").normalize("NFC").toLowerCase();
+  try {
+    const sameDir = a._dir === b._dir || (typeof a._dir.isSameEntry === "function" && await a._dir.isSameEntry(b._dir));
+    if(sameDir && nk(a._name) === nk(b._name)) return true;
+    return !!(await (await a._dir.getFileHandle(a._name)).isSameEntry(await b._dir.getFileHandle(b._name)));
+  } catch(_){ return true; }
 }
 /* 写真を「まとめる先」のファイルへ移す。★元の写真は1枚も減らさない★
    ・両方にファイルがある … まとめる先のファイルに和集合を書き、読み返して全部入ったことを確かめてから、元のファイルを消す
@@ -22812,7 +22835,8 @@ async function aptMgStrayDrop(tag){
    ファイルへ和集合で入れ（書く → 読み返す → 確かめる）、行にもファイルと同じ写真を全部持たせる。
    ★物件の縮小版は作り直す・この端末で直した印を付ける★（版179）
    古い縮小版（_thumbs）のままだと、物件には移す前の写真しか入らず、開き直すと移した写真がどこにも無くなる。
-   戻り値＝{ moved:枚数, note:文言 }。失敗は例外で知らせる（その場合は何も消していない）。 */
+   ★帯の外の行とまとめる先が同じファイルなら、そのファイルは消さない・帯の外の行にだけある写真も移す・暗号の戸別ファイルは扱わない★（版181）
+   戻り値＝{ moved:枚数, note:文言, keepFile:同じファイルなので消さない }。失敗は例外で知らせる（その場合は何も消していない）。 */
 async function aptMgMovePhotos(target, stray){
   const cnt = arr => (Array.isArray(arr) ? arr : []).filter(x => x && x.dataUri).length;
   const keyOf = x => (x && x.id) || ((x && x.dataUri) ? photoContentId(x.dataUri) : "");
@@ -22826,15 +22850,39 @@ async function aptMgMovePhotos(target, stray){
     try { tb = await rowTakeBackOriginals(stray); } catch(_){ tb = null; }
     if(tb && tb.miss) throw new Error("移す写真のうち " + tb.miss + " 枚を、預けてある戸別ファイルから読めませんでした（何もしていません）");
   }
+  /* 暗号をかけた戸別ファイル（.hyb・.enc）は、写真が暗号の中にある。平文の戸別として読むと写真0枚に見え、
+     写真を移さないままファイルを消していた。外側に平文で写真を書いてもいた（版181）。ここでは扱わない */
+  const encStop = (j, name) => { const ef = detectEncFormat(j);
+    if(ef === "hybrid" || ef === "full") throw new Error("暗号をかけた戸別ファイル（" + name + "）は、ここでは写真を移せません（何もしていません）"); };
   let strayPhotos = null, sfh = null, sText = "", sj = null;
   if(strayHasFile){
     sfh = await stray._dir.getFileHandle(stray._name);
     sText = await (await sfh.getFile()).text(); sj = JSON.parse(sText);
+    encStop(sj, stray._name);
     strayPhotos = Array.isArray(sj.chosho_photos) ? sj.chosho_photos : [];
   }
   else strayPhotos = Array.isArray((stray.data || {}).chosho_photos) ? stray.data.chosho_photos : [];
+  /* 帯の外の行とまとめる先が同じファイルを指している（同じ番号の行が同じファイルに付いた）ときは、そのファイルを消さない（版181）。
+     そのファイルの写真はもうまとめる先のものなので、移す写真に数えない */
+  const sameFile = strayHasFile && targetHasFile && (await aptMgSameFile(stray, target));
+  const strayFilePhotos = sameFile ? [] : strayPhotos;
+  /* ★帯の外の行にだけある写真も移す★（版181）
+     ファイルを持つ行でも、開いて足した・📥 で入れた写真は、行にだけあってファイルにはまだ無い。
+     ファイルの写真だけを移して行を消すと、その写真がどこにも無くなっていた。
+     預けた元の写真は先に読み直す（読めなければ移さない）。写真IDの無い物件の縮小版は、ファイルの写真の縮小版のはずなので足さない。 */
+  let strayExtra = [];
+  const sThumb = !!((stray.data || {}).chosho_photos_thumb) || !!stray._fromProject;
+  if(strayHasFile && Array.isArray((stray.data || {}).chosho_photos)){
+    let tb = null;
+    try { tb = await rowTakeBackOriginals(stray); } catch(_){ tb = null; }
+    if(tb && tb.miss) throw new Error("移す写真のうち " + tb.miss + " 枚を、預けてある戸別ファイルから読めませんでした（何もしていません）");
+    const have = new Set(strayPhotos.filter(x => x && x.dataUri).map(keyOf));   // ファイルにある写真
+    strayExtra = (Array.isArray((stray.data || {}).chosho_photos) ? stray.data.chosho_photos : [])
+      .filter(x => x && x.dataUri && !have.has(keyOf(x)) && !(sThumb && !x.id));
+  }
+  strayPhotos = strayFilePhotos.concat(strayExtra);
   const n = cnt(strayPhotos);
-  if(!n) return { moved: 0, note: "" };
+  if(!n) return { moved: 0, note: "", keepFile: sameFile };
   /* まとめる先が行に持っている写真のうち、ファイル（fp）に無いもの。
      物件の縮小版で、元の写真IDを持たないものは、まとめる先のファイルの写真と突き合わせられない
      （そのファイルの写真の縮小版のはず）ので足さない＝戸別ファイルへ書き出すときと同じ決まり。 */
@@ -22884,13 +22932,26 @@ async function aptMgMovePhotos(target, stray){
     try { tb = await rowTakeBackOriginals(target); } catch(_){ tb = null; }
     if(tb && tb.miss) throw new Error("まとめる先の写真のうち " + tb.miss + " 枚を、預けてある戸別ファイルから読めませんでした（何もしていません）");
   };
+  /* 行の写真を当てにしてよい行は、行の写真（直した名前・調書の印・画面で消した）をそのままにして、
+     行が見せていない写真と、移した写真だけを足す（版181。💾 物件に保存と同じ物差し）。
+     前はファイルとの和集合をそのまま行の写真にしていたので、直した名前・印が戻り、画面で消した写真が戻っていた。 */
+  const movedKeys = new Set(strayPhotos.filter(x => x && x.dataUri).map(keyOf));
   const settle = (back, fromFile) => {
-    const d = Object.assign({}, target.data || {});
+    const d0 = target.data || {};
+    const d = Object.assign({}, d0);
+    const known = !fromFile && !!target._photosKnown && !target._slim && !d0.chosho_photos_thumb && !target._fromProject
+                  && Array.isArray(d0.chosho_photos) && !rowHasParkedThumb(target);
     delete d.chosho_photos_thumb; delete d.chosho_photo_count;
     if(fromFile){ d.chosho_photos = null; target._photosKnown = false; }
-    else { d.chosho_photos = back.chosho_photos; target._slim = false; target._photosKnown = true; }
+    else {
+      d.chosho_photos = known
+        ? photosKeepFileOnly(d0.chosho_photos, (Array.isArray(back.chosho_photos) ? back.chosho_photos : [])
+            .filter(p => p && (!photoSeenBy(target, p) || (p.dataUri && movedKeys.has(keyOf(p))))))
+        : back.chosho_photos;
+      target._slim = false; target._photosKnown = true;
+    }
     target.data = d;
-    target._photoCount = cnt(back.chosho_photos);
+    target._photoCount = cnt(fromFile ? back.chosho_photos : d.chosho_photos);
     target._thumbs = undefined;
     try { markCaseEdited(target); } catch(_){}
   };
@@ -22899,18 +22960,20 @@ async function aptMgMovePhotos(target, stray){
     const tfh = await target._dir.getFileHandle(target._name);
     const tText = await (await tfh.getFile()).text();
     const tj = JSON.parse(tText);
+    encStop(tj, target._name);
     await takeBackTarget();
     const own = ownLack(tj.chosho_photos, true), fromFile = !!(target._slim && target.fileHandle);
     const back = await writeUnion(tfh, tj, tText, [
-      { photos: strayPhotos, thumb: !strayHasFile && !!((stray.data || {}).chosho_photos_thumb) },
+      { photos: strayFilePhotos, thumb: !strayHasFile && !!((stray.data || {}).chosho_photos_thumb) },
+      { photos: strayExtra, thumb: sThumb },
       { photos: own, thumb: !!((target.data || {}).chosho_photos_thumb) } ]);
     settle(back, fromFile);
     if(!fromFile){ try { await rowParkOriginals(target, tfh); } catch(_){} }   // 入れて確かめた元の写真は行に持たせない（版178・3回目）
-    if(strayHasFile){
+    if(strayHasFile && !sameFile){
       if(!(await dupEnsureWritable(stray._dir))) throw new Error("元のファイルのフォルダへの書き込み許可が得られませんでした（写真は移してあります）");
       await stray._dir.removeEntry(stray._name);
     }
-    return { moved: n, note: "写真 " + n + " 枚を " + target._name + " へ移しました"
+    return { moved: n, keepFile: sameFile, note: "写真 " + n + " 枚を " + target._name + " へ移しました"
       + (own.length ? ("（" + tmg + " の行にだけあった写真 " + own.length + " 枚も、このファイルへ入れました）") : "") };
   }
   if(strayHasFile){
@@ -22918,9 +22981,10 @@ async function aptMgMovePhotos(target, stray){
     await takeBackTarget();
     const own = ownLack(strayPhotos, false);
     let back = sj;
-    if(own.length){
+    if(own.length || strayExtra.length){
       if(!(await dupEnsureWritable(stray._dir))) throw new Error("フォルダへの書き込み許可が得られませんでした");
-      back = await writeUnion(sfh, sj, sText, [{ photos: own, thumb: !!((target.data || {}).chosho_photos_thumb) }]);
+      back = await writeUnion(sfh, sj, sText, [{ photos: strayExtra, thumb: sThumb },
+                                               { photos: own, thumb: !!((target.data || {}).chosho_photos_thumb) }]);
     }
     target._dir = stray._dir; target._name = stray._name; target._dirPath = stray._dirPath || "";
     target._size = stray._size; target.fileHandle = stray.fileHandle || sfh; target.file = stray.file;
@@ -22947,11 +23011,16 @@ async function aptMgMovePhotos(target, stray){
 async function aptMgStrayMerge(tag){
   const b = aptMgFind(_aptMgKey); if(!b) return;
   const r = aptMgStrayRow(tag); if(!r) return;
+  // この行か建物の世帯をエディタで開いているときは、画面の直しを先に行へ入れる（版181）
+  if(_editingRow && (_editingRow === r || (b.rows || []).indexOf(_editingRow) >= 0)){ try { syncEditorToRowData(); } catch(_){} }
   const info = aptMgStrayInfo(b, r);
   const t = info.target;
   if(!t){ alert("まとめる先の世帯が見つかりません。"); return; }
   if(info.bothDrawing){ alert("この行にも、まとめる先の世帯にも図面が入っています。\nどちらを残すか機械では決められないので、✏️ で開いて見比べてください。"); return; }
   if(info.photos < 0){ alert("この行は暗号化されていて、写真を読めません。先に開いて復号してください。"); return; }
+  /* 暗号をかけた戸別は、写真が暗号の中にある。ここで移すと、移さないままファイルを消したり、暗号の外へ平文で写真を書いたりする（版181） */
+  if(r.fileType !== "plain" || t.fileType !== "plain"){
+    alert("この行か、まとめる先の世帯が、暗号をかけた戸別です。\nここでは写真を移せないので、✏️ で開いて見比べてください。\n\n何もしていません。"); return; }
   const tmg = String((t.data || {}).chosho_mgmt_no || "");
   const tk = subCaseKey(t), tlg = getLedger(tk) || {};
   const plan = [];
@@ -22997,14 +23066,26 @@ async function aptMgStrayMerge(tag){
       });
     }
     // 元の行のファイルが残っていれば消す（写真が移せていないときは aptMgMovePhotos が例外で止めている）
-    if(info.hasFile && r._dir && r._name && !(t._dir === r._dir && t._name === r._name)){
+    if(info.hasFile && r._dir && r._name && !ph.keepFile && !(t._dir === r._dir && t._name === r._name)){
       try { await r._dir.removeEntry(r._name); } catch(e){ console.warn("[アパート] 元のファイルを消せませんでした", e); }
     }
+    const edGone = (_editingRow === r);
     aptMgRemoveRow(r);
+    /* ★まとめる先をエディタで開いていたら、その画面は古い（移した写真・図面が出ていない）★（版181）
+       そのまま保存すると（💾・自動保存）行が画面の中身に戻り、移した写真が消えていた。画面と行のつなぎを外す */
+    const edStale = (_editingRow === t);
+    if(edStale){
+      try { rtReleaseLock(t); } catch(_){}
+      _editingRow = null; _loadedOrigin = null;
+      try { clearEditorDirty(); } catch(_){}
+      try { updateOverwriteSaveBtn(); } catch(_){}
+    }
     try { projTouch(); } catch(_){}
     try { renderListTable(); } catch(_){}
     aptMgRender();
     alert("✅ " + who + " を " + tmg + " へまとめました。\n\n" + (ph.note ? (ph.note + "\n") : "")
+      + (edStale ? ("開いていた " + tmg + " の画面は古くなりました（移したものが出ていません）。✏️ で開き直してから直してください。\n") : "")
+      + (edGone ? ("開いていた " + info.mg + " の画面は、もう保存できません（この行はまとめて消しました）。\n") : "")
       + (plan.length ? plan.map(x => "・" + x).join("\n") : "")
       + "\n\n受付台帳の「💾 戸別ファイルへ反映」を押すと、ファイルにも入ります。");
   } catch(e){

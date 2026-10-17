@@ -4699,7 +4699,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       const o = { before: { t: await proj(NO), s: await proj(NOS) } };
       o.moved = await aptMgMovePhotos(tRow, sRow);                     // ファイルをまとめる先の持ち物にする
       aptMgRemoveRow(sRow); markCaseEdited(tRow);
-      o.t = { slim: !!tRow._slim, held: ((tRow.data || {}).chosho_photos || []).map(p => p.id).join(',') };
+      o.t = { slim: !!tRow._slim, held: ((tRow.data || {}).chosho_photos || []).map(p => p.id).sort().join(',') };   // 並びは見ない（版181：行の写真を先に、移した写真を後ろに足す）
       o.file = (JSON.parse(list.__files[NOS + '.json']).chosho_photos || []).filter(p => p && p.dataUri).map(p => p.id).sort().join(',');
       await saveProj();
       o.after = await proj(NO);
