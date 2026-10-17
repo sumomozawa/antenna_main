@@ -76,7 +76,9 @@ const SETUP = SRC172.slice(SRC172.indexOf('const SETUP = `') + 'const SETUP = `'
     for(const path of ['single', 'bulk']){
       __noDir(); await __clearDrafts();
       const no = path === 'single' ? 'Z173A01' : 'Z173A02';
-      const pc = Object.assign({}, main, { chosho_mgmt_no:no, chosho_cust_name:'PCで入れた 太郎',
+      /* 版181: 控えの無い戸別で PCのファイルの名前・工事日（メインの作りたては今日）がこの端末と違うと、まとめて保存は書かずに残す
+         （1件の保存で聞く）ようになった。この場面のねらい（PCで保存しただけのファイルの材料）は変えずに、名前・工事日はこの端末と同じにする */
+      const pc = Object.assign({}, main, { chosho_mgmt_no:no, chosho_cust_name:'現場の 花子', chosho_date:'2026-09-10',
         editedAt:'2026-09-20T00:00:00.000Z' });
       delete pc.survey_done; delete pc.survey_done_at;               // メインが工程の印を持っていないファイル
       const list = __mkdir('リスト', { [no + '.json']: JSON.stringify(pc) }, {});
