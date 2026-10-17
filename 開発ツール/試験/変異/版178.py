@@ -313,8 +313,8 @@ CASES = [
    u'''  return await photoKeepQueue(() => persistModel(model, Array.isArray(added) ? added : undefined, tag));''',
    u'''  return await photoKeepQueue(() => persistModel(model, Array.isArray(added) ? added : undefined));''', TG, "genba", u"㉕,㉘"),
   (u"★測定値の CSV で、別の下書きに入れた覚えに取り込みの印を付けない（知らせが出ない）",
-   u'''  else { await persistModel(model, undefined, tag); }   // 別戸別へ切替済み→読込元を直接確定保存（混入/喪失防止）''',
-   u'''  else { await persistModel(model); }''', TG, "genba", u"㉑"),
+   u'''persistModel(model, undefined, tag)); }   // 別戸別へ切替済み''',   # 版181: 写真の控えと同じ列に入れた（同じねらい：取り込みの印を渡さない）
+   u'''persistModel(model)); }   // 別戸別へ切替済み''', TG, "genba", u"㉑"),
   (u"★取り込みの書き込みで、別の下書き（印が違う）を置き換える",
    u'''    if(prev && prev.model && !draftSameUid(prev.model, m)){''', u'''    if(false){''', TG, "genba", u"㉑"),
   (u"★書いているあいだに開き直された写しに、書いた写真を足さない（写しを控えると写真が消える）",
