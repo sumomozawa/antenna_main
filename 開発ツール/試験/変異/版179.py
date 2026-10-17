@@ -24,9 +24,9 @@ CASES = [
    u'''      .filter(x => false);''', TM, "main", u"①a,①b,③a"),
   (u"★まとめる先にファイルが無いとき、まとめる先の写真を引き取るファイルへ書かない",
    u'''    let back = sj;
-    if(own.length){''',
+    if(own.length || strayExtra.length){''',
    u'''    let back = sj;
-    if(false){''', TM, "main", u"①a,①b"),
+    if(false){''', TM, "main", u"①a,①b"),   # 版181（m-apt）：帯の外の行にだけある写真も書くので目印を合わせた
   (u"★写真IDの無い物件の縮小版も、まとめる先のファイルへ足す（同じ写真が2枚になる）",
    u''' && !(ownFile && thumbish && !x.id));''',
    u''');''', TM, "main", u"③c"),
@@ -45,8 +45,12 @@ CASES = [
    u'''''', TM, "main", u"①a,③a"),
   # ======== 行の写真をファイルとそろえる ========
   (u"★まとめたあと、行の写真をファイルとそろえない（古い写真のまま）",
-   u'''    else { d.chosho_photos = back.chosho_photos; target._slim = false; target._photosKnown = true; }''',
-   u'''    else { target._slim = false; target._photosKnown = true; }''', TM, "main", u"①a,③a"),
+   u'''      d.chosho_photos = known
+        ? photosKeepFileOnly(d0.chosho_photos, (Array.isArray(back.chosho_photos) ? back.chosho_photos : [])
+            .filter(p => p && (!photoSeenBy(target, p) || (p.dataUri && movedKeys.has(keyOf(p))))))
+        : back.chosho_photos;
+''',
+   u'''''', TM, "main", u"①a,③a"),   # 版181（m-apt）：行の写真を当てにしてよい行は行の写真に足す形にしたので目印を合わせた
   (u"★まとめる先にファイルが無いとき、行を「ファイルから読む」形にする（行の写真が出ない）",
    u'''    settle(back, false);''',
    u'''    settle(back, true);''', TM, "main", u"①a"),
@@ -57,9 +61,9 @@ CASES = [
    u'''    const own = ownLack(tj.chosho_photos, true), fromFile = !!(target._slim && target.fileHandle);''',
    u'''    const own = ownLack(tj.chosho_photos, true), fromFile = false;''', TM, "main", u"③b"),
   (u"★ファイルへ入れたあと、物件の縮小版を作り直さない",
-   u'''    target._photoCount = cnt(back.chosho_photos);
+   u'''    target._photoCount = cnt(fromFile ? back.chosho_photos : d.chosho_photos);
     target._thumbs = undefined;''',
-   u'''    target._photoCount = cnt(back.chosho_photos);''', TM, "main", u"①a,③a"),
+   u'''    target._photoCount = cnt(fromFile ? back.chosho_photos : d.chosho_photos);''', TM, "main", u"①a,③a"),   # 版181（m-apt）：目印を合わせた
   (u"★ファイルへ入れたあと、この端末で直した印を付けない（別のPCの保存とまとめると前の写真に戻る）",
    u'''    target._thumbs = undefined;
     try { markCaseEdited(target); } catch(_){}

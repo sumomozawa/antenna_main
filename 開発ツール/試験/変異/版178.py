@@ -477,10 +477,11 @@ CASES = [
    u'''    try { updateOverwriteSaveBtn(); } catch(_){}   // 「💾 物件に保存」を出し直す（applyStateData のときは行が外れていた）
 ''', u'''''', TM, "main", u"㉗i"),
   (u"★世帯の削除で開いている行が外れても、ボタンを描き直さない（「💾 物件に保存」が押せるまま）",
-   u'''  if(_editingRow === row){ _editingRow = null; try { updateOverwriteSaveBtn(); } catch(_){} }   // ボタンを描き直す（版178）
+   u'''    try { updateOverwriteSaveBtn(); } catch(_){}   // ボタンを描き直す（版178）
+  }
   try { lgClearTouched([key]); } catch(_){}''',
-   u'''  if(_editingRow === row) _editingRow = null;
-  try { lgClearTouched([key]); } catch(_){}''', TM, "main", u"㉗j"),
+   u'''  }
+  try { lgClearTouched([key]); } catch(_){}''', TM, "main", u"㉗j"),   # 版181（m-apt）：aptMgRemoveRow の外し方を書き直したので目印を合わせた
   (u"★受付台帳の「一覧から消す」で開いている行が外れても、ボタンを描き直さない",
    u'''          if(_editingRow === row){ _editingRow = null; try { updateOverwriteSaveBtn(); } catch(_){} }   // ボタンを描き直す（版178）
           projTouch();
@@ -596,7 +597,13 @@ CASES = [
   (u"★預けられなかった行を覚えない（物件の保存のたびにファイルを読み直す）",
    u'''  if(row.data === d0) row._parkChecked = d0;''', u'''  if(false) row._parkChecked = d0;''', TMM, "main", u"㊷d"),
   (u"★帯の外の行の預けた元の写真を読めなくても、縮小版を移す",
-   u'''    if(tb && tb.miss) throw new Error("移す写真のうち "''', u'''    if(false) throw new Error("移す写真のうち "''', TMM, "main", u"㊷e"),
+   u'''  if(!strayHasFile){
+    let tb = null;
+    try { tb = await rowTakeBackOriginals(stray); } catch(_){ tb = null; }
+    if(tb && tb.miss) throw new Error("移す写真のうち "''', u'''  if(!strayHasFile){
+    let tb = null;
+    try { tb = await rowTakeBackOriginals(stray); } catch(_){ tb = null; }
+    if(false) throw new Error("移す写真のうち "''', TMM, "main", u"㊷e"),   # 版181（m-apt）：同じ止めをファイルのある行にも足したので、ファイルの無い行の方に絞った
   (u"★前の戸別を軽くするとき、縮小版が足りていても物件の縮小版づくりの終わりを待つ（開くたびに待たされる）",
    u'''    if(!Array.isArray(row._thumbs) || row._thumbs.length !== real){
       if(!inRun){''',
