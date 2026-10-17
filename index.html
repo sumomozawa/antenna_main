@@ -15368,7 +15368,11 @@ async function rowsFileFromProjDir(rows){
     if(!r || !r.fileHandle || r._detached) continue;
     let rp = null;
     try { rp = await pd.resolve(r.fileHandle); } catch(_){ rp = null; }
-    if(Array.isArray(rp) && rp.length) r.file = rp.join("/");
+    if(Array.isArray(rp) && rp.length){
+      r.file = rp.join("/");
+      /* 縮小版の控えは、物件の保存のとき この名前で置いてある（版181）。読んだときの名前では当たらず、読み直すたびに全部作り直していた */
+      if(!Array.isArray(r._thumbs) && r._photoCount > 0){ const m = thumbMemoGet(r.file, r.lastModified, r._photoCount); if(m) r._thumbs = m; }
+    }
   }
 }
 /* 管理番号の付け替え先（または「管理番号.json」へ名前をそろえる先）に、別のファイルがもうあるとき（版178）。
@@ -19684,7 +19688,9 @@ async function lgwbCreateMissing(dir, rows){
       let tb = null;
       try { tb = await rowTakeBackOriginals(row); } catch(_){ tb = null; }   // 戸別ファイルに預けた元の写真を読み直してから書く（版178・3回目）
       if(tb && tb.miss){
-        fails.push("\u30fb" + name + "：預けてある元の写真 " + tb.miss + " 枚を戸別ファイルから読めませんでした（縮小版で新しいファイルを作らないため、作っていません。少し待ってから、もう一度お試しください）");
+        fails.push("\u30fb" + name + "：預けてある元の写真 " + tb.miss + " 枚を戸別ファイルから読めませんでした（縮小版で新しいファイルを作らないため、作っていません。"
+          + (tb.gone ? "元の写真の入ったファイル（またはその写真）が見つかりません。ほかのパソコンで動かした・消した などが考えられます。「📁 フォルダ」で工事フォルダを読み込み直してから、もう一度お試しください）"
+                     : "少し待ってから、もう一度お試しください）"));   // 待っても直らないときは、そう言う（版181）
         continue;
       }
       const obj = {};
@@ -25943,7 +25949,7 @@ async function exportPhotosToFolder(){
     alert("この機能はPCの Chrome / Edge で使えます（フォルダ書き込みAPI）。\niPad/iPhone/一部ブラウザでは非対応です。");
     return;
   }
-  const photos = (Array.isArray(STATE.photos) ? STATE.photos : []).filter(p => p && p.dataUri);
+  let photos = (Array.isArray(STATE.photos) ? STATE.photos : []).filter(p => p && p.dataUri);
   if(!photos.length){
     alert("書き出せる写真がありません。\n（暗号化戸別を鍵なしで開いた場合、写真は復元されません）");
     return;
@@ -25952,9 +25958,23 @@ async function exportPhotosToFolder(){
   // 親フォルダ（工事フォルダ等）を毎回ピッカーで選ぶ（前回の場所から開く）
   const parent = await _pickPhotoExportDir();
   if(!parent) return;
+  /* ★画面に出ている写真が、戸別ファイルに預けた縮小版のまま（開いたとき一瞬読めなかった）なら、ここでもう一度読み直す★（版181）
+     読み直せなかった枚数は、書き出す前に知らせて確かめ、終わりの知らせにも出す（縮小版を元の写真と思わせない）。
+     読み直しはフォルダを選ぶ画面のあと（押した直後の扱いを切らない）。画面・行の写真は変えない */
+  let left = 0;
+  const er = _editingRow;
+  if(er && er.fileType === "plain" && rowHasParkedThumb(er, photos)){
+    let up = null;
+    try { up = await rowPhotosWithOriginals(Object.assign({}, er, { data: Object.assign({}, er.data, { chosho_photos: photos }) })); } catch(_){ up = null; }
+    if(up) photos = up.photos.filter(p => p && p.dataUri);
+    left = photos.filter(p => photoIsParkedThumb(er, p)).length;
+    if(left && !confirm("この画面の写真のうち " + left + " 枚は、戸別ファイルから元の写真を読めなかったので、物件に控えた小さい写真です。\n"
+        + "このまま書き出しますか？（同期中のときは、少し待って開き直すと元の写真で書き出せます）")) return;
+  }
   const r = await _writeCasePhotos(parent, mgmtNo, photos);
   const msg = "📁 管理番号フォルダ『" + mgmtNo + "』へ写真を書き出しました。\n\n"
     + "・書き出し: " + r.written + " 枚（いま入っているまま・縮め直していません）\n"
+    + (left ? ("・うち " + left + " 枚は小さい写真（元の写真ではありません）\n") : "")
     + (r.failed ? ("・失敗: " + r.failed + " 枚\n") : "")
     + "\n次回は前回と同じ場所から「📁 フォルダ」でフォルダを選ぶ画面が開きます。";
   alert(msg);
@@ -26414,7 +26434,9 @@ function photoSlimSyncRow(row, obj, newSize){
     const byId = new Map();
     src.forEach(p => { if(p && p.dataUri && p.id) byId.set(p.id, p.dataUri); });
     const arr = row && row.data && Array.isArray(row.data.chosho_photos) ? row.data.chosho_photos : null;
-    if(arr) arr.forEach(p => { if(p && p.dataUri && p.id && byId.has(p.id)) p.dataUri = byId.get(p.id); });
+    /* 預けた縮小版はそのまま（版181）。差し替えると、縮小版の印だけ残って「物件から開いた戸別」になり、元の写真を行が持ち続けた。
+       開くときの読み直しは、同じ写真IDのいちばん大きい写真（軽くしたほう）を採る */
+    if(arr) arr.forEach(p => { if(p && p.dataUri && p.id && byId.has(p.id) && !photoIsParkedThumb(row, p)) p.dataUri = byId.get(p.id); });
     if(newSize > 0) row._size = newSize;
   } catch(_){}
 }
@@ -27468,6 +27490,8 @@ async function buildAndPrintChoshoBatch(printable, fileLabelPrefix){
     document.body.appendChild(ov);
   }
   const setProg = n => { ov.style.display = "flex"; ov.textContent = "🖨 工事調書を準備中… " + n + " / " + printable.length + " 件"; };
+  /* 戸別ファイルに預けた元の写真を読み直せなかった戸別（版181）。縮小版のまま出すので、印刷の前に知らせる（黙って小さい写真で出さない） */
+  const parkMiss = [];
 
   try {
     for(let i = 0; i < printable.length; i++){
@@ -27479,7 +27503,9 @@ async function buildAndPrintChoshoBatch(printable, fileLabelPrefix){
       if(row.fileType === "plain"){
         try { const full = await rereadRowSource(row); if(full && full.chosho_mgmt_no !== undefined) data = full; } catch(_){}
         if(data === row.data){   // 戸別ファイルに預けた元の写真（版178・3回目）
-          try { const up = await rowPhotosWithOriginals(row); if(up) data = Object.assign({}, row.data, { chosho_photos: up.photos }); } catch(_){}
+          try { const up = await rowPhotosWithOriginals(row);
+                if(up){ data = Object.assign({}, row.data, { chosho_photos: up.photos });
+                        if(up.miss) parkMiss.push((String((row.data || {}).chosho_mgmt_no || "").trim() || "（管理番号なし）") + "（" + up.miss + " 枚）"); } } catch(_){}
         }
       }
       applyStateData(JSON.parse(JSON.stringify(data))); // クローンして元データを保護
@@ -27506,6 +27532,10 @@ async function buildAndPrintChoshoBatch(printable, fileLabelPrefix){
   }
 
   if(host.children.length === 0){ alert("印刷対象を準備できませんでした。"); return; }
+  if(parkMiss.length && !confirm("次の " + parkMiss.length + " 件は、戸別ファイルから元の写真を読めなかったので、物件に控えた小さい写真で出ます。\n・"
+      + parkMiss.slice(0, 10).join("\n・") + (parkMiss.length > 10 ? ("\n…ほか " + (parkMiss.length - 10) + " 件") : "")
+      + "\n\n同期中のときは少し待ってから、ファイルを動かした・消したときは「📁 フォルダ」で工事フォルダを読み込み直してから、やり直すと元の写真で出ます。"
+      + "\nこのまま出しますか？")){ host.innerHTML = ""; return; }
   document.body.classList.add("print-chosho-batch");
   setTimeout(() => {
     printWithFilename(fileLabelPrefix + host.children.length + "件", () => {
@@ -29918,10 +29948,11 @@ function rowHoldsParkedOriginal(row){
 function rowParkedOnlyThumb(row){
   return !!(row && row._parked && !row._parked.prevThumb && rowHasParkedThumb(row));
 }
-/* 戸別ファイルを読む。読めなければ undefined（0バイト・BOM だけは null） */
-async function photoFileRead(fh){
+/* 戸別ファイルを読む。読めなければ undefined（0バイト・BOM だけは null）。
+   why を渡すと、ファイルが無かったとき why.notFound＝true（いま読めないだけ＝同期中 と見分ける。版181） */
+async function photoFileRead(fh, why){
   try { return JSON.parse(String(await (await fh.getFile()).text()).replace(/^\uFEFF/, "").trim() || "null"); }
-  catch(_){ return undefined; }
+  catch(e){ if(why && e && e.name === "NotFoundError") why.notFound = true; return undefined; }
 }
 /* ★預ける★ fh＝いま書いたファイル（または元の写真の入っているファイル）。必ずファイルを読み返して確かめる。
    inRun＝物件の縮小版づくり（prepareProjectThumbs）の中から呼ばれた（その回の終わりを待たない）。
@@ -30019,27 +30050,29 @@ function rowTakeBackFrom(row, list){
   return before - u.left;
 }
 /* 預けた写真を、預けたファイルから読み直した並び（行は変えない）。預けた写真が無ければ null。
-   読めない・見つからない写真は縮小版のまま（miss に数える）。 */
+   読めない・見つからない写真は縮小版のまま（miss に数える）。
+   そのうち、預けたファイルが無い・読めたのにその写真がもう無い（ほかのパソコンで動かした・消した）ものは gone にも数える
+   （待っても読めるようにならない。版181） */
 async function rowPhotosWithOriginals(row){
   const d = row && row.data;
   if(!row || row.fileType !== "plain" || !d || !Array.isArray(d.chosho_photos) || !rowHasParkedThumb(row)) return null;
-  const files = new Map();
+  const files = new Map(), lost = new Set();   // lost＝預けたファイルが無い
   for(const p of d.chosho_photos){
     if(!(p && p.dataUri && photoIsParkedThumb(row, p))) continue;
     const fh = rowParkedEntry(row, p).fh;
-    if(!files.has(fh)) files.set(fh, await photoFileRead(fh));
+    if(!files.has(fh)){ const why = {}; files.set(fh, await photoFileRead(fh, why)); if(why.notFound) lost.add(fh); }
   }
-  let got = 0, miss = 0;
+  let got = 0, miss = 0, gone = 0;
   const photos = d.chosho_photos.map(p => {
     if(!(p && p.dataUri && photoIsParkedThumb(row, p))) return p;
     const e = rowParkedEntry(row, p);
     const j = files.get(e.fh);
     const f = parkPickOriginal(e, p, (j && typeof j === "object") ? j.chosho_photos : null);
-    if(!f){ miss++; return p; }
+    if(!f){ miss++; if(lost.has(e.fh) || (j && typeof j === "object")) gone++; return p; }
     got++;
     return Object.assign({}, p, { dataUri: f.dataUri });
   });
-  return { photos, got, miss };
+  return { photos, got, miss, gone };
 }
 /* ★読み直す★ 行の写真を、預ける前の形に戻す（読み直せた写真だけ）。縮小版がみな戻れば、縮小版の印も預ける前のまま。 */
 async function rowTakeBackOriginals(row){
@@ -34247,7 +34280,13 @@ function openXlsxPreview(){
     // 住所：どちらを残すかを文字クリックで選ぶ
     if(t && (e.excel.addr || cur.chosho_cust_addr)){
       const a1 = String(cur.chosho_cust_addr || ""), a2 = e.excel.addr;
-      if(a1 !== a2){
+      /* 暗号の戸別は、住所を台帳から直せない（暗号でない部分に平文で残り、開くと元の住所に戻る）。選ばせない（版181） */
+      if(a1 !== a2 && !lgEditableField(t, "addr")){
+        if(a2) body += '<div class="xi-f"><span class="xi-lbl">住所</span>'
+          + '<span class="xi-co" style="color:#8a6d1f;">暗号の戸別のため、住所は変えません（戸別を開いて直してください）</span>'
+          + '</div>';
+      }
+      else if(a1 !== a2){
         body += '<div class="xi-f"><span class="xi-lbl">住所</span>'
           + '<span class="xi-val pick' + (e.addrPick === "keep" ? " on" : "") + '" data-xact="addr" data-v="keep">' + val(a1, "（空欄）") + '<i>台帳</i></span>'
           + '<span class="xi-val pick' + (e.addrPick === "excel" ? " on" : "") + '" data-xact="addr" data-v="excel">' + val(a2, "（空欄）") + '<i>Excel</i></span>'
@@ -34361,7 +34400,7 @@ async function applyXlsxPlan(){
   const P = _xlsxPlan; if(!P) return;
   const todo = P.entries.filter(e => e.apply);
   if(!todo.length){ alert("反映する行が選ばれていません。"); return; }
-  let updated = 0, added = 0, ctrSet = 0, builtSet = 0, builtCheck = 0;
+  let updated = 0, added = 0, ctrSet = 0, builtSet = 0, builtCheck = 0, addrLocked = 0;
   const relink = {};   // 下三桁 → 新しい管理番号（地図の追従用）
   // 数百件でも「固まった」ように見えないよう、ボタンに進捗を出しつつ時々描画を挟む
   const btn = document.getElementById("xlsx-apply");
@@ -34376,7 +34415,12 @@ async function applyXlsxPlan(){
       added++;
     } else updated++;
     lgWriteCaseField(row, "mgmt", e.excel.mgmt);          // 改番＝台帳/持出/確認/施工会社のキーも移行される
-    if(e.addrPick === "excel" && e.excel.addr) lgWriteCaseField(row, "addr", e.excel.addr, { keepStatus: true });
+    /* 暗号の戸別（.hyb・.enc）の住所は書かない（版181）。受付台帳の画面と同じ決まり（lgEditableField）。
+       書くと、暗号でない部分に平文の住所が残り、開くと黙って元の住所に戻っていた */
+    if(e.addrPick === "excel" && e.excel.addr){
+      if(lgEditableField(row, "addr")) lgWriteCaseField(row, "addr", e.excel.addr, { keepStatus: true });
+      else if(String((row.data && row.data.chosho_cust_addr) || "") !== e.excel.addr) addrLocked++;
+    }
     const tk = subCaseKey(row);
     if(e.notePick === "excel" && e.excel.note){ try { setLedger(tk, { note: e.excel.note }); } catch(_){} }
     const co = contractorByMgmtNo(e.excel.mgmt);          // 4桁目→施工会社を自動判別
@@ -34420,7 +34464,8 @@ async function applyXlsxPlan(){
     + (builtCheck ? ("\n⚠ うち 2006年 の " + builtCheck + " 件は要確認"
         + "\n　（判定の境目が 2006/9/1 のため、年だけでは決まりません。"
         + "\n　　安全側に「みなし該当」で入れています。実際の着工日で見直してください）") : "")
-    + (mapN ? ("\n地図の建物リンクを更新: " + mapN + " 件") : ""));
+    + (mapN ? ("\n地図の建物リンクを更新: " + mapN + " 件") : "")
+    + (addrLocked ? ("\n⚠ 暗号の戸別 " + addrLocked + " 件は、住所を変えていません（戸別を開いて直してください）") : ""));
 }
 function bindLedgerHandlers(container){
   if(container._ledgerBound) return;
@@ -37320,12 +37365,17 @@ async function editorPresetPhotos(row){
    開くと写真の出ない画面になり、そこで足した写真・直した内容が、物件（この端末・共有ファイル）に正しく入らなかった。 */
 function editorUnreadableRefuse(row, why){
   const name = String((row && (row._name || row.file)) || "").split(/[\\/]/).pop();
+  /* 📄 ファイルで読んだ戸別（読んだときのファイルの写し）は、あとでファイルが書き替わると、待っても二度と読めない。
+     選び直す案内をする（版181。📁 の案内は、📁 で読んだ行のためのもの） */
+  const fromPick = !!(row && row.srcFile && !row.fileHandle);
   const reason = why === "notfound" ? "ファイルが見つかりません（別の場所へ移したり、名前を変えたりしていませんか）。"
     : (why === "empty" || why === "broken" || !why) ? "ファイルの中身を読み取れません（保存の途中で切れたか、壊れているかもしれません）。"
+    : fromPick ? "読み込んだあとでファイルが書き替わった（同期など）ため、ここからは読めなくなっています。"
     : "いまファイルを読めません（同期中・ほかのアプリで使用中など）。";
   alert("⚠ この戸別は開きませんでした（写真がファイルにあり、読めないまま開くと写真が出ないため）。\n  " + name + "\n\n"
     + reason + "\n\n"
-    + "少し待ってから、もう一度開いてください。ファイルを移したときは、一覧の「📁 フォルダ」で工事フォルダを読み込み直してください。");
+    + (fromPick ? "一覧の「📄 ファイル」で、このファイルをもう一度選んでから開いてください。"
+                : "少し待ってから、もう一度開いてください。ファイルを移したときは、一覧の「📁 フォルダ」で工事フォルダを読み込み直してください。"));
 }
 /* 常駐させない行（_slim）でも、📥 現場取込 で入れた写真（まだ戸別ファイルに入っていない）を行が持っていることがある（版178）。
    ファイルから読み直した中身に、ファイルに無いその写真を足す（足さないと、開いて保存したとき取り込んだ写真が消える）。 */
