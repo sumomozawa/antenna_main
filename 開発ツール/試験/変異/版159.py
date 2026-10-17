@@ -58,7 +58,7 @@ CASES = [
    u'''                     && !(x.id && mergedIds.has(x.id)));''',
    u'''                     );''', "smoke_v159_main.js", "main"),
   ("★普段の保存（物件へ保存）でも ⚠ を出す",
-   u'''  if(!dir) return "\\n（戸別ファイルには書いていません：工事フォルダをまだ選んでいません）";''',
+   u'''  if(!dir) return "\\n（戸別ファイルには書いていません：工事フォルダが選ばれていないか、工事フォルダに書く許可が出ていません）";''',
    u'''  if(!dir) return "\\n\\u26a0 戸別ファイルは更新していません（工事フォルダを掴めていません）。";''',
    "smoke_v159_main.js", "main"),
   ("★工事フォルダを掴めなくても、戸別ごとに聞き直す",
@@ -77,7 +77,7 @@ CASES = [
    u'''        .filter(x => x && !x.dataUri && merged.indexOf(x) < 0''',
    u'''        .filter(x => x && !x.dataUri && true''', "smoke_v159_main.js", "main"),
   ("★工事フォルダを掴めていないのに、取り込みで知らせない",
-   u'''        if(inImport && note && /工事フォルダをまだ選んでいません/.test(note)){ _genbaNoDir = true; return noDirNote; }''',
+   u'''        if(inImport && note && /工事フォルダが選ばれていないか/.test(note)){ _genbaNoDir = true; return noDirNote; }''',
    u'''        void 0;''', "smoke_v159_main.js", "main"),
   ("取り込みのまとめに、書けていない件数・物件を開いていない知らせを出さない",
    u'''    const ngWrite = notes.filter(t => /\\u26a0/.test(String(t))).length;   // ⚠ が付くのは書き戻せなかった知らせだけ

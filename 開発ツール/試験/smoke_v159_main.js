@@ -283,7 +283,7 @@ const WANT_VER = (function(){ try{
      '★工事フォルダを掴めていないのに、1件も書けていないことを知らせない → ' + JSON.stringify(r9.nolink));
   ok(r9.nolink2 === r9.nolink && r9.asked === 1,
      '★工事フォルダを掴めなかったのに、戸別ごとに何度も選ぶ画面を出す → ' + JSON.stringify({ n2:r9.nolink2, asked:r9.asked }));
-  ok(/工事フォルダをまだ選んでいません/.test(r9.quiet) && !/⚠/.test(r9.quiet),
+  ok(/工事フォルダが選ばれていないか/.test(r9.quiet) && !/⚠/.test(r9.quiet),
      '★普段の保存（物件へ保存）でも ⚠ が出るようになっている → ' + JSON.stringify(r9.quiet));
   ok(r9.other === true,
      '★取り込み以外の書き戻しまで、前の取り込みの「掴めなかった」印で素通りする → ' + JSON.stringify(r9.other));

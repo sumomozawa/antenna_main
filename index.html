@@ -4964,17 +4964,18 @@
       <span class="tb-grp">
         <button id="btn-reset" title="入力をすべて消して、新しい戸別をはじめる">＋ 新規</button>
         <button id="btn-load" title="保存したファイル（.json）を読み込む">📂 読込</button>
-        <button id="btn-save" title="名前を付けて、この戸別を別のファイル（写し）に保存します。工事フォルダの戸別ファイル（管理番号.json）は書き替えません（戸別ファイルへは「💾 上書き保存」「💾 物件に保存」）">📄 名前を付けて保存</button>
+        <button id="btn-save" title="名前を付けて、この戸別を別のファイルに保存します。物件から開いた戸別・📁 フォルダから読んだ戸別は、ダウンロードの場所に写しを作ります。保存先を選ぶ画面が出たときは、工事フォルダの戸別ファイル（管理番号.json）を選ばないでください（置き換わって、画面に出ていない写真が消えます）。戸別ファイルへは「💾 上書き保存」「💾 物件に保存」で書きます">📄 名前を付けて保存</button>
         <button id="btn-save-overwrite" title="この戸別を、工事フォルダの戸別ファイル（管理番号.json）に書きます" disabled>💾 上書き保存</button>
         <details class="uc-menu save-help"><summary class="tb-caret" title="保存ボタンのちがい">？</summary>
           <div class="uc-menu-pop save-help-pop">
             <div class="uc-menu-cap">保存ボタンのちがい</div>
             <div class="save-help-txt">
-              <b>💾 物件に保存</b>／<b>💾 上書き保存</b>＝この戸別を、工事フォルダの<b>戸別ファイル（管理番号.json）</b>に書きます。現場のスマホが読むのはこのファイルです。ファイルにある写真は消しません。<br>
-              ・物件から開いた戸別は「💾 物件に保存」（物件と戸別ファイルの両方に書きます）。<br>
+              <b>💾 物件に保存</b>／<b>💾 上書き保存</b>＝この戸別を、工事フォルダの<b>戸別ファイル（管理番号.json）</b>に書きます。現場のスマホが読むのはこのファイルです。開いたあとで現場が足した写真など、画面に出ていない写真は消しません。<br>
+              ・物件の一覧から開いた戸別は、ふつうは「💾 物件に保存」（物件と戸別ファイルの両方に書きます）。工事フォルダのファイルが付いている戸別は「💾 上書き保存」になります。<br>
               ・📁 フォルダから読んだ戸別は「💾 上書き保存」（その戸別ファイルに書きます）。<br>
-              <b>📄 名前を付けて保存</b>＝別のファイル（写し）を作るだけです。工事フォルダの戸別ファイルは書き替えません。<br>
-              ※ 物件を開いているときは、直した内容は物件に自動で入ります（戸別ファイルには入りません）。現場に渡すときは「💾 物件に保存」を押してください。
+              ・暗号をかけた戸別（.hyb）は、「💾 物件に保存」では氏名・電話・住所を書き替えず、写真は足すだけです。<br>
+              <b>📄 名前を付けて保存</b>＝別のファイルに保存します。物件から開いた戸別・📁 フォルダから読んだ戸別は、ダウンロードの場所に「写し」を作るだけです。保存先を選ぶ画面が出たときは、工事フォルダの戸別ファイルを選ばないでください（置き換わって、画面に出ていない写真が消えます）。<br>
+              ※ 物件の一覧から開いた戸別は、直した内容が物件に自動で入ります（戸別ファイルには入りません）。現場に渡すときは「💾 物件に保存」（ボタンが「💾 上書き保存」のときはそれ）を押してください。
             </div>
           </div>
         </details>
@@ -8882,8 +8883,8 @@ async function restoreAllProjFeeFollow(){
   alert("個別上書きだった " + targets.length + " 件を、物件の額（" + yen(amt) + "）にそろえました。"
     + (dir ? ("\n工事フォルダの戸別ファイル： " + wrote + " 件に書きました"
              + (failed ? ("／" + failed + " 件は書けませんでした") : "") + "。")
-           : "\n\n⚠ 工事フォルダをまだ選んでいないので、戸別ファイルには書いていません。\n"
-             + "　フォルダを読み直すと元に戻ります。工事フォルダを選んでから、もう一度実行してください。")
+           : "\n\n⚠ 工事フォルダが選ばれていないか、工事フォルダに書く許可が出ていないので、戸別ファイルには書いていません。\n"
+             + "　フォルダを読み直すと元に戻ります。工事フォルダを選んで（書くのを許可して）から、もう一度実行してください。")
     + (locked ? ("\n\n暗号化されたままの戸別 " + locked + " 件は対象外です。") : ""));
 }
 
@@ -14860,6 +14861,15 @@ function setLoadedOrigin(target){
   clearEditorDirty();   // 開いた直後＝まだ何も触っていない
   updateOverwriteSaveBtn();
 }
+/* 画面の上のどのボタンで戸別ファイルに入るかを、いま押せるボタンの名前で言う（版181）。
+   ＋新規・📂 読込・📄 ファイルで読んだ画面は戸別ファイルとつながっていないので、そう言う */
+function saveHintForScreen(){
+  try { updateOverwriteSaveBtn(); } catch(_){}
+  const b = document.getElementById("btn-save-overwrite");
+  const t = b ? String(b.textContent || "").trim() : "";
+  if(b && !b.disabled && /上書き保存|物件に保存/.test(t)) return "画面の上の「" + t + "」を押すと、戸別ファイル（管理番号.json）に入ります。";
+  return "この画面は工事フォルダの戸別ファイルとつながっていません。残すときは「📄 名前を付けて保存」でファイルに保存してください。";
+}
 function updateOverwriteSaveBtn(){
   const b = document.getElementById("btn-save-overwrite");
   if(!b) return;
@@ -14876,11 +14886,13 @@ function updateOverwriteSaveBtn(){
   b.disabled = !(fileOk || projOk);
   if(fileOk){
     b.textContent = "💾 上書き保存";
-    b.title = "この戸別を、戸別ファイル（" + _loadedOrigin.file.split(/[\\/]/).pop() + "）に上書きします（方式: " + overwriteFmtLabel(_loadedOrigin.fileType) + "）。ファイルにある写真は消しません";
+    b.title = "この戸別を、戸別ファイル（" + _loadedOrigin.file.split(/[\\/]/).pop() + "）に上書きします（方式: " + overwriteFmtLabel(_loadedOrigin.fileType) + "）。画面で消した写真のほかは、ファイルにある写真を消しません";
   } else if(projOk){
     b.textContent = "💾 物件に保存";
     b.title = "この戸別を、物件「" + (_currentProject.name || "") + "」と工事フォルダの戸別ファイル（管理番号.json）に書きます。現場のスマホが読むのは戸別ファイルです（はじめてのときは工事フォルダを選ぶ画面が出ます）"
-      + (_projFileHandle ? "" : "。物件はこの端末だけに入ります（共有ファイルにも入れるには、メニューの「🔗 共有ファイルに連動」）");
+      + ((_editingRow && _editingRow.fileType === "hybrid") ? "。暗号をかけた戸別は、氏名・電話・住所を書き替えず、写真は足すだけです" : "")
+      + (_projFileHandle ? "" : ("。物件はこの端末だけに入ります（共有ファイルにも入れるには、メニューの「"
+          + (_projPendingHandle ? "🔗 共有ファイルを再接続" : "🔗 共有ファイルに連動") + "」）"));
   } else {
     b.textContent = "💾 上書き保存";
     b.title = "📁 フォルダから戸別を読み込むか、物件を開くと押せます（別のファイルに保存するときは「📄 名前を付けて保存」）";
@@ -15753,7 +15765,7 @@ async function writeCurrentCaseToIndividualFile(){
     }
   }
   const dir = att ? row._dir : await ensureProjDirHandle();
-  if(!dir) return "\n（戸別ファイルには書いていません：工事フォルダをまだ選んでいません）";
+  if(!dir) return "\n（戸別ファイルには書いていません：工事フォルダが選ばれていないか、工事フォルダに書く許可が出ていません）";
   // 書き込み先の相対パス。
   // 戸別プレーンJSONは「管理番号.json」に統一（旧 .antenna.json 等の別名も正規化）。
   // ハイブリッド暗号は既存名(.hyb)を踏襲（無ければ管理番号.hyb）。
@@ -26291,7 +26303,7 @@ async function bulkImportPhotoFiles(fileList){
     msg += "\n※この戸別は物件の中だけにあります。物件には小さくした写真が入ります。"
          + "\n　原寸のまま残すには、工事フォルダの戸別ファイル（管理番号.json）へ書き込んでください。\n";
   } else {
-    msg += "\n画面の上の「💾 上書き保存」（物件から開いた戸別は「💾 物件に保存」）を押すと、戸別ファイル（管理番号.json）に入ります。\n";
+    msg += "\n" + saveHintForScreen() + "\n";
   }
   msg += "\n並び順は ▲▼ か、番号をつまんで動かすと変えられます。";
   alert(msg);
@@ -26739,7 +26751,7 @@ async function compressCurrentCasePhotos(){
   alert("📉 写真を軽量化しました。\n\n"
     + "・縮小: " + changed + " / " + withImg.length + " 枚\n"
     + "・写真サイズ: 約 " + bMB(beforeBytes) + " MB → 約 " + bMB(afterBytes) + " MB\n\n"
-    + "画面の上の「💾 上書き保存」（物件から開いた戸別は「💾 物件に保存」）を押すと、戸別ファイル（管理番号.json）に入ります。");
+    + saveHintForScreen());
   uiToast("写真を軽量化しました（約 " + bMB(beforeBytes) + "→" + bMB(afterBytes) + "MB）");
 }
 
@@ -33112,8 +33124,10 @@ function lgSaveStateHtml(){
     +   '<b>② 戸別ファイル</b>＝工事フォルダの中にある、戸別1件ずつのファイル。'
     +   '<b>現場用（スマホ）が読み書きするのはこちら</b>です。'
     +   '台帳で直した 名前・住所・電話・工事日程予定・打合せ・状態・備考・保留・ビラ・同意書・完了書 は、'
-    +   '②へは自動では入りません。<b>「💾 戸別ファイルへ反映」</b>を押すか、その戸別を開いて<b>「💾 物件に保存」</b>を押すと入ります'
-    +   '（エディタで直した図面・積算・写真は「💾 物件に保存」で入ります）。<br>'
+    +   '②へは自動では入りません。<b>「💾 戸別ファイルへ反映」</b>を押すと入ります。'
+    +   '名前・住所・電話・工事日程予定・状態・備考は、その戸別を開いて<b>「💾 物件に保存」</b>を押しても入ります'
+    +   '（打合せ・保留・ビラ・同意書・完了書と、暗号をかけた戸別の名前・住所・電話は「💾 戸別ファイルへ反映」で入れてください）。'
+    +   'エディタで直した図面・積算・足した写真は「💾 物件に保存」で入ります。<br>'
     +   'なので、台帳を直したら → ②へ反映 → 「📦 現場用」で書き出す、の順にすると食い違いません。'
     + '</div></details>'
     + '</div>';
@@ -39023,7 +39037,7 @@ async function _genbaWriteRowIndividual(row, inImport){
   try { _editingRow=row; _indivWriteNotShown = (prev !== row);
         const note = await writeCurrentCaseToIndividualFile();
         /* 普段の保存では静かな知らせだが、取り込みでは「1件も書けていない」ので必ず伝える。 */
-        if(inImport && note && /工事フォルダをまだ選んでいません/.test(note)){ _genbaNoDir = true; return noDirNote; }
+        if(inImport && note && /工事フォルダが選ばれていないか/.test(note)){ _genbaNoDir = true; return noDirNote; }
         return note; }
   catch(err){ console.warn("[現場取込] 個別JSON書戻し失敗:", err);
     return "\n\u26a0 戸別ファイルへの書き戻しに失敗しました（" + ((err && err.message) || err) + "）"; }
@@ -40152,7 +40166,8 @@ function init(){
       // 既に復号済みの行も再ロック（表示をマスクに戻す）
       /* ★まだ戸別ファイルに入っていない直し・📥 の写真を持つ行は伏せない★（版181）
          伏せると行の中身をファイルの封筒で作り直すので、行にだけある写真・欄が一覧から消えていた。 */
-      const keep = r => !!(r && (r._genbaUnsaved || r._lgEdited || r._photosGone
+      const keep = r => !!(r && (r._genbaUnsaved || r._lgEdited || r._photosGone || r._hybPhLeft
+        || r._photosKnown                                     // エディタで直して戻った（画面で足した写真は行にだけある）
         || (Array.isArray(r._rowNewer) && r._rowNewer.length) || r === _editingRow));
       const kept = [];
       _listRows.forEach(r => {
@@ -40189,10 +40204,10 @@ function init(){
       renderListTable();
       if(kept.length){
         alert("パスワードを忘れました。\n\n"
-          + "ただし、まだ戸別ファイルに入っていない直し・取り込んだ写真がある " + kept.length + " 件は、伏せずにそのままにしました"
+          + "ただし、いま開いている戸別と、まだ戸別ファイルに入っていないかもしれない直し・取り込んだ写真がある戸別（あわせて " + kept.length + " 件）は、伏せずにそのままにしました"
           + "（伏せると、その写真・直しが一覧から消えるためです）。\n"
           + "　→ " + kept.slice(0, 10).join("・") + (kept.length > 10 ? " ほか" : "") + "\n\n"
-          + "その戸別を開いて「💾 上書き保存」を押すと、戸別ファイルに入ります（パスワードをもう一度聞きます）。");
+          + "📁 フォルダから読んだ戸別なら、開いて「💾 上書き保存」を押すと、戸別ファイルに入ります（パスワードをもう一度聞きます）。");
       }
     }
   };

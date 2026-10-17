@@ -5,7 +5,8 @@
      ① .hyb の行：📥 で入れて書けていない（_genbaUnsaved）→ 伏せずにそのまま（写真 G・名前が残る）。知らせで件数と管理番号を言う
      ② .hyb の行：何も残っていない → 今までどおり伏せる（名前 ★★★★★・写真なし）
      ③ .enc の行：📥 で入れて書けていない → 伏せずにそのまま
-     ④ .hyb の行：受付台帳で直した（_lgEdited）・画面で写真を消した（_photosGone）・📥 の欄（_rowNewer）→ 伏せずにそのまま
+     ④ .hyb の行：受付台帳で直した（_lgEdited）・画面で写真を消した（_photosGone）・📥 の欄（_rowNewer）・
+        エディタで直して戻った（_photosKnown＝画面で足した写真は行にだけある）・「💾 物件に保存」で写真を入れられなかった（_hybPhLeft）→ 伏せずにそのまま
      ⑤ 伏せずに残した行が無いときは、知らせを出さない（今までどおり）
    使い方: node smoke_v181_pwforget_main.js [index.html の file:// URL]　（ONLY=① で場面を絞れる） */
 const { chromium } = require('playwright-core');
@@ -80,7 +81,7 @@ const J = o => JSON.stringify(o);
     ok(h2.ph === null && h2.name === '★★★★★' && h2.unlocked === false, '★②何も残っていない .hyb の行を、今までどおり伏せていない → ' + J(h2));
     ok(e3.ph === 'G' && e3.name === '佐藤' && e3.unlocked === true, '★③📥 の写真がまだ .enc に入っていない行を伏せて、写真が一覧から消えた → ' + J(e3));
     const msg = r.said.join('\n');
-    ok(/伏せずにそのままにしました/.test(msg) && /2 件/.test(msg) && /H001/.test(msg) && /E003/.test(msg) && /💾 上書き保存/.test(msg),
+    ok(/伏せずにそのままにしました/.test(msg) && /2 件/.test(msg) && /H001/.test(msg) && /E003/.test(msg) && /📁 フォルダから読んだ戸別なら、開いて「💾 上書き保存」/.test(msg),
        '★①③伏せずに残した件数・管理番号・どうすれば入るかを知らせない → ' + msg);
     ok(!/H002/.test(msg), '★②伏せた行まで「そのまま」と言った → ' + msg);
   }
@@ -90,10 +91,12 @@ const J = o => JSON.stringify(o);
       { no: 'H011', flags: { _lgEdited: true } },
       { no: 'H012', flags: { _photosGone: new Set() } },
       { no: 'H013', flags: { _rowNewer: ['chosho_cust_tel'] } },
+      { no: 'H014', flags: { _photosKnown: true } },
+      { no: 'H015', flags: { _hybPhLeft: true } },
     ]);
     console.log('④', J(r).slice(0, 600));
-    ok(['H011', 'H012', 'H013'].every(k => r.rows[k] && r.rows[k].unlocked === true && r.rows[k].ph === 'A,G'),
-       '★④台帳で直した・画面で写真を消した・📥 の欄がある .hyb の行を伏せて、行の中身が消えた → ' + J(r.rows));
+    ok(['H011', 'H012', 'H013', 'H014', 'H015'].every(k => r.rows[k] && r.rows[k].unlocked === true && r.rows[k].ph === 'A,G'),
+       '★④台帳で直した・画面で写真を消した・📥 の欄がある・エディタで写真を足して戻った・写真を入れられなかった .hyb の行を伏せて、行の中身が消えた → ' + J(r.rows));
   }
 
   if(want('⑤')){
