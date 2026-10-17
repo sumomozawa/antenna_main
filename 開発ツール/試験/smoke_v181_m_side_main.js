@@ -15,6 +15,17 @@
         振り分けた戸別の行には同じ中身を入れる・読み直さなかったわけを言う（v176-4）
      ⑤ いつもの名前（管理番号.json）に _side が入った戸別を、📁 で一覧から消さない（行には預けの印を持たせない）。
         知らせは「預けの印が入った いつもの名前のファイル」と分けて数える。📮 で印を外せる（v176-5）
+   2回目（確かめ係の指摘）：
+     ①e 行のファイルの中身が別の管理番号なら、開いても済みの印・欄を引き継がない
+     ①f 欄だけを引き継いだときの知らせで、済みの印・状態のことを言わない（開くとき・保存のとき）
+     ②d 本当の戸別が一覧の別の場所（リスト/完了）にある　②e 物件を開き直して行が作り直された（ファイルを掴んでいない）
+        → どちらも前に選んだ（去年の）フォルダの同じ管理番号のファイルへまとめない
+     ⑥a 別の端末の古い預けが、新しい預けと重ならない欄（測定値・ラインブースター）を直していたら、その欄は入れる（重なる欄だけ新しい値のまま）。
+        知らせで数と、預けの中身のありか（_整理前の控え）を言う
+     ⑥b 合わせ方：新しい預けがわざと空にした欄（電話・備考）を、②（PCが空の欄を埋める）で古い値に戻さない・覚えの無い古いファイルは全部飛ばす・
+        同じ値に直した欄も新しい預けの欄として覚える・入れた欄の無い預けにも空の覚えを残す
+     ⑦a 画面に出せない欄（測定値）を引き継いだら、保存し終えたあとで開き直して出す（2回目の保存で前の値に戻さない）
+     ⑦b 選択肢に無い値は元の値に戻してから「出せなかった欄」に入れ、知らせで欄の名前を言う（「前の中身のまま」と言わない）
    ★場面ごとに新しいブラウザの入れ物（newContext）を使う★ フォルダは試験の中で作る作り物（smoke_v176_main.js と同じ道具）。
    使い方: node smoke_v181_m_side_main.js [メイン index.html の file:// URL]　（ONLY=①a,③ で場面を絞れる） */
 const { chromium } = require('playwright-core');
@@ -216,7 +227,7 @@ const brief = o => JSON.stringify(o === undefined ? null : o).slice(0, 260);   /
 
   /* ---- ① 振り分けたとき開いていなかった物件（その２）から、あとで同じ戸別を開いて「物件に保存」（v176-1） ---- */
   {
-    for(const mode of ['a', 'b', 'c', 'd'].filter(m => want('①' + m))){
+    for(const mode of ['a', 'b', 'c', 'd', 'e', 'f'].filter(m => want('①' + m))){
       const { ctx, page, said } = await openMain('①' + mode);
       const r = await run(page, async ({ P1N, P2N, AT, mode }) => {
         await __fresh();
@@ -299,6 +310,47 @@ const brief = o => JSON.stringify(o === undefined ? null : o).slice(0, 260);   /
           o.shown = screen();
           try { await overwriteSaveCurrentToProject(); } catch(e){ o.saveErr = String(e && e.message || e); }
           o.afterSave = pick(file(l2));
+        } else if(mode === 'e'){
+          // 行のファイル（リスト/W2B001.json）の中身が、別の戸別（W2B999）のもの。まとめた印と欄の覚えを持っている
+          const other = Object.assign(__D('W2B999'), { amplifier: 'otherAmp', chosho_cust_tel: '0176-99-9999', work_done: true, chosho_status: 'completed',
+                                                        _sideMerged: [ST], _sideKeys: { [ST]: ['amplifier', 'chosho_cust_tel'] } });
+          const l2 = __mk('リスト', { [NO + '.json']: JSON.stringify(other, null, 2) });
+          const p2 = __mk('その２', {}, { 'リスト': l2 });
+          const stale = Object.assign({}, D, { chosho_photos: null });
+          const row = { file: 'リスト/' + NO + '.json', data: stale, fileType: 'plain', _fromProject: true };
+          _currentProject = { id: 'pjE2', name: P2N, cases: [] };
+          _listRows = [row];
+          _projDirHandle = p2;
+          const tb = document.getElementById('ui-toast'); if(tb) tb.textContent = '';
+          try { await openCaseInEditor(row); } catch(e){ o.openErr = String(e && e.message || e); }
+          o.toast = ((document.getElementById('ui-toast') || {}).textContent) || '';
+          o.row = { amp: row.data.amplifier, tel: row.data.chosho_cust_tel, wd: row.data.work_done, st: row.data.chosho_status,
+                    sm: row.data._sideMerged || null, keys: row.data._sideKeys || null };
+        } else if(mode === 'f'){
+          // 欄だけを引き継ぐ：戸別ファイルの預け（ST）は増幅器だけを直した（済みの印・状態は行と同じ）
+          const D0 = Object.assign({}, D, { flyer_done: false });
+          const F1 = Object.assign({}, D0, { amplifier: 'amp_1u45', _sideMerged: [ST], _sideKeys: { [ST]: ['amplifier'] } });
+          const l2 = __mk('リスト', { [NO + '.json']: JSON.stringify(F1, null, 2) });
+          const p2 = __mk('その２', {}, { 'リスト': l2 });
+          const stale = Object.assign({}, D0, { chosho_photos: null, chosho_photo_count: 6 });
+          const row = { file: 'リスト/' + NO + '.json', data: stale, fileType: 'plain', _fromProject: true, _slim: true, _photoCount: 6 };
+          _currentProject = { id: 'pjF2', name: P2N, cases: [] };
+          _listRows = [row];
+          _projDirHandle = p2;
+          const tb = document.getElementById('ui-toast'); if(tb) tb.textContent = '';
+          try { await openCaseInEditor(row); } catch(e){ o.openErr = String(e && e.message || e); }
+          o.toast = ((document.getElementById('ui-toast') || {}).textContent) || '';
+          o.shown = screen();
+          // 開いたあとで、ほかのPCが電話だけを直した預けをまとめた（済みの印・状態は変えない）
+          const S2 = Object.assign(__S(NO, { at: '2026-10-14T03:00:00.000Z', proj: P2N, touched: ['chosho_cust_tel'] }),
+                                   { chosho_cust_tel: '0176-77-8888', flyer_done: false, work_done: false, consent_received: false, chosho_status: 'in_progress' });
+          const mg = sideMergeInto(JSON.parse(l2.__files[NO + '.json']), S2, S2._side, { name: NO + '_現場預け_20261014-120000.json' });
+          o.mgFlags = mg.report.flagsOn.join();
+          l2.__files[NO + '.json'] = JSON.stringify(mg.merged, null, 2);
+          window.__al.length = 0;
+          try { await overwriteSaveCurrentToProject(); } catch(e){ o.saveErr = String(e && e.message || e); }
+          o.saveAlert = window.__al.join(' / ');
+          o.after = pick(file(l2));
         } else {
           // 🧹 未施工に戻しても、どの預けで入れた欄か（_sideKeys）は印（_sideMerged）と一緒に残る
           const row = { file: NO + '.json', data: Object.assign({}, D, { _sideMerged: [ST], _sideKeys: { [ST]: ['amplifier'] }, chosho_photos: null }),
@@ -352,6 +404,20 @@ const brief = o => JSON.stringify(o === undefined ? null : o).slice(0, 260);   /
           ok(r.afterSave && r.afterSave.amp === 'amp_1u45' && r.afterSave.tel === '0176-11-2222' && r.afterSave.wd === true
              && r.afterSave.ph === r.placed.ph,
              '★①c 台帳で作った行から保存すると、新しく置いた戸別の現場の直しが前の値に戻った／写真が減った → ' + short(r));
+        } else if(mode === 'e'){
+          ok(!r.openErr, '①e 開けなかった → ' + r.openErr);
+          ok(r.row.amp === 'amp_3u43' && r.row.tel === '' && r.row.wd === false && r.row.st === 'in_progress' && !r.row.sm && !r.row.keys,
+             '★①e 行のファイルの中身が別の戸別（管理番号が違う）なのに、その済みの印・欄・まとめた印を引き継いだ → ' + short(r.row));
+          ok(!/入れて開きました/.test(r.toast), '★①e 別の戸別のファイルから引き継いだと知らせた → ' + r.toast);
+        } else if(mode === 'f'){
+          ok(!r.openErr && !r.saveErr && r.shown.amp === 'amp_1u45' && r.mgFlags === '',
+             '①f 試験の前提: 開くときに増幅器を引き継ぐ・ほかのPCの預けは済みの印を変えない → ' + short(r));
+          ok(/現場から預かった入力がまとめてありました。現場で直した欄（1項目）を、この戸別に入れて開きました/.test(r.toast) && !/済みの印/.test(r.toast),
+             '★①f 欄だけを引き継いだのに、開くときの知らせで「済みの印・状態」を入れたと言う → ' + r.toast);
+          ok(/現場から預かった入力がまとめてありました。現場で直した欄（1項目）を残しました）/.test(r.saveAlert) && !/済みの印・状態は消さずに残しました/.test(r.saveAlert),
+             '★①f 欄だけを引き継いだのに、保存の知らせで「済みの印・状態は消さずに残しました」と言う → ' + r.saveAlert.slice(0, 500));
+          ok(r.after && r.after.amp === 'amp_1u45' && r.after.tel === '0176-77-8888',
+             '★①f 欄だけを引き継ぐ保存で、現場で直した欄が戻った → ' + short(r.after));
         } else {
           ok(!r.revErr && Array.isArray(r.afterRevert.sm) && r.afterRevert.keys && Array.isArray(r.afterRevert.keys[AT + '|W2B001']),
              '★①d 🧹 未施工に戻すと、どの預けで入れた欄か（_sideKeys）を落とす → ' + short(r));
@@ -365,7 +431,7 @@ const brief = o => JSON.stringify(o === undefined ? null : o).slice(0, 260);   /
   }
 
   /* ---- ② 前に選んだフォルダ（去年の 物件情報_調書）で振り分けると、📁 の一覧の預けを別の物件へ置く（v176-2） ---- */
-  for(const mode of ['a', 'b', 'c'].filter(m => want('②' + m))){
+  for(const mode of ['a', 'b', 'c', 'd', 'e'].filter(m => want('②' + m))){
     const { ctx, page, said } = await openMain('②' + mode);
     const r = await run(page, async ({ mode }) => {
       await __fresh();
@@ -377,11 +443,13 @@ const brief = o => JSON.stringify(o === undefined ? null : o).slice(0, 260);   /
       const sp = (mode === 'c') ? { proj: '', ledger: P9, touched: ['work_done', 'chosho_status', 'amplifier'] }
                                 : { proj: P9, ledger: P9, touched: ['work_done', 'chosho_status', 'amplifier'] };
       const S9 = JSON.stringify(__S(NO, sp));
-      // a・c は預けだけ（その戸別のファイルは別の所）、b は預けのすぐ隣にその戸別のファイルがある
-      const l9 = __mk('リスト', (mode === 'b') ? { [NO + '.json']: D9, [SIDEN]: S9 } : { [SIDEN]: S9 });
-      // 去年（令和８年度）の 物件情報_調書（前に 📮 で選んだフォルダ＝覚えている）。b は去年にも同じ管理番号（別のお宅）がある
+      // a・c は預けだけ（その戸別のファイルは別の所）、b・e は預けのすぐ隣にその戸別のファイルがある、
+      // d はその戸別のファイルが一覧の別の場所（リスト/完了）にある
+      const l9 = (mode === 'd') ? __mk('リスト', { [SIDEN]: S9 }, { '完了': __mk('完了', { [NO + '.json']: D9 }) })
+        : __mk('リスト', (mode === 'b' || mode === 'e') ? { [NO + '.json']: D9, [SIDEN]: S9 } : { [SIDEN]: S9 });
+      // 去年（令和８年度）の 物件情報_調書（前に 📮 で選んだフォルダ＝覚えている）。b・d・e は去年にも同じ管理番号（別のお宅）がある
       const old = JSON.stringify(Object.assign(__D(NO), { chosho_cust_name: '去年の 別のお宅', amplifier: 'oldAmp' }), null, 2);
-      const l8a = __mk('リスト', Object.assign({ 'W8A001.json': JSON.stringify(__D('W8A001')) }, (mode === 'b') ? { [NO + '.json']: old } : {}));
+      const l8a = __mk('リスト', Object.assign({ 'W8A001.json': JSON.stringify(__D('W8A001')) }, (mode === 'b' || mode === 'd' || mode === 'e') ? { [NO + '.json']: old } : {}));
       const l8b = __mk('リスト', {});
       const root8 = __mk('物件情報_調書', {}, { 'その１': __mk('その１', {}, { 'リスト': l8a }), 'その２': __mk('その２', {}, { 'リスト': l8b }) });
       if(mode === 'c') await projIdbPut(__proj('pj9c', '令和８年度戸別受信設備設置工事（その１）', [NO]));   // このPCの物件（去年の その１）にこの管理番号
@@ -389,6 +457,11 @@ const brief = o => JSON.stringify(o === undefined ? null : o).slice(0, 260);   /
       window.showDirectoryPicker = async () => l9;
       await listSelectFolder();
       const o = { rows: (_listRows || []).map(x => x._name).sort().join(), side: (_sideFiles || []).map(x => x.name).join() };
+      if(mode === 'e'){
+        // 物件を開き直して、一覧の行が物件から作り直された（ファイルを掴んでいない）。預けの覚え（_sideFiles）は残っている
+        _listRows = [{ file: 'リスト/' + NO + '.json', data: { chosho_mgmt_no: NO, chosho_cust_name: '三沢 太郎', chosho_status: 'in_progress', work_type: 'uhf_new' },
+                       fileType: 'plain', _fromProject: true }];
+      }
       const before8 = __tree(root8), before9 = __tree(l9);
       _sideSortRoot = root8;               // 覚えているフォルダ（IndexedDB の代わり）
       window.showDirectoryPicker = async () => { throw Object.assign(new Error('x'), { name: 'AbortError' }); };
@@ -400,8 +473,12 @@ const brief = o => JSON.stringify(o === undefined ? null : o).slice(0, 260);   /
     console.log('②' + mode, brief(r));
     ok(!r.error, '②' + mode + ' 止まった → ' + r.error);
     if(!r.error){
-      ok(/（読み込んだ一覧）/.test(r.run.text) && r.side === 'W9A001_現場預け_20261014-091812.json',
-         '②' + mode + ' 試験の前提: 📁 の一覧の預けが表に出る → ' + short(r));
+      ok(/（読み込んだ一覧）/.test(r.run.text) && r.side === 'W9A001_現場預け_20261014-091812.json'
+         && (mode !== 'd' || /W9A001\.json/.test(r.rows)),
+         '②' + mode + ' 試験の前提: 📁 の一覧の預けが表に出る（d は 完了 の戸別も一覧に出る） → ' + short(r));
+      if(mode === 'd' || mode === 'e')
+        ok(/この戸別は、読み込んだ一覧（または開いている物件）にもあります/.test(r.run.text),
+           '★②' + mode + ' 本当の戸別が一覧（別の場所・物件の行）にあると言わない → ' + r.run.text.slice(0, 700));
       ok(r.diff8.length === 0 && r.diff9.length === 0 && r.run.okDisabled === true,
          '★②' + mode + ' 前に選んだ（去年の）フォルダの「その１」へ、📁 の一覧の預けを置いた・まとめた／預けを片付けた → ' + short({ d8: r.diff8, d9: r.diff9, ok: r.run.okText }));
       ok(/選んだフォルダ（物件情報_調書）の外の、読み込んだ一覧の中にあります/.test(r.run.text) && /「📁 別のフォルダを選ぶ」/.test(r.run.text),
@@ -474,13 +551,15 @@ const brief = o => JSON.stringify(o === undefined ? null : o).slice(0, 260);   /
       ok(r.after2.ph.split(',').indexOf('a1') >= 0 && r.after2.ph.split(',').indexOf('b1') >= 0 && (r.after2.sm || []).length === 2
          && r.after2.flyer === true && r.sideLeft.length === 0,
          '★③ 古い預けの写真・済みの印・まとめた印が入らない／預けが残った → ' + short(r.after2));
-      ok(/W1C001（W1C001_現場預け_20261014-100000\.json）：この預けより新しい預けが もうまとめてあるので、現場で直した欄は入れていません/.test(r.alert2),
-         '★③ 直した欄を入れなかったことを、振り分けの終わりの知らせで言わない → ' + r.alert2.slice(0, 600));
+      ok(/W1C001（W1C001_現場預け_20261014-100000\.json）：この預けより新しい預けが、もうまとめてあります。新しい預けでも直していた欄（2項目）は、新しい預けの値のままにしました/.test(r.alert2),
+         '★③ 直した欄を入れなかったこと（と数）を、振り分けの終わりの知らせで言わない → ' + r.alert2.slice(0, 600));
+      ok(/この預けの中身は その１\/リスト\/_整理前の控え\/W1C001_現場預け_20261014-100000\.json に残しています/.test(r.alert2),
+         '★③ 入れなかった欄を、どこから戻せばよいか（預けの控え）を言わない → ' + r.alert2.slice(0, 600));
       ok(r.pure.amp === 'ampB' && r.pure.tel === '0176-BBBB' && r.pure.flyer === true && /a1/.test(r.pure.ph) && /b1/.test(r.pure.ph)
          && r.pure.sm.length === 2 && r.pure.older,
          '★③ 合わせ方：新しい預けがもうまとめてあるのに、古い預けの直した欄を入れる → ' + short(r.pure));
       ok(r.pureNoIso.amp === 'ampA', '③ 名前の日時しか無い印でも比べてしまう（今までどおり入れるはず） → ' + short(r.pureNoIso));
-      ok(/この預けより新しい預けが、もうまとめてあります。現場で直した欄は入れません/.test(r.preview),
+      ok(/この預けより新しい預けが、もうまとめてあります。どの欄を直したかの覚えが無い預けなので、この預けで直した欄（2項目）は入れません/.test(r.preview),
          '★③ 📥 の窓で、古い預けだと言わない → ' + r.preview.slice(0, 600));
     }
     await ctx.close();
@@ -582,6 +661,187 @@ const brief = o => JSON.stringify(o === undefined ? null : o).slice(0, 260);   /
          '★⑤ 読み込んだあとの知らせで、一覧に出している戸別を「預かったファイル」と数える → ' + r.note.slice(0, 300));
       ok(/預けの印を外す/.test(r.run.text) && !r.fixed.side && r.fixed.ph === 'p1,p2,p3,p4,p5,p6' && r.fixed.amp === 'pcAmp' && /W7A007/.test(r.rows2),
          '★⑤ 一覧に出したあと、📮 で印を外せない／中身が変わった／行が消えた → ' + short(r));
+    }
+    await ctx.close();
+  }
+
+  /* ---- ⑥a 別の端末の古い預けが、新しい預けと重ならない欄を直していた（確かめ係の指摘 1） ---- */
+  if(want('⑥a')){
+    const { ctx, page, said } = await openMain('⑥a');
+    const r = await run(page, async ({ P1N }) => {
+      await __fresh();
+      const NO = 'W6X001';
+      const M0 = cloneMeasurements(DEFAULT_MEASUREMENTS);
+      const MA = cloneMeasurements(DEFAULT_MEASUREMENTS); MA.antenna[0].db = 55.5;
+      const D = Object.assign(__D(NO), { amplifier: 'pcAmp', line_booster: 'lbPC', measurements: M0, flyer_done: false });
+      // 端末X の預け A（10:00）：増幅器・ラインブースター・測定値を直した　端末Y の預け B（11:00）：増幅器だけを直した
+      const A = Object.assign(__S(NO, { at: '2026-10-14T01:00:00.000Z', proj: P1N, touched: ['amplifier', 'line_booster', 'measurements'] }),
+                              { amplifier: 'ampA', line_booster: 'lbA', measurements: MA, chosho_photos: [__ph('a1', '#111')] });
+      const B = Object.assign(__S(NO, { at: '2026-10-14T02:00:00.000Z', proj: P1N, touched: ['amplifier'] }),
+                              { amplifier: 'ampB', line_booster: 'lbPC', chosho_photos: [__ph('b1', '#222')] });
+      const NA = NO + '_現場預け_20261014-100000.json', NB = NO + '_現場預け_20261014-110000.json';
+      const l1 = __mk('リスト', { [NO + '.json']: JSON.stringify(D, null, 2), [NA]: JSON.stringify(A), [NB]: JSON.stringify(B) });
+      const root = __mk('物件情報_調書', {}, { 'その１': __mk('その１', {}, { 'リスト': l1 }) });
+      // 1回目：A はまだ同期が終わっていない（読めない）＝ B だけまとまる
+      l1.__hooks.getFile = n => (n === NA) ? Object.assign(new Error('読めない'), { name: 'NotReadableError' }) : undefined;
+      window.showDirectoryPicker = async () => root;
+      const o = {};
+      o.run1 = (await __sortRun('sort-ok')).okText;
+      let f = JSON.parse(l1.__files[NO + '.json']);
+      o.after1 = { amp: f.amplifier, lb: f.line_booster, keysB: (f._sideKeys || {})['2026-10-14T02:00:00.000Z|' + NO] || null };
+      // 2回目：A が届いた
+      l1.__hooks.getFile = null;
+      window.__al.length = 0;
+      o.run2 = (await __sortRun('sort-ok')).okText;
+      o.alert2 = window.__al.join(' / ');
+      f = JSON.parse(l1.__files[NO + '.json']);
+      o.after2 = { amp: f.amplifier, lb: f.line_booster, db: f.measurements && f.measurements.antenna && f.measurements.antenna[0].db,
+                   ph: __pids(f), sm: (f._sideMerged || []).length,
+                   keysA: (f._sideKeys || {})['2026-10-14T01:00:00.000Z|' + NO] || null };
+      return o;
+    }, { P1N });
+    console.log('⑥a', brief(r));
+    ok(!r.error, '⑥a 止まった → ' + r.error);
+    if(!r.error){
+      ok(r.after1.amp === 'ampB' && r.after1.lb === 'lbPC' && JSON.stringify(r.after1.keysB) === '["amplifier"]',
+         '⑥a 試験の前提: 1回目は新しい預け（B）だけまとまり、B で入れた欄（増幅器）を覚える → ' + short(r.after1));
+      ok(r.after2.amp === 'ampB', '★⑥a 新しい預け（B）で直した増幅器が、古い預け（A）の値に戻った → ' + short(r.after2));
+      ok(r.after2.lb === 'lbA' && r.after2.db === 55.5,
+         '★⑥a 古い預け（A）が直した、新しい預けと重ならない欄（ラインブースター・測定値）が入らない（直す前より悪い） → ' + short(r.after2));
+      ok(/a1/.test(r.after2.ph) && /b1/.test(r.after2.ph) && r.after2.sm === 2, '★⑥a 写真・まとめた印が減った → ' + short(r.after2));
+      ok(Array.isArray(r.after2.keysA) && r.after2.keysA.indexOf('line_booster') >= 0 && r.after2.keysA.indexOf('measurements') >= 0
+         && r.after2.keysA.indexOf('amplifier') < 0,
+         '★⑥a 古い預けで入れた欄の覚え（_sideKeys）が違う（入れなかった増幅器まで覚える／入れた欄を覚えない） → ' + short(r.after2.keysA));
+      ok(/W6X001（W6X001_現場預け_20261014-100000\.json）：この預けより新しい預けが、もうまとめてあります。新しい預けでも直していた欄（1項目）は、新しい預けの値のままにしました/.test(r.alert2)
+         && /この預けの中身は その１\/リスト\/_整理前の控え\/W6X001_現場預け_20261014-100000\.json に残しています/.test(r.alert2),
+         '★⑥a 入れなかった欄の数・預けの中身のありかを、振り分けの終わりの知らせで言わない → ' + r.alert2.slice(0, 700));
+    }
+    await ctx.close();
+  }
+
+  /* ---- ⑥b 合わせ方：新しい預けで入れた欄だけを飛ばす（確かめ係の指摘 1・2） ---- */
+  if(want('⑥b')){
+    const { ctx, page, said } = await openMain('⑥b');
+    const r = await run(page, async () => {
+      const NO = 'W6Y001';
+      const AT_A = '2026-10-14T01:00:00.000Z', AT_B = '2026-10-14T02:00:00.000Z';
+      const SB = AT_B + '|' + NO, SA_ = AT_A + '|' + NO;
+      const D0 = { chosho_mgmt_no: NO, chosho_cust_tel: '0176-XX-0000', chosho_note: 'PCの備考', amplifier: 'pcAmp', line_booster: 'lbPC' };
+      const sd = (at, touched) => ({ v: 1, at, proj: '', touched });
+      const pk = m => ({ tel: m.merged.chosho_cust_tel, note: m.merged.chosho_note, amp: m.merged.amplifier, lb: m.merged.line_booster,
+                         older: m.report.olderSkipped || 0, all: !!m.report.olderAll, keys: m.merged._sideKeys || null });
+      const o = {};
+      // 新しい預け B：電話と備考を、わざと空にした
+      const mB = sideMergeInto(D0, { chosho_mgmt_no: NO, chosho_cust_tel: '', chosho_note: '' }, sd(AT_B, ['chosho_cust_tel', 'chosho_note']), {});
+      o.b = pk(mB);
+      // 古い預け A：電話・備考・増幅器が入っている
+      const SA = { chosho_mgmt_no: NO, chosho_cust_tel: '0176-AA-AAAA', chosho_note: '古い備考', amplifier: 'ampA' };
+      o.p1 = pk(sideMergeInto(mB.merged, SA, sd(AT_A, ['amplifier']), { fillEmpty: true }));      // 📥 で台帳の行へ（PCが空の欄を埋める）
+      o.p2 = pk(sideMergeInto(mB.merged, SA, sd(AT_A, undefined), {}));                          // 直した欄の記録が無い古い預け
+      // 覚え（_sideKeys）の無い古いファイル（版181より前にまとめた）：どの欄か分からないので全部飛ばす
+      const base2 = { chosho_mgmt_no: NO, chosho_cust_tel: '', chosho_note: '', amplifier: 'pcAmp', _sideMerged: [SB] };
+      o.p3 = pk(sideMergeInto(base2, SA, sd(AT_A, ['amplifier']), { fillEmpty: true }));
+      // B2：増幅器を PC と同じ値に直した → 同じ値でも B2 の欄として覚え、古い預けの増幅器を入れない
+      const mB2 = sideMergeInto(D0, { chosho_mgmt_no: NO, amplifier: 'pcAmp' }, sd(AT_B, ['amplifier']), {});
+      o.b2 = pk(mB2);
+      o.p4 = pk(sideMergeInto(mB2.merged, SA, sd(AT_A, ['amplifier']), {}));
+      // B3：写真だけ（入れた欄が無い）→ 空の覚えを残す。古い預けの欄は入る
+      const mB3 = sideMergeInto(D0, { chosho_mgmt_no: NO, chosho_photos: [__ph('b3', '#333')] }, sd(AT_B, ['amplifier']), {});
+      o.b3 = pk(mB3);
+      o.p5 = pk(sideMergeInto(mB3.merged, { chosho_mgmt_no: NO, line_booster: 'lbA' }, sd(AT_A, ['line_booster']), {}));
+      o.SB = SB; o.SA = SA_;
+      return o;
+    });
+    console.log('⑥b', brief(r));
+    ok(!r.error, '⑥b 止まった → ' + r.error);
+    if(!r.error){
+      const kb = r.b.keys && r.b.keys[r.SB];
+      ok(r.b.tel === '' && r.b.note === '' && Array.isArray(kb) && kb.indexOf('chosho_cust_tel') >= 0 && kb.indexOf('chosho_note') >= 0,
+         '⑥b 試験の前提: 新しい預けで電話・備考を空にし、その欄を覚える → ' + short(r.b));
+      ok(r.p1.tel === '' && r.p1.note === '',
+         '★⑥b 新しい預けがわざと空にした電話・備考に、古い預けの値を戻した（PCが空の欄を埋める） → ' + short(r.p1));
+      ok(r.p1.amp === 'ampA' && r.p1.older === 2 && !r.p1.all && JSON.stringify(r.p1.keys && r.p1.keys[r.SA]) === '["amplifier"]',
+         '★⑥b 新しい預けと重ならない欄（増幅器）が入らない／入れなかった数・覚えが違う → ' + short(r.p1));
+      ok(r.p2.tel === '' && r.p2.note === '' && r.p2.amp === 'pcAmp' && r.p2.older === 2,
+         '★⑥b 直した欄の記録が無い古い預けで、新しい預けが空にした欄を埋めた → ' + short(r.p2));
+      ok(r.p3.tel === '' && r.p3.note === '' && r.p3.amp === 'pcAmp' && r.p3.all && r.p3.older === 3,
+         '★⑥b 覚えの無い（版181より前の）新しい預けがあるのに、古い預けの欄を入れた → ' + short(r.p3));
+      ok(Array.isArray(r.b2.keys && r.b2.keys[r.SB]) && r.b2.keys[r.SB].indexOf('amplifier') >= 0 && r.p4.amp === 'pcAmp',
+         '★⑥b 新しい預けで同じ値に直した欄を覚えず、古い預けの値を入れた → ' + short({ b2: r.b2, p4: r.p4 }));
+      ok(Array.isArray(r.b3.keys && r.b3.keys[r.SB]) && r.b3.keys[r.SB].length === 0 && r.p5.lb === 'lbA' && !r.p5.older,
+         '★⑥b 入れた欄の無い新しい預けを「覚えが無い」と見て、古い預けの欄を飛ばした → ' + short({ b3: r.b3, p5: r.p5 }));
+    }
+    await ctx.close();
+  }
+
+  /* ---- ⑦ 画面に出せない欄を引き継いだら、保存し終えたあとで開き直す（確かめ係の指摘 3） ---- */
+  for(const mode of ['a', 'b'].filter(m => want('⑦' + m))){
+    const { ctx, page, said } = await openMain('⑦' + mode);
+    const r = await run(page, async ({ P2N, mode }) => {
+      await __fresh();
+      const NO = (mode === 'a') ? 'W7R001' : 'W7R002';
+      const M0 = cloneMeasurements(DEFAULT_MEASUREMENTS);
+      const MS = cloneMeasurements(DEFAULT_MEASUREMENTS); MS.antenna[0].db = 55.5; MS.terminal[2].mer = 29.9;
+      const D = Object.assign(__D(NO), { amplifier: 'amp_3u43', measurements: M0, work_done: false, chosho_status: 'in_progress', flyer_done: false });
+      delete D.work_done_at;
+      const l2 = __mk('リスト', { [NO + '.json']: JSON.stringify(D, null, 2) });
+      const p2 = __mk('その２', {}, { 'リスト': l2 });
+      const stale = Object.assign({}, D, { chosho_photos: null, chosho_photo_count: 6 });
+      const row = { file: 'リスト/' + NO + '.json', data: stale, fileType: 'plain', _fromProject: true, _slim: true, _photoCount: 6 };
+      _currentProject = { id: 'pjR7' + mode, name: P2N, cases: [] };
+      _listRows = [row];
+      _projDirHandle = p2;
+      await openCaseInEditor(row);
+      const o = { mode };
+      const db = () => (STATE.measurements && STATE.measurements.antenna && STATE.measurements.antenna[0]) ? STATE.measurements.antenna[0].db : null;
+      o.shown0 = { db: db(), amp: document.getElementById('amplifier').value };
+      // 開いたあとで、ほかのPCが預けをまとめた（a：測定値と増幅器　b：この画面の選択肢に無い増幅器）
+      const S = (mode === 'a')
+        ? Object.assign(__S(NO, { proj: P2N, touched: ['measurements', 'amplifier'] }), { measurements: MS, amplifier: 'amp_1u45', flyer_done: false })
+        : Object.assign(__S(NO, { proj: P2N, touched: ['amplifier'] }), { amplifier: 'amp_zz_unknown', flyer_done: false });
+      const mg = sideMergeInto(D, S, S._side, { name: NO + '_現場預け_20261014-091812.json' });
+      l2.__files[NO + '.json'] = JSON.stringify(mg.merged, null, 2);
+      window.__al.length = 0;
+      try { await overwriteSaveCurrentToProject(); } catch(e){ o.save1Err = String(e && e.message || e); }
+      let f = JSON.parse(l2.__files[NO + '.json']);
+      o.save1 = { db: f.measurements && f.measurements.antenna[0].db, amp: f.amplifier, alert: window.__al.join(' / ') };
+      o.screen1 = { db: db(), amp: document.getElementById('amplifier').value, same: _editingRow === row };
+      // 事務所は備考を直して、もう一度保存
+      const nt = document.getElementById('chosho_note'); if(nt){ nt.value = '事務所の備考'; nt.dispatchEvent(new Event('input', { bubbles: true })); }
+      try { markEditorDirty(); } catch(_){}
+      window.__al.length = 0;
+      try { await overwriteSaveCurrentToProject(); } catch(e){ o.save2Err = String(e && e.message || e); }
+      f = JSON.parse(l2.__files[NO + '.json']);
+      o.save2 = { db: f.measurements && f.measurements.antenna[0].db, mer: f.measurements && f.measurements.terminal[2].mer, amp: f.amplifier, note: f.chosho_note };
+      if(mode === 'b'){
+        // 選択肢に無い値は、元の値に戻してから「出せなかった欄」に入れる（空にしない）
+        const el = document.getElementById('amplifier');
+        el.value = 'amp_3u43';
+        const left = sideShowFields(['amplifier'], { amplifier: 'amp_zz_unknown' });
+        o.unit = { left: left.join(), val: el.value };
+      }
+      _currentProject = null; _listRows = []; _projDirHandle = null; _editingRow = null;
+      return o;
+    }, { P2N, mode });
+    console.log('⑦' + mode, brief(r));
+    ok(!r.error, '⑦' + mode + ' 止まった → ' + r.error);
+    if(!r.error){
+      if(mode === 'a'){
+        ok(!r.save1Err && !r.save2Err && r.shown0.db === 47.8 && r.save1.db === 55.5 && r.save1.amp === 'amp_1u45',
+           '⑦a 試験の前提: 開いたときは前の測定値・1回目の保存で戸別ファイルに現場の測定値が残る → ' + short(r));
+        ok(r.screen1.db === 55.5 && r.screen1.amp === 'amp_1u45' && r.screen1.same,
+           '★⑦a 引き継いだ測定値（入力欄1つで出せない欄）が、保存したあとも画面に出ない（開き直さない） → ' + short(r.screen1));
+        ok(/この戸別を開き直して、現場で直した欄を出しました/.test(r.save1.alert) && !/まだ前の中身のまま/.test(r.save1.alert),
+           '★⑦a 開き直したことを言わない／まだ前の中身のままと言う → ' + r.save1.alert.slice(0, 600));
+        ok(r.save2.db === 55.5 && r.save2.mer === 29.9 && r.save2.amp === 'amp_1u45' && r.save2.note === '事務所の備考',
+           '★⑦a 別の欄を直してもう一度保存すると、戸別ファイルの測定値が前の値に戻った → ' + short(r.save2));
+      } else {
+        ok(!r.save1Err && r.save1.amp === 'amp_zz_unknown', '⑦b 試験の前提: 1回目の保存で戸別ファイルに現場の増幅器が残る → ' + short(r));
+        ok(/現場で入れた値のうち、この画面に出せないものがあります（増幅器）/.test(r.save1.alert) && !/まだ前の中身のまま/.test(r.save1.alert),
+           '★⑦b 選択肢に無い値を出せなかったことを、欄の名前で言わない／「前の中身のまま」と言う（実際は空） → ' + r.save1.alert.slice(0, 600));
+        ok(r.unit.left === 'amplifier' && r.unit.val === 'amp_3u43',
+           '★⑦b 選択肢に無い値を入れようとして、欄を空にしたままにする（元の値に戻さない） → ' + short(r.unit));
+      }
     }
     await ctx.close();
   }
