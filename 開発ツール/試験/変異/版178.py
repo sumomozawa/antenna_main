@@ -171,7 +171,9 @@ CASES = [
   (u"★付け替え先のファイルの写真を土台にしない（行き先の元の写真を縮小版で置き換える）",
    u'''      alsoFh = fh;''', u'''''', TM, "main", u"⑯e"),
   (u"★💾 上書き保存で、開いたあとでファイルに入った写真を残さない（現場が足した写真が消える）",
-   u'''      stateObj.chosho_photos = photosKeepFileOnly(stateObj.chosho_photos, late);''', u'''''', TM, "main", u"㉓b"),
+   u'''      const late = (Array.isArray(prev.chosho_photos) ? prev.chosho_photos : []).filter(p => p && !photoSeenBy(_editingRow, p));
+      stateObj.chosho_photos = photosKeepFileOnly(stateObj.chosho_photos, late);''',   # 版181 で暗号の戸別にも同じ行がある（平文のほう）
+   u'''      const late = (Array.isArray(prev.chosho_photos) ? prev.chosho_photos : []).filter(p => p && !photoSeenBy(_editingRow, p));''', TM, "main", u"㉓b"),
   (u"★💾 上書き保存のあと、画面に出ていた写真を覚えない（足して上書きした写真を消しても残る）",
    u'''      if(fmt === "plain" && _editingRow && shownPhotos) rowSeePhotos(_editingRow, shownPhotos);   // 画面に出ていた写真（版178）''',
    u'''''', TM, "main", u"㉓f"),
@@ -815,8 +817,8 @@ CASES = [
    u'''      if(!orig){''',
    u'''      if(false){''', TM, "main", u"㊸o"),
   (u"★縮小版のまま入れたことを知らせない",
-   u'''  renamedNote += sideKeptNote + thumbKeptNote;''',
-   u'''  renamedNote += sideKeptNote;''', TM, "main", u"㊸n"),
+   u'''  renamedNote += sideKeptNote + thumbKeptNote + hybNote;''',   # 版181 で .hyb の写真の知らせ（hybNote）を足した
+   u'''  renamedNote += sideKeptNote + hybNote;''', TM, "main", u"㊸n"),
   (u"★縮小版のまま入れた知らせに ⚠ を付ける（📥 の知らせで、書けた戸別を「書けていません」に数える）",
    u'''      thumbKeptNote = "\\n※ " + up.why''',
    u'''      thumbKeptNote = "\\n\\u26a0 " + up.why''', TM, "main", u"㊸ic"),
@@ -877,11 +879,11 @@ CASES = [
   # ======== メイン：7回目の直し（暗号の物件の行を上書き保存しても写真を残す） ========
   # ======== メイン：暗号の戸別（.hyb）を、写真の出ていない画面から 💾 上書き保存しても写真を残す（7回目の見直し） ========
   (u"★写真の出ていない画面で、元ファイルの写真に足さずに書く（.hyb が画面の写真だけになる）",
-   u'''        stateObj.chosho_photos = photosKeepFileOnly(filePh, added);
-''', u'''''', TM, "main", u"㉕e"),
+   u'''        stateObj.chosho_photos = photosKeepFileOnly(base, added);
+''', u'''''', TM, "main", u"㉕e"),   # 版181：ファイルの写真（base）は、画面の版に替え・写真の出ている画面で消した写真を落としたもの
   (u"★写真の出ていない画面で、元ファイルをほどかない（ほどけないとして断る・直しが入らない）",
-   u'''          if(_editorPhotosStripped){ try { fileDec = await decryptHybrid(fresh, pw); } catch(_){ fileDec = null; } }
-''', u'''''', TM, "main", u"㉕e"),
+   u'''          try { fileDec = await decryptHybrid(fresh, pw); } catch(_){ fileDec = null; }
+''', u'''''', TM, "main", u"㉕e"),   # 版181 で写真の出ている画面でもほどく
   (u"★元ファイルに暗号の写真があっても、取り出さずに書く（ほどけない .hyb を写真なしで書く）",
    u'''      if(fp && fp.iv && fp.ct){''', u'''      if(false){''', TM, "main", u"㉕g"),
   (u"★元ファイルの写真の部分が壊れている（ほどくと写真が外れる）のに書く",
@@ -889,7 +891,7 @@ CASES = [
   (u"★写真の出ている画面でも、元ファイルの写真に足して書く（画面で消した写真が戻る）",
    u'''    if(fmt === "hybrid" && _editorPhotosStripped && readOk){''', u'''    if(fmt === "hybrid" && readOk){''', TM, "main", u"㉕i"),
   (u"★写真の出ていない画面で、画面で足した写真を書かない",
-   u'''photosKeepFileOnly(filePh, added);''', u'''photosKeepFileOnly(filePh, []);''', TM, "main", u"㉕enew"),
+   u'''photosKeepFileOnly(base, added);''', u'''photosKeepFileOnly(base, []);''', TM, "main", u"㉕enew"),   # 版181：filePh → base
   (u"★元ファイルの写真が古い形 {before, after} のとき、そのまま使う（A・B が消える）",
    u'''        const filePh = Array.isArray(fileDec.chosho_photos) ? fileDec.chosho_photos : migratePhotosShape(fileDec.chosho_photos);''',
    u'''        const filePh = fileDec.chosho_photos;''', TM, "main", u"㉕eold"),
@@ -903,7 +905,7 @@ CASES = [
   }
 ''', TM, "main", u"㉕enew"),
   (u"★帯が「写真が失われます」のまま",
-   u'''「💾 上書き保存」では、元の写真はそのまま残し、ここで足した写真を足して書きます（ここで写真を消しても、元のファイルからは消えません）。";''',
+   u'''保存（「💾 上書き保存」・「💾 物件に保存」）では、元の写真はそのまま残し、ここで足した写真を足して書きます（ここで写真を消しても、元のファイルからは消えません）。";''',   # 版181 で押せるボタンを言う
    u'''このまま上書き保存／再暗号化すると、元ファイルの写真が失われます。写真が必要な場合は元の個別ファイル(.hyb)から開き直してください。";''',
    TM, "main", u"㉕enew"),
   (u"★写真の出ていない画面で、壊れた .hyb をこの画面の中身で書き直すか聞く（OK で写真がみな消える）",
@@ -937,10 +939,12 @@ CASES = [
 ''', TM, "main", u"㉕t"),
   (u"★パスワードを聞いて開き直すとき、行にだけある写真を画面に出さない",
    u'''      const rowPh = hybRowPhotosToShow(full, target);   // 行にだけある写真を画面に出す（版178）
+      if(!full._photosStripped) rowSeePhotos(target, full.chosho_photos, true);   // 上と同じ（版181）
       const lite = Object.assign({}, full); lite.chosho_photos = rowPh;
 ''', u'''      const rowPh = null;
+      if(!full._photosStripped) rowSeePhotos(target, full.chosho_photos, true);   // 上と同じ（版181）
       const lite = Object.assign({}, full); lite.chosho_photos = rowPh;
-''', TM, "main", u"㉕mpw"),
+''', TM, "main", u"㉕mpw"),   # 版181 で見せた写真を覚える行が間に入った
   # 上と同じ（8回目の見直し）：パスワードを聞いて開いたときも、開く前のまま
   (u"★パスワードを聞いて開き直したとき、行をファイルから読む形に替える（次に開くと、直した増幅器 1U がファイルの古い 3U に戻る）",
    u'''      target.data = lite; target.unlocked = true; target._slim = wasSlim;   // 上と同じ（版178）''',
@@ -1282,8 +1286,8 @@ CASES = [
    u'''  if(!row || row.fileType !== "hybrid" || row.fileHandle || !row.srcFile || row._photosKnown) return env;''',
    u'''  if(!row || row.fileType !== "hybrid" || row.fileHandle || !row.srcFile) return env;''', TM, "main", u"㉕zk"),
   (u"★一括で行の写真を足すとき、ファイルの写真を先にする（画面で直した名前が、読んだファイルの名前に戻る）",
-   u'''        stateObj.chosho_photos = photosKeepFileOnly(own, base);''',
-   u'''        stateObj.chosho_photos = photosKeepFileOnly(base, own);''', TM, "main", u"㉕zk"),
+   u'''          ? photosKeepFileOnly(own, base.filter(p => !(p && p.dataUri && gone && gone.has(kOf(p)))))''',   # 版181 で消した写真（_photosGone）を落とす形に
+   u'''          ? photosKeepFileOnly(base, own)''', TM, "main", u"㉕zk"),
   # ======== 現場入力：特別記録の写真の取り込み・「保存」（版178） ========
   # 守りだけの所（いまの道では壊しても試験で見えない）には変異を置かない：spPersist の列（取り込みの書き込みは
   # 開いている記録なら画面の物を書くので重ならない）・✕ のあとも「見た」ままにする（描いたときに見た写真に入っている）・

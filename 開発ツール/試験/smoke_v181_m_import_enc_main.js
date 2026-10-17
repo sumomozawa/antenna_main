@@ -26,6 +26,38 @@
      ⑥b 取込-8：写真だけの 📥（欄は変わらない）でも確かめの窓が出る
      ⑦  v176-6：📥 の預けの注意は、預けの台帳（proj）が空なら「別の物件」と言わない（現場で開いていただけの台帳 ledger では決めない）
      ⑧  v176-7：📥 の預けの窓で、PC の値を現場で直した値に置き換える欄は「置き換え」と言う（PC が空の欄は今までどおり「補完」）
+   ---- 2段目（暗号の戸別：v178a-1〜4・取込-2・取込-3）----
+     ⑨a v178a-1・取込-2：共有の物件を開いて 📁 の .hyb（A・B）→ 🔓 → 📥 G → .hyb は A・B・G（鍵の元はそのまま）・知らせに ⚠ なし・
+         「まだ入っていない」の印なし → ほかの端末の保存とまとめて行を作り直しても、行に G・.hyb も A・B・G
+         （前は .hyb は A・B のまま「取込: 1 件」だけ、まとめると G が消えた）
+     ⑨b v178a-1：物件の暗号の行（ファイルとつながっていない・写真を剥がした封筒）を開いて写真 P を足し「💾 物件に保存」
+         → .hyb は A・P・鍵の元は行の封筒と同じ → 物件を開き直してもう一度「💾 物件に保存」（増幅器を 1U に）→ .hyb は A・P・1U
+         （前は .hyb は A だけで「個別JSONも更新しました」）・帯は押せるボタン（💾 物件に保存）も言う
+     ⑨c v178a-1・取込-2：覚えているパスワードが .hyb と違うときの 📥 G → .hyb は A・B のまま（書き替えない写真）・知らせに ⚠「まだ入れていません」
+         （「書けていません」に数える）・「まだ入っていない」の印が立つ
+         → ほかの端末の保存とまとめて行を作り直しても G は行に残る → 🔓 まとめて復号しても残る → 正しいパスワードで開いて
+           「💾 物件に保存」→ .hyb は A・B・G
+     ⑨d v178a-1・取込-2：⑨c と同じく入れられなかった 📥 G（まだ入っていない）→ 正しいパスワードでもう一度 📥 H → .hyb は A・B・G・H・
+         「まだ入っていない」の印を下ろす・2回目の知らせに ⚠ なし
+     ⑨e v178a-1：写真の無かった .hyb へ（共有の物件で）📥 G → .hyb に G → 物件を開き直して（行は写真を持たない）増幅器を直して「💾 物件に保存」
+         → .hyb の G が残る（行・物件の封筒に「ファイルに写真がある」印が無いと、写真なしで書き戻していた）
+     ⑩a v178a-2：物件なしで 📁 の .hyb（A・B）→ 🔓 → 📥 G → 🔄 一括再暗号化 → .hyb は A・B・G → 📁 読み直しで確かめの窓を出さない
+     ⑩p v178a-2：同じく 📥 G のあと 📄 一括平文化 → 書き出した .json は A・B・G
+     ⑩d v178a-2：写真の出ている画面で開いて何もせず戻る → 📥 G → 開く（写真の出ていない画面・G）→ 電話を直して戻る → 🔄 → A・B・G（A・B を落とさない）
+     ⑩e v178a-2：全暗号化（.enc。A・B・3U）→ 🔓 → 📥 G・1U → 🔄 → .enc は A・B・G・1U
+     ⑪a v178a-3：📁 の .hyb（A・B）を開いて電話を直す → そのあいだにほかの PC が C を足した → 💾 上書き保存 → A・B・C（前は A・B）
+     ⑪d v178a-3：写真の出ている画面で B を × で消して 💾 上書き保存 → A（消したものは消える）→ P を足して保存 → P を消して保存 → A
+     ⑪f v178a-3：⑪d と同じことを .enc で（消したものは消える・保存したあとで消した P も戻らない）
+     ⑪e v178a-3：.enc を開いて電話を直す → ほかの PC が C を足した（同じパスワード）→ 💾 上書き保存 → A・B・C
+     ⑪p v178a-3：.enc を開いて電話を直す → ほかの PC が別のパスワードにかけ直した → 💾 上書き保存は書かずに知らせる（前は古い中身・古いパスワードで書いた）
+     ⑪h v178a-3：.hyb（写真の出ている画面）で、ほかの PC が別のパスワードにかけ直した → 書かずに知らせる
+     ⑫a v178a-4：写真の出ている画面で B を消して戻る → 開き直す（写真の出ていない画面・A）→ 💾 上書き保存 → A → 開き直しても A（前は A・B）
+     ⑫l v178a-4：写真 A の名前を「玄関」にして戻る → 開き直して 💾 上書き保存 → .hyb の A は「玄関」（前は「写真A」に戻った）
+     ⑫r v178a-4：B を消して戻る → 🔄 一括再暗号化 → A
+     ⑫d v178a-4：写真の出ている画面で開いて何もせず戻る → 📥 G（物件なし）→ 開く（G だけ）→ 💾 上書き保存 → A・B・G（A・B を落とさない）
+     ⑬  取込-3：.enc（A・B・3U・長さ5）→ 🔓 → 📥（G・1U・25）→ 知らせに ⚠（.enc には入れていない）→ 開くと 1U・25・A・B・G
+         → 💾 上書き保存 → .enc も 1U・25・A・B・G・電話・「まだ入っていない」の印を下ろす（前は 3U・5・A・B で開いて書いた）
+     ⑬p 取込-3：同じく、開くときパスワードを聞かれて入れる枝でも 1U・25・A・B・G
    ★場面ごとに新しいブラウザの入れ物（newContext）を使う★ フォルダは試験の中で作る作り物。
    使い方: node smoke_v181_m_import_enc_main.js [メイン index.html の file:// URL]　（ONLY=①a,② で場面を絞れる。SCENE= も同じ） */
 const { chromium } = require('playwright-core');
@@ -157,6 +189,130 @@ const SETUP = `
     window.showDirectoryPicker = async () => list;
     const c = window.confirm; window.confirm = () => true;
     try { await listReloadFolder(); } finally { window.confirm = c; }
+  };
+  /* ---- 2段目（暗号の戸別）の道具 ---- */
+  window.__photoSet = seed => ({
+    A: { id: 'hA', label: '写真A', dataUri: __jpeg(600, 450, 0.85, seed) },     B: { id: 'hB', label: '写真B', dataUri: __jpeg(640, 480, 0.85, seed + 1) },
+    C: { id: 'hC', label: '写真C', dataUri: __jpeg(620, 460, 0.85, seed + 2) },  G: { id: 'G', label: '現場', dataUri: __jpeg(560, 420, 0.85, seed + 3) },
+    P: { id: 'P', label: '足した', dataUri: __jpeg(500, 400, 0.85, seed + 4) } });
+  /* 暗号の戸別ファイル（kind＝hybrid／full）の入ったフォルダ */
+  window.__encFolder = async (kind, NO, PW, photos, extra) => {
+    const base = Object.assign({ chosho_mgmt_no: NO, chosho_cust_name: '暗号 様', chosho_cust_tel: '011-000-0000', chosho_status: 'in_progress',
+                                 work_type: 'uhf_new', amplifier: 'amp_3u43', cable_main_len: '5', chosho_photos: photos }, extra || {});
+    const FN = NO + (kind === 'full' ? '.enc' : '.hyb');
+    const env = (kind === 'full') ? await encryptJsonString(JSON.stringify(base), PW) : await encryptHybrid(base, PW);
+    return { FN, env, list: __mk('リスト', { [FN]: JSON.stringify(env, null, 2) }, {}, { resolve: true }) };
+  };
+  /* 暗号の戸別ファイルをほどいた中身（写真は写真IDを並べ替えたもの） */
+  window.__dec = async (list, FN, pw) => {
+    try { const j = JSON.parse(list.__files[FN]);
+      const x = (j.format === 'hybrid') ? await decryptHybrid(j, pw) : JSON.parse(await decryptJsonString(j, pw));
+      const ps = (Array.isArray(x.chosho_photos) ? x.chosho_photos : []).filter(p => p && p.dataUri);
+      return { ids: ps.map(p => p.id).sort().join(','), labels: ps.map(p => p.id + ':' + p.label).sort().join(','),
+               tel: x.chosho_cust_tel, amp: x.amplifier, len: x.cable_main_len, salt: j.salt || '' };
+    } catch(e){ return { ids: '（ほどけない）' }; } };
+  /* ほかのパソコンがファイルを書き替えた（edit で中身を直す。newPw＝別のパスワードにかけ直す） */
+  window.__other = async (list, FN, pw, edit, newPw) => {
+    const j = JSON.parse(list.__files[FN]);
+    const x = (j.format === 'hybrid') ? await decryptHybrid(j, pw) : JSON.parse(await decryptJsonString(j, pw));
+    if(edit) edit(x);
+    const env = (j.format === 'hybrid') ? await encryptHybrid(x, newPw || pw) : await encryptJsonString(JSON.stringify(x), newPw || pw);
+    list.__files[FN] = JSON.stringify(env, null, 2);
+  };
+  window.__shown = () => (STATE.photos || []).filter(p => p && p.dataUri).map(p => p.id).sort().join(',');
+  window.__look = () => ({ shown: __shown(), stripped: !!_editorPhotosStripped, amp: __v('amplifier'), len: __v('cable_main_len'),
+                           btn: (document.getElementById('btn-save-overwrite') || {}).textContent || '',
+                           banner: ((document.getElementById('photo-stripped-banner') || {}).textContent || '') });
+  /* 一覧へ戻る（画面を直していれば行へ取り込む） */
+  window.__back = async () => { openListView(); __stopProjSave(); await new Promise(r => setTimeout(r, 300)); };
+  /* 写真の × を押す（確かめの窓は OK） */
+  window.__delPhoto = async id => {
+    const i = (STATE.photos || []).findIndex(p => p && p.id === id);
+    const b = document.querySelector('[data-photo-del="' + i + '"]');
+    const c = window.confirm; window.confirm = () => true;
+    try { if(b) b.click(); } finally { window.confirm = c; }
+    await new Promise(r => setTimeout(r, 300));
+    return !!b;
+  };
+  /* 写真の名前を直す */
+  window.__renamePhoto = (id, label) => {
+    const i = (STATE.photos || []).findIndex(p => p && p.id === id);
+    const el = document.querySelector('[data-photo-label="' + i + '"]');
+    if(!el) return false;
+    el.value = label; el.dispatchEvent(new Event('input')); el.dispatchEvent(new Event('change'));
+    return true;
+  };
+  /* エディタの 📷 まとめて取り込み から写真を入れる（利用者が写真を選んだのと同じ道） */
+  window.__addPhoto = async function(uri, name){
+    const blob = await (await fetch(uri)).blob();
+    const file = new File([blob], name || 'p.jpg', { type: 'image/jpeg' });
+    const inp = document.getElementById('photo-bulk-file');
+    const btn = document.getElementById('btn-photo-bulk');
+    const before = (STATE.photos || []).filter(p => p && p.dataUri).length;
+    const dt = new DataTransfer(); dt.items.add(file); inp.files = dt.files;
+    inp.dispatchEvent(new Event('change'));
+    for(let i = 0; i < 600; i++){
+      await new Promise(r => setTimeout(r, 50));
+      if((STATE.photos || []).filter(p => p && p.dataUri).length > before && !(btn && btn.disabled)) break;
+    }
+    await new Promise(r => setTimeout(r, 100));
+    const real = (STATE.photos || []).filter(p => p && p.dataUri);
+    return real[real.length - 1] || null;
+  };
+  /* 🔄 一括再暗号化（方式・パスワードはそのまま） */
+  window.__reenc = async () => {
+    document.getElementById('bulk-target').value = 'encrypted';
+    document.getElementById('bulk-new-format').value = 'keep';
+    document.getElementById('bulk-new-pw-src').value = 'keep';
+    const c = window.confirm, a = window.alert; window.confirm = () => true; window.alert = () => {};
+    try { await applyBulkReenc(); } finally { window.confirm = c; window.alert = a; }
+  };
+  /* 📄 一括平文化（.hyb の隣に .json を作れないので保存の窓に落ちる。その中身） */
+  window.__toPlain = async () => {
+    const blobs = [], oURL = URL.createObjectURL;
+    URL.createObjectURL = b => { blobs.push(b); return oURL.call(URL, b); };
+    const c = window.confirm, a = window.alert; window.confirm = () => true; window.alert = () => {};
+    try { await bulkConvertToPlain(); } finally { URL.createObjectURL = oURL; window.confirm = c; window.alert = a; }
+    const js = blobs.filter(b => b && b.type === 'application/json');
+    if(!js.length) return null;
+    try { return JSON.parse(await js[js.length - 1].text()); } catch(_){ return null; }
+  };
+  /* 共有ファイル（物件ファイル）の作り物。__otherDeviceSaves でほかの端末が保存した形にする（版178 の試験と同じ） */
+  window.__mkShared = function(P){
+    window.__disk = JSON.stringify(P);
+    return { kind: 'file', name: 'shared.json',
+      getFile: async () => ({ name: 'shared.json', size: window.__disk.length, lastModified: Date.now(), text: async () => window.__disk }),
+      createWritable: async () => { let buf = ''; return { write: async t => { buf += t; }, close: async () => { window.__disk = buf; } }; },
+      queryPermission: async () => 'granted', requestPermission: async () => 'granted' };
+  };
+  window.__openShared = async (P) => {
+    try { listCensusClear(); } catch(_){}
+    _listRows = []; _listDirHandle = null; _projDirHandle = null;
+    P.updatedAt = '2026-10-15T00:00:00.000Z';
+    const pfh = __mkShared(P);
+    await projIdbPut(P);
+    await applyProject(P, { silent: true, fileHandle: pfh });
+    try { writeSharedBak = async () => {}; } catch(_){}
+    return pfh;
+  };
+  window.__otherDeviceSaves = (no2) => {
+    const other = JSON.parse(window.__disk);
+    other.updatedAt = new Date(Date.now() + 60000).toISOString();
+    if(no2) other.cases.push({ caseId: 'cX' + no2, file: 'リスト/' + no2 + '.json', lastModified: 0,
+      payload: { chosho_mgmt_no: no2, chosho_cust_name: '別の端末 様', chosho_status: 'in_progress', work_type: '' } });
+    window.__disk = JSON.stringify(other);
+  };
+  /* 共有の物件を開いて、工事フォルダ（その１/リスト）を 📁 で読み、🔓 まとめて復号する */
+  window.__sharedHyb = async (pid, P1N, list, PW) => {
+    const root = __mk('その１', {}, { 'リスト': list }, { resolve: true });
+    await __openShared(__proj(pid, P1N));
+    window.showDirectoryPicker = async () => root;
+    setSessionPassword(PW);
+    const c = window.confirm, a = window.alert; window.confirm = () => true; window.alert = () => {};
+    try { openListView(); __stopProjSave(); await listSelectFolder(); __stopProjSave(); await unlockListView({ silent: true }); }
+    finally { window.confirm = c; window.alert = a; }
+    __stopProjSave();
+    return root;
   };
 `;
 
@@ -550,7 +706,7 @@ const flat = s => String(s || '').replace(/\s+/g, ' ');
          && r.ed.editing && r.btn && r.btn.pressed,
          '④h試験の前提: 📄 の .hyb の行・📥 で工事フォルダの .hyb は 1U・開いて保存できる → ' + short(r));
       ok(r.ed.amp === 'amp_1u45' && r.ed.len === '25', '★④h 📥 したのに、開くと 📄 の古い .hyb（3U・5）で開いた → ' + short(r.ed));
-      ok(r.file.amp === 'amp_1u45' && r.file.len === '25' && r.file.ph >= 1,   // お客様の欄・足した写真は暗号の部分（.hyb へは入らない＝版178 の決まり）
+      ok(r.file.amp === 'amp_1u45' && r.file.len === '25' && r.file.ph >= 1,   // お客様の欄は暗号の部分（.hyb へは 🔄 でしか入らない＝版178 の決まり）。足した写真は 2段目から入る（⑨）
          '★④h 「💾 物件に保存」で、工事フォルダの .hyb を古い値（3U・5）に戻した（または写真 A が消えた） → ' + short(r.file));
     }
     await ctx.close();
@@ -699,6 +855,413 @@ const flat = s => String(s || '').replace(/\s+/g, ' ');
          '★⑧ 預けで PC の氏名（三沢 太郎）を置き換えるのに「📱現場から補完」と出した（前の値を見せない） → ' + r.text);
       ok(/📱現場から補完: 011-222-3333/.test(r.text) && !/替えます: → /.test(r.text),
          '★⑧ PC が空の欄（電話）まで「置き換え」と言った → ' + r.text);
+    }
+    await ctx.close();
+  }
+
+  /* ======== 2段目：暗号の戸別（v178a-1〜4・取込-2・取込-3） ======== */
+
+  // ---- ⑨a 共有の物件で 📁 の .hyb へ 📥 → .hyb にも G・まとめて作り直しても G ----
+  if(want('⑨a')){
+    const { ctx, page } = await openMain('⑨a');
+    const r = await run(page, async ({ NO, P1N }) => {
+      const PW = 'pw-181-9a', ph = __photoSet(91);
+      const { FN, list } = await __encFolder('hybrid', NO, PW, [ph.A, ph.B]);
+      await __sharedHyb('pj181-9a', P1N, list, PW);
+      const row = __rowOf(NO);
+      const salt0 = JSON.parse(list.__files[FN]).salt;
+      const o = { row0: row ? { type: row.fileType, unlocked: !!row.unlocked, fh: !!row.fileHandle } : null };
+      o.imp = String(await __genbaImport([{ name: NO + '.json', obj: { chosho_mgmt_no: NO, _origin: 'genba', work_type: 'uhf_new', chosho_photos: [ph.G] } }])).replace(/\s+/g, ' ');
+      __stopProjSave();
+      o.file = await __dec(list, FN, PW);
+      o.saltKept = o.file.salt === salt0 && row.envelope.salt === salt0;
+      o.row1 = { ph: __ids(row.data && row.data.chosho_photos), unsaved: !!row._genbaUnsaved };
+      try { await projSaveNow(); } catch(_){}
+      __otherDeviceSaves('2612MKM099');                      // ほかの端末が共有ファイルを保存した
+      try { projTouch(); await projSaveNow(); } catch(e){ o.err = String(e); }   // この端末の保存でまとめる（行を作り直す）
+      __stopProjSave();
+      const nr = __rowOf(NO);
+      o.rebuilt = nr ? { same: nr === row, ph: __ids(nr.data && nr.data.chosho_photos) } : null;
+      o.file2 = await __dec(list, FN, PW);
+      return o;
+    }, { NO, P1N });
+    console.log('⑨a 共有の物件で .hyb へ 📥', short(r));
+    ok(!r.error, '⑨a止まった → ' + r.error);
+    if(!r.error){
+      ok(r.row0 && r.row0.type === 'hybrid' && r.row0.unlocked && r.row0.fh && /取込: 1 件/.test(r.imp) && r.rebuilt && !r.rebuilt.same,
+         '⑨a試験の前提: 📁 の .hyb を 🔓 して 📥 できる・まとめると行を作り直す → ' + short(r));
+      ok(r.file.ids === 'G,hA,hB', '★⑨a 📥 で入れた写真 G が .hyb に入らない（または A・B が減った） → ' + short(r.file));
+      ok(r.saltKept, '★⑨a 写真を入れたとき .hyb の鍵の元（salt）が替わった（行・物件の封筒と合わなくなる） → ' + short(r.file));
+      ok(!/\u26a0|書けていません/.test(r.imp), '★⑨a 写真まで入れたのに「書けていません」の知らせが出た → ' + r.imp);
+      ok(r.row1.ph === 'G' && !r.row1.unsaved, '★⑨a 入れて確かめたのに「まだ戸別ファイルに入っていない」の印が残った（または行から G を外した） → ' + short(r.row1));
+      ok(r.rebuilt && r.rebuilt.ph === 'G' && r.file2.ids === 'G,hA,hB', '★⑨a ほかの端末の保存とまとめたら、行または .hyb から G が消えた → ' + short(r));
+    }
+    await ctx.close();
+  }
+
+  // ---- ⑨b 物件の暗号の行（つながっていない）に P を足して「💾 物件に保存」→ .hyb に P・開き直してもう一度 ----
+  if(want('⑨b')){
+    const { ctx, page } = await openMain('⑨b');
+    const r = await run(page, async ({ NO, P1N }) => {
+      const PW = 'pw-181-9b', ph = __photoSet(95);
+      const { FN, env, list } = await __encFolder('hybrid', NO, PW, [ph.A]);
+      const root = __mk('その１', {}, { 'リスト': list }, { resolve: true });
+      const slim = Object.assign({}, env, { encrypted_fields: Object.assign({}, env.encrypted_fields, { chosho_photos: { stripped: true } }) });
+      const PJ = __proj('pj181-9b', P1N); PJ.cases = [{ caseId: 'c1', file: 'リスト/' + FN, lastModified: 0, payload: slim }];
+      await __openProj(PJ);
+      _projDirHandle = root; setSessionPassword(PW);
+      const row = _listRows[0];
+      await openCaseInEditor(row);
+      const o = { ed: __look() };
+      o.added = !!(await __addPhoto(ph.P.dataUri, 'p.jpg'));
+      const log = __catch(true);
+      o.btn = await __pressSave(); __stopProjSave();
+      o.said = log.said.map(m => m.replace(/\s+/g, ' ').slice(0, 300));
+      o.file = await __dec(list, FN, PW);
+      o.saltSame = row.envelope.salt === JSON.parse(list.__files[FN]).salt;
+      await new Promise(res => setTimeout(res, 300));
+      const pj = await projIdbGet('pj181-9b');               // アプリを開き直したのと同じ：物件を読み直して、もう一度開いて保存
+      await __openProj(pj); _projDirHandle = root; setSessionPassword(PW);
+      await openCaseInEditor(_listRows[0]);
+      __setField('amplifier', 'amp_1u45');                   // 暗号でない欄（お客様の欄は 🔄 でしか暗号の部分に入らない＝版178 の決まり）
+      const log2 = __catch(true);
+      o.btn2 = await __pressSave(); __stopProjSave();
+      o.said2 = log2.said.map(m => m.replace(/\s+/g, ' ').slice(0, 300));
+      o.file2 = await __dec(list, FN, PW);
+      return o;
+    }, { NO, P1N });
+    console.log('⑨b 物件の暗号の行に足して物件に保存', short(r));
+    ok(!r.error, '⑨b止まった → ' + r.error);
+    if(!r.error){
+      ok(r.ed.stripped && /物件に保存/.test(r.ed.btn) && r.added && r.btn && r.btn.pressed && r.btn2 && r.btn2.pressed,
+         '⑨b試験の前提: 物件の暗号の行は写真の出ていない画面・押せるのは「💾 物件に保存」 → ' + short(r));
+      ok(/物件に保存/.test(r.ed.banner), '★⑨b 帯が、押せない「💾 上書き保存」だけを言う（押せるのは「💾 物件に保存」） → ' + r.ed.banner);
+      ok(r.file.ids.split(',').length === 2 && /hA/.test(r.file.ids) && (r.said || []).some(m => /個別JSONも更新しました/.test(m) && !/まだ入れていません/.test(m)),
+         '★⑨b 「💾 物件に保存」で、足した写真が .hyb に入らない（なのに「個別JSONも更新しました」） → ' + short({ file: r.file, said: r.said }));
+      ok(r.saltSame, '★⑨b 写真を入れたとき .hyb の鍵の元が替わり、行の封筒と合わない → ' + short(r.file));
+      ok(r.file2.amp === 'amp_1u45' && r.file2.ids === r.file.ids,
+         '★⑨b 物件を開き直してもう一度「💾 物件に保存」すると、.hyb に書けない（鍵が違う）・写真が減った → ' + short({ file2: r.file2, said2: r.said2 }));
+    }
+    await ctx.close();
+  }
+
+  // ---- ⑨c 覚えているパスワードが .hyb と違うときの 📥 → ⚠・まだ入っていない／まとめても・🔓 しても残る → 正しいパスワードで入る ----
+  if(want('⑨c')){
+    const { ctx, page } = await openMain('⑨c');
+    const r = await run(page, async ({ NO, P1N }) => {
+      const PW = 'pw-181-9c', ph = __photoSet(101);
+      const { FN, list } = await __encFolder('hybrid', NO, PW, [ph.A, ph.B]);
+      const root = await __sharedHyb('pj181-9c', P1N, list, PW);
+      const row = __rowOf(NO);
+      setSessionPassword('chigau-pass-9c');                   // 覚えているパスワードが、この .hyb のものと違う
+      const o = { row0: row ? { unlocked: !!row.unlocked } : null };
+      o.imp = String(await __genbaImport([{ name: NO + '.json', obj: { chosho_mgmt_no: NO, _origin: 'genba', work_type: 'uhf_new', chosho_photos: [ph.G] } }])).replace(/\s+/g, ' ');
+      __stopProjSave();
+      o.file = await __dec(list, FN, PW);
+      o.row1 = { ph: __ids(row.data && row.data.chosho_photos), unsaved: !!row._genbaUnsaved };
+      try { await projSaveNow(); } catch(_){}
+      __otherDeviceSaves('2612MKM099');
+      try { projTouch(); await projSaveNow(); } catch(e){ o.err = String(e); }
+      __stopProjSave();
+      let nr = __rowOf(NO);
+      o.rebuilt = nr ? { same: nr === row, ph: __ids(nr.data && nr.data.chosho_photos), unlocked: !!nr.unlocked } : null;
+      setSessionPassword(PW);
+      { const c = window.confirm, a = window.alert; window.confirm = () => true; window.alert = () => {};
+        try { await unlockListView({ silent: true }); } finally { window.confirm = c; window.alert = a; } }
+      nr = __rowOf(NO);
+      o.unlocked = nr ? { unlocked: !!nr.unlocked, ph: __ids(nr.data && nr.data.chosho_photos) } : null;
+      _projDirHandle = root;
+      await openCaseInEditor(nr);
+      o.ed = __look();
+      const log = __catch(true);
+      o.btn = await __pressSave(); __stopProjSave();
+      o.said = log.said.map(m => m.replace(/\s+/g, ' ').slice(0, 200));
+      o.file2 = await __dec(list, FN, PW);
+      return o;
+    }, { NO, P1N });
+    console.log('⑨c パスワードが違うときの .hyb へ 📥', short(r));
+    ok(!r.error, '⑨c止まった → ' + r.error);
+    if(!r.error){
+      ok(r.row0 && r.row0.unlocked && /取込: 1 件/.test(r.imp) && r.rebuilt && !r.rebuilt.same && r.btn && r.btn.pressed,
+         '⑨c試験の前提: 🔓 した .hyb の行へ 📥 できる・まとめると行を作り直す・開いて保存できる → ' + short(r));
+      ok(r.file.ids === 'hA,hB', '⑨c .hyb の写真 A・B が減った（ほどけないファイルに写真を書いた） → ' + short(r.file));
+      ok(/まだ入れていません/.test(r.imp) && /書けていません/.test(r.imp),
+         '★⑨c 取り込んだ写真を .hyb に入れられなかったのに知らせない（「書けていません」に数えない） → ' + r.imp);
+      ok(r.row1.ph === 'G' && r.row1.unsaved, '★⑨c .hyb に入れられなかった写真 G を「まだ戸別ファイルに入っていない」にしない（📁 の読み直しで黙って消える） → ' + short(r.row1));
+      ok(r.rebuilt.ph === 'G', '★⑨c ほかの端末の保存とまとめて行を作り直すと、.hyb に入っていない写真 G が消えた → ' + short(r.rebuilt));
+      ok(r.unlocked && r.unlocked.unlocked && r.unlocked.ph === 'G', '★⑨c 🔓 まとめて復号で、行にだけある写真 G を落とした → ' + short(r.unlocked));
+      ok(/G/.test(r.ed.shown) && r.file2.ids === 'G,hA,hB', '★⑨c 正しいパスワードで開いて「💾 物件に保存」しても、.hyb に G が入らない → ' + short({ ed: r.ed, file2: r.file2, said: r.said }));
+    }
+    await ctx.close();
+  }
+
+  // ---- ⑨d 入れられなかった 📥 G のあと、正しいパスワードでもう一度 📥 H → .hyb に G・H・「まだ入っていない」を下ろす ----
+  if(want('⑨d')){
+    const { ctx, page } = await openMain('⑨d');
+    const r = await run(page, async ({ NO, P1N }) => {
+      const PW = 'pw-181-9d', ph = __photoSet(103);
+      const H = { id: 'H', label: '現場2', dataUri: __jpeg(520, 400, 0.85, 109) };
+      const { FN, list } = await __encFolder('hybrid', NO, PW, [ph.A, ph.B]);
+      await __sharedHyb('pj181-9d', P1N, list, PW);
+      const row = __rowOf(NO);
+      setSessionPassword('chigau-pass-9d');
+      const o = {};
+      o.imp1 = String(await __genbaImport([{ name: NO + '.json', obj: { chosho_mgmt_no: NO, _origin: 'genba', work_type: 'uhf_new', chosho_photos: [ph.G] } }])).replace(/\s+/g, ' ');
+      __stopProjSave();
+      o.row1 = { ph: __ids(row.data && row.data.chosho_photos), unsaved: !!row._genbaUnsaved };
+      setSessionPassword(PW);
+      o.imp2 = String(await __genbaImport([{ name: NO + '.json', obj: { chosho_mgmt_no: NO, _origin: 'genba', work_type: 'uhf_new', chosho_photos: [H] } }])).replace(/\s+/g, ' ');
+      __stopProjSave();
+      o.row2 = { ph: __ids(row.data && row.data.chosho_photos), unsaved: !!row._genbaUnsaved };
+      o.file = await __dec(list, FN, PW);
+      return o;
+    }, { NO, P1N });
+    console.log('⑨d 入れられなかった 📥 のあと、もう一度 📥', short(r));
+    ok(!r.error, '⑨d止まった → ' + r.error);
+    if(!r.error){
+      ok(/まだ入れていません/.test(r.imp1) && r.row1.ph === 'G' && r.row1.unsaved && /取込: 1 件/.test(r.imp2),
+         '⑨d試験の前提: 1回目は .hyb に入れられず「まだ入っていない」 → ' + short(r));
+      ok(r.file.ids === 'G,H,hA,hB' && !/まだ入れていません|書けていません/.test(r.imp2),
+         '★⑨d 正しいパスワードの 📥 で、前に入れられなかった写真 G（と H）が .hyb に入らない → ' + short({ file: r.file, imp2: r.imp2 }));
+      ok(!r.row2.unsaved, '★⑨d 写真がみな .hyb に入ったのに「まだ戸別ファイルに入っていない」の印が残った（📁 の読み直しのたびに確かめる） → ' + short(r.row2));
+    }
+    await ctx.close();
+  }
+
+  // ---- ⑨e 写真の無かった .hyb へ 📥 G → 物件を開き直して「💾 物件に保存」しても G が残る ----
+  if(want('⑨e')){
+    const { ctx, page } = await openMain('⑨e');
+    const r = await run(page, async ({ NO, P1N }) => {
+      const PW = 'pw-181-9e', ph = __photoSet(105);
+      const { FN, list } = await __encFolder('hybrid', NO, PW, []);
+      const root = await __sharedHyb('pj181-9e', P1N, list, PW);
+      const o = { file0: await __dec(list, FN, PW) };
+      o.imp = String(await __genbaImport([{ name: NO + '.json', obj: { chosho_mgmt_no: NO, _origin: 'genba', work_type: 'uhf_new', chosho_photos: [ph.G] } }])).replace(/\s+/g, ' ').slice(0, 120);
+      __stopProjSave();
+      try { await projSaveNow(); } catch(_){}
+      o.file1 = await __dec(list, FN, PW);
+      const pj = await projIdbGet('pj181-9e');                 // アプリを開き直したのと同じ（行は写真を持たない）
+      await __openProj(pj); _projDirHandle = root; setSessionPassword(PW);
+      const row = __rowOf(NO);
+      o.row = row ? { ph: __ids(row.data && row.data.chosho_photos) } : null;
+      await openCaseInEditor(row);
+      __setField('amplifier', 'amp_1u45');
+      const log = __catch(true);
+      o.btn = await __pressSave(); __stopProjSave();
+      o.said = log.said.map(m => m.replace(/\s+/g, ' ').slice(0, 160));
+      o.file2 = await __dec(list, FN, PW);
+      return o;
+    }, { NO, P1N });
+    console.log('⑨e 写真の無かった .hyb へ 📥 → 開き直して物件に保存', short(r));
+    ok(!r.error, '⑨e止まった → ' + r.error);
+    if(!r.error){
+      ok(r.file0.ids === '' && /取込: 1 件/.test(r.imp) && r.file1.ids === 'G' && r.row && r.row.ph === '' && r.btn && r.btn.pressed && r.file2.amp === 'amp_1u45',
+         '⑨e試験の前提: 写真の無い .hyb へ 📥 すると .hyb に G・開き直した行は写真を持たない・物件に保存で書ける → ' + short(r));
+      ok(r.file2.ids === 'G', '★⑨e 写真の無かった .hyb に入れた G が、物件を開き直して「💾 物件に保存」すると消えた（封筒に「ファイルに写真がある」印が無い） → ' + short(r.file2));
+    }
+    await ctx.close();
+  }
+
+  // ---- ⑩ 🔄 一括再暗号化・📄 一括平文化で、📥 で入れた写真（行にだけある）も書く ----
+  for(const mode of ['a', 'p', 'd', 'e'].filter(m => want('⑩' + m))){
+    const L = '⑩' + mode;
+    const { ctx, page } = await openMain(L);
+    const r = await run(page, async ({ NO, mode }) => {
+      const PW = 'pw-181-10', ph = __photoSet(111);
+      const kind = (mode === 'e') ? 'full' : 'hybrid';
+      const { FN, list } = await __encFolder(kind, NO, PW, [ph.A, ph.B]);
+      setSessionPassword(PW);
+      await __loadFolder(list);
+      await unlockListView({ silent: true });
+      const row = __rowOf(NO);
+      const o = { row0: row ? { type: row.fileType, unlocked: !!row.unlocked } : null };
+      if(mode === 'd'){ await openCaseInEditor(row); o.open1 = __look(); await __back(); }   // 写真の出ている画面で開いて、何もせずに戻る
+      const genba = { chosho_mgmt_no: NO, _origin: 'genba', work_type: 'uhf_new', chosho_photos: [ph.G] };
+      if(mode === 'e') genba.amplifier = 'amp_1u45';
+      o.imp = String(await __genbaImport([{ name: NO + '.json', obj: genba }])).replace(/\s+/g, ' ').slice(0, 120);
+      if(mode === 'd'){ await openCaseInEditor(row); o.open2 = __look(); __setTel('090-3333-4444'); await __back(); }
+      o.rowBefore = { ph: __ids(row.data && row.data.chosho_photos), unsaved: !!row._genbaUnsaved };
+      if(mode === 'p'){
+        const j = await __toPlain();
+        o.plain = j ? { ids: (j.chosho_photos || []).filter(p => p && p.dataUri).map(p => p.id).sort().join(','), enc: !!j.encrypted_fields } : null;
+        return o;
+      }
+      await __reenc();
+      o.file = await __dec(list, FN, PW);
+      o.rowAfter = { unsaved: !!row._genbaUnsaved };
+      if(mode === 'a'){
+        const log = __catch(false);
+        o.reload = await listReloadFolder();
+        o.asked = log.asked.filter(m => /まだ戸別ファイルへ入っていません/.test(m)).length;
+        o.file2 = await __dec(list, FN, PW);
+      }
+      return o;
+    }, { NO, mode });
+    console.log(L + ' 📥 のあとの一括再暗号化・平文化', short(r));
+    ok(!r.error, L + '止まった → ' + r.error);
+    if(!r.error){
+      ok(r.row0 && r.row0.unlocked && /取込: 1 件/.test(r.imp) && r.rowBefore.ph === 'G' && (mode !== 'd' || (r.open1 && r.open1.shown === 'hA,hB' && !r.open1.stripped && r.open2.stripped)),
+         L + '試験の前提: 🔓 した暗号の行へ 📥 すると行に G → ' + short(r));
+      if(mode === 'p') ok(r.plain && r.plain.ids === 'G,hA,hB' && !r.plain.enc, '★' + L + ' 📄 一括平文化で、📥 で入れた写真 G が書き出した .json に入らない → ' + short(r.plain));
+      else {
+        ok(r.file.ids === 'G,hA,hB', '★' + L + ' 🔄 一括再暗号化で、📥 で入れた写真 G が入らない（または A・B を落とした） → ' + short(r.file));
+        if(mode === 'e') ok(r.file.amp === 'amp_1u45', '★' + L + ' 🔄 一括再暗号化で、📥 で入れた欄（増幅器 1U）が .enc に入らない → ' + short(r.file));
+        ok(!r.rowAfter.unsaved, '★' + L + ' 🔄 で書けたのに「まだ戸別ファイルに入っていない」の印が残った → ' + short(r.rowAfter));
+      }
+      if(mode === 'a') ok(r.reload === true && r.asked === 0 && r.file2.ids === 'G,hA,hB',
+         '★' + L + ' 🔄 のあと 📁 で読み直すと、確かめの窓が出た・.hyb から G が消えた → ' + short({ reload: r.reload, asked: r.asked, file2: r.file2 }));
+    }
+    await ctx.close();
+  }
+
+  // ---- ⑪ 💾 上書き保存（暗号）で、開いたあとでほかの PC が足した写真を消さない・別のパスワードのファイルに書かない ----
+  for(const mode of ['a', 'd', 'f', 'e', 'p', 'h'].filter(m => want('⑪' + m))){
+    const L = '⑪' + mode;
+    const { ctx, page } = await openMain(L);
+    const r = await run(page, async ({ NO, mode }) => {
+      const PW = 'pw-181-11', ph = __photoSet(121);
+      const kind = (mode === 'e' || mode === 'p' || mode === 'f') ? 'full' : 'hybrid';
+      const { FN, list } = await __encFolder(kind, NO, PW, [ph.A, ph.B]);
+      setSessionPassword(PW);
+      await __loadFolder(list);
+      await unlockListView({ silent: true });
+      const row = __rowOf(NO);
+      await openCaseInEditor(row);
+      const o = { open: __look() };
+      const log = __catch(true);
+      if(mode === 'd' || mode === 'f'){
+        o.del = await __delPhoto('hB');
+        o.save1 = (await __pressSave()).pressed;
+        o.file1 = await __dec(list, FN, PW);
+        o.added = !!(await __addPhoto(ph.P.dataUri, 'p.jpg'));
+        o.save2 = (await __pressSave()).pressed;
+        o.file2 = await __dec(list, FN, PW);
+        const pid = (STATE.photos || []).filter(p => p && p.dataUri && p.dataUri !== ph.A.dataUri).map(p => p.id)[0];
+        o.del2 = await __delPhoto(pid);
+        o.save3 = (await __pressSave()).pressed;
+        o.file3 = await __dec(list, FN, PW);
+        return o;
+      }
+      __setTel('090-1111-2222');
+      if(mode === 'p' || mode === 'h') await __other(list, FN, PW, x => { x.chosho_photos = x.chosho_photos.concat([ph.C]); }, 'betsu-pass-11');
+      else await __other(list, FN, PW, x => { x.chosho_photos = x.chosho_photos.concat([ph.C]); });
+      const before = list.__files[FN];
+      o.save = (await __pressSave()).pressed;
+      o.unchanged = list.__files[FN] === before;
+      o.said = log.said.map(m => m.replace(/\s+/g, ' ').slice(0, 200));
+      o.file = await __dec(list, FN, (mode === 'p' || mode === 'h') ? 'betsu-pass-11' : PW);
+      return o;
+    }, { NO, mode });
+    console.log(L + ' 暗号の戸別の上書き保存', short(r));
+    ok(!r.error, L + '止まった → ' + r.error);
+    if(!r.error){
+      ok(r.open.shown === 'hA,hB' && !r.open.stripped && /上書き保存/.test(r.open.btn), L + '試験の前提: 写真の出ている画面で A・B → ' + short(r.open));
+      if(mode === 'd' || mode === 'f'){
+        ok(r.del && r.save1 && r.file1.ids === 'hA', '★' + L + ' 写真の出ている画面で消した B が、💾 上書き保存で消えない → ' + short(r.file1));
+        ok(r.added && r.save2 && r.file2.ids.split(',').length === 2, L + '試験の前提: 足した P が入る → ' + short(r.file2));
+        ok(r.del2 && r.save3 && r.file3.ids === 'hA', '★' + L + ' 保存したあとで消した P が、もう一度の 💾 上書き保存で戻ってきた → ' + short(r.file3));
+      } else if(mode === 'a' || mode === 'e'){
+        ok(r.save && r.file.ids === 'hA,hB,hC' && r.file.tel === '090-1111-2222',
+           '★' + L + ' 開いたあとでほかの PC が足した写真 C が、💾 上書き保存で消えた（または電話が入らない） → ' + short(r.file));
+      } else {
+        ok(r.unchanged && r.file.ids === 'hA,hB,hC', '★' + L + ' ほかの PC が別のパスワードにかけ直したファイルに、古い中身・古いパスワードで書いた → ' + short({ unchanged: r.unchanged, file: r.file }));
+        ok((r.said || []).some(m => /上書き保存していません/.test(m) && /別のパスワード/.test(m) && /入力した内容はこの画面に残っています/.test(m)),
+           '★' + L + ' 書かなかったこと・わけを知らせない → ' + short(r.said));
+      }
+    }
+    await ctx.close();
+  }
+
+  // ---- ⑫ 暗号の戸別で消した写真・直した名前が、開き直して 💾 上書き保存（🔄）すると戻らない ----
+  for(const mode of ['a', 'l', 'r', 'd'].filter(m => want('⑫' + m))){
+    const L = '⑫' + mode;
+    const { ctx, page } = await openMain(L);
+    const r = await run(page, async ({ NO, mode }) => {
+      const PW = 'pw-181-12', ph = __photoSet(131);
+      const { FN, list } = await __encFolder('hybrid', NO, PW, [ph.A, ph.B]);
+      setSessionPassword(PW);
+      await __loadFolder(list);
+      await unlockListView({ silent: true });
+      const row = __rowOf(NO);
+      await openCaseInEditor(row);
+      const o = { open1: __look() };
+      if(mode === 'l') o.renamed = __renamePhoto('hA', '玄関');
+      else if(mode !== 'd') o.del = await __delPhoto('hB');
+      await __back();
+      if(mode === 'd'){
+        o.imp = String(await __genbaImport([{ name: NO + '.json', obj: { chosho_mgmt_no: NO, _origin: 'genba', work_type: 'uhf_new', chosho_photos: [ph.G] } }])).replace(/\s+/g, ' ').slice(0, 80);
+      }
+      o.row = { slim: !!row._slim, ph: __ids(row.data && row.data.chosho_photos) };
+      if(mode === 'r'){ await __reenc(); o.file = await __dec(list, FN, PW); return o; }
+      await openCaseInEditor(row);
+      o.open2 = __look();
+      const log = __catch(true);
+      o.save = (await __pressSave()).pressed;
+      o.said = log.said.map(m => m.replace(/\s+/g, ' ').slice(0, 160));
+      o.file = await __dec(list, FN, PW);
+      await __back();
+      await openCaseInEditor(row);
+      o.open3 = __look();
+      return o;
+    }, { NO, mode });
+    console.log(L + ' 消した写真・直した名前', short(r));
+    ok(!r.error, L + '止まった → ' + r.error);
+    if(!r.error){
+      ok(r.open1.shown === 'hA,hB' && !r.open1.stripped && (mode === 'l' ? r.renamed : (mode === 'd' ? /取込: 1 件/.test(r.imp) : r.del))
+         && (mode === 'r' || (r.save && r.open2.stripped)),
+         L + '試験の前提: 写真の出ている画面で開いて直して戻る → 開き直すと写真の出ていない画面 → ' + short(r));
+      if(mode === 'a'){
+        ok(r.file.ids === 'hA', '★' + L + ' 写真の出ている画面で消した B が、開き直して 💾 上書き保存すると戻った → ' + short(r.file));
+        ok(r.open3.shown === 'hA', '★' + L + ' 開き直すと、消した B が戻ってきた → ' + short(r.open3));
+      }
+      if(mode === 'l') ok(r.file.labels === 'hA:玄関,hB:写真B', '★' + L + ' 写真の出ている画面で直した名前（玄関）が、開き直して 💾 上書き保存すると元に戻った → ' + short(r.file));
+      if(mode === 'r') ok(r.file.ids === 'hA', '★' + L + ' 写真の出ている画面で消した B が、🔄 一括再暗号化で戻った → ' + short(r.file));
+      if(mode === 'd') ok(r.file.ids === 'G,hA,hB', '★' + L + ' 見ただけの写真 A・B を、写真の出ていない画面の上書き保存で消した（G だけになった） → ' + short(r.file));
+    }
+    await ctx.close();
+  }
+
+  // ---- ⑬ 全暗号化（.enc）へ 📥 → 開くと取り込んだ欄・写真が出る → 💾 上書き保存で .enc にも入る ----
+  for(const mode of ['', 'p'].filter(m => want('⑬' + m))){
+    const L = '⑬' + mode;
+    const { ctx, page } = await openMain(L);
+    const r = await run(page, async ({ NO, mode }) => {
+      const PW = 'pw-181-13', ph = __photoSet(141);
+      const { FN, list } = await __encFolder('full', NO, PW, [ph.A, ph.B]);
+      setSessionPassword(PW);
+      await __loadFolder(list);
+      await unlockListView({ silent: true });
+      const row = __rowOf(NO);
+      const o = { row0: row ? { type: row.fileType, unlocked: !!row.unlocked } : null };
+      o.imp = String(await __genbaImport([{ name: NO + '.json', obj: { chosho_mgmt_no: NO, _origin: 'genba', work_type: 'uhf_new',
+                                                                  amplifier: 'amp_1u45', cable_main_len: '25', chosho_photos: [ph.G] } }])).replace(/\s+/g, ' ');
+      o.row1 = { ph: __ids(row.data && row.data.chosho_photos), unsaved: !!row._genbaUnsaved };
+      if(mode === 'p'){                                        // 覚えているパスワードが違う → 開くときに聞かれて入れる
+        setSessionPassword('chigau-pass-13');
+        window.__asked = 0; promptPassword = async () => { window.__asked++; return PW; };
+      }
+      await openCaseInEditor(row);
+      o.ed = __look(); o.asked = window.__asked || 0;
+      __setTel('090-5555-6666');
+      const log = __catch(true);
+      o.save = (await __pressSave()).pressed;
+      o.said = log.said.map(m => m.replace(/\s+/g, ' ').slice(0, 160));
+      o.file = await __dec(list, FN, PW);
+      o.row2 = { unsaved: !!row._genbaUnsaved };
+      return o;
+    }, { NO, mode });
+    console.log(L + ' .enc へ 📥 して開く', short(r));
+    ok(!r.error, L + '止まった → ' + r.error);
+    if(!r.error){
+      ok(r.row0 && r.row0.type === 'full' && r.row0.unlocked && /取込: 1 件/.test(r.imp) && r.row1.ph === 'G' && r.save && (mode !== 'p' || r.asked === 1),
+         L + '試験の前提: 🔓 した .enc の行へ 📥 すると行に G・開いて保存できる' + (mode === 'p' ? '・開くときパスワードを聞かれる' : '') + ' → ' + short(r));
+      if(mode === '') ok(/全暗号化の戸別ファイル（\.enc）には、取り込んだ内容をまだ入れていません/.test(r.imp) && /書けていません/.test(r.imp),
+         '★' + L + ' .enc には書いていないのに知らせない（「書けていません」に数えない） → ' + r.imp);
+      ok(r.ed.amp === 'amp_1u45' && r.ed.len === '25' && r.ed.shown === 'G,hA,hB',
+         '★' + L + ' 📥 したのに、開くと .enc の古い中身（3U・5・A・B）で開いた（取り込んだ写真 G が出ない） → ' + short(r.ed));
+      ok(r.file.amp === 'amp_1u45' && r.file.len === '25' && r.file.ids === 'G,hA,hB' && r.file.tel === '090-5555-6666',
+         '★' + L + ' 💾 上書き保存で、.enc に取り込んだ欄・写真が入らない（古い値で書いた） → ' + short(r.file));
+      ok(!r.row2.unsaved, '★' + L + ' 💾 上書き保存で .enc に入ったのに「まだ戸別ファイルに入っていない」の印が残った → ' + short(r.row2));
     }
     await ctx.close();
   }

@@ -5834,8 +5834,8 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       ok(s('s4').pc >= 2 && s('s4').vis && /^📷 [2-9]/.test(s('s4').cell) && s('s4').click,
          '★㊾nr写真 G を取り込むと、.hyb の行の枚数がファイルの枚数（2）より減った（取り込んだ数だけにした） → ' + short(s('s4')));
       ok(r.prev4 && r.prev4.n >= 1, '㊾nr写真 G の取り込みのあと、.hyb の「写真」欄を押しても写真が出ない → ' + short(r.prev4));
-      ok(s('s4').rowPh === 'G' && ['s1', 's2', 's3', 's4'].every(k => s(k).file === 'A,B'),
-         '㊾nr行の写真 G・.hyb の写真 A・B が減った → ' + short(['s1', 's2', 's3', 's4'].map(k => k + ':' + s(k).rowPh + '/' + s(k).file)));
+      ok(s('s4').rowPh === 'G' && ['s1', 's2', 's3'].every(k => s(k).file === 'A,B') && s('s4').file === 'A,B,G',   // 版181：物件ありの 📥 は .hyb にも G を入れる
+         '㊾nr行の写真 G・.hyb の写真 A・B が減った（または 📥 の G が .hyb に入らない） → ' + short(['s1', 's2', 's3', 's4'].map(k => k + ':' + s(k).rowPh + '/' + s(k).file)));
     }
     await ctx.close();
   }
@@ -6057,9 +6057,10 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
     console.log(L + '開いていない暗号の戸別へ 📥 してから開く', short(r));
     ok(!r.error, L + '止まった → ' + r.error);
     if(!r.error){
-      ok(r.loaded.rows === 1 && r.loaded.slim && r.afterImport.rowPh === 'G' && r.afterImport.file === 'A,B' && r.open1.click
+      /* 版181：物件あり（戸別ファイルへ書ける）なら、📥 で G も .hyb に入る（行の写真は持ったまま） */
+      ok(r.loaded.rows === 1 && r.loaded.slim && r.afterImport.rowPh === 'G' && r.afterImport.file === (mode === 'proj' ? 'A,B,G' : 'A,B') && r.open1.click
          && r.afterImport.slim === (mode === 'proj'),
-         L + '試験の前提: 🔓 した .hyb の行へ 📥 すると、行に G・ファイルの写真は A・B のまま・' + (mode === 'proj' ? '書けたので行はファイルから読む' : '書けないので行の封筒で開く') + ' → ' + short(r));
+         L + '試験の前提: 🔓 した .hyb の行へ 📥 すると、行に G・ファイルの写真は ' + (mode === 'proj' ? 'A・B・G（版181）' : 'A・B のまま') + '・' + (mode === 'proj' ? '書けたので行はファイルから読む' : '書けないので行の封筒で開く') + ' → ' + short(r));
       if(mode === 'proj'){
         ok(r.open1.shown === 'A,B,G' && !r.open1.stripped && !r.open1.banner,
            '★' + L + '📥 で入れた写真 G が、開くと画面に出ない（ファイルの写真だけ）・写真の出ている画面にならない → ' + short(r.open1));
@@ -6232,10 +6233,10 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
     console.log(L + '📥 で入れた写真を写真の出ていない画面で開く', short(r));
     ok(!r.error, L + '止まった → ' + r.error);
     if(!r.error){
-      ok(r.afterImport.rowPh === 'G' && !r.afterImport.known && r.afterImport.file === 'A,B' && r.open1.click
+      ok(r.afterImport.rowPh === 'G' && !r.afterImport.known && r.afterImport.file === (mode === 'A' ? 'A,B,G' : 'A,B') && r.open1.click   // 版181：物件ありの 📥 は .hyb にも G を入れる
          && (mode === 'A' ? (r.snapStripped && r.linked.rows === 1 && r.linked.fh && !r.linked.slim && !r.linked.known) : r.loaded.slim),
          L + '試験の前提: ' + (mode === 'A' ? '物件の暗号の行（写真を剥がした封筒）に 💾 反映でファイルが付き、' : '📁 の .hyb の行へ、')
-           + '📥 すると行に G（当てにしてよい印なし）・ファイルは A・B のまま → ' + short(r));
+           + '📥 すると行に G（当てにしてよい印なし）・ファイルは ' + (mode === 'A' ? 'A・B・G（版181）' : 'A・B のまま') + ' → ' + short(r));
       ok(r.open1.shown === 'G' && r.open1.stripped && r.open1.banner && r.open1.rowPh === 'G',
          '★' + L + ' 写真の出ていない画面で開くと、📥 で入れた写真 G が画面に出ない・行から消えた → ' + short(r.open1));
       if(mode === 'A')
