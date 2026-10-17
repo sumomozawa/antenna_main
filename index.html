@@ -15763,8 +15763,14 @@ async function writeCurrentCaseToIndividualFile(){
     }
     row._amtCache = undefined; row._bomCache = undefined;
     if(_currentProject){ try { projTouch(); } catch(_){} }
-    if(sideKept.flagsOn.length || sideKept.status)
-      sideKeptNote = "\n（戸別ファイルには、現場から預かった入力（工事完了など）がまとめてありました。済みの印・状態は消さずに残しました）";
+    /* 現場で直した欄を引き継いだときは、開いている画面にも出す（版181。出さないと次の保存で前の値に戻る） */
+    const nf = (sideKept.fields || []).length;
+    let unshown = [];
+    if(nf && _editingRow === row && !_indivWriteNotShown) unshown = sideShowFields(sideKept.fields, contentObj);
+    if(sideKept.flagsOn.length || sideKept.status || nf)
+      sideKeptNote = "\n（戸別ファイルには、現場から預かった入力（工事完了など）がまとめてありました。済みの印・状態は消さずに残しました"
+        + (nf ? ("。現場で直した欄（" + nf + "項目）も残しました") : "") + "）"
+        + (unshown.length ? "\n\u26a0 画面には、まだ前の中身のままの所があります。続けて直す前に、この戸別を一覧から開き直してください。" : "");
   }
   // 旧名ファイル(.antenna.json等)を削除して「管理番号.json」に一本化。
   // ★写真喪失防止ガード：旧に写真があるのに新に無い場合は削除しない（＝旧をバックアップとして残す）。
@@ -17123,7 +17129,11 @@ function sideFileMeta(pathPrefix, name, dir, fh, file){
 function sideLoadNote(stats){
   _sideFiles = (stats && stats.side) || [];
   if(window.__VIEWER_MODE__ || !_sideFiles.length) return "";
-  return "📮 現場から預かったファイルが " + _sideFiles.length + "件あります。「📮 預かりを振り分ける」で1つにまとめられます（「⋯ まとめて」の中）";
+  /* いつもの名前のまま預けの印が入ったファイル（一覧には出している）は分けて数える（版181） */
+  const nSelf = _sideFiles.filter(x => x && x.self).length, nSide = _sideFiles.length - nSelf;
+  return [nSide ? ("📮 現場から預かったファイルが " + nSide + "件あります。「📮 預かりを振り分ける」で1つにまとめられます（「⋯ まとめて」の中）") : "",
+          nSelf ? ("📮 預けの印が入った いつもの名前のファイルが " + nSelf + "件あります（一覧には出しています。「📮 預かりを振り分ける」で印を外せます）") : ""]
+    .filter(Boolean).join("　");
 }
 const SP_KIND_LABEL = { material_in:"資材検収（納品）", material_chk:"資材検収（検査中）",
                         other:"その他・イレギュラー" };
@@ -17272,12 +17282,20 @@ async function scanDirRecursive(dirHandle, pathPrefix, rows, stats){
             lastModified: file.lastModified, data: data });
           continue;
         }
-        /* 📮 名前が変わっていても、中に _side があれば預け（版176）。行にしない（中身・写真は持たない）。 */
+        /* 📮 名前が変わっていても、中に _side があれば預け（版176）。行にしない（中身・写真は持たない）。
+           ★いつもの名前（管理番号.json）なら、その戸別のファイルそのもの★（版181）
+           行にしないと一覧から黙って消え（「見当たりません」とも言わない）、物件に取り込むと物件からも抜ける。
+           行にして（預けの印は行に持たせない）、預けとしても覚える（「📮 預かりを振り分ける」で印を外せる）。 */
         if(isSideCaseFile(name, data)){
-          stats.files--;
-          (stats.side = stats.side || []).push(sideFileMeta(pathPrefix, name, dirHandle, handle, file));
-          (stats.skippedPaths = stats.skippedPaths || []).push(pathPrefix + name);
-          continue;
+          const sm = sideFileMeta(pathPrefix, name, dirHandle, handle, file);
+          (stats.side = stats.side || []).push(sm);
+          if(!sideCanonNo(name)){
+            stats.files--;
+            (stats.skippedPaths = stats.skippedPaths || []).push(pathPrefix + name);
+            continue;
+          }
+          sm.self = true;
+          data = Object.assign({}, data); delete data._side;
         }
         // 戸別ファイルでないと分かるもの（物件ファイル・現場用の書き出し等）は、
         // エラーではなく読み飛ばし。同じフォルダに置いてあっても邪魔にならないように。
@@ -18201,12 +18219,24 @@ async function sideSortReadItem(it){
   it.stamp = sideStampOf(sd, it.name, no);
   return it;
 }
+/* 📁 で読んだ一覧の預けで、そのすぐ隣（同じフォルダ）にその戸別の いつもの名前のファイルがあるか（版181） */
+function sideHomeNext(it){
+  if(!it || !it.fromList || !it.dir || !it.no) return false;
+  const no = toHalfWidthAn(String(it.no)).trim().toUpperCase();
+  return (Array.isArray(_listRows) ? _listRows : []).some(r => r && r._dir === it.dir
+    && toHalfWidthAn(sideCanonNo(r._name || "")).trim().toUpperCase() === no);
+}
 /* 行き先を証拠で決める。{ dest: 物件フォルダの番号 | -1, how } */
 function sideSortDecide(it, acc, idb){
   const P = acc.projects;
   if(!it.no) return { dest: -1, how: "" };
+  /* ★選んだフォルダの外にある預け（📁 で読んだ一覧から足したもの）は、名前（その番号）だけでは決めない★（版181）
+     物件フォルダの名前は「その１」「その２」なので、前に選んだフォルダ（去年の 物件情報_調書 など）も同じ物件と見て、
+     別の物件のリストへ新しく置き、預けを片付けていた。行き先は、選んだフォルダの中にその戸別のファイルがあるときだけ決める。
+     預けのすぐ隣にその戸別のファイルがあれば、それが本当の行き先（選んだフォルダの外）なので、選んだフォルダの中では決めない。 */
+  if(it.fromList && sideHomeNext(it)) return { dest: -1, how: "" };
   const proj = String((it.side && it.side.proj) || "").trim();
-  if(proj){
+  if(proj && !it.fromList){
     const c = P.filter(p => sideProjSame(p.name, proj));
     if(c.length === 1) return { dest: P.indexOf(c[0]), how: "proj" };
   }
@@ -18222,6 +18252,7 @@ function sideSortDecide(it, acc, idb){
   // リストの外（完了 など）・名前の違うものも数える（2つの物件にあれば、どちらとも決めない）
   sideFilesOf(acc, it.no).forEach(x => { if(!(x.direct && sideCanonNo(x.name))) addP(x.proj); });
   if(withFile.length === 1) return { dest: P.indexOf(withFile[0]), how: "file" };
+  if(it.fromList) return { dest: -1, how: "" };        // 選んだフォルダの外の預けは、このPCの物件の名前でも決めない（版181）
   const owners = (idb || []).filter(p => (p && Array.isArray(p.cases) ? p.cases : []).some(c =>
     toHalfWidthAn(String((c && c.payload && c.payload.chosho_mgmt_no) || "")).trim() === it.no));
   if(owners.length === 1){
@@ -18250,6 +18281,9 @@ function sideSortPlan(it, acc, destIdx){
   }
   if(!(destIdx >= 0)){
     if(it.decided && it.decided.dest >= 0) return { act: "hold", why: "触りません（行き先を「触らない」にしました）" };
+    if(it.fromList) return { act: "hold", why: "この預けは、選んだフォルダ（" + String((acc && acc.root && acc.root.name) || "") + "）の外の、読み込んだ一覧の中にあります"
+      + (sideHomeNext(it) ? ("（この戸別のファイル " + it.no + ".json も、預けのすぐ隣にあります）") : "")
+      + "。「📁 別のフォルダを選ぶ」で、この預けのある物件のフォルダか、その上のフォルダ（物件情報_調書）を選んでください" };
     const lg = String((it.side && (it.side.ledger || it.side.proj)) || "").trim();
     return { act: "hold", why: "どこの物件か分かりません" + (lg ? ("（現場の台帳: " + lg + "）") : "") + sideSortRootHint(it, acc) };
   }
@@ -18657,6 +18691,13 @@ async function sideSortNewOne(it, p){
   const had = Array.isArray(S._sideMerged) ? S._sideMerged.filter(x => typeof x === "string") : [];
   if(stamp && had.indexOf(stamp) < 0) had.push(stamp);
   S2._sideMerged = had;
+  /* 新しく置いた戸別で、現場が入れた欄（版181）。この預けを知らない行（台帳で作った行など）で保存しても戻さない（sideKeepFileMarks） */
+  { const sk = sideKeysKeep(S2._sideKeys, had);
+    const tk = (side && Array.isArray(side.touched) && side.touched.length) ? side.touched.map(String)
+      : Object.keys(S2).filter(k => !sideIsEmptyVal(S2[k]));
+    const keys = tk.filter(k => !sideNeverKey(k) && (k in S2));
+    if(stamp && keys.length) sk[stamp] = keys;
+    if(Object.keys(sk).length) S2._sideKeys = sk; else delete S2._sideKeys; }
   if(!toHalfWidthAn(String(S2.chosho_mgmt_no || "")).trim()) S2.chosho_mgmt_no = it.no;
   const text = JSON.stringify(S2, null, 2);
   let fh = null;
@@ -18722,7 +18763,7 @@ async function sideSortApply(acc){
   const res = { merged: 0, placed: 0, cleaned: 0, fixed: 0, held: [], notes: [], touched: [], gone: [], adopt: [] };
   for(const it of acc.side){
     const plan = sideSortPlan(it, acc, it.pick);
-    const label = (it.no || "（管理番号なし）") + "（" + it.name + "）";
+    const label = (it.no || (SIDE_NAME_RE.test(it.name) && sideAnyNo(it.name)) || "（管理番号なし）") + "（" + it.name + "）";   // 読めない預けも名前の管理番号で（版181）
     if(plan.act === "hold"){ res.held.push(label + "：" + plan.why); continue; }
     let r = null;
     try {
@@ -18736,6 +18777,8 @@ async function sideSortApply(acc){
       res.touched.push({ path: plan.p ? plan.p.listPath : (it.path || ""), fromList: !!it.fromList });
     }
     if(!r || !r.ok){ res.held.push(label + "：" + ((r && r.why) || "できませんでした")); continue; }
+    if(r.report && r.report.olderSkipped)   // 新しい預けがもうまとめてあった（版181。黙って欄を入れないことにしない）
+      res.notes.push(label + "：この預けより新しい預けが もうまとめてあるので、現場で直した欄は入れていません（写真と済みの印は入れました）");
     if(plan.act === "fix") res.fixed++;
     else if(plan.act === "new"){
       res.placed++;
@@ -18899,7 +18942,11 @@ async function sideSortAfter(acc, res){
       const lp = acc.loadedPath || "";
       const gone = res.gone.map(g => g.fromList ? g.path
         : (lp && String(g.path).indexOf(lp) === 0 ? String(g.path).slice(lp.length) : String(g.path)));
-      const reloaded = await listReloadFolder(gone);
+      /* ★画面に戸別を開いているときは、一覧を読み直さない★（版181）
+         読み直すと一覧の行が作り直され、開いている戸別が一覧から外れて、そのあと直した中身が一覧・受付台帳・物件に入らない
+         （自動保存も止まる）。読み直せなかったときと同じく、振り分けた戸別の行に同じ合わせ方で入れる。 */
+      const editing = !!(_editingRow && Array.isArray(_listRows) && _listRows.indexOf(_editingRow) >= 0);
+      const reloaded = editing ? false : await listReloadFolder(gone);
       if(reloaded !== true){
         /* ★読み直せなかった：その戸別ファイルの行（と開いている物件の行）にも、同じ合わせ方で入れる★（版176・3回目）
            前の中身のまま開いて保存すると、まとめた現場の入力と写真が消えるため。 */
@@ -18917,7 +18964,9 @@ async function sideSortAfter(acc, res){
         const left = res.adopt.filter(a => a && a.m && done.indexOf(a) < 0).length;
         tail += (left ? ("\n\n⚠ 一覧は、まだ振り分ける前の中身のままです（読み直していません。" + left + "件）。")
                       : "\n\n⚠ 一覧は読み直していません（振り分けた戸別の行には、同じ中身を入れました）。")
-          + "受付台帳で直したままの戸別があれば「💾 戸別ファイルへ反映」を押してから、「📁 フォルダ」で読み直してください。";
+          + (editing
+              ? "画面に戸別を開いているので、読み直していません（読み直すと、開いている戸別で直した中身が一覧に入らなくなるため）。開いている戸別を 💾 で保存してから「📁 フォルダ」で読み直し、戸別は一覧から開き直してください。"
+              : "受付台帳で直したままの戸別があれば「💾 戸別ファイルへ反映」を押してから、「📁 フォルダ」で読み直してください。");
       }
       if(_currentProject){ try { projTouch(); } catch(_){} }
     } else {
@@ -24661,6 +24710,8 @@ const CASE_KEEP_ON_REVERT = [
   "_manual", "_origin", "_schemaVer",
   // まとめた預けの印（版176）は残す。落とすと、次の「物件に保存」で戸別ファイルの印を「この行の知らない預け」と見て、
   // いま戻した工事完了をまた付けてしまう（同じ預けを、もう一度まとめてしまうことにもなる）。
+  // どの預けで、どの欄を入れたか（版181）も、印と一緒に残す。
+  "_sideKeys",
   "_sideMerged"
 ];
 /* この戸別に積算の中身が入っているか（＝「未施工に戻す」を出すか） */
@@ -37248,6 +37299,7 @@ async function openCaseInEditor(row, gotoDiagram){
   const seq = ++_openSeq, prev = _editingRow;
   row = await rowOpenTakeBack(row, seq);   // 開く戸別の元の写真を読み直す（版178・3回目。前の戸別は開けてから軽くする）
   if(!row) return;
+  if(row._fromProject && !row.fileHandle && !row.srcFile){ try { await sideAdoptFileMarks(row); } catch(_){} if(seq !== _openSeq) return; }   // 📮 戸別ファイルにだけまとめた預けを先に行へ（版181）
   const asbWas = _asbEdited;
   _asbEdited = false;
   if(lgHasDrawing(row) || row.fileType !== "plain"){
@@ -37379,6 +37431,7 @@ const EDITOR_KEEP_FIELDS = [
   "compdoc_waived","compdoc_waived_at","compdoc_waived_note",
   "hold_flag",                       // 保留（受付台帳の○。画面に欄が無い）
   "_passthrough","_otherFile","_mergedFrom",
+  "_sideKeys",                       // 📮 どの預けで、どの欄を入れたか（版181。戸別ファイルにだけまとめた預けの欄を行へ引き継ぐ）
   "_sideMerged"                      // 📮 どの預けをまとめたか（版176。二度まとめないための印）
 ];
 /* 画面に欄が無い項目を、いま持っている値（一覧の行や元ファイル）から引き継ぐ。
@@ -37845,8 +37898,22 @@ function sideMergeInto(D, S, side, opts){
     else if(k === "chosho_date") report.date = { from: String((D && D[k]) || ""), to: String(s[k] || "") };
     else report.technical.push(k);
   };
+  /* ★この預けより新しい預けが、もうまとめてあれば、直した欄は入れない★（版181）
+     1回目の振り分けで新しい預けだけをまとめ（古い預けはまだ同期中で読めなかった）、あとで古い預けをまとめると、
+     新しい預けで直した欄が古い値に戻っていた（📥 で新しい預け→古い預けの順に選んだときも同じ）。
+     写真（和集合）・工程の印（入れる方向だけ）・状態（進む方向だけ）は、いつもどおり入れる。
+     比べるのは預けた時刻（中の時刻）どうしだけ。名前の日時しか無い印は比べない。 */
+  const st0 = opts.stamp || sideStampOf(side, opts.name, d.chosho_mgmt_no || s.chosho_mgmt_no);
+  const atMs = x => { const a = String(x || "").split("|")[0]; return /^\d{4}-\d{2}-\d{2}T/.test(a) ? Date.parse(a) : NaN; };
+  const t0 = atMs(st0);
+  const newerIn = isFinite(t0) && (Array.isArray(D && D._sideMerged) ? D._sideMerged : [])
+    .some(x => typeof x === "string" && x !== st0 && atMs(x) > t0);
+  if(newerIn){
+    report.olderSkipped = true;
+    report.notes.push("この預けより新しい預けが、もうまとめてあります（現場で直した欄は入れていません。写真と済みの印は入れました）");
+  }
   // ① 現場で直した欄（touched）だけ、預けの値を採る
-  if(touched){
+  if(touched && !newerIn){
     touched.forEach(k => {
       if(never(k) || !(k in s)) return;
       if(JSON.stringify(d[k]) === JSON.stringify(s[k])) return;
@@ -37893,6 +37960,12 @@ function sideMergeInto(D, S, side, opts){
   const had = Array.isArray(d._sideMerged) ? d._sideMerged.filter(x => typeof x === "string") : [];
   if(stamp && had.indexOf(stamp) < 0) had.push(stamp);
   d._sideMerged = had.slice(-200);
+  /* どの預けで、どの欄を入れたか（版181）。戸別ファイルにだけまとめてあって、行（物件の行など）がまだ知らない預けのとき、
+     開く・保存するときにその欄を戸別ファイルから行へ引き継ぐ（sideKeepFileMarks）。写真・印・状態の欄は入らない。 */
+  { const sk = sideKeysKeep(d._sideKeys, d._sideMerged);
+    const keys = report.taken.concat(report.filled);
+    if(stamp && keys.length) sk[stamp] = keys;
+    if(Object.keys(sk).length) d._sideKeys = sk; else delete d._sideKeys; }
   report.stamp = stamp;
   delete d._side;
   d.editedAt = nowIsoStamp();
@@ -37900,8 +37973,30 @@ function sideMergeInto(D, S, side, opts){
   d._mergedFrom = { main: (D && D._origin) || null, genba: "side", at: d.editedAt };
   return { merged: d, report };
 }
+/* 預けで入れてはいけない欄（写真・管理番号・工程の印・状態・PCだけの欄・_ で始まる印）。sideMergeInto の never と同じ（版181） */
+function sideNeverKey(k){
+  k = String(k || "");
+  return !k || k.charAt(0) === "_" || SIDE_FLOW_FLAGS.some(p => p[0] === k || p[1] === k)
+    || k === "chosho_photos" || k === "chosho_photos_thumb" || k === "chosho_photo_count"
+    || k === "chosho_mgmt_no" || k === "chosho_status" || k === "editedAt"
+    || GENBA_HARD_KEEP_MAIN.indexOf(k) >= 0;
+}
+/* _sideKeys（預けの印 → その預けで入れた欄）のうち、まとめた印（merged）に残っているものだけ（版181。増えすぎない） */
+function sideKeysKeep(sk, merged){
+  const out = {};
+  if(!sk || typeof sk !== "object" || Array.isArray(sk)) return out;
+  const m = Array.isArray(merged) ? merged : [];
+  Object.keys(sk).forEach(st => {
+    if(m.indexOf(st) >= 0 && Array.isArray(sk[st])) out[st] = sk[st].filter(k => typeof k === "string" && !sideNeverKey(k));
+  });
+  return out;
+}
 /* 戸別ファイル（file）に、data の知らない預けのまとめた印があるとき、済みの印・日付・進んだ状態・まとめた印を data へ引き継ぐ。
-   入れる方向だけ（外さない）。引き継いだもの { flagsOn, status } を返す。知らない印が無ければ null（何もしない）。（版176・4回目） */
+   入れる方向だけ（外さない）。引き継いだもの { flagsOn, status, fields } を返す。知らない印が無ければ null（何もしない）。（版176・4回目）
+   ★その預けで入れた欄（現場で直した欄）も引き継ぐ★（版181）
+   引き継がないと、振り分けたときに開いていなかった物件の行（振り分ける前の中身）で保存したとき、
+   現場で直した欄（増幅器・電話など）が前の値に戻っていた。どの欄かは、まとめたときに _sideKeys に残してある
+   （残っていない古いファイルの欄は引き継げない）。写真・印・状態・PCだけの欄は引き継がない。 */
 function sideKeepFileMarks(data, file){
   if(!data || typeof data !== "object" || !file || typeof file !== "object") return null;
   const fm = Array.isArray(file._sideMerged) ? file._sideMerged.filter(x => typeof x === "string") : [];
@@ -37916,8 +38011,85 @@ function sideKeepFileMarks(data, file){
   });
   const dr = GENBA_STATUS_RANK[data.chosho_status] || 0, fr = GENBA_STATUS_RANK[file.chosho_status] || 0;
   if(fr > dr){ data.chosho_status = file.chosho_status; out.status = file.chosho_status; }
+  const fk = (file._sideKeys && typeof file._sideKeys === "object" && !Array.isArray(file._sideKeys)) ? file._sideKeys : {};
+  out.fields = [];
+  unk.forEach(st => (Array.isArray(fk[st]) ? fk[st] : []).forEach(k => {
+    if(typeof k !== "string" || sideNeverKey(k) || !(k in file) || out.fields.indexOf(k) >= 0) return;
+    if(JSON.stringify(data[k]) === JSON.stringify(file[k])) return;
+    data[k] = JSON.parse(JSON.stringify(file[k])); out.fields.push(k);
+  }));
   data._sideMerged = dm.concat(unk).slice(-200);
+  { const sk = sideKeysKeep(Object.assign({}, fk, (data._sideKeys && typeof data._sideKeys === "object") ? data._sideKeys : {}), data._sideMerged);
+    if(Object.keys(sk).length) data._sideKeys = sk; }
   return out;
+}
+/* 戸別ファイルから引き継いだ欄を、開いている画面にも出す（版181）。出せなかった欄（画面の欄が1つの入力ではないもの）を返す。
+   出さないと、画面が前の値のまま次の保存でその値を書き、現場で直した欄がまた戻ってしまう。 */
+function sideShowFields(keys, src){
+  const left = [];
+  let any = false;
+  (keys || []).forEach(k => {
+    const v = src ? src[k] : undefined;
+    const el = document.getElementById(k);
+    const prim = (v === undefined || v === null || typeof v === "string" || typeof v === "number" || typeof v === "boolean");
+    if(!el || !prim || !/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName || "") || el.type === "checkbox" || el.type === "radio"){ left.push(k); return; }
+    const want = (v === undefined || v === null) ? "" : String(v);
+    el.value = want;
+    if(el.value !== want){ left.push(k); return; }
+    any = true;
+  });
+  if(any){ try { rebuild(); } catch(_){} }
+  return left;
+}
+/* ★物件から開く戸別：戸別ファイルにだけまとめてある預け（行の知らない預け）を、開く前に行へ引き継ぐ★（版181）
+   ほかのPCで振り分けた・振り分けたときにこの物件を開いていなかった、などで、行が振り分ける前の中身のままのことがある。
+   そのまま開くと画面に前の値が出て、「💾 物件に保存」で現場で直した欄を前の値に戻していた。
+   ファイルを持つ行・📄 で読んだ行は、開くときにファイルを読むので要らない。許可の窓は出さない（許可が無ければ何もしない）。 */
+async function sideAdoptFileMarks(row){
+  if(!row || !row.data || row.fileType !== "plain" || !row._fromProject || row.fileHandle || row.srcFile) return null;
+  let dir = _projDirHandle;
+  if(!dir && _currentProject){
+    try { const h = await projHandleGet(_currentProject.id + ":dir");
+      if(h && (await h.queryPermission({ mode: "read" })) === "granted") dir = h; } catch(_){}
+  }
+  if(!dir) return null;
+  const rel = (row.file && !/^manual:/.test(row.file)) ? String(row.file) : "";
+  const base = rel.split(/[\\/]/).pop() || "";
+  const mg = String(row.data.chosho_mgmt_no || "").trim();
+  const cands = [];
+  if(rel) cands.push(rel);
+  if(mg){ const c = rel.slice(0, rel.length - base.length) + sanitizePrintFilename(mg) + ".json"; if(cands.indexOf(c) < 0) cands.push(c); }
+  let j = null;
+  for(const c of cands){
+    let fh = null;
+    try { fh = await resolveFileHandleInDir(dir, c, false); } catch(_){ fh = null; }
+    if(!fh) continue;
+    try {
+      const t = String(await (await fh.getFile()).text());
+      if(t.indexOf('"_sideMerged"') < 0) return null;                 // まとめた預けが無い（ふつう）＝写真入りの中身を読み解かない
+      j = JSON.parse(t.replace(/^\uFEFF/, "").trim() || "null");
+    } catch(_){ j = null; }
+    break;
+  }
+  if(!j || typeof j !== "object") return null;
+  const fno = toHalfWidthAn(String(j.chosho_mgmt_no || "")).trim().toUpperCase();
+  if(fno && mg && fno !== toHalfWidthAn(mg).trim().toUpperCase()) return null;   // 別の戸別のファイル
+  const d = Object.assign({}, row.data);
+  const k = sideKeepFileMarks(d, j);
+  if(!k) return null;
+  row.data = d;
+  row._amtCache = undefined; row._bomCache = undefined;
+  if(k.flagsOn.length){
+    const fl = {};
+    k.flagsOn.forEach(f => { fl[f] = true; });
+    try { flowAdoptRow(row, fl); } catch(_){}
+  }
+  if(_currentProject){ try { projTouch(); } catch(_){} }
+  const nf = (k.fields || []).length;
+  if(k.flagsOn.length || k.status || nf)   // 一覧で見ていた中身と画面が違うわけを言う
+    uiToast("📮 戸別ファイルには、現場から預かった入力（工事完了など）がまとめてありました。済みの印・状態"
+      + (nf ? ("と、現場で直した欄（" + nf + "項目）") : "") + "を、この戸別に入れて開きました", 7000);
+  return k;
 }
 
 function _genbaTodayStr(){ try { const d=new Date(); const p=n=>String(n).padStart(2,"0"); return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate()); } catch(_){ return ""; } }
@@ -38021,7 +38193,8 @@ async function openGenbaImportPreview(ctx){
       + "<div>" + (Array.isArray(ctx.side.touched) && ctx.side.touched.length
           ? ("<b>現場で直した欄だけ</b>を入れます（" + nTake + " 項目）。ほかの欄はPCのままです。")
           : ("この預けには「現場で直した欄」の記録が無いので、<b>PCで空の欄だけ</b>を埋めます（" + nTake + " 項目）。"))
-      + "</div><div style='margin-top:3px'>工程の印（下見・ビラ・工事完了・同意書・完了書）は外しません"
+      + "</div>" + (rep.olderSkipped ? "<div style='margin-top:3px;color:#7a4b00;font-weight:600;'>⚠ この預けより新しい預けが、もうまとめてあります。現場で直した欄は入れません（写真と済みの印は入れます）。</div>" : "")
+      + "<div style='margin-top:3px'>工程の印（下見・ビラ・工事完了・同意書・完了書）は外しません"
       + (rep.flagsOn.length ? ("（入れる印: <span class='gi-take'>" + rep.flagsOn.map(f => escapeHtml(flagName[f] || f)).join("・") + "</span>）") : "")
       + "。写真は両方とも残します。</div>");
   }
