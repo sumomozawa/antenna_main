@@ -150,7 +150,7 @@ CASES = [
   (u"まとめて保存が見るだけを見ない",
    u'''    f.guard = pcGuardNeeded(f.model, row) ? "viewonly" : "";''', u'''    f.guard = "";''', TG, "genba", u"⑰"),
   (u"まとめて保存の最初の確かめで見るだけを言わない",
-   u'''+ nothingTxt + guardTxt''', u'''+ nothingTxt''', TG, "genba", u"⑰"),
+   u'''otherTxt + outsideTxt + missTxt + guardTxt''', u'''otherTxt + outsideTxt + missTxt''', TG, "genba", u"⑰"),
   (u"まとめて保存の最後に、書けなかった分を言わない",
    u'''「（N件は失敗）」の一言だけだった。
      ★端末の中だけかもしれないフォルダに書いた分も、ここで「📮 事務所にも届ける」を選べる（任意）★ */
