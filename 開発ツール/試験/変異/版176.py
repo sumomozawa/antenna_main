@@ -248,8 +248,8 @@ CASES = [
         let f0 = null;''', TM, "main", "①"),
   (u"★読み込み：中に _side がある預け（名前が変わったもの）を行にする",
    u'''        if(isSideCaseFile(name, data)){
-          stats.files--;''', u'''        if(false){
-          stats.files--;''', TM, "main", "①"),
+          const sm = sideFileMeta(pathPrefix, name, dirHandle, handle, file);''', u'''        if(false){
+          const sm = sideFileMeta(pathPrefix, name, dirHandle, handle, file);''', TM, "main", "①"),
   (u"★📁 で読んだあと、預けを覚えない・知らせない",
    u'''    { const sd = sideLoadNote(stats);                       // 📮 現場から預かったファイル（版176）
       if(sd) _missLastNote''', u'''    { const sd = "";
@@ -361,7 +361,7 @@ CASES = [
   (u"★迷子を知らせない",
    u'''    if(ps.length >= 2) out.push(''', u'''    if(false) out.push(''', TM, "main", "⑩"),
   (u"★振り分けたあと一覧を読み直さない",
-   u'''      const reloaded = await listReloadFolder(gone);''', u'''      const reloaded = true;''', TM, "main", u"⑪"),
+   u'''      const reloaded = editing ? false : await listReloadFolder(gone);''', u'''      const reloaded = true;''', TM, "main", u"⑪"),
 
   # ---- フォルダの選び方 ----
   (u"★許可を断られたフォルダを忘れない",
@@ -400,8 +400,7 @@ CASES = [
   (u"★💾 戸別ファイルへ反映 で _side を残す",
    u'''      delete json._side;                              // 📮''', u'''      // (消した)''', TM, "main", "⑯"),
   (u"エディタで保存すると、まとめた印を落とす",
-   u'''  "_passthrough","_otherFile","_mergedFrom",
-  "_sideMerged"''', u'''  "_passthrough","_otherFile","_mergedFrom"''', TM, "main", "⑯"),
+   u'''  "_sideMerged"                      // 📮 どの預けをまとめたか（版176。二度まとめないための印）''', u'''  "_unused_"''', TM, "main", "⑯"),
 
   # ======== 現場入力（2回目・3回目の見直しの直し） ========
   (u"★📮 の印：渡す前に読んだ写しで下書きを書き戻す（渡しているあいだに入った写真が消える）",
