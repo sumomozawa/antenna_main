@@ -2,6 +2,7 @@
 # 版181 変異試験（組 m-import-enc・1段目）: 1箇所ずつ壊して、試験が赤くなるか確かめる（メイン）
 #   📥 現場取込のあとの「まだ戸別ファイルに入っていない」分。
 #   ・取込-1：戸別ファイルが無いままの行は「台帳で作った行」の印を残す（📁 の読み直しで消さない・💾 反映で作る）。
+#            ただし物件の縮小版しか無い写真の行は、反映で作らない（縮小版を元の写真として書かない・確かめ係の指摘）。
 #            写真の入った「台帳で作った行」に、カレンダーの「🗑 仮予定を削除」を出さない
 #   ・取込-4：📄 で読んだ行は、工事フォルダへ書けても「行が読み直すファイル」には入っていない（平文は欄をかぶせる・.hyb は行の封筒で開く）
 #   ・取込-5：📥 で変わった欄（_rowNewer）を、開くときにファイルの中身へかぶせる。書けたら下ろす
@@ -43,6 +44,18 @@ CASES = [
   (u"★取込-7 反映の確かめで、反映で作る戸別まで「まだ戸別ファイルに入っていない」に数える",
    u'''  const gLeft = _listRows.filter(r => r && r._genbaUnsaved && (missing || []).indexOf(r) < 0).length;''',
    u'''  const gLeft = _listRows.filter(r => r && r._genbaUnsaved).length;''', TM, "main", u"①b"),
+  # ---- 取込-1 の確かめ（物件を開き直した行の縮小版で、反映がファイルを作らない）----
+  (u"★取込-1確 反映で、物件の縮小版しか無い写真の行も 管理番号.json を作る（縮小版が元の写真の代わりに入る）",
+   u'''      if(((row.data && row.data.chosho_photos_thumb) || row._fromProject || rowHasParkedThumb(row))
+         && Array.isArray(obj.chosho_photos) && obj.chosho_photos.some(p => projThumbLike(p))){''',
+   u'''      if(false && ((row.data && row.data.chosho_photos_thumb) || row._fromProject || rowHasParkedThumb(row))
+         && Array.isArray(obj.chosho_photos) && obj.chosho_photos.some(p => projThumbLike(p))){''', TM, "main", u"①d"),
+  (u"★取込-1確 小さい写真しか無くて作らなかっただけなのに「フォルダへの書き込みを許可してから」と言う",
+   u'''      + ((mk.small && mk.small === allFails.length) ? ""''',
+   u'''      + (false ? ""''', TM, "main", u"①d"),
+  (u"★取込-1確 作れなかった行を「ファイル無し・名前だけ」に数え、「まだ入っていない」の印も下ろす",
+   u'''  const noFileLeft = (noFile || []).filter(r => (!r._dir || !r._name) && (missing || []).indexOf(r) < 0);''',
+   u'''  const noFileLeft = (noFile || []).filter(r => !r._dir || !r._name);''', TM, "main", u"①d"),
   # ======== 取込-5・取込-4 ========
   (u"★取込-5 開くとき、📥 で入れてまだファイルに無い欄をかぶせない（ファイルの古い機器・長さで開く）",
    u'''      if(fresh){ d = lgOverlayLedger(rowNewerOver(fresh, target), target);''',

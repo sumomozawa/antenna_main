@@ -19816,10 +19816,12 @@ async function lgwbScan(rows){
 }
 /* 戸別ファイルがまだ無い行を、工事フォルダに新しく作る。
    中身は台帳が持っている行そのもの（名前・住所・電話・日程・状態・備考・アパートの欄など）。
-   写真も図面も無い行なので、ここで失うものは無い。
+   📥 現場取込で書けなかった行・写真を入れた行もある（写真・機器も行の中身のまま入れる）。
+   ただし物件の縮小版しか無い写真は、元の写真として書かない（下の「★物件の縮小版を…」）。
    書いたら読み返して、本当に入ったときだけ成功にする。 */
 async function lgwbCreateMissing(dir, rows){
   const made = [], fails = [];
+  let small = 0;          // 物件の縮小版しか無いので作らなかった数（版181）
   for(const row of (rows || [])){
     const mg = String((row.data && row.data.chosho_mgmt_no) || "").trim();
     if(!mg){ continue; }
@@ -19845,6 +19847,25 @@ async function lgwbCreateMissing(dir, rows){
         if(k === "chosho_photos_thumb" || k === "chosho_photo_count") return;   // 物件専用のメタ
         obj[k] = row.data[k];
       });
+      /* ★物件の縮小版を、新しい戸別ファイルに写真として書かない★（版181）
+         戸別ファイルが無いままの行（📥 現場取込で書けなかった・台帳で作った行に写真を入れた）は、物件を開き直す
+         （ほかのパソコンで共有ファイルから開く）と、行の写真が物件の縮小版（長辺512px）だけになる。
+         そのまま作ると、縮小版が印なしで戸別ファイルに入り、あとで 📥 で元の写真を取り込んでも置き換わらない。
+         工事フォルダの中に同じ管理番号のファイルがあれば、その元の写真を使う（💾 物件に保存と同じ indivThumbOriginals）。
+         それでも縮小版が残るときは作らない（行・物件の写真はそのまま＝減らない。行は「台帳で作った行」のまま残る） */
+      if(((row.data && row.data.chosho_photos_thumb) || row._fromProject || rowHasParkedThumb(row))
+         && Array.isArray(obj.chosho_photos) && obj.chosho_photos.some(p => projThumbLike(p))){
+        let up = null;
+        try { up = await indivThumbOriginals(dir, [mg], obj); } catch(_){ up = null; }
+        const left = (Array.isArray(obj.chosho_photos) ? obj.chosho_photos : []).filter(p => projThumbLike(p)).length;
+        if(left){
+          fails.push("\u30fb" + name + "：この戸別の写真のうち " + left + " 枚は、物件に入っている小さい写真しか無いので、ファイルを作っていません"
+            + "（小さい写真のファイルにしないため。写真は一覧と物件に残っています" + ((up && !up.ok && up.why) ? ("。" + up.why) : "") + "）。\n"
+            + "\u3000 元の写真の入った現場入力のファイルを「📥 現場取込」でもう一度取り込むと、元の写真でファイルを作ります。");
+          small++;
+          continue;
+        }
+      }
       obj.editedAt = new Date().toISOString();
       const text = JSON.stringify(obj, null, 2);
       const fh = await dir.getFileHandle(name, { create: true });
@@ -19862,7 +19883,7 @@ async function lgwbCreateMissing(dir, rows){
       fails.push("\u30fb" + name + "：" + ((e && e.message) || e));
     }
   }
-  return { made, fails };
+  return { made, fails, small };
 }
 async function lgwbApply(list){
   let ok = 0; const fails = []; const okRows = []; const renamed = [];
@@ -20154,7 +20175,7 @@ async function lgwbButton(){
   /* 戸別ファイルを持てない行（「ファイル無し・名前だけ」等）の印も下ろす。
      押しても入る先が無いのに「反映を押すと入ります」と出し続けるのは嘘になる。
      中身は物件ファイルとこの端末に残っており、一覧にもその旨が出ている。 */
-  const noFileLeft = (noFile || []).filter(r => !r._dir || !r._name);
+  const noFileLeft = (noFile || []).filter(r => (!r._dir || !r._name) && (missing || []).indexOf(r) < 0);   // 作ろうとして作れなかった行は「できなかったもの」に出し、印も残す（版181）
   lgClearTouched(noFileLeft.map(r => { try { return subCaseKey(r); } catch(_){ return ""; } }));
   /* ★一覧を読み直すのは「全部書けたとき」だけ★
      読み直すとフォルダのファイルの中身が一覧に入り直るので、書けなかった分は
@@ -20171,7 +20192,8 @@ async function lgwbButton(){
     renderListTable();
     alert("⚠ 1件も書き戻せませんでした。\n\n" + allFails.join("\n")
       + "\n\n台帳に打ち込んだ内容はそのまま残してあります（一覧は読み直していません）。\n"
-      + "フォルダへの書き込みを許可してから、もう一度「💾 戸別ファイルへ反映」を押してください。");
+      + ((mk.small && mk.small === allFails.length) ? ""      // 小さい写真しか無くて作らなかっただけ＝許可の話ではない（版181）
+         : "フォルダへの書き込みを許可してから、もう一度「💾 戸別ファイルへ反映」を押してください。"));
     return;
   }
   if(allFails.length){

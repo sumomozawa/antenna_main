@@ -8,6 +8,11 @@
          反映の確かめでは、ファイルのある戸別で 📥 の分がまだ入っていない数だけを言う・反映のあとの読み直しはそれを確かめる
      ①c 取込-1 の副作用：写真の入った「台帳で作った行」（仮受付）に、カレンダーの「🗑 仮予定を削除（管理番号だけの仮メモ）」を出さない
          （写真の無い仮受付の行には今までどおり出す）
+     ①d 取込-1 の確かめ：物件を開き、工事フォルダをつながないまま 新しい管理番号へ 📥（写真 G・約1MB）→ 物件を保存して開き直す
+         （行の写真は物件の縮小版だけ）→「💾 戸別ファイルへ反映」で、縮小版の 管理番号.json を作らない
+         （窓で理由を言う・許可の話はしない・行と G は残る・物件の G も残る）
+         → 台帳で作った写真の無い行は今までどおり作る → 📥 で G をもう一度取り込むと、元の写真（約1MB）でファイルを作る
+     ①d2 同じく開き直したあとで、工事フォルダをつながないまま 📥 H（元の大きさ）→ 反映：縮小版の G が残るので作らない（G・H とも行に残る）
      ②  取込-5・取込-6：物件なしで 📁 の平文の戸別（写真 A・B・3U・長さ5・工事未了）へ 📥（1U・25・G・下見済・工事完了）
          → 開くと 1U・25・写真 A,B,G → 電話を直して 💾 上書き保存 → ファイルは 1U・25・A,B,G・下見済・工事完了・電話
          （前は開くとファイルの古い 3U・5 で開き、上書き保存で古い値・「未」を書いた）
@@ -471,6 +476,116 @@ const flat = s => String(s || '').replace(/\s+/g, ' ');
     if(!r.error){
       ok(r.manualA && r.manualB && r.delB, '①c試験の前提: 写真の無い仮受付の「台帳で作った行」には「🗑 仮予定を削除」が出る → ' + short(r));
       ok(!r.delA, '★①c 写真の入った「台帳で作った行」に「🗑 仮予定を削除（管理番号だけの仮メモ）」を出した（写真ごと行を消せる） → ' + short(r));
+    }
+    await ctx.close();
+  }
+
+  // ---- ①d 物件を開き直した行（写真は物件の縮小版だけ）を「💾 戸別ファイルへ反映」で作らない ----
+  for(const mode of ['', '2']){
+    const label = '①d' + mode;
+    if(!want(label)) continue;
+    const { ctx, page } = await openMain(label);
+    const r = await run(page, async ({ NO, NO2, mode }) => {
+      const o = {};
+      const NO3 = '2612MKM079';
+      const P = __proj('pid1d', '試験物件');
+      P.cases.push({ caseId: 'c2', file: NO2 + '.json', lastModified: 0,
+                     payload: { chosho_mgmt_no: NO2, chosho_cust_name: '別 様', chosho_status: 'in_progress', work_type: 'uhf_new' } });
+      await __openProj(P);
+      __stopProjSave();
+      window.showDirectoryPicker = async () => { const e = new Error('abort'); e.name = 'AbortError'; throw e; };   // 工事フォルダをつながない
+      const G = __jpeg(1200, 900, 0.85, 7), H = __jpeg(1100, 800, 0.85, 9);
+      const genba = { chosho_mgmt_no: NO, _origin: 'genba', chosho_cust_name: '現場 様', amplifier: 'amp_1u45',
+                      chosho_photos: [{ id: 'G', label: 'G', dataUri: G }] };
+      o.gLen = G.length;
+      o.imp = String(await __genbaImport([{ name: NO + '.json', obj: genba }])).replace(/\s+/g, ' ').slice(0, 200);
+      __stopProjSave();
+      const r1 = __rowOf(NO);
+      o.r1 = r1 ? { manual: !!r1._manual, ph: __ids(r1.data.chosho_photos), big: (r1.data.chosho_photos[0] || {}).dataUri === G } : null;
+      await projSaveNow(); __stopProjSave();
+      const snap = await projIdbGet('pid1d');
+      _currentProject = null;
+      await __openProj(JSON.parse(JSON.stringify(snap)));   // 物件を開き直す（ほかのパソコンで開いたのと同じ＝行の写真は縮小版だけ）
+      __stopProjSave();
+      let r2 = __rowOf(NO);
+      const p0 = r2 && (r2.data.chosho_photos || [])[0];
+      o.r2 = r2 ? { manual: !!r2._manual, ph: __ids(r2.data.chosho_photos), small: !!(p0 && p0.dataUri && p0.dataUri.length < 150000) } : null;
+      if(mode === '2'){
+        const genbaH = { chosho_mgmt_no: NO, _origin: 'genba', chosho_cust_name: '現場 様', amplifier: 'amp_1u45',
+                         chosho_photos: [{ id: 'H', label: 'H', dataUri: H }] };
+        o.impH = String(await __genbaImport([{ name: NO + '.json', obj: genbaH }])).replace(/\s+/g, ' ').slice(0, 200);
+        __stopProjSave();
+        r2 = __rowOf(NO);
+        o.r2h = r2 ? { manual: !!r2._manual, ph: __ids(r2.data.chosho_photos),
+                       hBig: (r2.data.chosho_photos || []).some(p => p && p.id === 'H' && p.dataUri === H) } : null;
+      }
+      const list = __mk('リスト', { [NO2 + '.json']: JSON.stringify({ chosho_mgmt_no: NO2, chosho_cust_name: '別 様', chosho_status: 'in_progress', work_type: 'uhf_new' }, null, 2) },
+                        {}, { resolve: true });
+      window.showDirectoryPicker = async () => list;
+      const lg = async () => {
+        const log = __catch(true);
+        let t = '';
+        try { t = await Promise.race([lgwbButton().then(() => 'done'), new Promise(res => setTimeout(() => res('timeout'), 30000))]); }
+        catch(e){ t = 'err ' + String(e); }
+        __stopProjSave();
+        return { t, said: log.said.map(m => m.replace(/\s+/g, ' ').slice(0, 600)) };
+      };
+      const w1 = await lg();
+      o.w1 = w1;
+      o.files1 = Object.keys(list.__files).sort().join(',');
+      const f1 = __fileOf(list, NO + '.json');
+      o.made1 = f1 ? { ph: __ids(f1.chosho_photos), len: ((f1.chosho_photos || [])[0] || {}).dataUri ? f1.chosho_photos[0].dataUri.length : 0 } : null;
+      const r3 = __rowOf(NO);
+      o.r3 = r3 ? { manual: !!r3._manual, ph: __ids(r3.data.chosho_photos), file: !!(r3._dir && r3._name) } : null;
+      await projSaveNow(); __stopProjSave();
+      const snap2 = await projIdbGet('pid1d');
+      const c2 = (snap2.cases || []).filter(c => c.payload && c.payload.chosho_mgmt_no === NO)[0];
+      o.proj = c2 ? __ids(c2.payload.chosho_photos) : null;
+      if(mode === ''){
+        /* 台帳で作った写真の無い行は今までどおり作る（縮小版の行があっても止めない） */
+        const m3 = createManualRow({ chosho_mgmt_no: NO3, chosho_cust_name: '台帳 様', chosho_status: 'provisional' }, 'manual');
+        const w2 = await lg();
+        o.w2 = w2;
+        const f3 = __fileOf(list, NO3 + '.json');
+        o.made3 = f3 ? { name: f3.chosho_cust_name } : null;
+        o.files2 = Object.keys(list.__files).sort().join(',');
+        o.m3file = !!(m3._dir && m3._name);
+        /* 📥 で G をもう一度取り込む（工事フォルダはつないである）→ 元の写真でファイルを作る */
+        o.imp2 = String(await __genbaImport([{ name: NO + '.json', obj: genba }])).replace(/\s+/g, ' ').slice(0, 200);
+        __stopProjSave();
+        const f4 = __fileOf(list, NO + '.json');
+        o.made4 = f4 ? { ph: __ids(f4.chosho_photos), big: ((f4.chosho_photos || [])[0] || {}).dataUri === G, thumbFlag: !!f4.chosho_photos_thumb } : null;
+      }
+      return o;
+    }, { NO, NO2, mode });
+    console.log(label + ' 物件を開き直した行を 💾 反映', short(r));
+    ok(!r.error, label + '止まった → ' + r.error);
+    if(!r.error){
+      ok(/取込: 1 件/.test(r.imp) && /書けていません/.test(r.imp) && r.r1 && r.r1.ph === 'G' && r.r1.big
+         && r.r2 && r.r2.ph === 'G' && r.r2.small,
+         label + '試験の前提: 工事フォルダをつながずに 📥 した G は行に元の大きさで入り、物件を開き直すと縮小版だけになる → ' + short({ imp: r.imp, r1: r.r1, r2: r.r2 }));
+      ok(r.r1 && r.r1.manual && r.r2 && r.r2.manual,
+         '★' + label + ' 戸別ファイルが無いままの行から「台帳で作った行」の印を外した（読み直しで消える） → ' + short({ r1: r.r1, r2: r.r2 }));
+      if(mode === '2') ok(r.r2h && r.r2h.ph === 'G,H' && r.r2h.hBig, label + '試験の前提: 開き直したあとの 📥 H が行に元の大きさで入る → ' + short(r.r2h));
+      ok(!r.made1,
+         '★' + label + ' 「💾 戸別ファイルへ反映」が、物件の縮小版しか無い写真で 管理番号.json を作った（縮小版が元の写真の代わりに入る） → ' + short({ made1: r.made1, files: r.files1 }));
+      const s1 = (r.w1 && r.w1.said || []).join(' / ');
+      ok(r.w1 && r.w1.t === 'done' && /小さい写真しか無いので、ファイルを作っていません/.test(s1) && /📥 現場取込/.test(s1),
+         '★' + label + ' 反映で作らなかった理由（小さい写真しか無い・📥 で取り込み直す）を知らせない → ' + short(r.w1));
+      if(mode === '') ok(!/書き込みを許可してから/.test(s1),
+         '★' + label + ' 小さい写真しか無くて作らなかっただけなのに「フォルダへの書き込みを許可してから」と言った → ' + s1);
+      ok(r.r3 && r.r3.manual && !r.r3.file && r.r3.ph === (mode === '2' ? 'G,H' : 'G'),
+         '★' + label + ' 反映のあと、行（写真）が減った・台帳で作った行の印が外れた → ' + short(r.r3));
+      ok(r.proj === (mode === '2' ? 'G,H' : 'G'), '★' + label + ' 反映のあと、物件の写真が減った → ' + short(r.proj));
+      if(mode === ''){
+        ok(r.made3 && r.made3.name === '台帳 様' && r.m3file,
+           '★' + label + ' 台帳で作った写真の無い行まで、反映で作らなくなった → ' + short({ made3: r.made3, files: r.files2, said: r.w2 && r.w2.said }));
+        const s2 = (r.w2 && r.w2.said || []).join(' / ');
+        ok(/小さい写真しか無いので、ファイルを作っていません/.test(s2) && !/書き込む先がないので飛ばしました/.test(s2),
+           '★' + label + ' 作れなかった行を「ファイル無し・名前だけ」の行として数えた（「まだ入っていない」の印も下ろす） → ' + s2);
+        ok(r.made4 && r.made4.ph === 'G' && r.made4.big && !r.made4.thumbFlag,
+           '★' + label + ' 工事フォルダをつないで 📥 で G を取り込み直しても、元の写真のファイルにならない → ' + short({ imp2: r.imp2, made4: r.made4 }));
+      }
     }
     await ctx.close();
   }
