@@ -72,7 +72,8 @@ async function openPage(b, label, vp){
       const tr = g.querySelector('details.pcg-trouble');
       const inTr = tr ? Array.from(tr.querySelectorAll('button')).map(x => x.id) : [];
       const load = document.getElementById('pcg-load');
-      const sub = load && load.nextElementSibling && load.nextElementSibling.classList.contains('pcg-sub') ? load.nextElementSibling.textContent : '';
+      const nx = load && load.nextElementSibling;
+      const sub = (nx && nx.classList.contains('pcg-sub') && nx.getClientRects().length > 0) ? nx.textContent : '';   // 見えている一行だけ
       const o = { main, inTr, open: !!(tr && tr.open), summary: tr ? tr.querySelector('summary').textContent : '',
                   load: load ? load.textContent : '', sub, text: g.textContent };
       window.showDirectoryPicker = keep;
