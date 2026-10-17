@@ -209,7 +209,7 @@ CASES = [
    u'''    const a = Number(rec.data.importedAt) || 0, b = (cur && Number(cur.importedAt)) || 0;''',
    u'''    const a = rec.data.importedAt | 0, b = (cur && cur.importedAt | 0) || 0;''', TG, "genba"),
   (u"★現場：まとめて保存の前に、いまの台帳に無い戸別を言わない",
-   u'''head + listTxt + otherTxt + outsideTxt + missTxt''', u'''head + listTxt + otherTxt + missTxt''', TG, "genba"),
+   u'''const cautions = otherTxt + outsideTxt + missTxt''', u'''const cautions = otherTxt + missTxt''', TG, "genba"),
   (u"現場：台帳にある戸別まで「台帳に無い」と言う",
    u'''files.filter(f => !rcNoSet[draftNoKey(f.no)])''', u'''files.filter(f => true)''', TG, "genba"),
 

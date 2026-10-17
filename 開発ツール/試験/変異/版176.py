@@ -110,9 +110,9 @@ CASES = [
         try{ const b = fileBaseGet(M); if(b) b.stale = true; }catch(_){}''', TG, "genba", u"⑨"),
   (u"写真の歯止めで 📮 を出さない",
    u'''msg: photoMissingText(miss), warn: true, escape: "photo" };''', u'''msg: photoMissingText(miss), warn: true };''', TG, "genba", u"⑩"),
-  (u"帯に「📮 入力して事務所に預ける」を出さない",
-   u'''    +   '<button type="button" id="pcg-side" class="side">📮 入力して事務所に預ける</button>\'''',
-   u'''    +   \'\'''', TG, "genba", u"⑪"),
+  (u"帯（の困ったとき）に「📮 事務所に預ける」を出さない",
+   u'''    +     '<button type="button" id="pcg-side" class="side">📮 事務所に預ける（別のファイルで送る・PCのファイルはそのまま）</button>\'''',
+   u'''    +     \'\'''', TG, "genba", u"⑪"),
   (u"預けモードにしない",
    u'''  M._sideOnly = pcGuardSig(row) || "on";''', u'''''', TG, "genba", u"⑪"),
   (u"預けモードでも いつもの保存をする",
@@ -150,7 +150,7 @@ CASES = [
   (u"まとめて保存が見るだけを見ない",
    u'''    f.guard = pcGuardNeeded(f.model, row) ? "viewonly" : "";''', u'''    f.guard = "";''', TG, "genba", u"⑰"),
   (u"まとめて保存の最初の確かめで見るだけを言わない",
-   u'''+ nothingTxt + guardTxt''', u'''+ nothingTxt''', TG, "genba", u"⑰"),
+   u'''otherTxt + outsideTxt + missTxt + guardTxt''', u'''otherTxt + outsideTxt + missTxt''', TG, "genba", u"⑰"),
   (u"まとめて保存の最後に、書けなかった分を言わない",
    u'''「（N件は失敗）」の一言だけだった。
      ★端末の中だけかもしれないフォルダに書いた分も、ここで「📮 事務所にも届ける」を選べる（任意）★ */
@@ -215,14 +215,14 @@ CASES = [
   (u"共有に失敗したら、窓に戻らずに終わる",
    u'''      shareNg = !r.aborted;''', u'''      return null;''', TG, "genba", u"㉗b"),
   (u"「このまま新しく入力する」の確かめを「PCのファイルから消えます」に戻す",
-   u'''      + "迷ったときは「いいえ」を選び、「📮 入力して事務所に預ける」にしてください。\\n\\n"''',
+   u'''      + "迷ったときは「いいえ」を選び、同じ「困ったとき」の中の「📮 事務所に預ける」にしてください。\\n\\n"''',
    u'''      + "がPCのファイルから消えます。\\n\\n"''', TG, "genba", u"㉙"),
   (u"選ぶ窓の説明を折り返さない（長い預けの名前）",
    u'''  #pick-note{ overflow-wrap:anywhere; }''', u'''''', TG, "genba", u"㉚c"),
   (u"結果の窓に高さの上限が無い（下のボタンに指が届かない）",
    u'''    max-height:calc(100vh - 48px); max-height:calc(100dvh - 48px); overflow:auto; box-sizing:border-box;}''', u'''}''', TG, "genba", u"㉚b"),
   (u"履歴の 📮 ボタンを1行にしない",
-   u'''  .d-sidesel{flex:1 1 100%; order:3;''', u'''  .d-sidesel{white-space:nowrap; flex:none;''', TG, "genba", u"㉚b"),
+   u'''font-size:13.5px; font-family:inherit; white-space:normal;}''', u'''font-size:13.5px; font-family:inherit; white-space:nowrap; width:auto; display:inline-block;}''', TG, "genba", u"㉚b"),
 
   (u"名前だけの窓に「フォルダを覚えるのをやめる」を出さない",
    u'''    if(saveDirName()) add("📤 フォルダを覚えるのをやめる（保存は共有で渡す）", "\\u0000forget",''',
@@ -248,8 +248,8 @@ CASES = [
         let f0 = null;''', TM, "main", "①"),
   (u"★読み込み：中に _side がある預け（名前が変わったもの）を行にする",
    u'''        if(isSideCaseFile(name, data)){
-          stats.files--;''', u'''        if(false){
-          stats.files--;''', TM, "main", "①"),
+          const sm = sideFileMeta(pathPrefix, name, dirHandle, handle, file);''', u'''        if(false){
+          const sm = sideFileMeta(pathPrefix, name, dirHandle, handle, file);''', TM, "main", "①"),
   (u"★📁 で読んだあと、預けを覚えない・知らせない",
    u'''    { const sd = sideLoadNote(stats);                       // 📮 現場から預かったファイル（版176）
       if(sd) _missLastNote''', u'''    { const sd = "";
@@ -361,7 +361,7 @@ CASES = [
   (u"★迷子を知らせない",
    u'''    if(ps.length >= 2) out.push(''', u'''    if(false) out.push(''', TM, "main", "⑩"),
   (u"★振り分けたあと一覧を読み直さない",
-   u'''      const reloaded = await listReloadFolder(gone);''', u'''      const reloaded = true;''', TM, "main", u"⑪"),
+   u'''      const reloaded = editing ? false : await listReloadFolder(gone);''', u'''      const reloaded = true;''', TM, "main", u"⑪"),
 
   # ---- フォルダの選び方 ----
   (u"★許可を断られたフォルダを忘れない",
@@ -400,8 +400,7 @@ CASES = [
   (u"★💾 戸別ファイルへ反映 で _side を残す",
    u'''      delete json._side;                              // 📮''', u'''      // (消した)''', TM, "main", "⑯"),
   (u"エディタで保存すると、まとめた印を落とす",
-   u'''  "_passthrough","_otherFile","_mergedFrom",
-  "_sideMerged"''', u'''  "_passthrough","_otherFile","_mergedFrom"''', TM, "main", "⑯"),
+   u'''  "_sideMerged"                      // 📮 どの預けをまとめたか（版176。二度まとめないための印）''', u'''  "_unused_"''', TM, "main", "⑯"),
 
   # ======== 現場入力（2回目・3回目の見直しの直し） ========
   (u"★📮 の印：渡す前に読んだ写しで下書きを書き戻す（渡しているあいだに入った写真が消える）",
@@ -468,10 +467,10 @@ CASES = [
    u'''"それでも、このまま保存しますか？"))){ _lastSaveInfo = saveKeepPcInfo(handle.name || fname); return true; }''',
    u'''"それでも、このまま保存しますか？"))) return false;''', TG, "genba", u"㊲b"),
   (u"★見るだけの帯（工事完了）が「ここで保存すると…PCのファイルから消えます」と言う（版175 に戻す）",
-   u'''          ? "直すときは、PCでお願いします。ここで「保存」を押しても、PCのファイルは書き替えません（📮 で事務所に預けられます）。"''',
+   u'''          ? "直すときは、PCでお願いします。ここで「保存」を押しても、PCのファイルは書き替えません。"''',
    u'''          ? "直すときは、PCでお願いします。ここで保存すると、上の中身はPCのファイルから消えます。"''', TG, "genba", u"㊳"),
   (u"★見るだけの帯が「このまま保存すると…PCのファイルから消えます」と言う（版175 に戻す）",
-   u'''          : "ここで「保存」を押しても、PCのファイルは書き替えません（📮 で事務所に預けられます）。")''',
+   u'''          : "ここで「保存」を押しても、PCのファイルは書き替えません。")''',
    u'''          : "このまま保存すると、上の中身はPCのファイルから消えます。")''', TG, "genba", u"㊳"),
   (u"★端末の中だけかもしれないフォルダに書いても、緑の「保存しました」を勝手に閉じる（⚠・📮 なし）",
    u'''      const devOnly = saveDirMaybeDevice(dir);''',
@@ -782,7 +781,7 @@ CASES = [
   (u"★引き継いだ状態を開いている画面に入れない（開いたままもう一度保存すると外れる）",
    u'''      if(el && el.value !== k2.status) el.value = k2.status;''', u'''''', TM, "main", u"㉙"),
   (u"★戸別ファイルから済みの印・状態を引き継いだことを知らせない",
-   u'''  renamedNote += sideKeptNote + thumbKeptNote;''', u'''  renamedNote += thumbKeptNote;''', TM, "main", u"㉙"),   # 版178 で縮小版の知らせ（thumbKeptNote）を足した
+   u'''  renamedNote += sideKeptNote + thumbKeptNote + hybNote;''', u'''  renamedNote += thumbKeptNote + hybNote;''', TM, "main", u"㉙"),   # 版178 で縮小版の知らせ（thumbKeptNote）・版181 で .hyb の写真の知らせ（hybNote）を足した
   (u"★物件の行のときも、振り分けたあと 📁 のフォルダを読み直す（物件の戸別・物件だけの直しが消える）",
    u'''      related = false;
       if(res.gone.length){                       // 片付けた預けは''', u'''      if(res.gone.length){                       // 片付けた預けは''', TM, "main", u"㉘a"),

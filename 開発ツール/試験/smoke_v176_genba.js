@@ -679,7 +679,10 @@ window.__tagOf = iso => { const d = new Date(iso); const p = n => String(n).padS
     const r = await page.evaluate(async () => {
       await __state({ dirName:'リスト' });
       const vo0 = !!M._viewOnly;
-      const order = Array.from(document.querySelectorAll('#pcguard .pcg-btns button')).map(x => x.id);
+      const order = Array.from(document.querySelectorAll('#pcguard > .pcg-btns button')).map(x => x.id);
+      /* 版181：📮 と「このまま新しく入力する」は、閉じた「困ったとき」にしまった（利用者の指定） */
+      const trouble = Array.from(document.querySelectorAll('#pcguard details.pcg-trouble button')).map(x => x.id);
+      const troubleOpen = !!(document.querySelector('#pcguard details.pcg-trouble') || {}).open;
       __click('pcg-side'); await __sleep(500);
       const mode = { sideOnly: !!M._sideOnly, viewOnly: !!M._viewOnly, band: ((document.getElementById('pcguard') || {}).innerText || '').replace(/\s+/g, ' '),
                      bar: __bar().all, said: __said.slice(-1)[0] || '' };
@@ -692,13 +695,13 @@ window.__tagOf = iso => { const d = new Date(iso); const p = n => String(n).padS
       const after = { sideOnly: !!M._sideOnly, viewOnly: !!M._viewOnly, fromCase: !!M._fromCaseFile, bar: __bar().all };
       const w2 = await __watch(() => __press('btn-save'), 15000);
       const f = __fileOf(__D, '2612MKM013.json');
-      return { vo0, order, mode, w: { shared: w.shared, names: w.sharedNames, picks: w.picks }, why: j && j._side && j._side.why, note: j && j.chosho_note,
+      return { vo0, order, trouble, troubleOpen, mode, w: { shared: w.shared, names: w.sharedNames, picks: w.picks }, why: j && j._side && j._side.why, note: j && j.chosho_note,
                canon1, after, w2: { shared: w2.shared, wrote: w2.wrote, ov: w2.ov }, file: f && { photos: __pids(f), note: f.chosho_note, side: ('_side' in f) } };
     });
     console.log('⑪預けモード', J(r));
     ok(r.vo0 === true, '試験の前提: 見るだけになっていない');
-    ok(r.order.indexOf('pcg-side') >= 0 && r.order.indexOf('pcg-side') === r.order.indexOf('pcg-load') + 1,
-       '★帯に「📮 入力して事務所に預ける」が無い（または「📂」のすぐ後でない）→ ' + J(r.order));
+    ok(r.trouble.indexOf('pcg-side') >= 0 && r.order.indexOf('pcg-side') < 0 && r.troubleOpen === false,
+       '★帯の「困ったとき」に「📮 事務所に預ける」が無い（またはふだんのボタンに並んでいる・開いたまま）→ ' + J([r.order, r.trouble, r.troubleOpen]));
     ok(/別の名前/.test(r.mode.said) && /書き替えません/.test(r.mode.said), '★預けモードの確かめで、別の名前で渡すと言わない → ' + r.mode.said);
     ok(r.mode.sideOnly && !r.mode.viewOnly && /預けモード/.test(r.mode.band) && /預けモード/.test(r.mode.bar),
        '★預けモードにならない（帯・保存バーに「📮 預けモード」が出ない）→ ' + J(r.mode));
@@ -1383,6 +1386,8 @@ window.__tagOf = iso => { const d = new Date(iso); const p = n => String(n).padS
       M._touched = true; await persistDraft();
       await openDraftModal(); await __sleep(400);
       const cb = document.querySelector('.d-check'); if(cb){ cb.checked = true; cb.dispatchEvent(new Event('change')); }
+      /* 版181：📮 は閉じた「困ったとき」の中。開いて測る（閉じたままだと大きさが 0 で、はみ出しを見逃す） */
+      const dt = document.querySelector('#draft-list details.d-trouble'); if(dt) dt.open = true; await __sleep(100);
       const sb = document.getElementById('d-sidesel'); const sr = sb ? sb.getBoundingClientRect() : null;
       const d = m();
       return { a, b2, c, d, card: cr && [Math.round(cr.left), Math.round(cr.right), Math.round(cr.height)], vh: window.innerHeight,
@@ -1393,7 +1398,7 @@ window.__tagOf = iso => { const d = new Date(iso); const p = n => String(n).padS
     ok(r.b2.sw <= r.b2.iw, '★幅320px で預けモードの帯が横にはみ出した → ' + J(r.b2));
     ok(r.c.sw <= r.c.iw && r.card && r.card[0] >= 0 && r.card[1] <= 320 && r.card[2] <= r.vh,
        '★幅320px で結果の窓（長い知らせ）が画面に収まらない → ' + J([r.c, r.card, r.vh]));
-    ok(r.d.sw <= r.d.iw && r.side && r.side[0] >= 0 && r.side[1] <= 320, '★幅320px で履歴の「📮 選んで事務所に預ける」が横にはみ出した → ' + J([r.d, r.side]));
+    ok(r.d.sw <= r.d.iw && r.side && r.side[0] >= 0 && r.side[1] <= 320 && r.side[1] > r.side[0], '★幅320px で履歴の「📮 選んで事務所に預ける」が横にはみ出した → ' + J([r.d, r.side]));
   });
 
   /* ======== 版176 第2回の直し ======== */

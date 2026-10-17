@@ -88,8 +88,8 @@ CASES = [
   if(c) c.addEventListener("click", copyMgmtNo);''',
    u'''  void 0;''', "smoke_v169_genba.js", "genba"),
   (u"★帯に、貼り付けて探せることを書かない",
-   u'''           + "<br>1つずつ探すときは、📋 で番号をコピーして、ファイルを選ぶ画面の検索に貼り付けてください。")''',
-   u'''           + "")''', "smoke_v169_genba.js", "genba"),
+   u'''         : '<div class="pcg-sub">1つずつ探すときは、📋 で番号をコピーして、ファイルを選ぶ画面の検索に貼り付けてください。</div>')''',
+   u'''         : '')''', "smoke_v169_genba.js", "genba"),
 ]
 
 import sys as _s

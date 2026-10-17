@@ -386,8 +386,8 @@ CASES = [
    u"""  if(false){""", "smoke_v172_genba.js", "genba"),
   (u"★第9回の2 写真の歯止めを、保存先を選ぶ画面を開いたあとにする（選んだファイルが空のまま残る）",
    u"""      if(await photoGateStop(M, state)) return true;
-      const handle=await window.showSaveFilePicker(""",
-   u"""      const handle=await window.showSaveFilePicker(""", "smoke_v172_genba.js", "genba"),
+      /* ★ほかの端末も保存している戸別（_otherFile）は、この画面を開かない★""",   # 版181: 間に「ほかの端末の戸別」の歯止めが入った（同じねらい）
+   u"""      /* ★ほかの端末も保存している戸別（_otherFile）は、この画面を開かない★""", "smoke_v172_genba.js", "genba"),
   (u"★第9回の2 読み込みで、前に当たったほかのフォルダを、リストより先に見る（古い写しで開く）",
    u"""  const h1 = await look(dir);
   if(h1){ _caseDirHit = dir; _caseDirHitRoot = root; return h1; }

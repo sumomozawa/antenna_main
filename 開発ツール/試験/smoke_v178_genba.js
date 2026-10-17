@@ -424,7 +424,9 @@ window.__spRowText = id => { const b = document.querySelector('[data-sp-open="' 
   await scene('①b', async page => {
     const r = await page.evaluate(async ({ NA }) => {
       await __state();
-      const pc = buildStateOf(Object.assign(freshModel(), { chosho_mgmt_no: NA, chosho_cust_name: '工藤 A', chosho_time: '10:00', chosho_note: 'PCメモ' }));
+      /* 版181: 控えの無い戸別で PCのファイルの備考（PCだけが入れた値）がこの端末の備考と違うと、まとめて保存は書かずに残す（1件の保存で聞く）ようになった。
+         この場面のねらい（届いた写真・PCだけの値＝時刻）は変えずに、PCのファイルの備考を外す */
+      const pc = buildStateOf(Object.assign(freshModel(), { chosho_mgmt_no: NA, chosho_cust_name: '工藤 A', chosho_time: '10:00' }));
       pc.chosho_photos = [ __ph('pc1', '#999') ]; pc._origin = 'main';
       __D.__files[NA + '.json'] = JSON.stringify(pc);
       let fired = 0;
@@ -1909,7 +1911,7 @@ window.__spRowText = id => { const b = document.querySelector('[data-sp-open="' 
     ok(t.length === 1 && (r.listed || []).indexOf(t[0].key) >= 0, '★㉑一時のキーに残した戸別が、下書き一覧に出ない → ' + J(r.listed));
     /* 小さな知らせ（toast）は、すぐあとの「…CH取込」で消えて読めなかった（5回目の見直し）。取り込みの最後に窓で知らせる */
     const w = (r.said || []).filter(s => /別の下書き/.test(s));
-    ok(w.some(s => s.indexOf(NA) >= 0 && /測定値/.test(s) && /下書き一覧/.test(s)),
+    ok(w.some(s => s.indexOf(NA) >= 0 && /測定値/.test(s) && /履歴/.test(s)),   // 版181: 画面の呼び名は「履歴」（「下書き一覧」は画面に無い）
        '★㉑そのキーの下書きが別のものに替わっていたのに、測定値を別の下書き（一時のキー）に入れたことを窓で知らせない（「下書き一覧」も言わない） → ' + J(r.said));
     ok(w.every(s => !/写真/.test(s)), '★㉑測定値の CSV の取り込みなのに「写真を別の下書きに入れました」と知らせた → ' + J(w));
   });
@@ -2128,7 +2130,7 @@ window.__spRowText = id => { const b = document.querySelector('[data-sp-open="' 
     ok(t.length === 1 && hasAll(t[0].photos, r.all),
        '★㉕取り込んだ写真（a1・1〜3枚目）が、一時のキーの下書き1つにそろって残らない（写真が消えた） → ' + J(r.tmps));
     ok(t.length === 1 && (r.listed || []).indexOf(t[0].key) >= 0, '★㉕写真を入れた一時のキーの下書きが、下書き一覧に出ない → ' + J(r.listed));
-    ok((r.said || []).length === 1 && r.said[0].indexOf(NA) >= 0 && /写真/.test(r.said[0]) && /下書き一覧/.test(r.said[0]),
+    ok((r.said || []).length === 1 && r.said[0].indexOf(NA) >= 0 && /写真/.test(r.said[0]) && /履歴/.test(r.said[0]),   // 版181: 「履歴」と言う
        '★㉕取り込みが終わっても、写真を別の下書きに入れたことを窓で知らせない（または何度も出た・「下書き一覧」を言わない） → ' + J(r.said));
   });
 

@@ -224,7 +224,7 @@ function serve(file){
     renderPcGuard();
     const btn = document.getElementById('pcg-copy');
     const o = { copy: !!btn, label: btn ? btn.textContent : '',
-                msg: (document.querySelector('#pcguard .pcg-msg') || {}).textContent || '' };
+                msg: (document.getElementById('pcguard') || {}).textContent || '' };   // 版181：説明はボタンのすぐ下（.pcg-sub）
     try{ await navigator.clipboard.writeText('__まだ__'); }catch(_){}
     if(btn) btn.click();
     await new Promise(r => setTimeout(r, 250));
@@ -235,7 +235,7 @@ function serve(file){
   console.log('⑤帯のコピー（スマホ）', JSON.stringify(r5));
   ok(r5.copy === true, '★スマホの帯に「📋 管理番号をコピー」が無い');
   ok(/コピー/.test(r5.label), '★ボタンの字が違う → ' + r5.label);
-  ok(/貼り付け/.test(r5.msg), '★帯に、貼り付けて探せることを書いていない');
+  ok(/検索に貼り付け/.test(r5.msg), '★帯に、貼り付けて探せることを書いていない');   // ボタンの字（探す画面に貼り付け）とは別に、説明の文があること
   ok(r5.pasted === '2621HIN101', '★帯のボタンを押してもコピーされていない → ' + r5.pasted);
 
   // ---------- ⑥ フォルダを掴める端末（PC）では出さない ----------

@@ -58,8 +58,8 @@ CASES = [
    u'''                     && !(x.id && mergedIds.has(x.id)));''',
    u'''                     );''', "smoke_v159_main.js", "main"),
   ("★普段の保存（物件へ保存）でも ⚠ を出す",
-   u'''  if(!dir) return "\\n（戸別の個別JSONは更新していません：工事フォルダ未リンク）";''',
-   u'''  if(!dir) return "\\n\\u26a0 戸別の個別JSONは更新していません（工事フォルダを掴めていません）。";''',
+   u'''  if(!dir) return "\\n（戸別ファイルには書いていません：工事フォルダが選ばれていないか、工事フォルダに書く許可が出ていません）";''',
+   u'''  if(!dir) return "\\n\\u26a0 戸別ファイルは更新していません（工事フォルダを掴めていません）。";''',
    "smoke_v159_main.js", "main"),
   ("★工事フォルダを掴めなくても、戸別ごとに聞き直す",
    u'''  if(inImport && _genbaNoDir) return noDirNote;   // 1件目で掴めなかった＝残りも同じ。何度も窓を出さない''',
@@ -77,14 +77,15 @@ CASES = [
    u'''        .filter(x => x && !x.dataUri && merged.indexOf(x) < 0''',
    u'''        .filter(x => x && !x.dataUri && true''', "smoke_v159_main.js", "main"),
   ("★工事フォルダを掴めていないのに、取り込みで知らせない",
-   u'''        if(inImport && note && /工事フォルダ未リンク/.test(note)){ _genbaNoDir = true; return noDirNote; }''',
+   u'''        if(inImport && note && /工事フォルダが選ばれていないか/.test(note)){ _genbaNoDir = true; return noDirNote; }''',
    u'''        void 0;''', "smoke_v159_main.js", "main"),
   ("取り込みのまとめに、書けていない件数・物件を開いていない知らせを出さない",
    u'''    const ngWrite = notes.filter(t => /\\u26a0/.test(String(t))).length;   // ⚠ が付くのは書き戻せなかった知らせだけ
     alert("📥 現場データ取込 完了\\n\\n取込: "+done+" 件"
       + (ngWrite ? ("（うち " + ngWrite + " 件は戸別ファイルへ書けていません）") : "")
       + " ／ スキップ: "+skipped+" 件"+(failed?(" ／ 失敗: "+failed+" 件"):"")
-      + (!_currentProject ? "\\n\\n※ 物件を開いていないので、戸別ファイルへは書き戻していません（この一覧の中だけの取り込みです）。\\n　 受付台帳の「💾 戸別ファイルへ反映」か、戸別を開いて「保存」で書けます。" : "")
+      + (!_currentProject ? "\\n\\n※ 物件を開いていないので、戸別ファイルへは書き戻していません（この一覧の中だけの取り込みです）。\\n　 もうファイルのある戸別は、1件ずつ開いて「💾 上書き保存」を押してください（受付台帳の「💾 戸別ファイルへ反映」では、現場の機器・長さ・写真は入りません）。"
+          + "\\n　 ファイルの無い戸別は、受付台帳の「💾 戸別ファイルへ反映」で作れます。" : "")
       + (notes.length?("\\n\\n"+notes.join("\\n")):""));''',
    u'''    alert("📥 現場データ取込 完了\\n\\n取込: "+done+" 件 ／ スキップ: "+skipped+" 件"+(failed?(" ／ 失敗: "+failed+" 件"):"")+(notes.length?("\\n\\n"+notes.join("\\n")):""));''',
    "smoke_v159_main.js", "main"),

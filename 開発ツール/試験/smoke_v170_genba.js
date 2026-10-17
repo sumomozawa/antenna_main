@@ -204,7 +204,7 @@ window.__manyNames = function(n, want){
     const o = { load: T('pcg-load'), one: T('pcg-one'), copy: T('pcg-copy'), force: T('pcg-force'),
                 dir: T('pcg-dir'),
                 loadAlt: (document.getElementById('pcg-load')||{}).className || '',
-                msg: (document.querySelector('#pcguard .pcg-msg')||{}).textContent || '',
+                msg: (document.getElementById('pcguard')||{}).textContent || '',   // 版181：説明はボタンのすぐ下（.pcg-sub）にも出す
                 order: Array.from(document.querySelectorAll('#pcguard .pcg-btns button')).map(x => x.id) };
     window.showDirectoryPicker = keep;
     return o;
@@ -218,7 +218,7 @@ window.__manyNames = function(n, want){
   ok(r8.dir === null, '★フォルダを掴めない端末に、押しても何も起きないボタンを出している');
   ok(r8.order.indexOf('pcg-load') === 0, '★「まとめて選ぶ」が一番上に無い → ' + r8.order.join(','));
   ok(/すべて選択/.test(r8.msg), '★「すべて選択」すればよいことを書いていない');
-  ok(/貼り付け/.test(r8.msg), '★コピーして貼り付けられることを書いていない（版169 の約束）');
+  ok(/検索に貼り付け/.test(r8.msg), '★コピーして貼り付けられることを書いていない（版169 の約束）');
 
   // ---------- ⑨ 帯のボタン（PC）は版168 のまま ----------
   const r9 = await page.evaluate(() => {

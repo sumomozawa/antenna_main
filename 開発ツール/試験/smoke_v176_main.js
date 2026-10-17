@@ -26,7 +26,8 @@
         a) その１/リスト を読んでいて上のフォルダを選ぶ　b) その２/リスト（預けがある所）を読んでいて その１ を選ぶ
      ⑫ 開いて直している途中・台帳で直したまま（_editingRow・_lgEdited）の戸別は触らない
      ⑬ 同じ戸別に預けが2つ（新しい戸別）：古い方で置き、新しい方をそこへまとめる。読み込んだ一覧の預けと2回数えない
-     ⑭ いつもの名前のファイルに _side が入ってしまったもの：一覧には出ないが、振り分けで印だけ外して戻す（消さない）
+     ⑭ いつもの名前のファイルに _side が入ってしまったもの：振り分けで印だけ外して戻す（消さない）
+        （版181 から、いつもの名前のファイルは一覧にも出す（行には印を持たせない）。前は一覧から黙って消えていた）
      ⑮ 📥 現場取込で預けを選ぶ：直した欄だけ・工程の印は外れない（受付台帳の同意書も）・似た写真を捨てる選択を出さない・
         写真は和集合・まとめた印。同じ預けをもう一度取り込もうとすると「もうまとめてあります」
      ⑯ PC が いつもの名前で書くとき（buildIndividualContent・💾 戸別ファイルへ反映）_side を入れない。_sideMerged は残す
@@ -79,7 +80,7 @@
         a) 物件のリストを選ぶ（台帳で作って「💾 戸別ファイルへ反映」でファイルのできた行もある）　b) 上のフォルダ（物件情報_調書）を選ぶ
         c) 物件に 📁 を取り込んでいる（台帳で作った行のほかは、行がファイルを持つ）→ これまでどおり読み直す（新しく置いた戸別が一覧に出る）
         d) 台帳で作った行しか無い物件（その２）で、覚えているのは その１ のリスト → その１ の戸別をこの物件に入れない
-     ㉙ 物件に保存：戸別ファイルに、行のまだ知らない預けがまとめてある（ほかのPCで振り分けた）→ 工事完了・日付・状態・まとめた印を
+     ㉙ 物件に保存：戸別ファイルに、行のまだ知らない預けがまとめてある（開いたあとで、ほかのPCで振り分けた）→ 工事完了・日付・状態・まとめた印を
         落とさない（行と開いている画面にも入れる＝開いたままもう一度保存しても外れない）。
         行が知っている印だけのファイルは、事務所が外した工事完了をそのまま書く
      ㉚ 📁 の一覧で、預けの印を外しただけ（一覧に行の無い戸別）で読み直しを断った → 「まだ振り分ける前の中身」と言う
@@ -824,7 +825,7 @@ const brief = o => JSON.stringify(o === undefined ? null : o).slice(0, 260);   /
     console.log('⑭いつもの名前の _side', brief(r14));
     ok(!r14.error, '⑭止まった → ' + r14.error);
     if(!r14.error){
-      ok(r14.rows0 === 0 && r14.side0 === 1, '⑭試験の前提: 印の入ったいつもの名前のファイルは一覧に出ない → ' + short(r14));
+      ok(r14.rows0 === 1 && r14.side0 === 1, '⑭試験の前提: 印の入ったいつもの名前のファイルは一覧に出る（版181）・預けとしても覚える → ' + short(r14));
       ok(/預けの印を外す/.test(r14.run.text), '★いつもの名前のファイルに入った預けの印を外す道が無い → ' + r14.run.text.slice(0, 400));
       ok(r14.still && r14.removed.length === 0 && !r14.hasSide && r14.photos === 'p1,p2,p3,p4,p5,p6' && r14.amp === 'pcAmp' && r14.bk,
          '★いつもの名前のファイルを消した／印が残る／中身が変わった／控えが無い → ' + short(r14));
@@ -1945,7 +1946,11 @@ const brief = o => JSON.stringify(o === undefined ? null : o).slice(0, 260);   /
       const F = Object.assign(__D(NO), { amplifier: 'amp_1u45', work_done: true, work_done_at: '2026-10-14', chosho_status: 'completed', _sideMerged: [STAMP] });
       // W2：まとめた印は行も知っている。このPCで事務所が工事完了を外した
       const F2 = Object.assign(__D(W2), { work_done: true, work_done_at: '2026-10-10', chosho_status: 'completed', _sideMerged: [S2] });
-      const l = __mk('リスト', { [NO + '.json']: JSON.stringify(F, null, 2), [W2 + '.json']: JSON.stringify(F2, null, 2) });
+      /* 版181 から、物件から開く戸別は、開く前に戸別ファイルにまとめてあった預けを開くときに引き継ぐ（smoke_v181_m_side_main ①a）。
+         ここでは保存の歯止めを確かめるので、開いたあとで（ほかのPCが）まとめたことにする */
+      const Fold = Object.assign({}, F, { amplifier: 'amp_3u43', work_done: false, chosho_status: 'in_progress' });
+      delete Fold.work_done_at; delete Fold._sideMerged;
+      const l = __mk('リスト', { [NO + '.json']: JSON.stringify(Fold, null, 2), [W2 + '.json']: JSON.stringify(F2, null, 2) });
       const stale = Object.assign({}, F, { amplifier: 'amp_3u43', work_done: false, chosho_status: 'in_progress', chosho_photos: null, chosho_photo_count: 6 });
       delete stale.work_done_at; delete stale._sideMerged;
       const row = { file: NO + '.json', data: stale, fileType: 'plain', _fromProject: true, _slim: true, _photoCount: 6 };
@@ -1957,6 +1962,7 @@ const brief = o => JSON.stringify(o === undefined ? null : o).slice(0, 260);   /
       _projDirHandle = l;
       const o = {};
       try { await openCaseInEditor(row); } catch(e){ o.openErr = String(e && e.message || e); }
+      l.__files[NO + '.json'] = JSON.stringify(F, null, 2);          // 開いたあとで、ほかのPCが振り分けた
       try { await overwriteSaveCurrentToProject(); } catch(e){ o.saveErr = String(e && e.message || e); }
       const f1 = JSON.parse(l.__files[NO + '.json']);
       o.saved = { wd: f1.work_done, at: f1.work_done_at, st: f1.chosho_status, sm: f1._sideMerged, ph: __pids(f1) };
@@ -2020,8 +2026,10 @@ const brief = o => JSON.stringify(o === undefined ? null : o).slice(0, 260);   /
     console.log('㉚印を外して読み直しを断った', brief(r), brief(fin));
     ok(!r.error, '㉚止まった → ' + r.error);
     if(!r.error){
-      ok(r.pre.rows === 'W1A001.json' && r.pre.sf === NO + '.json' && !r.fileHasSide && !r.rowForNo && fin.length === 1 && /預けの印を外した 1件/.test(fin[0]),
-         '㉚試験の前提: 印を外す・行が無い・読み直しを断る → ' + short({ r, fin }));
+      /* 版181 から、いつもの名前のファイルは一覧に出る（行は印を外す前の中身のまま＝読み直さなければ「まだ前の中身」） */
+      ok(r.pre.rows.split(',').sort().join() === [NO + '.json', 'W1A001.json'].sort().join() && r.pre.sf === NO + '.json' && !r.fileHasSide && r.rowForNo
+         && fin.length === 1 && /預けの印を外した 1件/.test(fin[0]),
+         '㉚試験の前提: 印を外す・行は印を外す前の中身・読み直しを断る → ' + short({ r, fin }));
       ok(fin.length === 1 && /一覧は、まだ振り分ける前の中身のままです（読み直していません。1件）/.test(fin[0])
          && !/振り分けた戸別の行には、同じ中身を入れました/.test(fin[0]),
          '★㉚ 行の無い戸別があるのに「振り分けた戸別の行には、同じ中身を入れました」と言う → ' + short(fin));

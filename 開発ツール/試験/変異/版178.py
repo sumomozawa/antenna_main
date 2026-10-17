@@ -171,7 +171,9 @@ CASES = [
   (u"★付け替え先のファイルの写真を土台にしない（行き先の元の写真を縮小版で置き換える）",
    u'''      alsoFh = fh;''', u'''''', TM, "main", u"⑯e"),
   (u"★💾 上書き保存で、開いたあとでファイルに入った写真を残さない（現場が足した写真が消える）",
-   u'''      stateObj.chosho_photos = photosKeepFileOnly(stateObj.chosho_photos, late);''', u'''''', TM, "main", u"㉓b"),
+   u'''      const late = (Array.isArray(prev.chosho_photos) ? prev.chosho_photos : []).filter(p => p && !photoSeenBy(_editingRow, p));
+      stateObj.chosho_photos = photosKeepFileOnly(stateObj.chosho_photos, late);''',   # 版181 で暗号の戸別にも同じ行がある（平文のほう）
+   u'''      const late = (Array.isArray(prev.chosho_photos) ? prev.chosho_photos : []).filter(p => p && !photoSeenBy(_editingRow, p));''', TM, "main", u"㉓b"),
   (u"★💾 上書き保存のあと、画面に出ていた写真を覚えない（足して上書きした写真を消しても残る）",
    u'''      if(fmt === "plain" && _editingRow && shownPhotos) rowSeePhotos(_editingRow, shownPhotos);   // 画面に出ていた写真（版178）''',
    u'''''', TM, "main", u"㉓f"),
@@ -241,7 +243,7 @@ CASES = [
    u'''    if(row.fileType === "plain") rowSeePhotos(row, (shown || {}).chosho_photos, wasSlim);''',
    u'''    if(row.fileType === "plain") rowSeePhotos(row, (shown || {}).chosho_photos, true);''', TM, "main", u"㊽b"),
   (u"★常駐させない行に 📥 して戸別ファイルへ書けても、行を「ファイルから読む」に戻さない（一覧・物件・工事調書に現場の写真しか出ない）",
-   u'''  if(wasSlim && row.fileType === "plain" && row.fileHandle && /個別JSONも更新しました/.test(String(note || ""))){''',
+   u'''  if(wasSlim && row.fileType === "plain" && row.fileHandle && /戸別ファイルにも書きました/.test(String(note || ""))){''',
    u'''  if(false){''', TM, "main", u"㊽c"),
   (u"★常駐させない行に取り込んだ写真を、開いたとき画面に出さない（開いて保存すると取り込んだ写真が消える）",
    u'''        d = slimRowWithMemPhotos(d, target);''', u'''''', TM, "main", u"㊾a"),
@@ -313,8 +315,8 @@ CASES = [
    u'''  return await photoKeepQueue(() => persistModel(model, Array.isArray(added) ? added : undefined, tag));''',
    u'''  return await photoKeepQueue(() => persistModel(model, Array.isArray(added) ? added : undefined));''', TG, "genba", u"㉕,㉘"),
   (u"★測定値の CSV で、別の下書きに入れた覚えに取り込みの印を付けない（知らせが出ない）",
-   u'''  else { await persistModel(model, undefined, tag); }   // 別戸別へ切替済み→読込元を直接確定保存（混入/喪失防止）''',
-   u'''  else { await persistModel(model); }''', TG, "genba", u"㉑"),
+   u'''persistModel(model, undefined, tag)); }   // 別戸別へ切替済み''',   # 版181: 写真の控えと同じ列に入れた（同じねらい：取り込みの印を渡さない）
+   u'''persistModel(model)); }   // 別戸別へ切替済み''', TG, "genba", u"㉑"),
   (u"★取り込みの書き込みで、別の下書き（印が違う）を置き換える",
    u'''    if(prev && prev.model && !draftSameUid(prev.model, m)){''', u'''    if(false){''', TG, "genba", u"㉑"),
   (u"★書いているあいだに開き直された写しに、書いた写真を足さない（写しを控えると写真が消える）",
@@ -415,23 +417,23 @@ CASES = [
   (u"★🔐 暗号化保存の写しに、画面に入れなかった写真を入れない（図面の無い戸別の写しが写真0枚）",
    u'''  if(fromProj){ editorAddHiddenPhotos(s, true); if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }   // 写しには画面に入れなかった写真も入れる
   const password = await promptPassword({
-    title: "🔐 暗号化保存",''',
+    title: "🔐 全暗号化保存",''',
    u'''  if(fromProj){ if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }
   const password = await promptPassword({
-    title: "🔐 暗号化保存",''', TM, "main", u"㉘c"),
+    title: "🔐 全暗号化保存",''', TM, "main", u"㉘c"),
   (u"★ハイブリッド保存で、パスワードの前に知らせて確かめない",
    u'''  if(fromProj){ editorAddHiddenPhotos(s, true); if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }   // 写しには画面に入れなかった写真も入れる
   const password = await promptPassword({
-    title: "🔐🔑 ハイブリッド暗号化保存 (方式C)",''',
+    title: "🔑 ハイブリッド保存（方式C）",''',
    u'''  if(fromProj){ editorAddHiddenPhotos(s, true); }
   const password = await promptPassword({
-    title: "🔐🔑 ハイブリッド暗号化保存 (方式C)",''', TM, "main", u"㉘b"),
+    title: "🔑 ハイブリッド保存（方式C）",''', TM, "main", u"㉘b"),
   (u"★ハイブリッド保存の写しのあと「保存が完了しました」と言う（戸別ファイルに書いたように聞こえる）",
    u'''  alert(fromProj ? ("🔐🔑 写しをダウンロードの場所へ保存しました：" + fname + "\\n戸別ファイルは書き替えていません。")''',
    u'''  alert(false ? ("🔐🔑 写しをダウンロードの場所へ保存しました：" + fname + "\\n戸別ファイルは書き替えていません。")''', TM, "main", u"㉘a"),
   (u"★🔐 暗号化保存の写しのあと「保存が完了しました」と言う",
-   u'''  alert(fromProj ? ("🔐 写しをダウンロードの場所へ保存しました：" + fname + "\\n戸別ファイルは書き替えていません。") : "🔐 暗号化保存が完了しました");''',
-   u'''  alert("🔐 暗号化保存が完了しました");''', TM, "main", u"㉘c"),
+   u'''  alert(fromProj ? ("🔐 写しをダウンロードの場所へ保存しました：" + fname + "\\n戸別ファイルは書き替えていません。") : "🔐 全暗号化保存が完了しました");''',
+   u'''  alert("🔐 全暗号化保存が完了しました");''', TM, "main", u"㉘c"),
 
   # ---- （G2）見直しの直し：開いている行が一覧から外れても写しにする・案内するボタン・写しの写真 ----
   (u"★物件から開いた印を画面の側で覚えない（開いている行を 🧹 未施工にすると、💾 保存がファイルを選ぶ画面を開く）",
@@ -464,10 +466,10 @@ CASES = [
   (u"★ハイブリッド保存の写しに、画面に入れなかった写真を入れない（図面の無い戸別の写しが写真0枚）",
    u'''  if(fromProj){ editorAddHiddenPhotos(s, true); if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }   // 写しには画面に入れなかった写真も入れる
   const password = await promptPassword({
-    title: "🔐🔑 ハイブリッド暗号化保存 (方式C)",''',
+    title: "🔑 ハイブリッド保存（方式C）",''',
    u'''  if(fromProj){ if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }
   const password = await promptPassword({
-    title: "🔐🔑 ハイブリッド暗号化保存 (方式C)",''', TM, "main", u"㉘c"),
+    title: "🔑 ハイブリッド保存（方式C）",''', TM, "main", u"㉘c"),
 
   # ---- （G3）2回目の見直しの直し：📥 のあとも覚える・ボタンを描き直す・外れたあとの名前・復元できていない印・暗号の戸別への案内 ----
   (u"★📥 で開いている戸別へ入れたあと、物件から開いた行の覚えを戻さない（そのあと 🧹 未施工にすると、ファイルを選ぶ画面が開く）",
@@ -477,10 +479,11 @@ CASES = [
    u'''    try { updateOverwriteSaveBtn(); } catch(_){}   // 「💾 物件に保存」を出し直す（applyStateData のときは行が外れていた）
 ''', u'''''', TM, "main", u"㉗i"),
   (u"★世帯の削除で開いている行が外れても、ボタンを描き直さない（「💾 物件に保存」が押せるまま）",
-   u'''  if(_editingRow === row){ _editingRow = null; try { updateOverwriteSaveBtn(); } catch(_){} }   // ボタンを描き直す（版178）
+   u'''    try { updateOverwriteSaveBtn(); } catch(_){}   // ボタンを描き直す（版178）
+  }
   try { lgClearTouched([key]); } catch(_){}''',
-   u'''  if(_editingRow === row) _editingRow = null;
-  try { lgClearTouched([key]); } catch(_){}''', TM, "main", u"㉗j"),
+   u'''  }
+  try { lgClearTouched([key]); } catch(_){}''', TM, "main", u"㉗j"),   # 版181（m-apt）：aptMgRemoveRow の外し方を書き直したので目印を合わせた
   (u"★受付台帳の「一覧から消す」で開いている行が外れても、ボタンを描き直さない",
    u'''          if(_editingRow === row){ _editingRow = null; try { updateOverwriteSaveBtn(); } catch(_){} }   // ボタンを描き直す（版178）
           projTouch();
@@ -502,17 +505,17 @@ CASES = [
   (u"★🔐 暗号化保存の写しで、行が外れたら画面に入れなかった写真を足さない（写しが写真0枚）",
    u'''  if(fromProj){ editorAddHiddenPhotos(s, true); if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }   // 写しには画面に入れなかった写真も入れる
   const password = await promptPassword({
-    title: "🔐 暗号化保存",''',
+    title: "🔐 全暗号化保存",''',
    u'''  if(fromProj){ editorAddHiddenPhotos(s); if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }
   const password = await promptPassword({
-    title: "🔐 暗号化保存",''', TM, "main", u"㉘f"),
+    title: "🔐 全暗号化保存",''', TM, "main", u"㉘f"),
   (u"★ハイブリッド保存の写しで、行が外れたら画面に入れなかった写真を足さない（写しが写真0枚）",
    u'''  if(fromProj){ editorAddHiddenPhotos(s, true); if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }   // 写しには画面に入れなかった写真も入れる
   const password = await promptPassword({
-    title: "🔐🔑 ハイブリッド暗号化保存 (方式C)",''',
+    title: "🔑 ハイブリッド保存（方式C）",''',
    u'''  if(fromProj){ editorAddHiddenPhotos(s); if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }
   const password = await promptPassword({
-    title: "🔐🔑 ハイブリッド暗号化保存 (方式C)",''', TM, "main", u"㉘f"),
+    title: "🔑 ハイブリッド保存（方式C）",''', TM, "main", u"㉘f"),
 
   # ---- （G5）#176（預けた縮小版）との取り決め：預けた縮小版を持つ行も「物件から開いた戸別」と同じに扱う ----
   (u"★預けた縮小版を持つ行（台帳で作った行・縮小版の印が外れた）の「💾 保存」で、ファイルを選ぶ画面を開く（戸別ファイルを縮小版で置き換える）",
@@ -596,7 +599,13 @@ CASES = [
   (u"★預けられなかった行を覚えない（物件の保存のたびにファイルを読み直す）",
    u'''  if(row.data === d0) row._parkChecked = d0;''', u'''  if(false) row._parkChecked = d0;''', TMM, "main", u"㊷d"),
   (u"★帯の外の行の預けた元の写真を読めなくても、縮小版を移す",
-   u'''    if(tb && tb.miss) throw new Error("移す写真のうち "''', u'''    if(false) throw new Error("移す写真のうち "''', TMM, "main", u"㊷e"),
+   u'''  if(!strayHasFile){
+    let tb = null;
+    try { tb = await rowTakeBackOriginals(stray); } catch(_){ tb = null; }
+    if(tb && tb.miss) throw new Error("移す写真のうち "''', u'''  if(!strayHasFile){
+    let tb = null;
+    try { tb = await rowTakeBackOriginals(stray); } catch(_){ tb = null; }
+    if(false) throw new Error("移す写真のうち "''', TMM, "main", u"㊷e"),   # 版181（m-apt）：同じ止めをファイルのある行にも足したので、ファイルの無い行の方に絞った
   (u"★前の戸別を軽くするとき、縮小版が足りていても物件の縮小版づくりの終わりを待つ（開くたびに待たされる）",
    u'''    if(!Array.isArray(row._thumbs) || row._thumbs.length !== real){
       if(!inRun){''',
@@ -803,7 +812,7 @@ CASES = [
    u'''  if(unread.length && obj.chosho_photos.some(small)){''',
    u'''  if(unread.length){''', TM, "main", u"㊸id"),
   (u"★確かめられなかったのに、作らなかったことを知らせない",
-   u'''        return "\\n\\u26a0 戸別の個別JSONは作っていません：" + up.why + "。\\n"''',
+   u'''        return "\\n\\u26a0 戸別ファイルは作っていません：" + up.why + "。\\n"''',
    u'''        return "" + "\\n"''', TM, "main", u"㊸ia"),
   (u"★読めないファイルと開けないフォルダで、知らせる直し方を取り違える",
    u'''             + (up.file''',
@@ -815,8 +824,8 @@ CASES = [
    u'''      if(!orig){''',
    u'''      if(false){''', TM, "main", u"㊸o"),
   (u"★縮小版のまま入れたことを知らせない",
-   u'''  renamedNote += sideKeptNote + thumbKeptNote;''',
-   u'''  renamedNote += sideKeptNote;''', TM, "main", u"㊸n"),
+   u'''  renamedNote += sideKeptNote + thumbKeptNote + hybNote;''',   # 版181 で .hyb の写真の知らせ（hybNote）を足した
+   u'''  renamedNote += sideKeptNote + hybNote;''', TM, "main", u"㊸n"),
   (u"★縮小版のまま入れた知らせに ⚠ を付ける（📥 の知らせで、書けた戸別を「書けていません」に数える）",
    u'''      thumbKeptNote = "\\n※ " + up.why''',
    u'''      thumbKeptNote = "\\n\\u26a0 " + up.why''', TM, "main", u"㊸ic"),
@@ -869,19 +878,19 @@ CASES = [
       ? Object.assign({}, p, { dataUri: b.p.dataUri }) : p;''',
    u'''    return b ? Object.assign({}, p, { dataUri: b.p.dataUri }) : p;''', TM, "main", u"㊸q"),
   (u"★見て回っているあいだに届いたファイルを、確かめずに上書きする（現場の写真が消える）",
-   u'''      if(now) return "\\n\\u26a0 戸別の個別JSONは書いていません：''',
-   u'''      if(false) return "\\n\\u26a0 戸別の個別JSONは書いていません：''', TM, "main", u"㊸p"),
+   u'''      if(now) return "\\n\\u26a0 戸別ファイルには書いていません：''',
+   u'''      if(false) return "\\n\\u26a0 戸別ファイルには書いていません：''', TM, "main", u"㊸p"),
   (u"★見て回ったことを伝えない（届いたファイルを確かめずに上書きする）",
    u'''  return { ok: true, walked: true };''',
    u'''  return { ok: true, walked: false };''', TM, "main", u"㊸p"),
   # ======== メイン：7回目の直し（暗号の物件の行を上書き保存しても写真を残す） ========
   # ======== メイン：暗号の戸別（.hyb）を、写真の出ていない画面から 💾 上書き保存しても写真を残す（7回目の見直し） ========
   (u"★写真の出ていない画面で、元ファイルの写真に足さずに書く（.hyb が画面の写真だけになる）",
-   u'''        stateObj.chosho_photos = photosKeepFileOnly(filePh, added);
-''', u'''''', TM, "main", u"㉕e"),
+   u'''        stateObj.chosho_photos = photosKeepFileOnly(base, added);
+''', u'''''', TM, "main", u"㉕e"),   # 版181：ファイルの写真（base）は、画面の版に替え・写真の出ている画面で消した写真を落としたもの
   (u"★写真の出ていない画面で、元ファイルをほどかない（ほどけないとして断る・直しが入らない）",
-   u'''          if(_editorPhotosStripped){ try { fileDec = await decryptHybrid(fresh, pw); } catch(_){ fileDec = null; } }
-''', u'''''', TM, "main", u"㉕e"),
+   u'''          try { fileDec = await decryptHybrid(fresh, pw); } catch(_){ fileDec = null; }
+''', u'''''', TM, "main", u"㉕e"),   # 版181 で写真の出ている画面でもほどく
   (u"★元ファイルに暗号の写真があっても、取り出さずに書く（ほどけない .hyb を写真なしで書く）",
    u'''      if(fp && fp.iv && fp.ct){''', u'''      if(false){''', TM, "main", u"㉕g"),
   (u"★元ファイルの写真の部分が壊れている（ほどくと写真が外れる）のに書く",
@@ -889,7 +898,7 @@ CASES = [
   (u"★写真の出ている画面でも、元ファイルの写真に足して書く（画面で消した写真が戻る）",
    u'''    if(fmt === "hybrid" && _editorPhotosStripped && readOk){''', u'''    if(fmt === "hybrid" && readOk){''', TM, "main", u"㉕i"),
   (u"★写真の出ていない画面で、画面で足した写真を書かない",
-   u'''photosKeepFileOnly(filePh, added);''', u'''photosKeepFileOnly(filePh, []);''', TM, "main", u"㉕enew"),
+   u'''photosKeepFileOnly(base, added);''', u'''photosKeepFileOnly(base, []);''', TM, "main", u"㉕enew"),   # 版181：filePh → base
   (u"★元ファイルの写真が古い形 {before, after} のとき、そのまま使う（A・B が消える）",
    u'''        const filePh = Array.isArray(fileDec.chosho_photos) ? fileDec.chosho_photos : migratePhotosShape(fileDec.chosho_photos);''',
    u'''        const filePh = fileDec.chosho_photos;''', TM, "main", u"㉕eold"),
@@ -903,7 +912,7 @@ CASES = [
   }
 ''', TM, "main", u"㉕enew"),
   (u"★帯が「写真が失われます」のまま",
-   u'''「💾 上書き保存」では、元の写真はそのまま残し、ここで足した写真を足して書きます（ここで写真を消しても、元のファイルからは消えません）。";''',
+   u'''保存（「💾 上書き保存」・「💾 物件に保存」）では、元の写真はそのまま残し、ここで足した写真を足して書きます（ここで写真を消しても、元のファイルからは消えません）。";''',   # 版181 で押せるボタンを言う
    u'''このまま上書き保存／再暗号化すると、元ファイルの写真が失われます。写真が必要な場合は元の個別ファイル(.hyb)から開き直してください。";''',
    TM, "main", u"㉕enew"),
   (u"★写真の出ていない画面で、壊れた .hyb をこの画面の中身で書き直すか聞く（OK で写真がみな消える）",
@@ -937,10 +946,12 @@ CASES = [
 ''', TM, "main", u"㉕t"),
   (u"★パスワードを聞いて開き直すとき、行にだけある写真を画面に出さない",
    u'''      const rowPh = hybRowPhotosToShow(full, target);   // 行にだけある写真を画面に出す（版178）
+      if(!full._photosStripped) rowSeePhotos(target, full.chosho_photos, true);   // 上と同じ（版181）
       const lite = Object.assign({}, full); lite.chosho_photos = rowPh;
 ''', u'''      const rowPh = null;
+      if(!full._photosStripped) rowSeePhotos(target, full.chosho_photos, true);   // 上と同じ（版181）
       const lite = Object.assign({}, full); lite.chosho_photos = rowPh;
-''', TM, "main", u"㉕mpw"),
+''', TM, "main", u"㉕mpw"),   # 版181 で見せた写真を覚える行が間に入った
   # 上と同じ（8回目の見直し）：パスワードを聞いて開いたときも、開く前のまま
   (u"★パスワードを聞いて開き直したとき、行をファイルから読む形に替える（次に開くと、直した増幅器 1U がファイルの古い 3U に戻る）",
    u'''      target.data = lite; target.unlocked = true; target._slim = wasSlim;   // 上と同じ（版178）''',
@@ -1221,10 +1232,10 @@ CASES = [
    u'''    for(const k in merged){ if(sens.indexOf(k) < 0) np[k] = merged[k]; }''',
    u'''    for(const k in merged){ np[k] = merged[k]; }''', TM, "main", u"㉕x"),
   (u"★暗号の行へ 📥 して戸別ファイルへ書けなかったのに「ファイルから読む」のまま（開くとファイルの古い中身で開き、現場の増幅器が戻る）",
-   u'''  if(row.fileType === "hybrid" && row._slim && !/個別JSONも更新しました/.test(String(note || ""))) row._slim = false;''',
+   u'''  if(row.fileType === "hybrid" && row._slim && !wroteOwn) row._slim = false;''',
    u'''''', TM, "main", u"㉕x"),
   (u"★暗号の行へ 📥 して戸別ファイルへ書けたのに「ファイルから読む」をやめる（開くとファイルの写真が出ない）",
-   u'''  if(row.fileType === "hybrid" && row._slim && !/個別JSONも更新しました/.test(String(note || ""))) row._slim = false;''',
+   u'''  if(row.fileType === "hybrid" && row._slim && !wroteOwn) row._slim = false;''',
    u'''  if(row.fileType === "hybrid" && row._slim) row._slim = false;''', TM, "main", u"㉕rproj"),
   # ======== メイン：10回目の見直しの直し（🔄 で受付台帳の「完了」を物件から消さない・ほかのPCの直しを消さない・知らせを分ける・📄 ファイルの行） ========
   # 11回目の直しで、行の封筒をほどいて書いた行（_slim でない）の「行の封筒のまま」は、書いた中身の暗号でない部分と同じ（壊しても同じ）。
@@ -1282,8 +1293,8 @@ CASES = [
    u'''  if(!row || row.fileType !== "hybrid" || row.fileHandle || !row.srcFile || row._photosKnown) return env;''',
    u'''  if(!row || row.fileType !== "hybrid" || row.fileHandle || !row.srcFile) return env;''', TM, "main", u"㉕zk"),
   (u"★一括で行の写真を足すとき、ファイルの写真を先にする（画面で直した名前が、読んだファイルの名前に戻る）",
-   u'''        stateObj.chosho_photos = photosKeepFileOnly(own, base);''',
-   u'''        stateObj.chosho_photos = photosKeepFileOnly(base, own);''', TM, "main", u"㉕zk"),
+   u'''          ? photosKeepFileOnly(own, base.filter(p => !(p && p.dataUri && gone && gone.has(kOf(p)))))''',   # 版181 で消した写真（_photosGone）を落とす形に
+   u'''          ? photosKeepFileOnly(base, own)''', TM, "main", u"㉕zk"),
   # ======== 現場入力：特別記録の写真の取り込み・「保存」（版178） ========
   # 守りだけの所（いまの道では壊しても試験で見えない）には変異を置かない：spPersist の列（取り込みの書き込みは
   # 開いている記録なら画面の物を書くので重ならない）・✕ のあとも「見た」ままにする（描いたときに見た写真に入っている）・
