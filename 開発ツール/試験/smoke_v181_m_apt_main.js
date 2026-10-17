@@ -6,6 +6,8 @@
      A2 両方にファイル・まとめる先を開いたまま → 古い画面で 💾 → 行・ファイル・物件に f1・z1
      A3 どちらにもファイルが無い（画面の順：開いて写真を足す → 一覧 → まとめる → 一覧を閉じる → 💾）→ 行・物件に o1・z1
      A4 A3 と同じで、💾 は押さずに画面で何か直す（自動保存）→ 行・物件に o1・z1
+     A5 まとめる先（図面あり・ファイルあり＝開くと「💾 上書き保存」の行き先がそのファイル）を開いたまま、帯の外の行（ファイルに z1）をまとめる
+        → 💾 上書き保存 は押せない・押してもファイル・物件は f1・z1 のまま（前は行き先が残り、古い画面がファイルを f1 だけで上書きした）
      B1 帯の外の行（同じ番号の手作りの行）が「💾 戸別ファイルへ反映」の結び付けでまとめる先と同じファイルに付いた
         → まとめてもそのファイルを消さない（f1・f2 と帯の外の行の z1）・預けた写真を読み直せる（miss 0）
      B2 B1 と同じで、まとめる先が「ファイルから読む」行 → ファイルが残る・物件に f1・f2
@@ -20,6 +22,11 @@
      E  まとめる先（ファイルあり）を開いて f1 の名前・調書の印を直し f2 を消して一覧へ → まとめる → 行は直したまま（f1 の名前・印・f2 なし）＋z1
      F  帯の外の行（📁・図面あり）を開いたまま → まとめる先（ファイル無し・o1）がそのファイルを引き取る
         → 古い画面の 💾 上書き保存 は押せない・押してもファイルは o1・z1 のまま・預けた o1 を読み直せる（miss 0）
+     G1 まとめる先の行はファイルを指しているが、そのファイルが無い（ほかのPCで消した・名前を替えた）
+        → 止めて知らせる・帯の外の行・ファイル・物件の z1 が残る（前は「同じファイル」と決めて写真を移さないまま行を消した）
+     G2 まとめる先が別のフォルダで、そのフォルダの許可がまだ無い → 先に許可を取ってからまとめる（f1・z1。止めない・行を消して z1 を置き去りにしない）
+     G3 「🗑 消す（中身なし）」で、まとめる先と同じファイルかどうか確かめられない（フォルダを比べられない）
+        → 「ファイルごと消す」を出さない・ファイルが残る（同じファイルなら世帯の写真が消える）
    ★場面ごとに新しいブラウザの入れ物（newContext）を使う★
    フォルダは試験の中で作る作り物。工事フォルダはつながない（フォルダを選ぶ画面は「閉じた」にする）。
    使い方: node smoke_v181_m_apt_main.js [メイン index.html]　（ONLY=A1,B3 で場面を絞れる） */
@@ -609,6 +616,107 @@ const MORE = `
     ok(r.afterMerge.save.disabled, '★F 消した行の古い画面の 💾 上書き保存 が押せる → ' + short(r.afterMerge.save));
     ok(r.files === B + '.json:o1,z1' && r.takeBack && r.takeBack.miss === 0,
        '★F 古い画面の 💾 上書き保存 で、まとめる先の元の写真 o1 が無くなった → ' + short(r));
+  });
+
+  // ---- A5 まとめる先（図面あり・ファイルあり）を開いたまま → まとめる → 古い画面の 💾 上書き保存
+  //      図面のある行は、開くと「💾 上書き保存」の行き先（_loadedOrigin）がそのファイルになる（図面の無い行はプリセットで開くので行き先が無い）
+  await go('A5', async ({ B, T1 }) => {
+    const o = {};
+    __proj('x-a5');
+    const tj = Object.assign(JSON.parse(JSON.stringify(PRESETS.standard)), JSON.parse(__unitFile(1, [__ph('f1', '#3c3')])));
+    const list = __mk('リスト', { [T1 + '.json']: JSON.stringify(tj, null, 2), [B + '.json']: __strayFile([__ph('z1', '#33c')]) });
+    const T = await __fileRow(list, T1 + '.json'); __unit(2); await __fileRow(list, B + '.json');
+    await openCaseInEditor(T);
+    o.origin = !!(_loadedOrigin && _loadedOrigin.fileHandle); o.open = _editingRow === T;
+    o.save0 = __btn();
+    markEditorDirty(); __toList();
+    await projSaveNow();
+    o.btn = await __merge();
+    o.afterMerge = { files: __files(list), save: __btn(), origin: !!_loadedOrigin };
+    __back();
+    await __btnSave();                              // 押せないはずのボタンを、それでも押した形
+    o.files = __files(list); o.row = __pids(T.data);
+    await projSaveNow();
+    o.idb = __pay(await projIdbGet(_currentProject.id), T1);
+    return o;
+  }, (r, said) => {
+    ok(r.origin && r.open && !r.save0.disabled && /移して消す/.test(r.btn) && r.afterMerge.files === T1 + '.json:f1,z1',
+       'A5 試験の前提: まとめる先（図面あり）を開くと 💾 上書き保存 の行き先がそのファイル → ' + short(r));
+    ok(r.afterMerge.save.disabled && !r.afterMerge.origin, '★A5 まとめたあとも、古い画面の 💾 上書き保存 が押せる → ' + short(r.afterMerge));
+    ok(r.files === T1 + '.json:f1,z1' && r.row === 'f1,z1' && r.idb === 'f1,z1',
+       '★A5 古い画面の 💾 上書き保存 で、まとめる先のファイルから移した写真 z1 が消えた → ' + short(r));
+    ok(said1(said, /画面は古くなりました/), '★A5 開いていた画面が古くなったことを知らせていない');
+  });
+
+  // ---- G1 まとめる先の行が指すファイルが無い（ほかのPCで消した・名前を替えた）→ 止める
+  await go('G1', async ({ B, T1 }) => {
+    const o = {};
+    __proj('x-g1');
+    const list = __mk('リスト', { [T1 + '.json']: __unitFile(1, [__ph('f1', '#3c3')]), [B + '.json']: __strayFile([__ph('z1', '#33c')]) });
+    const T = await __fileRow(list, T1 + '.json'); __unit(2); await __fileRow(list, B + '.json');
+    await projSaveNow();
+    delete list.__files[T1 + '.json'];               // ほかのPCで消した
+    o.btn = await __merge();
+    o.files = __files(list); o.removed = list.__removed.slice();
+    o.nos = __nos();
+    await projSaveNow();
+    const snap = await projIdbGet(_currentProject.id);
+    o.idbS = __pay(snap, B); o.idbT = __pay(snap, T1);
+    return o;
+  }, (r, said) => {
+    ok(/移して消す/.test(r.btn), 'G1 試験の前提 → ' + short(r));
+    ok(r.nos.indexOf(B + ',') >= 0 && r.idbS === 'z1', '★G1 写真を移さないまま、帯の外の行を一覧と物件から消した → ' + short(r));
+    ok(r.removed.length === 0 && r.files === B + '.json:z1', '★G1 帯の外の行のファイルを消した／書き替えた → ' + short(r));
+    ok(said1(said, /まとめられませんでした/) && said1(said, /見つからないか、読めませんでした/) && !said1(said, /へまとめました/),
+       '★G1 止めたことを知らせていない（「まとめました」と言った） → ' + short(alerts(said)));
+  });
+
+  // ---- G2 まとめる先が別のフォルダで、そのフォルダの許可がまだ無い（開き直したあとなど）→ 先に許可を取ってまとめる
+  await go('G2', async ({ B, T1 }) => {
+    const o = {};
+    __proj('x-g2');
+    const list = __mk('リスト', { [B + '.json']: __strayFile([__ph('z1', '#33c')]) });
+    const tdir = __mk('世帯', { [T1 + '.json']: __unitFile(1, [__ph('f1', '#3c3')]) });
+    const T = await __fileRow(tdir, T1 + '.json'); __unit(2); await __fileRow(list, B + '.json');
+    await projSaveNow();
+    // 許可がまだ無い：許可を求めるまで、ファイルを掴めない（Chrome は NotAllowedError）
+    let perm = 'prompt'; o.asked = 0;
+    const gfh = tdir.getFileHandle;
+    tdir.queryPermission = async () => perm;
+    tdir.requestPermission = async () => { o.asked++; perm = 'granted'; return perm; };
+    tdir.getFileHandle = async (n, opt) => { if(perm !== 'granted'){ const e = new Error('NotAllowed'); e.name = 'NotAllowedError'; throw e; } return gfh(n, opt); };
+    o.btn = await __merge();
+    o.files = __files(list) + ' | ' + __files(tdir); o.removed = list.__removed.concat(tdir.__removed);
+    o.nos = __nos(); o.T = __pids(T.data);
+    return o;
+  }, (r, said) => {
+    ok(/移して消す/.test(r.btn), 'G2 試験の前提 → ' + short(r));
+    ok(r.asked >= 1 && r.files === ' | ' + T1 + '.json:f1,z1' && r.removed.join(',') === B + '.json' && r.nos.indexOf(B + ',') < 0,
+       '★G2 まとめる先のフォルダの許可を取らずに、まとめられなかった／写真を移さないまま行を消した → ' + short(r));
+    ok(said1(said, /へまとめました/) && said1(said, /写真 1 枚を W7A007-01\.json へ移しました/), '★G2 知らせが合わない → ' + short(alerts(said)));
+  });
+
+  // ---- G3 「🗑 消す（中身なし）」で、同じファイルかどうか確かめられない（フォルダを比べられない）→ ファイルを消さない
+  await go('G3', async ({ B, T1 }) => {
+    const o = {};
+    __proj('x-g3');
+    const list = __mk('リスト', { [T1 + '.json']: __unitFile(1, [__ph('f1', '#3c3'), __ph('f2', '#c3c')]) });
+    const list2 = __mk('リスト', {});
+    list2.__files = list.__files;                                    // 同じフォルダを別に掴んだ（中身は同じ）
+    list2.isSameEntry = async () => { const e = new Error('比べられない'); e.name = 'NotAllowedError'; throw e; };
+    const T = await __fileRow(list, T1 + '.json'); __unit(2);
+    const S = createManualRow({ chosho_mgmt_no: T1, chosho_cust_name: '101号' }, 'manual');
+    S._dir = list2; S._name = T1 + '.json'; S._dirPath = ''; S.fileHandle = await list2.getFileHandle(T1 + '.json');
+    o.drop = await __drop();
+    o.files = __files(list); o.removed = list.__removed.concat(list2.__removed);
+    o.nos = __nos();
+    return o;
+  }, (r, said) => {
+    ok(/消す/.test(r.drop.text), 'G3 試験の前提: 中身の無い行が出ている → ' + short(r));
+    ok(!r.drop.dlg, '★G3 同じファイルかどうか確かめられないのに「ファイルごと消す」の窓を出した → ' + short(r));
+    ok(r.removed.length === 0 && r.files === T1 + '.json:f1,f2', '★G3 まとめる先と同じかもしれないファイルを消した → ' + short(r));
+    ok(r.nos === [T1, B + '-02'].join(','), '★G3 中身の無い行を一覧から外していない／世帯が消えた → ' + short(r.nos));
+    ok(confirms(said).some(m => /確かめられないので、ファイルは消しません/.test(m)), '★G3 ファイルを消さない訳を知らせていない → ' + short(confirms(said)));
   });
 
   await browser.close();

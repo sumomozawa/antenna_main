@@ -22803,10 +22803,13 @@ async function aptMgStrayDrop(tag){
   const who = info.mg + (((r.data || {}).chosho_cust_name) ? ("　" + r.data.chosho_cust_name) : "");
   /* まとめる先の世帯と同じファイルに付いている行（同じ番号の手作りの行が「💾 戸別ファイルへ反映」で同じファイルに付いた）は、
      「ファイルごと消す」を出さない。そのファイルは世帯のもの（版181） */
-  const sameFile = !!(info.hasFile && info.target && (await aptMgSameFile(r, info.target)));
+  const same = (info.hasFile && info.target) ? (await aptMgSameFile(r, info.target)) : false;
+  const sameFile = same !== false;   // 確かめられない（null）ときも、ファイルは消さない向き
+  const tmgD = String(((info.target || {}).data || {}).chosho_mgmt_no || "");
   const choice = (info.hasFile && !sameFile) ? await lgDelDialog(r, who)
     : (confirm(who + " を消します。\n\n写真・図面・備考・印は入っていません。\n"
-        + (sameFile ? ("この行のファイルは " + String(((info.target || {}).data || {}).chosho_mgmt_no || "") + " の世帯と同じファイルなので、ファイルは消しません（一覧から外すだけです）。\n") : "")
+        + (same === true ? ("この行のファイルは " + tmgD + " の世帯と同じファイルなので、ファイルは消しません（一覧から外すだけです）。\n")
+           : (same === null ? ("この行のファイルが " + tmgD + " の世帯と同じファイルかどうか確かめられないので、ファイルは消しません（一覧から外すだけです）。\n") : ""))
         + "消すと戻せません。") ? "list" : null);
   if(!choice) return;
   if(!(await lgDelApply(r, choice))) return;
@@ -22815,7 +22818,9 @@ async function aptMgStrayDrop(tag){
   try { renderListTable(); } catch(_){}
   aptMgRender();
 }
-/* 2つの行が同じファイルを指しているか（版181）。確かめられないときは「同じ」と見なす（消さない向き） */
+/* 2つの行が同じファイルを指しているか（版181）。true＝同じ／false＝違う／null＝確かめられない（ファイルが見つからない・フォルダを読めない）。
+   null を「同じ」と決めてはいけない：まとめるときにそう決めると、帯の外のファイルの写真を移さないまま行を消していた。
+   使う側で決める：消すほう（🗑 消す）は「同じかもしれない」としてファイルを消さない・まとめるほうは止める。 */
 async function aptMgSameFile(a, b){
   if(!(a && b && a._dir && b._dir && a._name && b._name)) return false;
   const nk = x => String(x || "").normalize("NFC").toLowerCase();
@@ -22823,7 +22828,7 @@ async function aptMgSameFile(a, b){
     const sameDir = a._dir === b._dir || (typeof a._dir.isSameEntry === "function" && await a._dir.isSameEntry(b._dir));
     if(sameDir && nk(a._name) === nk(b._name)) return true;
     return !!(await (await a._dir.getFileHandle(a._name)).isSameEntry(await b._dir.getFileHandle(b._name)));
-  } catch(_){ return true; }
+  } catch(_){ return null; }
 }
 /* 写真を「まとめる先」のファイルへ移す。★元の写真は1枚も減らさない★
    ・両方にファイルがある … まとめる先のファイルに和集合を書き、読み返して全部入ったことを確かめてから、元のファイルを消す
@@ -22864,7 +22869,18 @@ async function aptMgMovePhotos(target, stray){
   else strayPhotos = Array.isArray((stray.data || {}).chosho_photos) ? stray.data.chosho_photos : [];
   /* 帯の外の行とまとめる先が同じファイルを指している（同じ番号の行が同じファイルに付いた）ときは、そのファイルを消さない（版181）。
      そのファイルの写真はもうまとめる先のものなので、移す写真に数えない */
-  const sameFile = strayHasFile && targetHasFile && (await aptMgSameFile(stray, target));
+  let sameFile = false;
+  if(strayHasFile && targetHasFile){
+    // まとめる先のフォルダの許可を先に得る（許可がまだ無いと、同じファイルかを確かめられない）
+    if(!(await dupEnsureWritable(target._dir))) throw new Error("フォルダへの書き込み許可が得られませんでした（何もしていません）");
+    const same = await aptMgSameFile(stray, target);
+    /* 確かめられない（まとめる先のファイルが見つからない・読めない）ときは止める。
+       「同じ」と決めると、帯の外のファイルの写真を移さないまま行を消していた（版181） */
+    if(same === null) throw new Error("まとめる先のファイル（" + target._name + "）が見つからないか、読めませんでした。"
+      + "この行のファイル（" + stray._name + "）と同じかどうか確かめられないので、何もしていません。\n"
+      + "ほかのパソコンで消した・名前を替えたときは、📁 フォルダ で読み直してから、もう一度まとめてください。");
+    sameFile = same === true;
+  }
   const strayFilePhotos = sameFile ? [] : strayPhotos;
   /* ★帯の外の行にだけある写真も移す★（版181）
      ファイルを持つ行でも、開いて足した・📥 で入れた写真は、行にだけあってファイルにはまだ無い。

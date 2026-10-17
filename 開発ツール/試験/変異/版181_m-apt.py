@@ -7,6 +7,8 @@
 #   ・帯の外の行にだけある写真（ファイルにまだ無い）も移す
 #   ・暗号をかけた戸別（行・読んだ中身）はここで扱わない
 #   ・まとめる先の行で直した名前・調書の印・画面で消した写真を、ファイルの中身に戻さない（移した写真は必ず持たせる）
+#   ・同じファイルかどうか確かめられない（まとめる先のファイルが無い・フォルダを比べられない）とき、まとめるほうは止め、🗑 消す はファイルを消さない
+#     （まとめる先のフォルダの許可は、確かめる前に取る）
 #   場面を絞って速くする（ONLY に場面の記号を渡す）。名前の一部を引数に渡して絞れる。
 import io, subprocess, os
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -28,7 +30,12 @@ CASES = [
   (u"★まとめる先を開いていた画面と行のつなぎを外さない（古い画面の保存で移した写真が消える）",
    u'''      try { rtReleaseLock(t); } catch(_){}
       _editingRow = null; _loadedOrigin = null;''',
-   u'''      try { rtReleaseLock(t); } catch(_){}''', TM, "main", u"A1,A2,A3,A4"),
+   u'''      try { rtReleaseLock(t); } catch(_){}''', TM, "main", u"A1,A2,A3,A4,A5"),
+  (u"★まとめる先を開いていた画面の 💾 上書き保存 の行き先（_loadedOrigin）を残す（_editingRow だけ外す。古い画面がまとめる先のファイルを古い中身で上書き）",
+   u'''      try { rtReleaseLock(t); } catch(_){}
+      _editingRow = null; _loadedOrigin = null;''',
+   u'''      try { rtReleaseLock(t); } catch(_){}
+      _editingRow = null;''', TM, "main", u"A5"),
   (u"★帯の外の行とまとめる先が同じファイルでも、帯の外の行のファイルを消す（aptMgMovePhotos）",
    u'''    if(strayHasFile && !sameFile){''',
    u'''    if(strayHasFile){''', TM, "main", u"B1,B2"),
@@ -42,8 +49,26 @@ CASES = [
    u'''  const strayFilePhotos = sameFile ? [] : strayPhotos;''',
    u'''  const strayFilePhotos = strayPhotos;''', TM, "main", u"B1"),
   (u"★🗑 消す（中身なし）で、まとめる先と同じファイルでも「ファイルごと消す」を出す",
-   u'''  const sameFile = !!(info.hasFile && info.target && (await aptMgSameFile(r, info.target)));''',
+   u'''  const sameFile = same !== false;   // 確かめられない（null）ときも、ファイルは消さない向き''',
    u'''  const sameFile = false;''', TM, "main", u"B3"),
+  (u"★同じファイルかどうか確かめられないとき「同じ」と決める（まとめる先のファイルが無いのに、写真を移さないまま行を消す）",
+   u'''    return !!(await (await a._dir.getFileHandle(a._name)).isSameEntry(await b._dir.getFileHandle(b._name)));
+  } catch(_){ return null; }''',
+   u'''    return !!(await (await a._dir.getFileHandle(a._name)).isSameEntry(await b._dir.getFileHandle(b._name)));
+  } catch(_){ return true; }''', TM, "main", u"G1"),
+  (u"★まとめるとき、同じファイルかどうか確かめられなくても止めずに「同じ」と見なす",
+   u'''    if(same === null) throw new Error("まとめる先のファイル（" + target._name + "）が見つからないか、読めませんでした。"
+      + "この行のファイル（" + stray._name + "）と同じかどうか確かめられないので、何もしていません。\\n"
+      + "ほかのパソコンで消した・名前を替えたときは、📁 フォルダ で読み直してから、もう一度まとめてください。");
+    sameFile = same === true;''',
+   u'''    sameFile = same !== false;''', TM, "main", u"G1"),
+  (u"★まとめる先のフォルダの許可を取らずに、同じファイルかを確かめる（許可がまだ無いと、まとめられない）",
+   u'''    if(!(await dupEnsureWritable(target._dir))) throw new Error("フォルダへの書き込み許可が得られませんでした（何もしていません）");
+    const same = await aptMgSameFile(stray, target);''',
+   u'''    const same = await aptMgSameFile(stray, target);''', TM, "main", u"G2"),
+  (u"★🗑 消す（中身なし）で、同じファイルかどうか確かめられないときも「ファイルごと消す」を出す",
+   u'''  const sameFile = same !== false;   // 確かめられない（null）ときも、ファイルは消さない向き''',
+   u'''  const sameFile = same === true;''', TM, "main", u"G3"),
   (u"★帯の外の行にだけある写真（ファイルにまだ無い）を移さない",
    u'''      .filter(x => x && x.dataUri && !have.has(keyOf(x)) && !(sThumb && !x.id));''',
    u'''      .filter(x => false);''', TM, "main", u"C1,C2"),
