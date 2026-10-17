@@ -777,7 +777,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
     console.log('㊷c開いている戸別へ📥', short(r));
     ok(!r.error, '㊷c止まった → ' + r.error);
     if(!r.error){
-      ok(r.parked && r.open && /個別JSONも更新しました/.test(r.note) && r.file.join() === 'G,P', '㊷c試験の前提: 預けたあと、開いている戸別へ 📥 して戸別ファイルへ書けた → ' + short(r));
+      ok(r.parked && r.open && /戸別ファイルにも書きました/.test(r.note) && r.file.join() === 'G,P', '㊷c試験の前提: 預けたあと、開いている戸別へ 📥 して戸別ファイルへ書けた → ' + short(r));
       ok(r.shown.join() === 'G,P', '★㊷c開いている戸別へ 📥 したあと、画面に預けた縮小版を出した（元の写真ではない） → ' + short(r.shown));
       ok(r.saved.join() === 'G,P' && r.tel === '090-5555-6666', '★㊷cそのあとの保存で、戸別ファイルの元の写真が縮小版になった・直しが入らない → ' + short(r));
     }
@@ -1070,7 +1070,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
     console.log('㊷g📥のあと読み直せない', short(r));
     ok(!r.error, '㊷g止まった → ' + r.error);
     if(!r.error){
-      ok(r.attached && /上書き保存/.test(r.btn0) && r.shown0 && /個別JSONも更新しました/.test(r.note) && r.imp.file.join() === 'G,P' && r.imp.unread === 0,
+      ok(r.attached && /上書き保存/.test(r.btn0) && r.shown0 && /戸別ファイルにも書きました/.test(r.note) && r.imp.file.join() === 'G,P' && r.imp.unread === 0,
          '㊷g試験の前提: 「💾 上書き保存」で開いた戸別へ 📥 して書け、そのあとの読み直しだけ読めなかった → ' + short(r));
       ok(r.imp.shown.indexOf('P') >= 0, '★㊷g読み直せなかったとき、画面に出ていた元の写真 P から戻さず、縮小版を出した → ' + short(r.imp));
       ok(!/上書き保存/.test(r.imp.btn) && /読めなかった/.test(r.imp.toast),
@@ -1436,7 +1436,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
     console.log('㊷m前の縮小版が画面に出ている', short(r));
     ok(!r.error, '㊷m止まった → ' + r.error);
     if(!r.error){
-      ok(r.pre.parked && r.pre.og && r.pre.t2Shorter && r.open.join() === 'T1' && /個別JSONも更新しました/.test(r.note) && r.imp.file.join() === 'Og',
+      ok(r.pre.parked && r.pre.og && r.pre.t2Shorter && r.open.join() === 'T1' && /戸別ファイルにも書きました/.test(r.note) && r.imp.file.join() === 'Og',
          '㊷m試験の前提: 縮小版 T1 で開き、📥 で大きい版 Og をファイルへ書けた → ' + short(r));
       ok(r.imp.row.join() !== 'T1' && !/上書き保存/.test(r.imp.btn), '★㊷m画面に出ていた前の縮小版 T1 を、元の写真と見なして行に戻した → ' + short(r.imp));
       ok(r.saved.pressed && r.saved.file.join() === 'Og' && r.saved.tel === '090-1111-2222',
@@ -1559,7 +1559,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
     console.log('㊷p預けた世帯へまとめたあと 📥', short(r));
     ok(!r.error, '㊷p止まった → ' + r.error);
     if(!r.error){
-      ok(r.parked && r.move === 1 && r.slim && /個別JSONも更新しました/.test(r.note) && r.file === 'Q',
+      ok(r.parked && r.move === 1 && r.slim && /戸別ファイルにも書きました/.test(r.note) && r.file === 'Q',
          '㊷p試験の前提: 預けた世帯へまとめ、📥 で戸別ファイルに Q を書いた（預けた縮小版は書かない） → ' + short(r));
       ok(r.row === 'P1縮' && r.project === 'Q縮,P1縮', '★㊷p戸別ファイルに入れなかった預けた縮小版を行から外し、物件からも消した → ' + short({ row: r.row, project: r.project }));
     }
@@ -1653,7 +1653,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
     if(!r.error){
       ok(r.parked && r.after.pressed, '㊷q' + mode + '試験の前提: 預けて、保存を押せた → ' + short(r));
       if(mode === 'a'){
-        ok(r.after.file === null && /個別JSONは作っていません/.test(last), '★㊷qa預けた縮小版しか無いのに、新しい戸別ファイルを作った → ' + short(r.after) + ' ' + short(last.slice(0, 80)));
+        ok(r.after.file === null && /戸別ファイルは作っていません/.test(last), '★㊷qa預けた縮小版しか無いのに、新しい戸別ファイルを作った → ' + short(r.after) + ' ' + short(last.slice(0, 80)));
         ok(r.after.row === 'P1縮,P2縮' && r.after.project === 2, '★㊷qa行・物件から預けた縮小版が無くなった → ' + short(r.after));
       } else {
         ok(r.after.file === 'P3' && /2 枚は、戸別ファイルから元の写真を読めなかった/.test(last),

@@ -535,7 +535,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       // 3回目の見直し（メモリ）から：戸別ファイルに入れて確かめた元の写真は、行に持たせない（預けた縮小版＋預け先）
       ok(r1.row.parked === true && r1.row.same === false && r1.row.to === NO + '.json',
          '★①戸別ファイルに入れて確かめたのに、行が元の写真を持ち続けている・預け先が違う → ' + short(r1.row));
-      ok(a1.some(m => /戸別の個別JSONも更新しました/.test(m)), '①知らせに戸別ファイルを書いたことが出ない → ' + short(a1));
+      ok(a1.some(m => /戸別ファイルにも書きました/.test(m)), '①知らせに戸別ファイルを書いたことが出ない → ' + short(a1));
     }
     await ctx.close();
   }
@@ -1447,7 +1447,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       ok(r.tel === '090-2222-3333', '★㉑' + mode + '付いているファイルに直しが入っていない → ' + short(r));
       ok(r.photos.join() === 'G原寸,K', '★㉑' + mode + '付いているファイルの写真が G（原寸）と K のままではない → ' + short(r.photos));
       ok(!r.thumbAnywhere, '★㉑' + mode + 'フォルダのどこかに縮小版（長辺512px）が書かれた → ' + short(r));
-      ok(!a21.some(m => /書き替えていません/.test(m)) && a21.some(m => /戸別の個別JSONも更新しました/.test(m)),
+      ok(!a21.some(m => /書き替えていません/.test(m)) && a21.some(m => /戸別ファイルにも書きました/.test(m)),
          '★㉑' + mode + '戸別ファイルを書いたと知らせない・書かなかった → ' + short(a21.slice(-1)));
       if(mode === 'd'){
         const s = r.second || {};
@@ -1508,7 +1508,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       ok(r.tel === '090-2222-3333' && r.photos.join() === 'G原寸,K',
          '★㉒' + mode + '小文字の名前の戸別ファイルへ書かない・写真が G（原寸）と K のままではない → ' + short(r));
       ok(!a22.some(m => /書き替えていません/.test(m)), '★㉒' + mode + '同じファイルなのに「書き替えていません」と断った → ' + short(a22.slice(-1)));
-      ok(a22.some(m => /戸別の個別JSONも更新しました/.test(m)) && !a22.some(m => /統一|新名|旧 /.test(m)) && r.rowFile === 'リスト/' + NO.toLowerCase() + '.json',
+      ok(a22.some(m => /戸別ファイルにも書きました/.test(m)) && !a22.some(m => /統一|新名|旧 /.test(m)) && r.rowFile === 'リスト/' + NO.toLowerCase() + '.json',
          '★㉒' + mode + '同じファイルなのに「古い名前」として扱った（名前をそろえた・旧を残したと知らせる・行の名前を替えた） → ' + short(r.rowFile) + ' ' + short(a22.slice(-1)));
     }
     await ctx.close();
@@ -1539,7 +1539,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       const row = buildListRow(NO + '.json', 1, JSON.parse(list.__files[NO + '.json']), fh);   // 📁 フォルダで読んだ行（写真は常駐させない）
       slimListRow(row, true);
       _listRows = [row];
-      window.confirm = () => true;                                              // 「元ファイルに上書き保存します」→ はい
+      window.confirm = () => true;                                              // 「戸別ファイルに上書き保存します」→ はい
       // 現場入力が、いまのファイルに写真を足して保存した
       const fieldAdds = add => {
         const j = JSON.parse(list.__files[NO + '.json']);
@@ -1629,7 +1629,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       const want23 = { a: 'K,g1', b: 'K,g1', c: 'K,g1', d: 'G2,P,g1', e: 'g1', f: 'g1', g: 'g1' }[mode];
       if(mode === 'a') ok(r.shown === 'g1' && r.btn.pressed && /物件に保存/.test(r.btn.text), '㉓a試験の前提: 開くとファイルの写真が出て、物件に保存できる → ' + short(r));
       if(mode === 'b' || mode === 'e') ok(r.shown === (mode === 'e' ? 'g1,x1' : 'g1') && /上書き保存/.test(r.btnText), '㉓' + mode + '試験の前提: 📁 で読んだ戸別を開くと、ファイルの写真が出て「💾 上書き保存」になる → ' + short(r));
-      if(mode === 'c') ok(r.shown === 'g1' && !r.rowHeld.slim && r.rowHeld.ids === 'g1' && /戸別の個別JSONも更新しました/.test(r.note),
+      if(mode === 'c') ok(r.shown === 'g1' && !r.rowHeld.slim && r.rowHeld.ids === 'g1' && /戸別ファイルにも書きました/.test(r.note),
                           '㉓c試験の前提: 一覧へ戻ると行が写真を持ち、そろえ直しで戸別ファイルを書く → ' + short(r));
       if(mode === 'd') ok(r.shown === 'g1' && /物件に保存/.test(r.btn.text) && r.first === 'P,g1' && r.shown2 === 'P,g1' && /上書き保存/.test(r.btn2.text) && r.btn2.pressed,
                           '㉓d試験の前提: 物件に保存で g1・P が入り、開き直すと「💾 上書き保存」になる → ' + short(r));
@@ -1724,7 +1724,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
     if(!r.error){
       ok(r.fileType === 'hybrid' && r.rowStripped && r.saltDiff === (mode === 'b'), '㉕' + mode + '試験の前提: 物件の行は写真を剥がした暗号の封筒 → ' + short(r));
       if(mode === 'a'){
-        ok(/戸別の個別JSONも更新しました/.test(r.msg) && r.writes >= 1, '㉕a試験の前提: 戸別ファイル（.hyb）を書く → ' + short(r));
+        ok(/戸別ファイルにも書きました/.test(r.msg) && r.writes >= 1, '㉕a試験の前提: 戸別ファイル（.hyb）を書く → ' + short(r));
         ok(r.encPhotos && r.dec && r.dec.n === 1 && r.dec.same && r.dec.name === '暗号 様',
            '★㉕a写真を剥がした封筒をそのまま書き、.hyb の写真が消えた → ' + short(r));
       } else {
@@ -2086,13 +2086,13 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
         ok(r.tree.join() === NO2 + '.json' && r.removed.join() === NO + '.json' && r.tgt.no === NO2 && r.tgt.name === '山田 太郎 様'
            && r.tgt.tel === '090-1212-3434' && r.tgt.photos === 'P',
            '★' + sc + '「OK」（同じお宅）なのに そのファイルへ書かない・写真 P／直した電話が入らない・古いファイルが残った → ' + short(r));
-        ok(/戸別の個別JSONも更新しました/.test(a[a.length - 1] || '') && /統一/.test(a[a.length - 1] || '') && !/書き替えていません/.test(a[a.length - 1] || ''),
+        ok(/戸別ファイルにも書きました/.test(a[a.length - 1] || '') && /統一/.test(a[a.length - 1] || '') && !/書き替えていません/.test(a[a.length - 1] || ''),
            '★' + sc + '「OK」で書いたのに、1つにまとめた（統一）と知らせない → ' + short(a.slice(-1)));
       } else if(kind === 'g'){
         ok(r.asked.length === 0, '★' + sc + '名前が同じお宅のファイルなのに、同じお宅か聞いた → ' + short(r.asked.map(m => m.slice(0, 200))));
         ok(r.tree.join() === NO2 + '.json' && r.removed.join() === NO + '.json' && r.tgt.no === NO2 && r.tgt.photos === 'K,P',
            '★' + sc + '同じお宅（名前が同じ・写真の無い）ファイルへ書かない・古いファイルの写真（P・現場の K）が移っていない・古いファイルが残った → ' + short(r));
-        ok(!a.some(m => /書き替えていません/.test(m)) && a.some(m => /戸別の個別JSONも更新しました/.test(m) && /統一/.test(m)),
+        ok(!a.some(m => /書き替えていません/.test(m)) && a.some(m => /戸別ファイルにも書きました/.test(m) && /統一/.test(m)),
            '★' + sc + '同じお宅のファイルなのに書かずに断った → ' + short(a.slice(-1)));
       }
     }
@@ -2144,7 +2144,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
     if(!r.error){
       ok(r.fileType === 'hybrid' && r.stripped && r.shown === 1 && /上書き保存/.test(r.btn) && r.saltChanged,
          '㉕c試験の前提: 写真を剥がした封筒の行を開き、💾 上書き保存で鍵の元（salt）が新しくなる → ' + short(r));
-      ok(r.writes >= 1 && /戸別の個別JSONも更新しました/.test(r.note) && !/書き替えていません/.test(r.note),
+      ok(r.writes >= 1 && /戸別ファイルにも書きました/.test(r.note) && !/書き替えていません/.test(r.note),
          '★㉕c💾 上書き保存のあと、戸別ファイル（.hyb）へ書かずに断った（行の封筒が古い鍵のまま） → ' + short(r));
       ok(r.dec && r.dec.n === 1 && r.dec.same && r.dec.name === '暗号 様' && r.dec.tel === '090-1111-2222',
          '★㉕c書いた .hyb がほどけない・写真が消えた・直しが消えた → ' + short(r));
@@ -2201,7 +2201,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
         ok(r.after.join() === 'リスト/' + NO + '.json' && r.tel === '090-2222-3333' && r.photos.join() === 'G原寸,K' && !r.thumbAnywhere,
            '★㊸aほかのPCがまとめた 管理番号.json に書かない・写真が G（原寸）と K のままではない・ファイルを作った → ' + short(r));
         ok(r.rowNow.name === NO + '.json' && r.rowNow.file === 'リスト/' + NO + '.json', '★㊸a行が 管理番号.json に付け直されていない → ' + short(r.rowNow));
-        ok(a.some(m => /戸別の個別JSONも更新しました/.test(m)) && !a.some(m => /書き替えていません/.test(m)), '★㊸a書いたと知らせない・断った → ' + short(a.slice(-1)));
+        ok(a.some(m => /戸別ファイルにも書きました/.test(m)) && !a.some(m => /書き替えていません/.test(m)), '★㊸a書いたと知らせない・断った → ' + short(a.slice(-1)));
       } else {
         ok(r.after.join() === r.before.join() && r.unchanged && r.writes === 0,
            '★㊸b付いているファイルが無いのに、書いた・ファイルを作った（0バイトも含む） → ' + short(r.before) + ' → ' + short(r));
@@ -2924,7 +2924,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       row._dir = list; row._name = OLD; row._dirPath = '';
       slimListRow(row, true);
       _listRows = [row];
-      window.confirm = () => true;                                     // 「元ファイルに上書き保存します」→ はい
+      window.confirm = () => true;                                     // 「戸別ファイルに上書き保存します」→ はい
       await openCaseInEditor(row);
       const o = { shown: (STATE.photos || []).filter(p => p && p.dataUri).map(p => p.id).join(',') };
       list.__files[NO + '.json'] = list.__files[OLD]; delete list.__files[OLD];   // ほかのPCが名前を変えた（中身はそのまま）
@@ -3042,7 +3042,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
     if(!r.error){
       ok(r.shown === 'A,B' && /上書き保存/.test(r.btn0) && /antenna/.test(r.title0) && /統一/.test(r.note) && r.treeAfterAlign.join() === 'リスト/' + NO + '.json' && r.btn.pressed,
          '㊼d試験の前提: 古い名前の戸別を開いて「💾 上書き保存」、そろえ直しで ' + NO + '.json にそろって古い名前が消える → ' + short(r));
-      const cf = r.askedSave.filter(m => /元ファイルに上書き保存します/.test(m))[0] || '';
+      const cf = r.askedSave.filter(m => /戸別ファイルに上書き保存します/.test(m))[0] || '';
       ok(new RegExp(NO + '\\.json').test(r.titleAfterAlign) && !/antenna/.test(r.titleAfterAlign) && new RegExp('ファイル: ' + NO + '\\.json').test(cf),
          '★㊼dそろえ直しで名前が変わったのに、💾 上書き保存 の行き先（ボタン・確かめの窓）が古い名前のまま → ' + short(r.titleAfterAlign) + ' / ' + short(cf));
       ok(r.tree.join() === 'リスト/' + NO + '.json' && r.tel === '090-1111-2222' && r.file === 'A,B',
@@ -3157,7 +3157,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
     console.log('㊽c常駐させない行へ現場取込（開いたまま）', short(r));
     ok(!r.error, '㊽c止まった → ' + r.error);
     if(!r.error){
-      ok(r.shown1 === 'A,B' && r.slimBack && /戸別の個別JSONも更新しました/.test(r.note) && r.fileAfterImport === 'A,B,G',
+      ok(r.shown1 === 'A,B' && r.slimBack && /戸別ファイルにも書きました/.test(r.note) && r.fileAfterImport === 'A,B,G',
          '㊽c試験の前提: 開いて戻り（行は常駐させない）、開いたまま 📥 で戸別ファイルが A・B・G になる → ' + short(r));
       ok(r.screenAfterImport === 'A,B,G', '★㊽c開いている戸別へ 📥 したあと、画面にファイルの写真（A・B）が出ない → ' + short(r.screenAfterImport));
       ok(r.load === 'A,B,G' && r.rowAfterImport.count === 3 && r.cdl1 === '3枚',
@@ -3645,7 +3645,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
     };
   `;
   const ANDROID = NO + '_5017105541291380094.json';
-  const indivPart = m => { const s = String(m || ''); const i = s.indexOf('戸別の個別JSON'); if(i < 0) return ''; const j = s.indexOf('\n\n', i); return s.slice(i, j < 0 ? s.length : j); };
+  const indivPart = m => { const s = String(m || ''); const i = s.indexOf('戸別ファイル'); if(i < 0) return ''; const j = s.indexOf('\n\n', i); return s.slice(i, j < 0 ? s.length : j); };
 
   // ---- ㊸h 物件の覚えている名前が古い（本当のファイルは リスト/管理番号.json）→ 新しいファイルに縮小版を書かない ----
   for(const mode of ['a', 'b', 'c', 'd'].filter(m => want('㊸h' + m))){
@@ -3961,7 +3961,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
     if(!r.error){
       ok(r.tree1.join() === 'リスト/' + ANDROID && r.brokenSame && r.rowFile1 === NO + '.json',
          '★㊸o 行の写真がみな縮小版なのに、確かめられないまま縮小版のファイルを作った → ' + short(r));
-      ok(String(a[0] || '').indexOf('\u26a0 戸別の個別JSONは作っていません') >= 0 && m1.indexOf('リスト/' + ANDROID + ' を読めませんでした') >= 0 && /小さくしたものしか入っていません/.test(m1)
+      ok(String(a[0] || '').indexOf('\u26a0 戸別ファイルは作っていません') >= 0 && m1.indexOf('リスト/' + ANDROID + ' を読めませんでした') >= 0 && /小さくしたものしか入っていません/.test(m1)
          && /壊れているかもしれません/.test(m1) && /工事フォルダの外へ移してから、もう一度保存してください/.test(m1) && !/📁/.test(m1),
          '★㊸o 作らなかったこと・読めないファイル・直し方（工事フォルダの外へ移す）を知らせない（📁 を勧めた）→ ' + short(m1.slice(0, 400)));
       ok(r.rowN1 === 2 && r.idb1.n === 2 && r.idb1.count === 2, '★㊸o 作らなかったときに、行・物件（端末内）の写真が減った → ' + short(r));
@@ -4004,7 +4004,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
     if(!r.error){
       ok(r.came === 1 && r.realSame1 && r.tree1.join() === [NO + '.json', 'リスト/' + NO + '.json'].join(), '㊸p試験の前提: 見て回っているあいだに直下へ届いた → ' + short(r));
       ok(r.rootSame1 && r.rootWrites1 === 0, '★㊸p 見て回っているあいだに届いたファイルを、読まずに上書きした（現場の写真 X が消える）→ ' + short(r));
-      ok(/\u26a0 戸別の個別JSONは書いていません：2612MKM077\.json が、いま工事フォルダに届きました。もう一度保存してください。/.test(String(a[0] || '')),
+      ok(/\u26a0 戸別ファイルには書いていません：2612MKM077\.json が、いま工事フォルダに届きました。もう一度保存してください。/.test(String(a[0] || '')),
          '★㊸p 届いたので書かなかったことを知らせない → ' + short(m1.slice(0, 300)));
       ok(r.made2 && r.made2.photos.indexOf('X') >= 0 && r.made2.photos.indexOf('G原寸') >= 0 && r.made2.tel === '090-1111-2222' && r.realSame2,
          '★㊸p もう一度保存しても、届いたファイルへ書けない・X か G の原寸が消えた → ' + short(r) + ' ' + short(m2.slice(0, 120)));
@@ -4885,7 +4885,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
     console.log('㊾k📄 の行で書けたあと、選んだファイルが読めない', short(r));
     ok(!r.error, '㊾k止まった → ' + r.error);
     if(!r.error){
-      ok(r.before.idb === 'A,B' && /個別JSONも更新しました/.test(r.note) && r.writes === NO + '.json' && r.file === 'A,B,G' && r.srcReadable === false,
+      ok(r.before.idb === 'A,B' && /戸別ファイルにも書きました/.test(r.note) && r.writes === NO + '.json' && r.file === 'A,B,G' && r.srcReadable === false,
          '㊾k試験の前提: 物件に A・B・取り込みは工事フォルダのファイルへ書けた（A・B・G）・📄 で選んだファイルはもう読めない → ' + short(r));
       ok(r.after.idb === 'A,B,G' && r.after.idbCount === 3 && r.after.disk === 'A,B,G' && r.after.diskCount === 3,
          '★㊾k物件（この端末・共有ファイル）のこの戸別が A・B・G（3枚）でない（ファイルの写真 A・B が物件から消えた） → ' + short(r.after));
@@ -5036,7 +5036,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
          '㊸r' + mode + '試験の前提: 物件は古い名前を覚えていて、見つけたファイルは元のまま・保存の知らせが2つ → ' + short(r) + ' ' + a.length);
       ok(r.tree1.join() === ['リスト/' + ANDROID, 'リスト/' + NO + '.json'].sort().join() && !r.made1,
          '★㊸r' + mode + ' 1日目：行の写真がみな縮小版なのに、ほかのファイルで見つけた G の原寸を「画面にしか無い元の写真」と数えて作った（H は縮小版のまま）→ ' + short(r));
-      ok(String(a[0] || '').indexOf('⚠ 戸別の個別JSONは作っていません') >= 0 && m1.indexOf('リスト/' + ANDROID + ' を読めませんでした') >= 0
+      ok(String(a[0] || '').indexOf('⚠ 戸別ファイルは作っていません') >= 0 && m1.indexOf('リスト/' + ANDROID + ' を読めませんでした') >= 0
          && /小さくしたものしか入っていません/.test(m1) && /同期が終わってから、もう一度保存してください/.test(m1),
          '★㊸r' + mode + ' 1日目：作らなかったこと・読めないファイル・直し方を知らせない → ' + short(m1.slice(0, 400)));
       ok(r.rowN1 === 2 && r.idb1.n === 2 && r.idb1.count === 2, '★㊸r' + mode + ' 作らなかったときに、行・物件（端末内）の写真が減った → ' + short(r));
@@ -5102,7 +5102,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       ok(r.made && r.made.join() === (mode === 'g' ? 'G縮小版,P元' : 'P元') && r.rowSame === 'true'
          && r.tree.indexOf(mode === 'g' ? NO + '.json' : 'リスト/' + NO + '.json') >= 0,
          '★㊸s' + mode + ' 画面で足した小さい図（PNG）を物件の縮小版と取り違えて断った・戸別ファイルの PNG が元のままでない（物件には作り直した JPEG しか無い）→ ' + short(r));
-      ok(/新規作成/.test(msg) && !/作っていません/.test(msg) && String(a[a.length - 1] || '').indexOf('⚠ 戸別の個別JSONは作っていません') < 0,
+      ok(/新規作成/.test(msg) && !/作っていません/.test(msg) && String(a[a.length - 1] || '').indexOf('⚠ 戸別ファイルは作っていません') < 0,
          '★㊸s' + mode + ' 作ったことを知らせない・「作っていません」と知らせた → ' + short(msg.slice(0, 300)));
       if(mode === 'g'){
         ok(msg.indexOf('※ 工事フォルダの中の リスト/' + ANDROID + ' を読めませんでした。この戸別の写真のうち、元の写真を見つけられなかったものは、物件の小さい写真のまま入れました。') >= 0,
@@ -5304,7 +5304,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
          '㊸u' + mode + '試験の前提: PNG はそのまま入る・物件の縮小版は G・P から作った JPEG（P の縮小版は長辺 400 のまま）・物件は古い名前を覚えている・保存を押せた → ' + short(r));
       ok(r.made === 'G元,P元' && r.tel === '090-1111-2222',
          '★㊸u' + mode + ' 見つけた PNG の図（元の写真）を使わず、新しいファイルに物件の JPEG を入れた・作らなかった → ' + short(r));
-      ok(/新規作成/.test(msg) && !/作っていません/.test(msg) && !/※/.test(msg) && String(a[a.length - 1] || '').indexOf('⚠ 戸別の個別JSONは作っていません') < 0,
+      ok(/新規作成/.test(msg) && !/作っていません/.test(msg) && !/※/.test(msg) && String(a[a.length - 1] || '').indexOf('⚠ 戸別ファイルは作っていません') < 0,
          '★㊸u' + mode + ' 元の写真がみな見つかったのに、断った・「小さい写真のまま入れた」と知らせた → ' + short(msg.slice(0, 300)));
       ok(r.realSame && r.tree.join() === [NO + '.json', 'リスト/' + NO + '.json', '打合せ/memo.json'].sort().join(),
          '★㊸u' + mode + ' 見つけたファイルを書き替えた・工事フォルダの直下に作っていない・ほかのファイルを作った → ' + short(r));
@@ -5590,7 +5590,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       const v = ui ? ui2 : r;
       const pre = ui
         ? (ui2.busy && /取込: 2 件（うち 1 件は戸別ファイルへ書けていません）/.test(ui2.done))
-        : (/個別JSONも更新しました/.test(r.noteY) && /読めませんでした/.test(r.noteX));
+        : (/戸別ファイルにも書きました/.test(r.noteY) && /読めませんでした/.test(r.noteX));
       ok(r.rows === 2 && r.before.X.idb === 'A,B' && r.before.X.idbCount === 2 && r.before.Y.idb === 'C,D' && pre
          && v.started.length === 1 && /^(C|D|GY0|GY1)$/.test(v.started[0]) && v.xPrev && v.xPrev.slim && v.xPrev.thumbs === 'A,B' && !v.xPrev.noFile && !v.xPrev.retry
          && v.xKept && v.xKept.thumbs === 'A,B' && v.xKept.noFile

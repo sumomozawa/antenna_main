@@ -243,7 +243,7 @@ CASES = [
    u'''    if(row.fileType === "plain") rowSeePhotos(row, (shown || {}).chosho_photos, wasSlim);''',
    u'''    if(row.fileType === "plain") rowSeePhotos(row, (shown || {}).chosho_photos, true);''', TM, "main", u"㊽b"),
   (u"★常駐させない行に 📥 して戸別ファイルへ書けても、行を「ファイルから読む」に戻さない（一覧・物件・工事調書に現場の写真しか出ない）",
-   u'''  if(wasSlim && row.fileType === "plain" && row.fileHandle && /個別JSONも更新しました/.test(String(note || ""))){''',
+   u'''  if(wasSlim && row.fileType === "plain" && row.fileHandle && /戸別ファイルにも書きました/.test(String(note || ""))){''',
    u'''  if(false){''', TM, "main", u"㊽c"),
   (u"★常駐させない行に取り込んだ写真を、開いたとき画面に出さない（開いて保存すると取り込んだ写真が消える）",
    u'''        d = slimRowWithMemPhotos(d, target);''', u'''''', TM, "main", u"㊾a"),
@@ -417,23 +417,23 @@ CASES = [
   (u"★🔐 暗号化保存の写しに、画面に入れなかった写真を入れない（図面の無い戸別の写しが写真0枚）",
    u'''  if(fromProj){ editorAddHiddenPhotos(s, true); if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }   // 写しには画面に入れなかった写真も入れる
   const password = await promptPassword({
-    title: "🔐 暗号化保存",''',
+    title: "🔐 全暗号化保存",''',
    u'''  if(fromProj){ if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }
   const password = await promptPassword({
-    title: "🔐 暗号化保存",''', TM, "main", u"㉘c"),
+    title: "🔐 全暗号化保存",''', TM, "main", u"㉘c"),
   (u"★ハイブリッド保存で、パスワードの前に知らせて確かめない",
    u'''  if(fromProj){ editorAddHiddenPhotos(s, true); if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }   // 写しには画面に入れなかった写真も入れる
   const password = await promptPassword({
-    title: "🔐🔑 ハイブリッド暗号化保存 (方式C)",''',
+    title: "🔑 ハイブリッド保存（方式C）",''',
    u'''  if(fromProj){ editorAddHiddenPhotos(s, true); }
   const password = await promptPassword({
-    title: "🔐🔑 ハイブリッド暗号化保存 (方式C)",''', TM, "main", u"㉘b"),
+    title: "🔑 ハイブリッド保存（方式C）",''', TM, "main", u"㉘b"),
   (u"★ハイブリッド保存の写しのあと「保存が完了しました」と言う（戸別ファイルに書いたように聞こえる）",
    u'''  alert(fromProj ? ("🔐🔑 写しをダウンロードの場所へ保存しました：" + fname + "\\n戸別ファイルは書き替えていません。")''',
    u'''  alert(false ? ("🔐🔑 写しをダウンロードの場所へ保存しました：" + fname + "\\n戸別ファイルは書き替えていません。")''', TM, "main", u"㉘a"),
   (u"★🔐 暗号化保存の写しのあと「保存が完了しました」と言う",
-   u'''  alert(fromProj ? ("🔐 写しをダウンロードの場所へ保存しました：" + fname + "\\n戸別ファイルは書き替えていません。") : "🔐 暗号化保存が完了しました");''',
-   u'''  alert("🔐 暗号化保存が完了しました");''', TM, "main", u"㉘c"),
+   u'''  alert(fromProj ? ("🔐 写しをダウンロードの場所へ保存しました：" + fname + "\\n戸別ファイルは書き替えていません。") : "🔐 全暗号化保存が完了しました");''',
+   u'''  alert("🔐 全暗号化保存が完了しました");''', TM, "main", u"㉘c"),
 
   # ---- （G2）見直しの直し：開いている行が一覧から外れても写しにする・案内するボタン・写しの写真 ----
   (u"★物件から開いた印を画面の側で覚えない（開いている行を 🧹 未施工にすると、💾 保存がファイルを選ぶ画面を開く）",
@@ -466,10 +466,10 @@ CASES = [
   (u"★ハイブリッド保存の写しに、画面に入れなかった写真を入れない（図面の無い戸別の写しが写真0枚）",
    u'''  if(fromProj){ editorAddHiddenPhotos(s, true); if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }   // 写しには画面に入れなかった写真も入れる
   const password = await promptPassword({
-    title: "🔐🔑 ハイブリッド暗号化保存 (方式C)",''',
+    title: "🔑 ハイブリッド保存（方式C）",''',
    u'''  if(fromProj){ if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }
   const password = await promptPassword({
-    title: "🔐🔑 ハイブリッド暗号化保存 (方式C)",''', TM, "main", u"㉘c"),
+    title: "🔑 ハイブリッド保存（方式C）",''', TM, "main", u"㉘c"),
 
   # ---- （G3）2回目の見直しの直し：📥 のあとも覚える・ボタンを描き直す・外れたあとの名前・復元できていない印・暗号の戸別への案内 ----
   (u"★📥 で開いている戸別へ入れたあと、物件から開いた行の覚えを戻さない（そのあと 🧹 未施工にすると、ファイルを選ぶ画面が開く）",
@@ -505,17 +505,17 @@ CASES = [
   (u"★🔐 暗号化保存の写しで、行が外れたら画面に入れなかった写真を足さない（写しが写真0枚）",
    u'''  if(fromProj){ editorAddHiddenPhotos(s, true); if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }   // 写しには画面に入れなかった写真も入れる
   const password = await promptPassword({
-    title: "🔐 暗号化保存",''',
+    title: "🔐 全暗号化保存",''',
    u'''  if(fromProj){ editorAddHiddenPhotos(s); if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }
   const password = await promptPassword({
-    title: "🔐 暗号化保存",''', TM, "main", u"㉘f"),
+    title: "🔐 全暗号化保存",''', TM, "main", u"㉘f"),
   (u"★ハイブリッド保存の写しで、行が外れたら画面に入れなかった写真を足さない（写しが写真0枚）",
    u'''  if(fromProj){ editorAddHiddenPhotos(s, true); if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }   // 写しには画面に入れなかった写真も入れる
   const password = await promptPassword({
-    title: "🔐🔑 ハイブリッド暗号化保存 (方式C)",''',
+    title: "🔑 ハイブリッド保存（方式C）",''',
    u'''  if(fromProj){ editorAddHiddenPhotos(s); if(!saveStateProjConfirm(s, mgmtSafe, fname)) return; }
   const password = await promptPassword({
-    title: "🔐🔑 ハイブリッド暗号化保存 (方式C)",''', TM, "main", u"㉘f"),
+    title: "🔑 ハイブリッド保存（方式C）",''', TM, "main", u"㉘f"),
 
   # ---- （G5）#176（預けた縮小版）との取り決め：預けた縮小版を持つ行も「物件から開いた戸別」と同じに扱う ----
   (u"★預けた縮小版を持つ行（台帳で作った行・縮小版の印が外れた）の「💾 保存」で、ファイルを選ぶ画面を開く（戸別ファイルを縮小版で置き換える）",
@@ -812,7 +812,7 @@ CASES = [
    u'''  if(unread.length && obj.chosho_photos.some(small)){''',
    u'''  if(unread.length){''', TM, "main", u"㊸id"),
   (u"★確かめられなかったのに、作らなかったことを知らせない",
-   u'''        return "\\n\\u26a0 戸別の個別JSONは作っていません：" + up.why + "。\\n"''',
+   u'''        return "\\n\\u26a0 戸別ファイルは作っていません：" + up.why + "。\\n"''',
    u'''        return "" + "\\n"''', TM, "main", u"㊸ia"),
   (u"★読めないファイルと開けないフォルダで、知らせる直し方を取り違える",
    u'''             + (up.file''',
@@ -878,8 +878,8 @@ CASES = [
       ? Object.assign({}, p, { dataUri: b.p.dataUri }) : p;''',
    u'''    return b ? Object.assign({}, p, { dataUri: b.p.dataUri }) : p;''', TM, "main", u"㊸q"),
   (u"★見て回っているあいだに届いたファイルを、確かめずに上書きする（現場の写真が消える）",
-   u'''      if(now) return "\\n\\u26a0 戸別の個別JSONは書いていません：''',
-   u'''      if(false) return "\\n\\u26a0 戸別の個別JSONは書いていません：''', TM, "main", u"㊸p"),
+   u'''      if(now) return "\\n\\u26a0 戸別ファイルには書いていません：''',
+   u'''      if(false) return "\\n\\u26a0 戸別ファイルには書いていません：''', TM, "main", u"㊸p"),
   (u"★見て回ったことを伝えない（届いたファイルを確かめずに上書きする）",
    u'''  return { ok: true, walked: true };''',
    u'''  return { ok: true, walked: false };''', TM, "main", u"㊸p"),

@@ -37,7 +37,7 @@
          （前は .hyb は A・B のまま「取込: 1 件」だけ、まとめると G が消えた）
      ⑨b v178a-1：物件の暗号の行（ファイルとつながっていない・写真を剥がした封筒）を開いて写真 P を足し「💾 物件に保存」
          → .hyb は A・P・鍵の元は行の封筒と同じ → 物件を開き直してもう一度「💾 物件に保存」（増幅器を 1U に）→ .hyb は A・P・1U
-         （前は .hyb は A だけで「個別JSONも更新しました」）・帯は押せるボタン（💾 物件に保存）も言う
+         （前は .hyb は A だけで「戸別ファイルにも書きました」）・帯は押せるボタン（💾 物件に保存）も言う
      ⑨c v178a-1・取込-2：覚えているパスワードが .hyb と違うときの 📥 G → .hyb は A・B のまま（書き替えない写真）・知らせに ⚠「まだ入れていません」
          （「書けていません」に数える）・「まだ入っていない」の印が立つ
          → ほかの端末の保存とまとめて行を作り直しても G は行に残る → 🔓 まとめて復号しても残る → 正しいパスワードで開いて
@@ -817,7 +817,7 @@ const flat = s => String(s || '').replace(/\s+/g, ' ');
     console.log('④h 📄 の .hyb へ 📥 → 物件に保存', short(r));
     ok(!r.error, '④h止まった → ' + r.error);
     if(!r.error){
-      ok(r.row0.slim && r.row0.unlocked && !r.row0.fh && /個別JSONも更新しました/.test(r.note) && r.fileAfterImport.amp === 'amp_1u45'
+      ok(r.row0.slim && r.row0.unlocked && !r.row0.fh && /戸別ファイルにも書きました/.test(r.note) && r.fileAfterImport.amp === 'amp_1u45'
          && r.ed.editing && r.btn && r.btn.pressed,
          '④h試験の前提: 📄 の .hyb の行・📥 で工事フォルダの .hyb は 1U・開いて保存できる → ' + short(r));
       ok(r.ed.amp === 'amp_1u45' && r.ed.len === '25', '★④h 📥 したのに、開くと 📄 の古い .hyb（3U・5）で開いた → ' + short(r.ed));
@@ -1051,8 +1051,8 @@ const flat = s => String(s || '').replace(/\s+/g, ' ');
       ok(r.ed.stripped && /物件に保存/.test(r.ed.btn) && r.added && r.btn && r.btn.pressed && r.btn2 && r.btn2.pressed,
          '⑨b試験の前提: 物件の暗号の行は写真の出ていない画面・押せるのは「💾 物件に保存」 → ' + short(r));
       ok(/物件に保存/.test(r.ed.banner), '★⑨b 帯が、押せない「💾 上書き保存」だけを言う（押せるのは「💾 物件に保存」） → ' + r.ed.banner);
-      ok(r.file.ids.split(',').length === 2 && /hA/.test(r.file.ids) && (r.said || []).some(m => /個別JSONも更新しました/.test(m) && !/まだ入れていません/.test(m)),
-         '★⑨b 「💾 物件に保存」で、足した写真が .hyb に入らない（なのに「個別JSONも更新しました」） → ' + short({ file: r.file, said: r.said }));
+      ok(r.file.ids.split(',').length === 2 && /hA/.test(r.file.ids) && (r.said || []).some(m => /戸別ファイルにも書きました/.test(m) && !/まだ入れていません/.test(m)),
+         '★⑨b 「💾 物件に保存」で、足した写真が .hyb に入らない（なのに「戸別ファイルにも書きました」） → ' + short({ file: r.file, said: r.said }));
       ok(r.saltSame, '★⑨b 写真を入れたとき .hyb の鍵の元が替わり、行の封筒と合わない → ' + short(r.file));
       ok(r.file2.amp === 'amp_1u45' && r.file2.ids === r.file.ids,
          '★⑨b 物件を開き直してもう一度「💾 物件に保存」すると、.hyb に書けない（鍵が違う）・写真が減った → ' + short({ file2: r.file2, said2: r.said2 }));

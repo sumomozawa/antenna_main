@@ -711,7 +711,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
     if(!r.error){
       ok(r.idbEarly === '0170-00-0000', '⑩試験の前提: 前の自動保存が書いているあいだは、端末内はまだ前の電話 → ' + short(r));
       ok(!r.early.some(m => /✅/.test(m)), '★⑩自動保存が書いている最中に押すと、まだ書いていないのに「✅ 物件に保存しました」と言った → ' + short(r.early));
-      ok(r.late.some(m => /✅ 物件（端末内）に保存しました/.test(m)) && r.idbAfter === '0170-77-7777',
+      ok(r.late.some(m => /✅ 物件「[^」]*」をこの端末に保存しました/.test(m)) && r.idbAfter === '0170-77-7777',
          '★⑩前の自動保存が終わったあと、直した電話を書き切って「✅ 保存しました」と言わない（端末内に直しが入らない） → ' + short(r));
     }
     await ctx.close();
