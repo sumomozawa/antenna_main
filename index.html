@@ -16024,7 +16024,7 @@ function saveStateFileNote(s, mgmtSafe){
   const ovBtn = !ro && !vr && !!(o && o.fileHandle);
   return "\u26a0 この戸別は、戸別ファイル（" + fname + "）から開いています。\n"
     + (vr ? "パスワードなしで開いたので、氏名・電話・住所・写真は、この写しに入りません。\n" : "")
-    + "ここで同じ名前のファイルを選んで置き換えると、この画面に出ていない印（工程・保留・同意書・完了書など）や写真が消えてしまいます。\n"
+    + "ファイルを選ぶ画面で元の戸別ファイルを選んで置き換えると、この画面に出ていない印（工程・保留・同意書・完了書など）や写真が消えるので、ここでは写しにします。\n"
     + (ovBtn ? "戸別ファイルへは「💾 上書き保存」で書いてください。\nここでは写しを保存します。戸別ファイルは書き替えません。"
              : "戸別ファイルは、ここからは書き替えません。\nここでは写しだけを保存します。");
 }
@@ -16425,7 +16425,10 @@ async function decryptEnvelopeAndApply(envelope, fmt){
       applyViewOnlyMaskToForm();
     }
     catch(err){ alert("読込エラー: " + err.message); return; }
-    alert("👁 パスワードなしで読み込みました\n\n氏名・電話番号・住所・写真 は「🔒 復号されていないため非表示」と表示されます。\nこの状態で上書き保存すると個人情報が失われますのでご注意ください。");
+    /* パスワードなしで開いた画面（📂 🔓 復号して読込・落としたファイル）も、3つの保存を写しにする（版181）。
+       ファイルを選ぶ画面で元の .hyb を選んで置き換えると、氏名・電話・住所・写真が空のファイルになる */
+    _editorViewOnlyRow = { file: "" };
+    alert("👁 パスワードなしで読み込みました\n\n氏名・電話番号・住所・写真 は「🔒 復号されていないため非表示」と表示されます。\nこの画面で保存すると、氏名・電話・住所・写真の入らない写しになります（元のファイルは書き替えません）。");
     return;
   }
 
@@ -25113,7 +25116,7 @@ async function listLoadRow(target, seq0){
       if(rowOpenedFromProject(target)) _editorProjRow = target;
       closeListView();
       setTimeout(() => {
-        alert("👁 パスワードなしで読み込みました\n\n氏名・電話番号・住所・写真 は「🔒 復号されていないため非表示」と表示されます。\nこの状態で上書き保存すると個人情報が失われますのでご注意ください。");
+        alert("👁 パスワードなしで読み込みました\n\n氏名・電話番号・住所・写真 は「🔒 復号されていないため非表示」と表示されます。\nこの画面で保存すると、氏名・電話・住所・写真の入らない写しになります（元のファイルは書き替えません）。");
       }, 100);
       return;
     }
@@ -27589,6 +27592,7 @@ async function buildAndPrintChoshoBatch(printable, fileLabelPrefix){
   // 現在の編集状態を退避（印刷後に元へ戻す）
   const saved = collectState();
   const savedOrigin = _loadedOrigin, savedEditing = _editingRow, savedHidden = _editorHiddenPhotos, savedProjRow = _editorProjRow;
+  const savedViewOnly = _editorViewOnlyRow;   // パスワードなしで開いた画面か（applyStateData が下ろす。版181）
   const savedStripped = _editorPhotosStripped;   // 写真の出ていない画面か（applyStateData が外す。版178）
   // 進捗オーバーレイ（重い準備中の操作防止も兼ねる）
   let ov = document.getElementById("chosho-batch-progress");
@@ -27635,6 +27639,7 @@ async function buildAndPrintChoshoBatch(printable, fileLabelPrefix){
       applyStateData(saved);
       _loadedOrigin = savedOrigin; _editingRow = savedEditing; _editorHiddenPhotos = savedHidden; _editorProjRow = savedProjRow;
       if(savedStripped){ _editorPhotosStripped = true; showPhotoStrippedBanner(true); }   // 写真の出ていない画面のまま（版178）
+      if(savedViewOnly){ _editorViewOnlyRow = savedViewOnly; try { applyViewOnlyMaskToForm(); } catch(_){} }   // 伏せ字の画面のまま（版181）
       if(typeof updateOverwriteSaveBtn === "function") updateOverwriteSaveBtn();
     } catch(_){}
     ov.style.display = "none";
@@ -30419,6 +30424,7 @@ async function projSaveNow(){
       }
     } else {
       consumed = true; // 連動なし：端末内スナップショットに取り込み済み
+      _projWriteWarn = "";   // 端末内に書けた＝前の「保存できていません」は古い（版181。保存の状態に ⚠ が残り続けていた）
     }
     // 書込/取り込みに成功した分だけ編集マークを消す（保存中に来た新規編集マークは残し、次回マージで上乗せ）
     if(consumed){ try { subtractMarks(cap); } catch(_){} }
@@ -31842,7 +31848,7 @@ async function exportProjectFlow(id){
           if(/Android/i.test(navigator.userAgent || "")){
             alert("⚠ 既存の「" + opts.suggestedName + "」には上書きされず、\n「" + nm + "」という別ファイルとして保存されました。\n\nAndroid の保存ダイアログは既存ファイルへの上書きができない仕様です（自動で連番付きの別ファイルになります）。\n\n既存の共有ファイルを上書きしたいときは、メニューの「📂 共有ファイルを開く」でそのファイルを開いてください。以後の保存は自動でその場に上書きされます。\n※ 今できた連番付きファイルは、不要なら削除してください。");
           } else {
-            alert("✅ 「" + nm + "」として別ファイル（コピー）で保存しました。\n既存の「" + opts.suggestedName + "」へは上書きされていません。\n（上書きしたい場合は、保存ダイアログで既存のファイルを選んで「置き換え」てください）");
+            alert("✅ 「" + nm + "」として別ファイル（コピー）で保存しました。\n既存の「" + opts.suggestedName + "」へは上書きされていません。\n（ほかの人と同じ共有ファイルに入れるときは、メニューの「📂 共有ファイルを開く」で開いてください。保存の画面で既にあるファイルを選ぶと、中身がこの端末の物件で置き換わります）");
           }
           return; // コピー保存＝この物件の連動先にはしない
         }

@@ -459,7 +459,9 @@ async function openPark(label){
       ok(r.after.fileLen < r.bigLen && r.after.n === 1, '④試験の前提: 📉 でファイルの写真が軽くなった → ' + short(r.after));
       ok(r.after.parked && r.after.held === 0 && r.after.rowLen < r.after.fileLen / 5,
          '★④📉 が預けた縮小版を軽くした元の写真に差し替えた（縮小版の印だけ残り、行が元の写真を持つ） → ' + short(r.after));
-      ok(/上書き保存/.test(r.open.btn) && !r.open.projRow && r.open.shownLen === r.after.fileLen,
+      /* 台帳で作った行は、版181（組 m-save の F1）から「物件から開いた戸別」と見る（3つの保存は写しになる）。
+         ここで見るのは、ボタンが「💾 上書き保存」で、画面に軽くした元の写真が出ること */
+      ok(/上書き保存/.test(r.open.btn) && r.open.shownLen === r.after.fileLen,
          '★④開いても「💾 上書き保存」にならない・軽くした元の写真が出ない → ' + short(r.open));
       ok(r.back.parked && r.back.held === 0, '★④別の戸別を開いたあと、預けた形に戻らない → ' + short(r.back));
     }
