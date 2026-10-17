@@ -204,7 +204,7 @@ window.__manyNames = function(n, want){
     const o = { load: T('pcg-load'), one: T('pcg-one'), copy: T('pcg-copy'), force: T('pcg-force'),
                 dir: T('pcg-dir'),
                 loadAlt: (document.getElementById('pcg-load')||{}).className || '',
-                msg: (document.querySelector('#pcguard .pcg-msg')||{}).textContent || '',
+                msg: (document.getElementById('pcguard')||{}).textContent || '',   // 版181：説明はボタンのすぐ下（.pcg-sub）にも出す
                 order: Array.from(document.querySelectorAll('#pcguard .pcg-btns button')).map(x => x.id) };
     window.showDirectoryPicker = keep;
     return o;

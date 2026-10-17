@@ -224,7 +224,7 @@ function serve(file){
     renderPcGuard();
     const btn = document.getElementById('pcg-copy');
     const o = { copy: !!btn, label: btn ? btn.textContent : '',
-                msg: (document.querySelector('#pcguard .pcg-msg') || {}).textContent || '' };
+                msg: (document.getElementById('pcguard') || {}).textContent || '' };   // 版181：説明はボタンのすぐ下（.pcg-sub）
     try{ await navigator.clipboard.writeText('__まだ__'); }catch(_){}
     if(btn) btn.click();
     await new Promise(r => setTimeout(r, 250));
