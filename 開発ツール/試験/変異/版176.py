@@ -222,7 +222,7 @@ CASES = [
   (u"結果の窓に高さの上限が無い（下のボタンに指が届かない）",
    u'''    max-height:calc(100vh - 48px); max-height:calc(100dvh - 48px); overflow:auto; box-sizing:border-box;}''', u'''}''', TG, "genba", u"㉚b"),
   (u"履歴の 📮 ボタンを1行にしない",
-   u'''  .d-sidesel{display:block; width:100%; box-sizing:border-box;''', u'''  .d-sidesel{white-space:nowrap; flex:none;''', TG, "genba", u"㉚b"),
+   u'''font-size:13.5px; font-family:inherit; white-space:normal;}''', u'''font-size:13.5px; font-family:inherit; white-space:nowrap; width:auto; display:inline-block;}''', TG, "genba", u"㉚b"),
 
   (u"名前だけの窓に「フォルダを覚えるのをやめる」を出さない",
    u'''    if(saveDirName()) add("📤 フォルダを覚えるのをやめる（保存は共有で渡す）", "\\u0000forget",''',
