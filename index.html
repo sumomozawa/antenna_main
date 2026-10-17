@@ -15061,6 +15061,7 @@ async function overwriteSaveCurrent(){
       if(_editingRow && _editingRow.fileType !== "full" && _editingRow.data && typeof _editingRow.data === "object"){
         try { editorKeepFields(_editingRow.data, stateObj); } catch(_){}
       }
+      try { lgwbMarkWritten(_editingRow, stateObj); } catch(_){}   // 戸別ファイルへ書けた＝台帳の印を下ろす（版181）
       alert("✅ 上書き保存しました\n  " + res.name);
     } else {
       alert("⚠ 元ファイルへの書込み権限が得られなかったため、ダウンロードで保存しました。\n  " + res.name + "\n（元ファイルは変更されていません）");
@@ -15074,8 +15075,11 @@ async function overwriteSaveCurrent(){
    編集をエディタ→行へ丸ごと取り込み（氏名・図面・積算すべて）、物件をIndexedDB＋
    共有ファイル(連動時)へ即保存する。未連動なら共有ファイルへの連動を促す。 */
 async function overwriteSaveCurrentToProject(){
+  const row0 = _editingRow;
+  let busy = false;
   try {
     if(typeof projSyncEditorToRow === "function") projSyncEditorToRow(true); // 明示保存＝無条件で行へ取り込み
+    busy = !!_projSaving;   // 自動保存が書いている最中（projSaveNow は予約だけして戻る＝まだ書いていない。版181）
     if(typeof projSaveNow === "function") await projSaveNow();            // 物件を保存（IndexedDB＋ハンドルあれば共有ファイル）
   } catch(err){
     alert("物件への保存に失敗しました: " + (err.message || err));
@@ -15085,6 +15089,22 @@ async function overwriteSaveCurrentToProject(){
   let indivMsg = "";
   try { indivMsg = await writeCurrentCaseToIndividualFile(); }
   catch(e){ console.warn("[個別保存]", e); indivMsg = "\n⚠ 戸別の個別JSONの更新に失敗しました（" + (e && e.message || e) + "）。"; }
+  /* 戸別ファイルへ書けた＝台帳の印を下ろす（版181。書いた欄が台帳の思っている中身と同じときだけ。暗号の戸別は暗号でない部分で見る） */
+  if(row0 && /^\n📄 戸別の個別JSONも更新しました/.test(indivMsg)){
+    try { lgwbMarkWritten(row0, row0.fileType === "hybrid" ? ((row0.envelope && row0.envelope.plain) || null) : row0.data); } catch(_){}
+  }
+  /* ★自動保存が書いている最中に押したときは、書き終わるのを待ってから結果を言う★（版181）
+     前は予約だけして、まだ書いていないのに「✅ …保存しました」と言っていた（そのまま閉じると直しが入らないことがある）。
+     ファイルを選ぶ画面は押した直後にしか開けないので、待つのは戸別ファイルを書いたあと。 */
+  if(busy){
+    let done = false;
+    try { done = await projSaveNowAfterBusy(120000); } catch(_){ done = false; }
+    if(!done){
+      alert("\u26a0 物件への保存が、まだ終わっていません（前の自動保存が書いている途中です）。\n"
+        + "少し待ってから、もう一度「💾 物件に保存」を押してください。入力した内容はこの画面に残っています。" + indivMsg);
+      return;
+    }
+  }
   const pname = (typeof _currentProject !== "undefined" && _currentProject) ? (_currentProject.name || "") : "";
   if(_projFileHandle){
     if(_projWriteWarn){
@@ -15104,6 +15124,17 @@ async function overwriteSaveCurrentToProject(){
   }
 }
 
+/* 前の保存（自動保存）が書き終わるのを待ってから、もう一度 物件を保存する（版181。「💾 物件に保存」の知らせを本当にするため）。
+   maxMs のあいだに書き終わらなければ false（書いていない）。 */
+async function projSaveNowAfterBusy(maxMs){
+  const t0 = Date.now();
+  while(_projSaving){
+    if(Date.now() - t0 > maxMs) return false;
+    await new Promise(r => setTimeout(r, 50));
+  }
+  await projSaveNow();
+  return true;
+}
 /* ---------- 戸別の個別JSONの同時書き戻し（工事フォルダを物件にリンク） ----------
    「物件に保存」時、物件JSONと一緒に該当する戸別の個別JSONも工事フォルダへ書き戻す。
    ・工事フォルダのディレクトリハンドルを物件IDごとに記憶（再リンク用）。
@@ -15895,7 +15926,7 @@ async function saveState(){
      写しをダウンロードの場所へ、管理番号.json とは別の名前で保存し（戸別ファイルは書き替えない）、
      戸別ファイルへは「💾 物件に保存」（工事フォルダの元の写真と合わせて書く）で書くよう知らせる。
      写しには、画面に入れなかった写真も入れる（写真を減らさない）。🔐 暗号化保存・ハイブリッド保存も同じにする。 */
-  const fromProj = saveStateFromProject();
+  const fromProj = saveStateAsCopy();   // 物件から開いた戸別・📁 の戸別ファイルが付いた戸別・パスワードなしで開いた画面は写し（版181）
   if(fromProj) editorAddHiddenPhotos(s, true);
   const defaultBase = saveStateBaseName(mgmtSafe, fromProj);
   const content = JSON.stringify(s, null, 2);
@@ -15953,7 +15984,17 @@ async function saveState(){
 /* 行が物件から開いたものか（版178）。物件の行（_fromProject）か、物件の縮小版の印（chosho_photos_thumb）を持つ行。
    戸別ファイルに預けた縮小版（rowHasParkedThumb）を持つ行も同じに扱う（版178・#176 との取り決め）。
    台帳で作った行は、読めないまま保存すると縮小版の印が外れるが、画面は預けた縮小版のまま（ファイルを選ぶ画面で戸別ファイルを置き換えると縮小版で書く） */
+/* この場で作った物件の行か（版181）。受付台帳・カレンダーの仮入力・Excel 取込・📥／📮 で新しくできた行（_manual／_origin）は、
+   物件を読み直すまで _fromProject が付かない。預けた縮小版がみな元の写真に読み直せると縮小版の印も外れる。
+   こうした行の画面は戸別ファイルを読まずに行の写真だけで開くので、ファイルにしか無い写真（現場の写真など）は画面に出ていない。
+   そのままファイルを選ぶ画面で同じ番号の戸別ファイルを選ぶと、Chrome が中身を空にしてから、画面の写真だけを書いていた。
+   📥 で取り込むと _manual は外れる（applyGenbaMergeToRow）が、_origin は残るので両方を見る。 */
+function rowMadeInProject(row){
+  return !!(row && (row._manual || row._origin) && !row._slim
+            && typeof _currentProject !== "undefined" && !!_currentProject);
+}
 function rowOpenedFromProject(row){
+  if(rowMadeInProject(row)) return true;   // この場で作った物件の行も（版181）
   return !!(row && (row._fromProject || (row.data && row.data.chosho_photos_thumb)
     || (typeof rowHasParkedThumb === "function" && rowHasParkedThumb(row))));
 }
@@ -15962,6 +16003,30 @@ function rowOpenedFromProject(row){
    _editingRow だけが外れ、画面は物件の縮小版のまま残る。行だけを見ていると、そのあとの保存でファイルを選ぶ画面が開いていた。 */
 function saveStateFromProject(){
   return !!_editorProjRow || rowOpenedFromProject(_editingRow);
+}
+/* 「💾 保存」「🔐 暗号化保存」「ハイブリッド保存」を写しにするか（版181）。物件から開いた戸別（saveStateFromProject）に加えて、
+   ・📁 フォルダの戸別ファイルが付いている戸別（_loadedOrigin.fileHandle。戸別ファイルへは「💾 上書き保存」で書ける）
+   ・パスワードなしで開いた暗号の戸別（伏せ字・写真の無い画面。_editorViewOnlyRow）
+   も、ファイルを選ぶ画面を開かない。ファイルを選ぶ画面で元の戸別ファイル（管理番号.json・管理番号.antenna.hyb など）を選ぶと、
+   Chrome が中身を空にしてから、この画面の中身だけを書く。画面に欄の無い印（工程の印・保留・同意書・完了書など）と、
+   開いたあとで現場が足した写真が消えていた（伏せ字の画面では、氏名・電話・住所・写真の無いファイルになる）。
+   ファイルの付いていない新しい戸別（＋新規・📂 読込・プリセット）は今までどおり、ファイルを選ぶ画面で保存する。 */
+function saveStateAsCopy(){
+  return saveStateFromProject() || !!_editorViewOnlyRow || !!(_loadedOrigin && _loadedOrigin.fileHandle);
+}
+/* 📁 の戸別・パスワードなしで開いた画面の写しの知らせ（版181。物件から開いた戸別は saveStateProjNote のほかの部分）。
+   「💾 上書き保存」は、そのボタンが押せるときだけ案内する（閲覧のみ・パスワードなしで開いた画面では押せない）。 */
+function saveStateFileNote(s, mgmtSafe){
+  const vr = _editorViewOnlyRow, o = _loadedOrigin;
+  const known = String((o && o.file) || (vr && (vr._name || (/^manual:/.test(vr.file || "") ? "" : (vr.file || "")))) || "").split(/[\\/]/).pop();
+  const fname = known || ((mgmtSafe || "管理番号") + ".json");
+  const ro = (typeof rtIsCaseReadOnly === "function") && rtIsCaseReadOnly();
+  const ovBtn = !ro && !vr && !!(o && o.fileHandle);
+  return "\u26a0 この戸別は、戸別ファイル（" + fname + "）から開いています。\n"
+    + (vr ? "パスワードなしで開いたので、氏名・電話・住所・写真は、この写しに入りません。\n" : "")
+    + "ここで同じ名前のファイルを選んで置き換えると、この画面に出ていない印（工程・保留・同意書・完了書など）や写真が消えてしまいます。\n"
+    + (ovBtn ? "戸別ファイルへは「💾 上書き保存」で書いてください。\nここでは写しを保存します。戸別ファイルは書き替えません。"
+             : "戸別ファイルは、ここからは書き替えません。\nここでは写しだけを保存します。");
 }
 /* 保存するファイルの名前の土台（版178）。物件から開いた戸別の写しは「管理番号_写し」＝戸別ファイルとは別の名前 */
 function saveStateBaseName(mgmtSafe, fromProj){
@@ -15973,6 +16038,7 @@ function saveStateBaseName(mgmtSafe, fromProj){
      暗号の戸別は、物件に縮小版を入れない（暗号の封筒のまま）ので「小さい写真」とは言わない（画面の写真はファイルからほどいた元の写真）。
    ・剥がれていても、ここで足した写真・📥 で入れた写真は画面に出て、写しに入る。そのときは「この画面の写真だけが入ります」と言う */
 function saveStateProjNote(s, mgmtSafe){
+  if(!saveStateFromProject()) return saveStateFileNote(s, mgmtSafe);   // 📁 の戸別・パスワードなしで開いた画面（版181）
   /* 戸別ファイルの名前。暗号の戸別は、行が覚えている名前（💾 物件に保存 もその名前へ書く。多くは 管理番号.antenna.hyb）。
      ふつうの戸別は「管理番号.json」（💾 物件に保存 がこの名前にそろえて書く。管理番号が無いときは行が覚えている名前） */
   const er = _editingRow, r = er || _editorProjRow;   // 名前は、行が一覧から外れていても開いた行から（版178）
@@ -15981,6 +16047,7 @@ function saveStateProjNote(s, mgmtSafe){
   const fname = ((hyb || !mgmtSafe) && known) ? known : ((mgmtSafe || "管理番号") + (hyb ? ".hyb" : ".json"));
   const ph = ((s && Array.isArray(s.chosho_photos)) ? s.chosho_photos : []).filter(p => p && p.dataUri);   // 写しに入る写真
   const small = !hyb && ph.some(p => projThumbLike(p));
+  const nSmall = hyb ? 0 : ph.filter(p => projThumbLike(p)).length;   // 何枚が小さい写真か（版181。元の写真が混じっていても「写真は」と言わない）
   /* 「💾 物件に保存」の名前は、そのボタンが押せるときだけ出す（updateOverwriteSaveBtn と同じ条件）。
      押せないとき（ファイルに結び付いて「💾 上書き保存」になっている・閲覧のみ・行が一覧から外れた）は、ほかのボタンへ案内しない
      （剥がれた写真や縮小版で戸別ファイルを上書きする道へ連れて行かない）。 */
@@ -15988,8 +16055,10 @@ function saveStateProjNote(s, mgmtSafe){
   const projBtn = !ro && !(_loadedOrigin && _loadedOrigin.fileHandle)
     && (typeof _currentProject !== "undefined") && !!_currentProject && !!er && _listRows.indexOf(er) >= 0;
   return "\u26a0 この戸別は物件から開いています。\n"
+    + (_editorViewOnlyRow ? "パスワードなしで開いたので、氏名・電話・住所・写真は、この写しに入りません。\n" : "")   // 伏せ字の画面（版181）
     + (_editorPhotosStripped ? (ph.length ? "元の暗号の写真は復元できていないので、この写しには入りません（この画面の写真だけが入ります。元の写真は工事フォルダの戸別ファイルにあります）。\n"
                                           : "写真は復元できていないので、この写しには入りません（暗号の写真は、工事フォルダの戸別ファイルにあります）。\n")
+     : (small && nSmall < ph.length) ? "写真 " + ph.length + " 枚のうち " + nSmall + " 枚は、物件に控えた小さい写真です（元の写真ではありません）。\n"
      : small ? "写真は、物件に控えた小さい写真です（元の写真ではありません）。\n"
              : "工事フォルダの戸別ファイルにしか無い写真は、この画面には入っていないことがあります。\n")
     /* 暗号の戸別：「💾 物件に保存」が書くのは暗号でない部分（図面・積算など）だけ。暗号の部分（写真・お客様の欄）は元のファイルのまま */
@@ -16014,6 +16083,7 @@ function applyStateData(s){
   _editingRow = null;
   _editorHiddenPhotos = null;
   _editorProjRow = null;   // 物件から開いた行の覚えも下ろす（版178）
+  _editorViewOnlyRow = null;   // パスワードなしで開いた画面の覚えも下ろす（版181）
   if(typeof updateOverwriteSaveBtn === "function") updateOverwriteSaveBtn();
   // 前回が伏字モードだった場合に備え、視覚的なマスクを解除
   if(typeof clearViewOnlyMaskFromForm === "function") clearViewOnlyMaskFromForm();
@@ -16175,7 +16245,7 @@ async function saveStateEncrypted(){
      ファイルを選ぶ画面は、選んだ既にあるファイルをページへ渡す前に空にする。工事フォルダの 管理番号.hyb／.enc を選ぶと、
      元の暗号の写真が消える（画面の写真は物件の縮小版か、復元できていないもの）。写しをダウンロードの場所へ、別の名前で保存する。
      パスワードを聞く前に知らせて確かめる（やめるなら、パスワードを打つ前に）。 */
-  const fromProj = saveStateFromProject();
+  const fromProj = saveStateAsCopy();   // 物件から開いた戸別・📁 の戸別ファイルが付いた戸別・パスワードなしで開いた画面は写し（版181）
   const mgmtRaw = (document.getElementById("chosho_mgmt_no") || {}).value || "";
   const mgmtSafe = mgmtRaw.trim().replace(/[\\/:*?"<>|]/g, "_");
   const defaultBase = saveStateBaseName(mgmtSafe, fromProj);
@@ -16213,15 +16283,15 @@ async function saveStateEncrypted(){
       const writable = await handle.createWritable();
       await writable.write(content);
       await writable.close();
-      { const bad = await fileSizeVerify(handle, content);
-        if(bad){
-          alert("\u26a0 保存したファイルを読み返したところ、中身が合いませんでした。\n\n" + bad
-            + "\n\n空き容量を確認して、もう一度保存してください。\n入力した内容はこの画面に残っています。");
-        } }
+      const bad = await fileSizeVerify(handle, content);
+      if(bad){
+        alert("\u26a0 保存したファイルを読み返したところ、中身が合いませんでした。\n\n" + bad
+          + "\n\n空き容量を確認して、もう一度保存してください。\n入力した内容はこの画面に残っています。");
+      }
       try {
         lastSaveDirHandle = await handle.getParent ? await handle.getParent() : null;
       } catch(_){ /* 非対応環境 */ }
-      alert("🔐 暗号化保存が完了しました");
+      if(!bad) alert("🔐 暗号化保存が完了しました");   // 読み返して合わないときは「完了しました」と言わない（版181）
       return;
     } catch(err){
       if(err && err.name === "AbortError") return;
@@ -16244,7 +16314,7 @@ async function saveStateHybrid(){
     return;
   }
   /* ★物件から開いた戸別は、ファイルを選ぶ画面で保存しない★（版178。🔐 暗号化保存と同じ。くわしくは saveState の説明） */
-  const fromProj = saveStateFromProject();
+  const fromProj = saveStateAsCopy();   // 物件から開いた戸別・📁 の戸別ファイルが付いた戸別・パスワードなしで開いた画面は写し（版181）
   const mgmtRaw = (document.getElementById("chosho_mgmt_no") || {}).value || "";
   const mgmtSafe = mgmtRaw.trim().replace(/[\\/:*?"<>|]/g, "_");
   const defaultBase = saveStateBaseName(mgmtSafe, fromProj);
@@ -16281,15 +16351,15 @@ async function saveStateHybrid(){
       const writable = await handle.createWritable();
       await writable.write(content);
       await writable.close();
-      { const bad = await fileSizeVerify(handle, content);
-        if(bad){
-          alert("\u26a0 保存したファイルを読み返したところ、中身が合いませんでした。\n\n" + bad
-            + "\n\n空き容量を確認して、もう一度保存してください。\n入力した内容はこの画面に残っています。");
-        } }
+      const bad = await fileSizeVerify(handle, content);
+      if(bad){
+        alert("\u26a0 保存したファイルを読み返したところ、中身が合いませんでした。\n\n" + bad
+          + "\n\n空き容量を確認して、もう一度保存してください。\n入力した内容はこの画面に残っています。");
+      }
       try {
         lastSaveDirHandle = await handle.getParent ? await handle.getParent() : null;
       } catch(_){}
-      alert("🔐🔑 ハイブリッド暗号化保存が完了しました\n(氏名・電話・住所・写真のみ暗号化／他の項目は平文)");
+      if(!bad) alert("🔐🔑 ハイブリッド暗号化保存が完了しました\n(氏名・電話・住所・写真のみ暗号化／他の項目は平文)");   // 合わないときは言わない（版181）
       return;
     } catch(err){
       if(err && err.name === "AbortError") return;
@@ -19553,6 +19623,27 @@ function lgClearTouched(tks){
   if(!tks) _lgTouched.clear();
   else (tks || []).forEach(k => { if(k) _lgTouched.delete(k); });
 }
+/* 戸別ファイルへ書けたあと、その戸別の「まだ戸別ファイルに入っていない直し」の印を下ろす（版181）。
+   エディタの「💾 物件に保存」「💾 上書き保存」で書いても下りず、受付台帳の②が「直した N 件が、まだ入っていません」のままだった。
+   下ろすのは、書いた中身が受付台帳の思っている中身（lgwbWanted・「💾 戸別ファイルへ反映」で書く欄）と同じときだけ
+   （台帳の控えにしか無い 保留・同意書 などがまだファイルに入っていなければ、印を残す）。 */
+function lgwbMarkWritten(row, obj){
+  if(!row || !obj || typeof obj !== "object") return false;
+  let want = null;
+  try { want = lgwbWanted(row); } catch(_){ return false; }
+  const J = v => JSON.stringify(v == null ? null : v);
+  const diff = LGWB_FIELDS.some(f => {
+    if(f.obj) return (f.k in want) && J(obj[f.k]) !== J(want[f.k]);
+    const now = f.bool ? !!obj[f.k] : String(obj[f.k] == null ? "" : obj[f.k]);
+    return now !== want[f.k];
+  });
+  if(diff) return false;
+  if(want.chosho_mgmt_no && toHalfWidthAn(String(obj.chosho_mgmt_no == null ? "" : obj.chosho_mgmt_no)).trim() !== toHalfWidthAn(want.chosho_mgmt_no).trim()) return false;
+  lgClearCaseEdited([row]);
+  try { lgClearTouched([subCaseKey(row)]); } catch(_){}
+  try { lgSaveStateRefresh(); } catch(_){}
+  return true;
+}
 function lgUnsavedCaseEdits(){
   return (Array.isArray(_listRows) ? _listRows : []).filter(r => r && r._lgEdited).length;
 }
@@ -19565,7 +19656,7 @@ function lgClearCaseEdited(rows){
 function lgConfirmDiscardCaseEdits(what){
   const n = lgUnsavedCaseEdits();
   if(!n) return true;
-  return !confirm("⚠ 受付台帳で直した " + n + " 件が、まだ戸別ファイルへ入っていません。\n"
+  return !confirm("⚠ 受付台帳やエディタで直した " + n + " 件が、まだ戸別ファイルへ入っていません。\n"
     + "（名前・住所・電話・工事日程予定・状態は、台帳で直しただけでは戸別ファイルに入りません）\n\n"
     + "このまま" + (what || "読み込む") + "と、直した内容はファイルの中身で上書きされて消えます。\n\n"
     + "OK＝中止する（先に受付台帳の「💾 戸別ファイルへ反映」を押してください）\n"
@@ -19666,6 +19757,16 @@ async function lgwbScan(rows){
   }
   return { list, skipped, unreadable, same, missing, noFile };
 }
+/* 受付台帳が持ち主の欄を、新しく作る戸別ファイルの中身に入れる（版181）。○×の欄は台帳の印（×は、行の中身にあるときだけ書く）。
+   打合せ予定・時刻・備考は台帳の値（空は、行の中身にあるときだけ書く）。名前・住所などは行そのものなので、そのまま。 */
+function lgwbLedgerInto(obj, row){
+  const want = lgwbWanted(row);
+  LGWB_FIELDS.forEach(f => { if(f.bool && (want[f.k] || (f.k in obj))) obj[f.k] = want[f.k]; });
+  ["chosho_note", "chosho_meet_at", "chosho_time"].forEach(k => {
+    if((k in want) && (String(want[k]) !== "" || (k in obj))) obj[k] = want[k];
+  });
+  return obj;
+}
 /* 戸別ファイルがまだ無い行を、工事フォルダに新しく作る。
    中身は台帳が持っている行そのもの（名前・住所・電話・日程・状態・備考・アパートの欄など）。
    写真も図面も無い行なので、ここで失うものは無い。
@@ -19699,6 +19800,9 @@ async function lgwbCreateMissing(dir, rows){
         if(k === "chosho_photos_thumb" || k === "chosho_photo_count") return;   // 物件専用のメタ
         obj[k] = row.data[k];
       });
+      /* 受付台帳が持ち主の欄（保留・ビラ・同意書・完了書・打合せ予定・工事の時刻・台帳の備考）も入れる（版181。
+         既にあるファイルへ書く lgwbApply と同じ欄）。前は行の中身だけを書き、台帳で付けた印が入らないまま②の印を下ろしていた */
+      lgwbLedgerInto(obj, row);
       obj.editedAt = new Date().toISOString();
       const text = JSON.stringify(obj, null, 2);
       const fh = await dir.getFileHandle(name, { create: true });
@@ -25002,6 +25106,11 @@ async function listLoadRow(target, seq0){
       const viewState = buildViewOnlyStateFromHybrid(target.envelope); // plain部のみで足りる（再読込不要）
       applyStateData(viewState);
       applyViewOnlyMaskToForm();
+      /* 伏せ字の画面（氏名・電話・住所・写真が空）の「💾 保存」「🔐」「🔑」は、ファイルを選ぶ画面を開かずに写しにする（版181）。
+         この道は setLoadedOrigin を通らないので、物件から開いた印もここで立てる（前は下りたままで、工事フォルダの .hyb と
+         同じ名前でファイルを選ぶ画面が開き、置き換えると写真0枚・氏名の無いファイルになった）。 */
+      _editorViewOnlyRow = target;
+      if(rowOpenedFromProject(target)) _editorProjRow = target;
       closeListView();
       setTimeout(() => {
         alert("👁 パスワードなしで読み込みました\n\n氏名・電話番号・住所・写真 は「🔒 復号されていないため非表示」と表示されます。\nこの状態で上書き保存すると個人情報が失われますのでご注意ください。");
@@ -30737,6 +30846,9 @@ async function attachProjectFile(){
     }
     if(!window.showSaveFilePicker) return exportProjectFlow(_currentProject.id);
   }
+  /* ★既にある共有ファイルを、ここで選ばせない★（版181）。選ぶと Chrome が中身を空にしてから渡すので、
+     この端末の物件で置き換わる（ほかの端末の戸別・直しが消える）。開く前に確かめる（projPickerWarn） */
+  if(!isAndroid && !(await projPickerWarn("attach"))) return;
   try {
     const sug = "物件_" + sanitizePrintFilename(_currentProject.name || "無題") + ".json";
     const handle = await window.showSaveFilePicker({
@@ -30757,6 +30869,41 @@ async function attachProjectFile(){
     }
     return attachProjectToHandle(handle);
   } catch(err){ if(err && err.name === "AbortError") return; console.warn(err); }
+}
+/* 📤 出力/保存・🔗 共有ファイルに連動：保存先を選ぶ画面を開く前の確かめ（版181）。true＝続ける／false＝やめる。
+   保存先を選ぶ画面で選んだ既にあるファイルは、ブラウザがページへ渡す前に中身を空にする（Chrome の決まり）。
+   ほかの端末と使っている共有ファイルを選ぶと、ほかの端末が入れた戸別・直しが消え、この端末の物件だけになる
+   （中身が空で渡されるので「統合しますか」も出せない）。選ばせたあとでは止められないので、画面を開く前に知らせる。
+   ★確かめは、この画面の中の窓で聞く★ confirm を出すと「押した直後」の扱いが切れて、保存先を選ぶ画面が開けない。
+   窓のボタンを押した直後なら開ける。Android の保存の画面は既にあるファイルを置き換えない（別の名前になる）ので聞かない。 */
+function projPickerWarn(what){
+  if(/Android/i.test(navigator.userAgent || "")) return Promise.resolve(true);
+  return new Promise(resolve => {
+    const old = document.getElementById("proj-pick-warn"); if(old && old.parentNode) old.parentNode.removeChild(old);
+    const btn = "padding:6px 14px;border-radius:3px;cursor:pointer;font-size:12px;";
+    const back = document.createElement("div");
+    back.className = "modal-backdrop open";
+    back.id = "proj-pick-warn";
+    back.style.zIndex = "5000";            // メニュー画面（z-index:400）より前に出す
+    back.innerHTML = '<div class="modal" style="max-width:560px;">'
+      + "<h3>\u26a0 保存先を選ぶ前に</h3>"
+      + '<div style="font-size:13px;line-height:1.8;">'
+      + "ほかの人と同じファイルを使うときは、メニューの<b>「📂 共有ファイルを開く」</b>で開いてください。<br>"
+      + '<b style="color:#c62828;">ここで既にあるファイルを選ぶと、そのファイルの中身は、この端末の物件で置き換わります</b>'
+      + "（ほかの端末で入れた戸別や直しは消えます）。<br>"
+      + "ここでは、新しいファイル（新しい名前）を作るときに使ってください。"
+      + "</div>"
+      + '<div style="display:flex;gap:6px;margin-top:14px;justify-content:flex-end;flex-wrap:wrap;">'
+      + '<button type="button" id="proj-pick-go" style="background:#1e3a5f;color:#fff;border:1px solid #16314f;' + btn + '">'
+      + (what === "attach" ? "新しいファイルを作って連動する" : "保存先を選ぶ") + "</button>"
+      + '<button type="button" id="proj-pick-cancel" style="background:#666;color:#fff;border:1px solid #444;' + btn + '">やめる</button>'
+      + "</div></div>";
+    document.body.appendChild(back);
+    const done = v => { if(back.parentNode) back.parentNode.removeChild(back); resolve(v); };
+    document.getElementById("proj-pick-go").addEventListener("click", () => done(true));
+    document.getElementById("proj-pick-cancel").addEventListener("click", () => done(false));
+    back.addEventListener("click", e => { if(e.target === back) done(false); });
+  });
 }
 /* 選択済みのファイルハンドルへ現在の物件を連動して書き込む（既存内容があれば統合確認）。attachProjectFile から分離 */
 async function attachProjectToHandle(handle){
@@ -31329,7 +31476,7 @@ function rtSetCaseReadOnlyUI(on, who){
   let b = document.getElementById("rt-readonly-banner");
   if(on){
     if(!b){ b = document.createElement("div"); b.id = "rt-readonly-banner"; b.className = "rt-banner rt-banner-ro"; document.body.appendChild(b); }
-    b.textContent = "🔒 閲覧のみ — " + (who || "他の端末") + " がこの戸別を編集中です（この端末の変更は保存されません）";
+    b.textContent = "🔒 閲覧のみ — " + (who || "他の端末") + " がこの戸別を編集中です（この端末で直しても、物件にも戸別ファイルにも入りません）";
     b.style.display = "";
   } else if(b){ b.style.display = "none"; }
   try { updateOverwriteSaveBtn(); } catch(_){}
@@ -31679,6 +31826,7 @@ async function exportProjectFlow(id){
         types: [{ description: "物件JSON", accept: { "application/json": [".json"] } }]
       };
       if(lastSaveDirHandle) opts.startIn = lastSaveDirHandle;
+      if(!(await projPickerWarn("export"))) return;   // 既にある共有ファイルを選ぶと置き換わる、と開く前に確かめる（版181）
       const handle = await window.showSaveFilePicker(opts);
       const w = await handle.createWritable();
       await w.write(content);
@@ -31854,6 +32002,9 @@ function updateProjBar(){
    「保存ボタンを押さないと保存されない」という誤解と、連動が切れたまま入力し続ける
    事故を防ぐのが目的なので、専門用語を使わず短い1文にする。 */
 function updateSaveStateBar(){
+  /* 受付台帳の「保存の状態」①も、書けない・書けるようになったときだけ出し直す（版181。出し直すと説明の開け閉めが戻るので、毎回はしない） */
+  try { const lb = document.getElementById("lg-save-bar");
+        if(lb && (lb.getAttribute("data-w") || "") !== ((_currentProject && _projWriteWarn) ? "1" : "")) lgSaveStateRefresh(); } catch(_){}
   const b = document.getElementById("menu-savestate"); if(!b) return;
   b.classList.remove("ss-ok", "ss-warn", "ss-none");
   if(!_currentProject){
@@ -31865,6 +32016,13 @@ function updateSaveStateBar(){
     b.classList.add("ss-warn");
     b.innerHTML = '⚠ 共有ファイルとつながっていません（この端末の中だけに保存中）'
       + '<span class="ss-sub">上の「🔗 共有ファイルを再接続」を押すと、また自動でファイルに保存されます。</span>';
+    return;
+  }
+  /* 共有ファイルへの書き込みが失敗・食い違いで止まっているときは、✅ と言わない（版181） */
+  if(_projWriteWarn){
+    b.classList.add("ss-warn");
+    b.innerHTML = '⚠ ' + (_projFileHandle ? '共有ファイルへ保存できていません' : 'この端末に保存できていません')
+      + '<span class="ss-sub">' + escapeHtml(String(_projWriteWarn).replace(/^\u26a0\s*/, "")) + '</span>';
     return;
   }
   if(_projFileHandle){
@@ -32507,13 +32665,19 @@ function lgSaveStateHtml(){
     t1 = "この端末の中だけに保存されています";
     s1 = "メニューの「🔗 共有ファイルに連動」を押すと、共有ファイルにも自動で保存されます";
   }
+  /* 共有ファイルへの書き込みが失敗・食い違いで止まっている（_projWriteWarn）ときは、緑の「自動で保存されています」と言わない（版181） */
+  if(_currentProject && _projWriteWarn){
+    c1 = "lgs-warn";
+    t1 = "\u26a0 " + (_projFileHandle ? "共有ファイルへ保存できていません" : "保存できていません");
+    s1 = String(_projWriteWarn).replace(/^\u26a0\s*/, "");
+  }
   // ② 戸別ファイル（現場用のスマホが読み書きする、戸別1件ずつのファイル）
   const n = lgTouchedCount();
   const c2 = n ? "lgs-warn" : "lgs-none";
-  const t2 = n ? ("台帳で直した " + n + " 件が、まだ入っていません") : "この画面で直した分はありません";
+  const t2 = n ? ("台帳やエディタで直した " + n + " 件が、まだ入っていません") : "この画面で直した分はありません";
   const s2 = n ? "右の「💾 戸別ファイルへ反映」を押すと入ります"
                : "前に直した分があるかは、「💾 戸別ファイルへ反映」を押すと一覧で確かめられます";
-  return '<div class="lg-save cost-detail-section" id="lg-save-bar">'
+  return '<div class="lg-save cost-detail-section" id="lg-save-bar" data-w="' + ((_currentProject && _projWriteWarn) ? "1" : "") + '">'
     + '<div class="lgs-line">'
     +   '<span class="lgs-ttl">保存の状態</span>'
     +   '<span class="lgs-item ' + c1 + '"><span class="lgs-k">① 物件ファイル</span>'
@@ -37231,6 +37395,8 @@ let _editorHiddenPhotos = null;
    工事調書のまとめ印刷では退避して戻す。開いている行を一覧で「🧹 未施工」「一覧から消す」・世帯の削除にして _editingRow が外れても、
    画面は物件の縮小版のまま残るため（saveStateFromProject・saveStateProjNote の戸別ファイルの名前）。 */
 let _editorProjRow = null;
+/* パスワードなしで開いた暗号の戸別（伏せ字の画面）の行（版181。無ければ null）。applyStateData で下ろす。 */
+let _editorViewOnlyRow = null;
 /* エディタを開いてから実際に何か触ったか。
    未着工の戸別を開くと、フォームには標準プリセットの工事構成が入る（openCaseInEditor）。
    これを「見ただけで戻った」場合にも行へ書き戻していたため、触っていないのに金額が付いていた。
@@ -37455,6 +37621,10 @@ function editorAddHiddenPhotos(s, any){
 }
 function syncEditorToRowData(force){
   if(!_editingRow || _listRows.indexOf(_editingRow) < 0) return;
+  /* 「🔒 閲覧のみ」（ほかの端末がこの戸別を直している）のあいだは、画面の直しを行へ入れない（版181）。
+     帯は「この端末で直しても入りません」と言うのに、一覧へ戻る・保存ボタン・タブを裏へ回す（自動保存）で、
+     直した中身が行と物件（端末内・共有ファイル）に入り、ほかの端末の直しと食い違っていた。 */
+  if(rtIsCaseReadOnly()) return;
   // 開いてから何も触っていなければ書き戻さない（見ただけで工事内容・金額が入るのを防ぐ）。
   // 保存ボタンなど明示操作のときは force=true で必ず書き戻す。
   if(!force && !_editorDirty) return;
@@ -37555,6 +37725,7 @@ function projAutoSaveEdit(){
   markEditorDirty();   // 図面ドラッグ・写真・測定値などフォーム外の編集もここを通る
   if(!_currentProject) return;
   if(!_editingRow || _listRows.indexOf(_editingRow) < 0) return;
+  if(rtIsCaseReadOnly()) return;   // 閲覧のみのあいだは、この戸別を「この端末が直した」にしない（版181）
   try { markCaseEdited(_editingRow); } catch(_){} // Phase2: この戸別を編集済みに（マージ上乗せ対象）
   projTouch();
 }
@@ -37566,6 +37737,7 @@ function bindEditorCaseFieldSync(){
     if(!el) return;
     el.addEventListener("change", () => {
       if(!_editingRow || _listRows.indexOf(_editingRow) < 0) return;
+      if(rtIsCaseReadOnly()) return;   // 閲覧のみのあいだは行へ入れない（版181）
       const fKey = Object.keys(LG_FIELD_MAP).find(k => LG_FIELD_MAP[k] === id);
       if(fKey) lgWriteCaseField(_editingRow, fKey, el.value);
       else lgWriteCaseField(_editingRow, id, el.value);
@@ -38950,6 +39122,7 @@ function initProjectFeatures(){
     }); }
   // 編集画面の施工会社セレクト：管理番号で割当（物件に保存）。管理番号変更でキーを取り直す。
   { const _cc = document.getElementById("case_contractor"); if(_cc) _cc.addEventListener("change", () => {
+      if(rtIsCaseReadOnly()) return;   // 閲覧のみのあいだは物件へ入れない（版181）
       const k = editorContractorKey(); if(k) setContractor(k, _cc.value); }); }
   { const _mg = document.getElementById("chosho_mgmt_no"); if(_mg) _mg.addEventListener("input", refreshEditorContractor); }
   try { refreshEditorContractor(); } catch(_){}
@@ -39046,7 +39219,7 @@ function init(){
     }
     // 建物ごとの値（世帯数・建物名・共用部・大家・共用部完了）は建物ぜんぶに配る。
     // 1世帯だけ直して他とちぐはぐになると、積算の代表判定や台帳の帯がずれるため。
-    if(APT_GROUP_FIELDS.indexOf(e.target.id) >= 0 && _editingRow && isApartmentRow(_editingRow)){
+    if(APT_GROUP_FIELDS.indexOf(e.target.id) >= 0 && _editingRow && isApartmentRow(_editingRow) && !rtIsCaseReadOnly()){   // 閲覧のみのあいだは配らない（版181）
       aptSetGroupField(_editingRow, e.target.id, e.target.value);
       if(e.target.id === "apt_common" || e.target.id === "apt_units"){
         aptGroupRows(_listRows, aptBldgKeyOfRow(_editingRow))
