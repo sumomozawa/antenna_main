@@ -18,6 +18,8 @@
    ── 写真の取り込みと、下書きを読んで直して書くところの順番（版178 の見直し）──
      ⑤a A で写真を3枚取り込み中に、履歴から B を開く。開く途中（A を控えたあと・B を読み始めた瞬間）に2枚目が読み終わる → 2枚目が A の下書きに残る
      ⑤b 同じく、受付台帳から B を開く ⑤c ＋新規 で新しい戸別にする
+     ⑤r A で3枚を取り込み中に B を開き、A を開き直す（開き直した写し A'）。A' から履歴で B へ移る途中（B を読み始めた瞬間）に2枚目が読み終わる
+        → 2枚目が A の下書きに残る（開き直した写しの枝でも、下書きにすぐ足す）
      ⑤d 切り替える直前に A で打った備考・消した写真・撮った写真（まだ控えていない）を、取り込みの控えが戻さない・落とさない
      ⑥a まとめて保存で A の「保存済」の印を付けるために下書きを読むのと同時に、A の写真が下書きに届く → 写真が下書きに残る・「保存済」にしない
      ⑥b 受付台帳の取り込み（下書きへの入れ直し）と同時に届く → 写真が残る・名前も直る
@@ -659,6 +661,42 @@ window.__dno = no => { const el = Array.from(document.querySelectorAll('#draft-l
       ok(has(r.final, r.p2), '★' + sc + '切り替えの途中で読み終わった2枚目が、A の下書きに無い（どの下書きにも残らない）→ ' + J(r));
     });
   }
+  /* ⑤r 開き直した写し（A'）から B へ移る途中に2枚目が読み終わる（photoKeepInto の「同じ戸別を開き直した」枝・確かめ係の見つけた道） */
+  const reopenBody = async () => {
+    __gatedImport();
+    await __state78();
+    await __open('no:' + __NA);
+    const X = M;
+    const imp = handlePhotoFiles(__files(['#101', '#202', '#303']));
+    await __rel('#101');
+    await __sleep(600);
+    await __open('no:' + __NB);
+    await __sleep(200);
+    await __open('no:' + __NA);                 // 開き直した写し（別の物）
+    const reopened = (M !== X) && M.chosho_mgmt_no === __NA;
+    await __sleep(600);
+    const og = idbGet; let armed = true;
+    idbGet = function(k){
+      if(armed && k === 'no:' + __NB){ armed = false; const g = window.__cg['#202']; delete window.__cg['#202']; if(g) g(); }
+      return og.apply(this, arguments);
+    };
+    for(let i = 0; i < 50 && !window.__cg['#202']; i++) await __sleep(20);
+    await openDraftModal();
+    document.querySelector('button.d-open[data-draftopen="no:' + __NB + '"]').click();
+    for(let i = 0; i < 100 && M.chosho_mgmt_no !== __NB; i++) await __sleep(10);
+    idbGet = og;
+    await __sleep(700);
+    await __rel('#303'); await imp; await __sleep(700);
+    const rec = await idbGet('no:' + __NA);
+    return { reopened, armed, open: M.chosho_mgmt_no, p2: __pidOf('#202'), p3: __pidOf('#303'), final: __pids(rec.model),
+             holders: await __holders([__pidOf('#202')]) };
+  };
+  await scene('⑤r', { pc:true }, async page => {
+    const r = await page.evaluate(reopenBody);
+    console.log('⑤r開き直した写しから切り替え', J(r));
+    ok(r.reopened && !r.armed && r.open === NB && has(r.final, r.p3), '⑤r試験の前提 → ' + J(r));
+    ok(has(r.final, r.p2), '★⑤r開き直した写しから切り替える途中で読み終わった2枚目が、A の下書きに無い → ' + J(r));
+  });
   const raceBody = async ({ what }) => {
     __gatedImport();
     await __state78();

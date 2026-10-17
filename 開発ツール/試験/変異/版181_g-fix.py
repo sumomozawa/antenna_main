@@ -48,6 +48,9 @@ CASES = [
   (u"★画面に開いている戸別の写真を、400ms あとの控えまで下書きに足さない（切り替えの途中の1枚が消える）",
    u'''    if(adds && model._lastDraftKey) return await photoKeepQueue(() => persistModel(model, added, tag));
     return !adds;''', u'''    return true;''', TG, "genba", u"⑤a,⑤b,⑤c"),
+  (u"★開き直した写し（同じ戸別を開き直した）に届いた写真を、下書きにすぐ足さない（そこから移る途中の1枚が消える）",
+   u'''    if(adds) return await photoKeepQueue(() => persistModel(model, added, tag));   // 下書きにもすぐ足す（上と同じ・版181）
+''', u'''''', TG, "genba", u"⑤r"),
   (u"★写真の控えで、画面に開いている下書きを画面の中身ではなく読んだ下書きで書く（切り替える直前の直しを戻す）",
    u'''      const open = (M && Array.isArray(M.chosho_photos)''', u'''      const open = null && (M && Array.isArray(M.chosho_photos)''', TG, "genba", u"⑤d"),
   (u"★まとめて保存の「保存済」の印付けを、写真の控えと同じ列に並べない",
