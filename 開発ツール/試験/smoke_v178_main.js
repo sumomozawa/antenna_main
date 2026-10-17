@@ -4753,7 +4753,10 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       o.unreadable = await proj();
       list.__unreadable[NO + '.json'] = 0;                             // 読めるようになった
       if(mode === 'b'){ await saveProj(); o.healed = await proj(); }   // b) 読めるようになった次の物件の保存
+      /* 版181: 📥 で入れた写真 G がまだどの戸別ファイルにも無いので、読み直しの前に確かめが出る（キャンセル＝読み直す） */
+      const oc = window.confirm; window.confirm = m => /📥 現場取込で入れた/.test(String(m)) ? false : oc.call(window, m);
       o.reload = await listReloadFolder();                             // 📁 フォルダを読み直す
+      window.confirm = oc;
       const nr = _listRows.filter(x => (x.data || {}).chosho_mgmt_no === NO)[0];
       o.newRow = { other: nr !== row, count: nr && nr._photoCount, thumbs: ((nr && nr._thumbs) || []).map(t => t.id).join(',') };
       await saveProj();

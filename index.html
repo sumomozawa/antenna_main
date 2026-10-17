@@ -14975,6 +14975,15 @@ async function overwriteSaveCurrent(){
     }
     editorKeepFields(stateObj, prev);
     if(_editingRow) editorKeepFields(stateObj, _editingRow.data || null);
+    /* ★📥 現場取込で入れて、まだこのファイルに無い工程の印（工事完了・下見など）を、ファイルの古い「未」で外さない★（版181）
+       画面に欄の無い印は、先に入れた元ファイルの値が勝つ。物件を開かずに 📥 したあと（ファイルへ書いていない）、
+       現場の工事完了がファイルの古い「未」に戻っていた。📥 で入れた印（_rowNewer）だけ・入れる方向だけ（外す方向は今までどおりファイル） */
+    if(_editingRow && _editingRow.data && Array.isArray(_editingRow._rowNewer))
+      SIDE_FLOW_FLAGS.forEach(([f, at]) => {
+        if(_editingRow._rowNewer.indexOf(f) < 0 || !_editingRow.data[f] || stateObj[f]) return;
+        stateObj[f] = _editingRow.data[f];
+        if(_editingRow.data[at]) stateObj[at] = _editingRow.data[at];
+      });
     /* ★預けた縮小版で、元ファイルの元の写真を上書きしない★（版178・3回目）
        画面に預けた縮小版が出ている（元の写真を読み直せなかった）ときは、いま読んだ元ファイルの同じ写真（元の写真）に替えて書く。
        元ファイルにも無い（読めなかった・ほかの端末が消した）ときは書かない。 */
@@ -15061,6 +15070,8 @@ async function overwriteSaveCurrent(){
       if(_editingRow && _editingRow.fileType !== "full" && _editingRow.data && typeof _editingRow.data === "object"){
         try { editorKeepFields(_editingRow.data, stateObj); } catch(_){}
       }
+      /* 📥 現場取込で入れた分は、このファイルに入った（版181）。全暗号化（.enc）は、行にだけある写真をまだ画面に出していないので残す */
+      if(_editingRow){ delete _editingRow._rowNewer; if(fmt !== "full") delete _editingRow._genbaUnsaved; }
       alert("✅ 上書き保存しました\n  " + res.name);
     } else {
       alert("⚠ 元ファイルへの書込み権限が得られなかったため、ダウンロードで保存しました。\n  " + res.name + "\n（元ファイルは変更されていません）");
@@ -15747,6 +15758,11 @@ async function writeCurrentCaseToIndividualFile(){
       return "\n\u26a0 戸別の個別JSONを書いたあと読み返したところ、中身が合いませんでした。\n" + bad
            + "\n\u3000 空き容量を確認して、もう一度お試しください。中身はこの画面に残っています。";
     } }
+  /* 📥 現場取込で入れて、まだファイルに無かった分が、このファイルに入った（版181）。
+     開くときにかぶせる印（_rowNewer）は、行が読み直すファイル（付いているファイル）に入ったときだけ下ろす。
+     暗号（.hyb）の行は、行にだけある写真（暗号の部分）がまだ入っていないので、写真を持っている間は「まだ入っていない」のまま */
+  if(att) delete row._rowNewer;
+  if(row.fileType === "plain" || !((row.data && Array.isArray(row.data.chosho_photos)) && row.data.chosho_photos.some(p => p && p.dataUri))) delete row._genbaUnsaved;
   /* 引き継いだ印・状態は、行（物件・受付台帳）と開いている画面にも入れる（あとの保存で外さないため） */
   let sideKeptNote = "";
   if(sideKept){
@@ -19550,7 +19566,12 @@ function lgClearTouched(tks){
   else (tks || []).forEach(k => { if(k) _lgTouched.delete(k); });
 }
 function lgUnsavedCaseEdits(){
-  return (Array.isArray(_listRows) ? _listRows : []).filter(r => r && r._lgEdited).length;
+  return (Array.isArray(_listRows) ? _listRows : []).filter(r => r && (r._lgEdited || lgGenbaUnsaved(r))).length;
+}
+/* 📥 現場取込で入れて、まだどの戸別ファイルにも入っていない戸別で、読み直すと消えるもの（版181）。
+   台帳で作った行（ファイルの無い行）は読み直しても残る（mergeRowsWithManual）ので数えない */
+function lgGenbaUnsaved(r){
+  return !!(r && r._genbaUnsaved && !r._manual);
 }
 function lgClearCaseEdited(rows){
   (Array.isArray(rows) ? rows : (Array.isArray(_listRows) ? _listRows : [])).forEach(r => { if(r) delete r._lgEdited; });
@@ -19561,11 +19582,22 @@ function lgClearCaseEdited(rows){
 function lgConfirmDiscardCaseEdits(what){
   const n = lgUnsavedCaseEdits();
   if(!n) return true;
-  return !confirm("⚠ 受付台帳で直した " + n + " 件が、まだ戸別ファイルへ入っていません。\n"
+  /* 📥 現場取込で入れて、まだ戸別ファイルに入っていない戸別（版181）。前は数えず、読み直すと黙って消えた（写真も） */
+  const rows = Array.isArray(_listRows) ? _listRows : [];
+  const nL = rows.filter(r => r && r._lgEdited).length;
+  const nG = rows.filter(lgGenbaUnsaved).length;
+  if(!nG) return !confirm("⚠ 受付台帳で直した " + n + " 件が、まだ戸別ファイルへ入っていません。\n"
     + "（名前・住所・電話・工事日程予定・状態は、台帳で直しただけでは戸別ファイルに入りません）\n\n"
     + "このまま" + (what || "読み込む") + "と、直した内容はファイルの中身で上書きされて消えます。\n\n"
     + "OK＝中止する（先に受付台帳の「💾 戸別ファイルへ反映」を押してください）\n"
     + "キャンセル＝直した内容を捨てて" + (what || "読み込む"));
+  return !confirm("⚠ " + (nL ? ("受付台帳で直した " + nL + " 件と、") : "") + "📥 現場取込で入れた " + nG + " 件が、まだ戸別ファイルへ入っていません。\n"
+    + (nL ? "（名前・住所・電話・工事日程予定・状態は、台帳で直しただけでは戸別ファイルに入りません）\n" : "")
+    + "（📥 で入れた現場の機器・長さ・写真・工事完了などは、この一覧の中にしかありません。現場のファイルは残っています）\n\n"
+    + "このまま" + (what || "読み込む") + "と、" + (nL ? "直した内容と、" : "") + "取り込んだ内容はファイルの中身で上書きされて消えます。\n\n"
+    + "OK＝中止する（先に" + (nL ? "受付台帳の「💾 戸別ファイルへ反映」を押し、" : "")
+    + "📥 で入れた戸別を1件ずつ開いて「💾 上書き保存」を押してください。ファイルの無い戸別は、受付台帳の「💾 戸別ファイルへ反映」で作れます）\n"
+    + "キャンセル＝" + (nL ? "直した内容と、" : "") + "取り込んだ内容を捨てて" + (what || "読み込む"));
 }
 function lgwbShow(k, v){
   const f = lgwbField(k);
@@ -19957,8 +19989,12 @@ async function lgwbButton(){
      「台帳で直した N 件がまだ入っていません」が消えないまま残ってしまう。 */
   lgClearCaseEdited(same);
   lgClearTouched(same.map(r => { try { return subCaseKey(r); } catch(_){ return ""; } }));
+  /* 📥 現場取込で入れて、まだ戸別ファイルに入っていない戸別（版181）。この操作は台帳の欄しか書かない（新しく作る戸別は行の中身で作る） */
+  const gLeft = _listRows.filter(r => r && r._genbaUnsaved && (missing || []).indexOf(r) < 0).length;   // 台帳で作った行でも、この操作で作らない行は数える
+  const gNote = gLeft ? ("\n※ 📥 現場取込で入れた機器・長さ・写真などが、まだ戸別ファイルに入っていない戸別が " + gLeft + " 件あります（この操作では入りません）。"
+                         + "戸別を1件ずつ開いて「💾 上書き保存」を押してください。") : "";
   const note = (skipped.length ? ("\n※ 暗号化ファイル " + skipped.length + " 件は対象外です（戸別を開いて保存してください）") : "")
-             + (unreadable.length ? ("\n※ 読めなかったファイル " + unreadable.length + " 件は飛ばします") : "");
+             + (unreadable.length ? ("\n※ 読めなかったファイル " + unreadable.length + " 件は飛ばします") : "") + gNote;
   if(!list.length && !(missing && missing.length)){
     /* 戸別ファイルを持てない行（ファイル無し・名前だけ等）の印は、ここで下ろす。
        押しても入る先が無いのに「反映を押すと入ります」と出し続けるのは嘘になる。
@@ -19967,7 +20003,7 @@ async function lgwbButton(){
     try { renderListTable(); } catch(_){}      // 「まだ入っていません」の表示も下ろす
     alert("受付台帳の内容と、戸別ファイルの中身は一致しています。\n書き戻すものはありません。\n\n"
       + (LGWB_LEDGER_ONLY ? ("※ 台帳の「" + LGWB_LEDGER_ONLY + "」は戸別ファイルに置き場所が無いため、この操作の対象外です。\n") : "")
-      + "　 これらは物件ファイルとこの端末に保存されているので、書き戻さなくても消えません。" + note);
+      + (_currentProject ? "　 これらは物件ファイルとこの端末に保存されているので、書き戻さなくても消えません。" : "") + note);   // 物件を開いていないときは言わない（版181）
     return;
   }
   const lines = list.slice(0, 12).map(it => "・" + it.name + "\n    "
@@ -19990,6 +20026,7 @@ async function lgwbButton(){
      このあとの書き戻しと同じ扱いになる。 */
   let mk = { made: [], fails: [] };
   if(missing && missing.length) mk = await lgwbCreateMissing(root.dir, missing);
+  mk.made.forEach(r => { delete r._genbaUnsaved; delete r._rowNewer; });   // 行の中身（📥 で入れた分も）で作った（版181）
   const res = await lgwbApply(list);
   // 書けたファイルの分だけ「まだ入っていない直し」から外す（できなかった分は残す）
   lgClearCaseEdited(res.okRows.concat(mk.made));
@@ -24954,7 +24991,7 @@ async function listLoadRow(target, seq0){
       if(seq !== _openSeq) return false;   // 読んでいるあいだに別の戸別を開き始めた（版178・3回目）
       const fresh = (rr.data && typeof rr.data === "object") ? rr.data : null;
       if(!fresh && rr.why !== "none"){ editorUnreadableRefuse(target, rr.why); return false; }   // 写真のあるファイルを読めないまま開かない（版178）
-      if(fresh){ d = lgOverlayLedger(fresh, target);
+      if(fresh){ d = lgOverlayLedger(rowNewerOver(fresh, target), target);   // 📥 で入れて、まだこのファイルに無い欄（版181）
         d = slimRowWithMemPhotos(d, target); }
       rowSeePhotos(target, (d && d.chosho_photos) || [], true); }    // このファイルの写真を見せる（版178）
     else rowSeePhotos(target, d && d.chosho_photos);                                                         // 行の写真を見せる（版178）
@@ -36802,7 +36839,7 @@ function renderCalPanel(byDate){
   let delBtn = '';
   if(!isWork){
     delBtn = '<button id="cal-ev-del" style="border-color:#c62828;color:#c62828;">打合せを削除</button>';
-  } else if(row._manual && isProv){
+  } else if(row._manual && isProv && lgPhotoCountOf(row.data || {}, row) === 0){   // 写真のある行（📥 で入れた等）は「仮メモ」として消させない（版181）
     delBtn = '<button id="cal-ev-del-row" style="border-color:#c62828;color:#c62828;" title="仮登録したこの行を台帳ごと削除します（管理番号だけの仮メモ）">🗑 仮予定を削除</button>';
   } else if(lgEditableField(row, "date")){
     delBtn = '<button id="cal-ev-unschedule" style="border-color:#c62828;color:#c62828;" title="この戸別の工事予定日をクリアします（戸別は台帳に残ります）">予定を取り消す</button>';
@@ -37326,6 +37363,19 @@ function editorUnreadableRefuse(row, why){
   alert("⚠ この戸別は開きませんでした（写真がファイルにあり、読めないまま開くと写真が出ないため）。\n  " + name + "\n\n"
     + reason + "\n\n"
     + "少し待ってから、もう一度開いてください。ファイルを移したときは、一覧の「📁 フォルダ」で工事フォルダを読み込み直してください。");
+}
+/* 📥 現場取込で入れて、行が読み直すファイルにはまだ入っていない欄（row._rowNewer）を、読み直した中身にかぶせる（版181）。
+   物件を開いていない・書けなかった・📄 で読んだ行で、開くとファイルの古い機器・長さに戻り、💾 上書き保存でその古い値を書いていた。
+   写真はかぶせない（ファイルの写真のまま。行にだけある写真は slimRowWithMemPhotos が足す）。 */
+function rowNewerOver(fresh, row){
+  const ks = (row && Array.isArray(row._rowNewer)) ? row._rowNewer : null;
+  if(!fresh || typeof fresh !== "object" || !ks || !ks.length || !row.data) return fresh;
+  const out = Object.assign({}, fresh);
+  ks.forEach(k => {
+    if(k === "chosho_photos" || k === "chosho_photos_thumb") return;
+    if(k in row.data) out[k] = row.data[k]; else delete out[k];
+  });
+  return out;
 }
 /* 常駐させない行（_slim）でも、📥 現場取込 で入れた写真（まだ戸別ファイルに入っていない）を行が持っていることがある（版178）。
    ファイルから読み直した中身に、ファイルに無いその写真を足す（足さないと、開いて保存したとき取り込んだ写真が消える）。 */
@@ -38039,7 +38089,8 @@ async function openGenbaImportPreview(ctx){
         ctrl='<div class="gi-conflict" data-cust="'+k+'">'
           +'<label><input type="radio" name="gi-cust-'+k+'" value="main" checked> 📒台帳 <b>'+escapeHtml(mv)+'</b></label>'
           +'<label><input type="radio" name="gi-cust-'+k+'" value="genba"> 📱現場 <b>'+escapeHtml(gv)+'</b></label></div>';
-      } else if(seed){ chg=true; ctrl='<span class="gi-take">📱現場から補完: '+escapeHtml(gv)+'</span>'; }
+      } else if(seed){ chg=true;   // 預けは、現場で直した欄なら PC の値を置き換える（版181。「補完」は空欄を埋めるときだけ）
+        ctrl='<span class="gi-take">'+((sideMode && mv) ? ('📱現場で直した値に替えます: '+escapeHtml(mv)+' → ') : '📱現場から補完: ')+escapeHtml(gv)+'</span>'; }
       else { ctrl='<span class="gi-muted">'+(mv?escapeHtml(mv):"（空欄）")+'（変更なし）</span>'; }
       return '<tr class="gi-diff-row'+(chg?' chg':'')+'"><th>'+nm[k]+'</th><td>'+ctrl+'</td></tr>';
     }).join("");
@@ -38176,6 +38227,7 @@ async function applyGenbaMergeToRow(row, genbaData, opts){
     ? sideMergeInto(row.data||{}, genbaData, opts.side, { fillEmpty: !!opts.sideFillEmpty, name: opts.sideName })
     : genbaMergeCaseData(row.data||{}, genbaData, opts);
   const merged = mres.merged;
+  const before = row.data || {};   // 取り込む前の行（📥 で変わった欄を覚えるため・版181）
   row.data = merged;
   /* ★暗号（.hyb）の行は、封筒の暗号でない部分（図面・機器・測定値など）にも入れる★（版178）
      入れないと、開いたとき封筒の古い中身で開き（現場の機器・長さ・測定値が戻る）、💾 で古い値を書き、物件にも古い値が入っていた。
@@ -38186,7 +38238,7 @@ async function applyGenbaMergeToRow(row, genbaData, opts){
     for(const k in merged){ if(sens.indexOf(k) < 0) np[k] = merged[k]; }
     row.envelope = Object.assign({}, row.envelope, { plain: np });
   }
-  row._manual = false;
+  /* 「台帳で作った行」の印（_manual）は、戸別ファイルへ書いたあとで決める（下・版181） */
   /* ★常駐させない行（_slim）に取り込んだとき★（版178）
      行の写真は取り込んだ分だけ（ファイルの写真は入っていない）。戸別ファイルへ書けなかったときも、物件からファイルの写真を落とさない。
      ・物件の縮小版（ファイルの写真の分）は捨てずに残し、作り直す印（_thumbsNoFile）を付ける。次の物件の保存でファイルを読み、
@@ -38236,10 +38288,30 @@ async function applyGenbaMergeToRow(row, genbaData, opts){
   } catch(_){}
   const wasSlim = !!row._slim;
   const note = await _genbaWriteRowIndividual(row, !!opts.importRun);  // 原寸写真は温存して個別JSONへ書戻し
+  const wrote = /個別JSONも更新しました/.test(String(note || ""));   // どこかの戸別ファイルへ書けた
+  /* 行が読み直すファイル（📁 の戸別＝fileHandle）へ書けたか（版181）。📄 で読んだ行（srcFile）は、物件の工事フォルダのファイルへ書けても、
+     開くときに読み直すのは 📄 で読んだときの古い写し */
+  const wroteOwn = wrote && !!row.fileHandle;
+  /* ★戸別ファイルが無いままの行（台帳で作った行・📥 で新しく作った行）は「台帳で作った行」の印を残す★（版181）
+     前は書けなくても外していたので、📁 の読み直しでこの行が（取り込んだ写真ごと）黙って一覧から消え、
+     「💾 戸別ファイルへ反映」でもファイルを作らなかった（「一致しています」と出るだけ）。
+     「ファイル無し・名前だけ」の行も印を残す（外すと読み直しで消える） */
+  if(!row._detached && (row.fileHandle || (row._dir && row._name) || wrote)) row._manual = false;
+  /* ★📥 で入れて、まだ戸別ファイルに入っていない分を覚える★（版181）
+     物件を開いていない・書けなかった（⚠）・📄 で読んだ行、では行だけが現場の機器・長さ・工程の印（・写真）を持っている。
+     ・_rowNewer＝📥 で変わった欄の名前（行が読み直すファイルに無い）。開くとき（rowNewerOver）・💾 上書き保存（工程の印）で、ファイルの古い値に戻さない
+     ・_genbaUnsaved＝どの戸別ファイルにも入っていない（写真も）。📁 で読み直す前に確かめる（lgConfirmDiscardCaseEdits） */
+  { const ks = Object.keys(merged).filter(k => k !== "chosho_photos" && k !== "chosho_photos_thumb" && JSON.stringify(merged[k]) !== JSON.stringify(before[k]));
+    const pk = p => p.id || photoContentId(p.dataUri);
+    const had = new Set((Array.isArray(before.chosho_photos) ? before.chosho_photos : []).filter(p => p && p.dataUri).map(pk));
+    const phNew = (Array.isArray(merged.chosho_photos) ? merged.chosho_photos : []).some(p => p && p.dataUri && !had.has(pk(p)));
+    if(!wroteOwn && ks.length) row._rowNewer = Array.from(new Set((Array.isArray(row._rowNewer) ? row._rowNewer : []).concat(ks)));
+    if(!wrote && (phNew || ks.some(k => k !== "editedAt" && k.charAt(0) !== "_"))) row._genbaUnsaved = true; }
   /* ★暗号（.hyb）の行で、戸別ファイルへ書けなかったとき★（版178）行は、まだファイルに無い現場の欄（機器・測定値など）を持っている。
      「ファイルから読む」のままだと、開いたときファイルの古い中身で開き、💾 で古い値を書いていた。画面で直したときと同じく、行の封筒で開く
-     （写真の出ていない画面になり、💾 上書き保存はファイルの写真に足して書く） */
-  if(row.fileType === "hybrid" && row._slim && !/個別JSONも更新しました/.test(String(note || ""))) row._slim = false;
+     （写真の出ていない画面になり、💾 上書き保存はファイルの写真に足して書く）。
+     📄 で読んだ行は、書けても読み直すのは 📄 の古い写しなので、同じく行の封筒で開く（版181） */
+  if(row.fileType === "hybrid" && row._slim && !wroteOwn) row._slim = false;
   /* ★常駐させない行（_slim）に取り込んで、戸別ファイルへ書けたとき★（版178）
      行には現場の写真しか入っていない（ファイルの写真と合わせたのはファイルの中だけ）。そのままだと一覧・物件・工事調書に
      現場の写真しか出ない。ファイルに全部入ったので、行は「ファイルから読む」に戻す（枚数はファイルのもの）。 */
@@ -38306,7 +38378,8 @@ async function applyGenbaMergeToRow(row, genbaData, opts){
    またはこの一覧に無い戸別なら、ここで取り込むと違う物件に入ってしまうかもしれない。空なら注意なし。 */
 function sideImportWarn(side, matchType){
   if(!side) return "";
-  const sp = String(side.proj || side.ledger || "").trim();
+  /* proj が空＝その戸別は現場で開いていた台帳に無かった。ledger（現場で開いていただけの台帳）で「別の物件」と言わない（版181） */
+  const sp = String(side.proj || "").trim();
   const cur = _currentProject ? String(_currentProject.name || "").trim() : "";
   if(cur && sp && pjDiffers(sp, cur))
     return "この預けは「" + sp + "」の台帳から来ています。開いている物件（" + cur + "）とは違います。ここで取り込むと、この物件に入ってしまいます。";
@@ -38378,7 +38451,8 @@ function genbaImportFlow(){
     alert("📥 現場データ取込 完了\n\n取込: "+done+" 件"
       + (ngWrite ? ("（うち " + ngWrite + " 件は戸別ファイルへ書けていません）") : "")
       + " ／ スキップ: "+skipped+" 件"+(failed?(" ／ 失敗: "+failed+" 件"):"")
-      + (!_currentProject ? "\n\n※ 物件を開いていないので、戸別ファイルへは書き戻していません（この一覧の中だけの取り込みです）。\n　 受付台帳の「💾 戸別ファイルへ反映」か、戸別を開いて「保存」で書けます。" : "")
+      + (!_currentProject ? "\n\n※ 物件を開いていないので、戸別ファイルへは書き戻していません（この一覧の中だけの取り込みです）。\n　 もうファイルのある戸別は、1件ずつ開いて「💾 上書き保存」を押してください（受付台帳の「💾 戸別ファイルへ反映」では、現場の機器・長さ・写真は入りません）。"
+          + "\n　 ファイルの無い戸別は、受付台帳の「💾 戸別ファイルへ反映」で作れます。" : "")
       + (notes.length?("\n\n"+notes.join("\n")):""));
   });
 }

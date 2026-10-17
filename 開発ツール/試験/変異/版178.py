@@ -1221,10 +1221,10 @@ CASES = [
    u'''    for(const k in merged){ if(sens.indexOf(k) < 0) np[k] = merged[k]; }''',
    u'''    for(const k in merged){ np[k] = merged[k]; }''', TM, "main", u"㉕x"),
   (u"★暗号の行へ 📥 して戸別ファイルへ書けなかったのに「ファイルから読む」のまま（開くとファイルの古い中身で開き、現場の増幅器が戻る）",
-   u'''  if(row.fileType === "hybrid" && row._slim && !/個別JSONも更新しました/.test(String(note || ""))) row._slim = false;''',
+   u'''  if(row.fileType === "hybrid" && row._slim && !wroteOwn) row._slim = false;''',
    u'''''', TM, "main", u"㉕x"),
   (u"★暗号の行へ 📥 して戸別ファイルへ書けたのに「ファイルから読む」をやめる（開くとファイルの写真が出ない）",
-   u'''  if(row.fileType === "hybrid" && row._slim && !/個別JSONも更新しました/.test(String(note || ""))) row._slim = false;''',
+   u'''  if(row.fileType === "hybrid" && row._slim && !wroteOwn) row._slim = false;''',
    u'''  if(row.fileType === "hybrid" && row._slim) row._slim = false;''', TM, "main", u"㉕rproj"),
   # ======== メイン：10回目の見直しの直し（🔄 で受付台帳の「完了」を物件から消さない・ほかのPCの直しを消さない・知らせを分ける・📄 ファイルの行） ========
   # 11回目の直しで、行の封筒をほどいて書いた行（_slim でない）の「行の封筒のまま」は、書いた中身の暗号でない部分と同じ（壊しても同じ）。
