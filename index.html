@@ -6977,7 +6977,7 @@ async function lsRestoreFromIdb(){
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "183";
+const APP_VERSION = "184";
 /* ============================================================
    ★日時の表示は、必ずこの端末の時刻で★
    保存している日時は世界時のISO文字列（…T01:03:00.000Z）。これを文字のまま
@@ -14856,6 +14856,7 @@ function setLoadedOrigin(target){
   // 一覧の行から開いた戸別は台帳⇄エディタ双方向反映の対象として追跡
   _editingRow = (target && target.data !== undefined) ? target : null;
   _editorProjRow = rowOpenedFromProject(_editingRow) ? _editingRow : null;   // 物件から開いた行（版178。行が外れても、保存は写しにする）
+  editorBaseKeep(_editingRow);   // 開いたときの画面の中身（版184）
   // リアルタイム：この戸別の編集ロックを取得（他端末が編集中なら閲覧のみになる）
   if(_editingRow){ try { rtClaimLock(_editingRow); } catch(_){} }
   clearEditorDirty();   // 開いた直後＝まだ何も触っていない
@@ -15148,6 +15149,7 @@ async function overwriteSaveCurrent(){
         try { editorKeepFields(_editingRow.data, stateObj); } catch(_){}
       }
       try { lgSrcFromWritten(_editingRow, stateObj); } catch(_){}  // 書いた値を控えへ（版183）
+      editorEditedDone(_editingRow);                               // 直した欄はファイルに入った（版184）
       try { lgwbMarkWritten(_editingRow, stateObj); } catch(_){}   // 戸別ファイルへ書けた＝台帳の印を下ろす（版181）
       /* 📥 現場取込で入れた分は、このファイルに入った（版181）。全暗号化（.enc）は、行にだけある写真をまだ画面に出していないので残す */
       if(_editingRow){ delete _editingRow._rowNewer; if(fmt !== "full") delete _editingRow._genbaUnsaved; }
@@ -15166,6 +15168,8 @@ async function overwriteSaveCurrent(){
 async function overwriteSaveCurrentToProject(){
   const row0 = _editingRow;
   let busy = false;
+  let mine = null;                                                       // いま画面で直した欄（版184）。行へ取り込む前に見る
+  try { mine = editorEditedKeys(row0); } catch(_){ mine = null; }
   try {
     if(typeof projSyncEditorToRow === "function") projSyncEditorToRow(true); // 明示保存＝無条件で行へ取り込み
     busy = !!_projSaving;   // 自動保存が書いている最中（projSaveNow は予約だけして戻る＝まだ書いていない。版181）
@@ -15176,12 +15180,26 @@ async function overwriteSaveCurrentToProject(){
   }
   // 戸別の個別JSONも同時更新（工事フォルダがリンク済み／これからリンクする場合・原寸写真は温存）
   let indivMsg = "";
-  try { indivMsg = await writeCurrentCaseToIndividualFile(); }
+  try { indivMsg = await writeCurrentCaseToIndividualFile(mine); }
   catch(e){ console.warn("[個別保存]", e); indivMsg = "\n⚠ 戸別ファイルに書けませんでした（" + (e && e.message || e) + "）。"; }
   /* 戸別ファイルへ書けた＝台帳の印を下ろす（版181。書いた欄が台帳の思っている中身と同じときだけ。暗号の戸別は暗号でない部分で見る） */
   if(row0 && /^\n📄 戸別ファイルにも書きました/.test(indivMsg)){
     const wrote = row0.fileType === "hybrid" ? ((row0.envelope && row0.envelope.plain) || null) : row0.data;
     try { lgwbMarkWritten(row0, wrote); } catch(_){}
+    if(_editingRow === row0 && !row0._indivMerged) editorBaseKeep(row0);   // 次の保存は、ここからの差を見る（版184。いま書いたファイルを「新しい」と見ない）
+  }
+  /* ファイルの新しい中身と合わせて書いたときは、開き直して画面にも出す（版184。前の値のまま次の保存で現場の内容を戻さない）。
+     保存のあいだに打った欄は、行へ入れて覚えてから開く（開き直すと画面は入れ替わる）。知らせを出す前に物件へ入れる */
+  if(row0 && row0._indivMerged){
+    delete row0._indivMerged;
+    if(row0 === _editingRow && _listRows.indexOf(row0) >= 0){
+      if(_editorDirty){
+        const st = collectState(), ks = editorEditedRemember(row0, st) || [];
+        ks.forEach(k => { if(k in st) row0.data[k] = st[k]; });
+      }
+      try { await openCaseInEditor(row0); } catch(_){}
+    }
+    try { await projSaveNow(); } catch(_){}
   }
   /* ★自動保存が書いている最中に押したときは、書き終わるのを待ってから結果を言う★（版181）
      前は予約だけして、まだ書いていないのに「✅ …保存しました」と言っていた（そのまま閉じると直しが入らないことがある）。
@@ -15739,7 +15757,60 @@ async function indivThumbOriginals(dir, nos, obj){
   }
   return { ok: true, walked: true };
 }
-async function writeCurrentCaseToIndividualFile(){
+/* 戸別ファイルが、行の知らない新しい中身か（版184）。どちらが新しいかは、ファイルの中の editedAt で見る（📁 の重なりと同じ）。
+   日時の無いファイルは見分けられないので、今までどおり（新しいと見ない） */
+function indivFileNewer(row, file){
+  const fa = Date.parse(String((file && file.editedAt) || "").trim());
+  if(!isFinite(fa)) return false;
+  const b = _editorBase;
+  const ra = Date.parse(String(((b && b.row === row) ? b.at : ((row.data && row.data.editedAt) || "")) || "").trim());
+  return !isFinite(ra) || fa > ra;
+}
+/* ★ファイルのほうが新しいときは、いま直した欄だけをファイルの中身へ入れて書く★（版184）
+   物件を開き直しただけの行は、ファイルの新しい中身を知らない。そのまま書くと、現場が入れた住所・完了・機器・測定値を物件の古い値で消していた
+   （写真だけは残る）。結果は「📁 で読み直してから、同じ欄を直して保存した」のと同じになる。
+   obj＝書こうとしている中身、file＝いま読んだファイルの中身、mine＝いま画面で直した欄。返り値 { obj, note }。
+   台帳で直した欄が分からない行は合わせられないので、書かずに知らせる（文字列を返す）。
+   新しい名前のファイルを作るところ（created）は止めない（空のファイルが残る）。null＝合わせずに今までどおり書く。 */
+function indivMergeNewer(row, obj, file, mine, created){
+  const lk = Array.isArray(row._lgKeys) ? row._lgKeys : [];
+  if(row._manual || lk.indexOf("*") >= 0){
+    if(created) return null;
+    return "\n⚠ 戸別ファイルは書き替えていません：ファイルのほうが新しい中身になっています（現場が保存した など）。\n"
+         + (row._manual
+             ? "　 この戸別は受付台帳で作った行で、同じ番号のファイルがあります。どちらを残すかは、一覧の「📁 フォルダ」で読むと聞きます。\n"
+             : "　 この戸別は直した欄が分からないので、ファイルの中身と合わせて書けません。ファイルの中身を確かめたいときは、一覧の「📁 フォルダ」で読み直してください（確かめの窓が出ます）。\n")
+         + "　 直しは物件に入っています。";
+  }
+  let keys = Array.from(new Set(mine.concat(lk, Array.isArray(row._rowNewer) ? row._rowNewer : [], Array.isArray(row._edKeys) ? row._edKeys : [])));
+  if(keys.indexOf(EDIT_PRESET) >= 0){
+    keys = keys.filter(k => k !== EDIT_PRESET);
+    /* ファイルにも図面が無いときは、画面の工事の欄を全部入れる。入れないと図面の無い行のままで、開き直すと標準の画面に戻り、次の保存で直しが消える */
+    if(!file.amplifier) keys = Array.from(new Set(keys.concat(Object.keys(obj).filter(editorWorkKey))));
+  }
+  /* 現場が書いたファイルは、PCだけが持つ欄（料金・石綿・図面の手直し・アパートの欄）を既定値や古い値で持つ。📥・📮 と同じく行の値を残す */
+  if(file._origin === "genba") keys = Array.from(new Set(keys.concat(GENBA_HARD_KEEP_MAIN.concat(LGWB_FIELDS.map(f => f.k).filter(k => /^apt_/.test(k))).filter(k => k in obj))));
+  const J = v => JSON.stringify(v === undefined ? null : v);
+  const kept = Object.keys(file).filter(k => !editorBaseSkip(k) && keys.indexOf(k) < 0 && J(file[k]) !== J(obj[k]));
+  const out = Object.assign({}, file);
+  delete out._side;           // 📮 預けの印は いつもの名前のファイルに入れない（版176）
+  keys.concat(["chosho_mgmt_no", "chosho_photos", "_origin", "_schemaVer", "editedAt"]).forEach(k => { if(k in obj) out[k] = obj[k]; else delete out[k]; });
+  /* 台帳が持ち主の欄は、読んだばかりのファイルの行として突き合わせる（現場の直しは採る・台帳で直した値は残す） */
+  const t = { data: out, file: row.file, fileType: "plain" };
+  noteResolveRows([t], true);
+  /* 行も同じ中身にする（物件に入れる）。写真は行のまま（ファイルの元の写真を行に持たせない） */
+  const was = row.data || {};
+  row.data = Object.assign({}, t.data, { chosho_photos: was.chosho_photos });
+  ["chosho_photos_thumb", "chosho_photo_count"].forEach(k => { if(k in was) row.data[k] = was[k]; });
+  row._amtCache = undefined; row._bomCache = undefined;
+  row._indivMerged = true;
+  try { markCaseEdited(row); } catch(_){}
+  const names = Array.from(new Set(kept.map(k => sideFieldLabel(k))));
+  return { obj: t.data, note: "\n（戸別ファイルのほうが新しかったので、いま直した欄だけをファイルの中身へ入れて書きました。ファイルにあった内容は残しています"
+    + (names.length ? ("：" + names.slice(0, 6).join("・") + (names.length > 6 ? (" など " + names.length + " 項目") : "")) : "")
+    + "。画面も新しい中身で開き直します）" };
+}
+async function writeCurrentCaseToIndividualFile(mine){   // mine＝いま画面で直した欄（「💾 物件に保存」のとき。版184）
   const row = _editingRow;
   _sideReopen = null;                 // 前の保存の「開き直す」覚えは持ち越さない（版181）
   if(!row || _listRows.indexOf(row) < 0) return "";
@@ -15918,12 +15989,19 @@ async function writeCurrentCaseToIndividualFile(){
      行が前の中身のままだと、ここで前の中身を書いて、現場の工事完了が外れる。
      まとめた印（_sideMerged）のうち行の知らないものがあるときだけ、済みの印・日付・進んだ状態・まとめた印を引き継ぐ
      （外す方向には動かさない。行が知っている印だけのファイルは、いつもどおり この画面の中身で書く）。 */
-  let sideKept = null, sideFile = null;
+  let sideKept = null, sideFile = null, newerNote = "";
   if(contentObj && row.fileType === "plain" && contentObj !== row.envelope){
     const kf = (!created && fh) ? fh : photoSrcFh;
     if(kf){
       try { sideFile = JSON.parse(String(await (await kf.getFile()).text()).replace(/^\uFEFF/, "").trim() || "null"); } catch(_){ sideFile = null; }
       sideKept = sideKeepFileMarks(contentObj, sideFile);
+      /* ファイルのほうが新しければ合わせる（版184）。行の知らない預けがあるときは、上で預けの欄を引き継いだので合わせない。
+         📥 で入れてまだファイルに無い行は、行の中身が新しいので合わせない。alsoFh＝付け替え先の別のファイル（行のファイルではない） */
+      if(!sideKept && mine && !alsoFh && !row._genbaUnsaved && indivFileNewer(row, sideFile)){
+        const nw = indivMergeNewer(row, contentObj, sideFile, mine, created);
+        if(typeof nw === "string") return nw;
+        if(nw){ contentObj = nw.obj; newerNote = nw.note; }
+      }
     }
   }
   /* ★書けなかったときに例外で飛ばさない／書いたら読み返して確かめる★
@@ -16053,6 +16131,7 @@ async function writeCurrentCaseToIndividualFile(){
   }
   else row.file = relpath; // 以後この個別ファイルに紐づく
   try { lgSrcFromWritten(row, row.fileType === "hybrid" ? ((contentObj && contentObj.plain) || null) : contentObj); } catch(_){}   // 書いた値を控えへ（版183）
+  editorEditedDone(row);   // 直した欄はファイルに入った（版184）
   /* ファイル無の行にファイルができた：ふつうの行に戻す（版182）。戻さないと、次の 💾 が自分の作ったファイルを「戻ったファイル」と見て止まる */
   if(row._detached){
     try { undetach(missKeyOf(row)); } catch(_){}
@@ -16069,7 +16148,7 @@ async function writeCurrentCaseToIndividualFile(){
     _loadedOrigin = { file: row.file || relpath, fileHandle: fh, fileType: _loadedOrigin.fileType };
     try { updateOverwriteSaveBtn(); } catch(_){}
   }
-  renamedNote += sideKeptNote + thumbKeptNote + hybNote;
+  renamedNote += newerNote + sideKeptNote + thumbKeptNote + hybNote;
   return "\n📄 戸別ファイルにも書きました（" + relpath.split(/[\\/]/).pop() + (created ? "・新規作成" : "") + "）。" + renamedNote;
 }
 
@@ -24053,6 +24132,9 @@ async function caseFilePatch(row, patch){
   if(ng.length) throw new Error("書いたあと読み返したら入っていませんでした（" + ng.join("・") + "）");
   if(cnt(back) < before) throw new Error("書いたあと写真の枚数が " + before + "枚 → " + cnt(back) + "枚 に減っていました。すぐに開いて確かめてください");
   row.fileHandle = fh;
+  /* いま書いた日時を行にも入れる（版184。入れないと、次の 💾 物件に保存が、自分で書いたファイルを「新しい」と見る） */
+  if(row.data) row.data = Object.assign({}, row.data, { editedAt: json.editedAt });
+  if(_editorBase && _editorBase.row === row) _editorBase.at = json.editedAt;
   return "written";
 }
 /* 石綿の判定を、建物の世帯（members）の行にそろえる（手元の行だけ。ファイルは aptAsbestosApplyAll が書く）。
@@ -24097,7 +24179,7 @@ async function aptAsbestosApplyAll(members, asb){
     if(state === "written" || state === "same"){
       res[state]++;
       /* ファイルに入ったので、この操作で付けた印は下ろす（前から付いていた印はそのまま） */
-      if(!wasMarked.has(m)){ delete m._lgEdited; try { lgClearTouched([subCaseKey(m)]); } catch(_){} }
+      if(!wasMarked.has(m)){ delete m._lgEdited; delete m._lgKeys; try { lgClearTouched([subCaseKey(m)]); } catch(_){} }
     } else if(state === "nofile"){ res.nofile++; }
     else if(state === "encrypted"){ res.encrypted++; }
   }
@@ -30412,6 +30494,7 @@ function buildProjectSnapshot(base){
     /* 台帳で直してまだ戸別ファイルに入っていない印も入れる（版183）。入れないと、台帳の「完了」✔ を反映しないまま開き直したあとの 📁 で、
        確かめの窓が出ず、黙ってファイルの古い中身に置き換わった。台帳で作った行は読み直しても残るので入れない（窓が出続ける） */
     if(r._lgEdited && !r._manual) payload = Object.assign({}, payload, { _lgEdited: true, _lgKeys: r._lgKeys || undefined });
+    if(Array.isArray(r._edKeys) && r._edKeys.length && !r._manual) payload = Object.assign({}, payload, { _edKeys: r._edKeys });   // 画面で直して、まだファイルに入っていない欄（版184）
     const cw = { caseId: ensureRowCaseId(r), file: r.file || "", lastModified: r.lastModified || 0, payload };
     if(r._prevSubKey) cw.prevSub = r._prevSubKey; // Phase2: 改番した場合の旧キー（移行期のマージ突合用）
     cases.push(cw);
@@ -31040,6 +31123,7 @@ async function applyMergedLocally(merged){
     const nr = _listRows.find(r => r && r._caseId === curId);
     if(nr){
       if(_editorHiddenPhotos && _editorHiddenPhotos.row === _editingRow) _editorHiddenPhotos.row = nr;
+      if(_editorBase && _editorBase.row === _editingRow) _editorBase.row = nr;   // 開いたときの控えも新しい行へ（版184。古い行のままだと直した欄を覚えない）
       _editingRow = nr; // 同じ戸別の新行へエディタを再リンク（フォームの入力内容はそのまま保持）
     }
   }
@@ -31244,11 +31328,11 @@ async function applyProject(p, opts){
                  _genbaUnsaved: c.payload._genbaUnsaved || undefined,
                  _caseId: c.caseId || projNewId() }; // Phase2: 安定IDを復元（無ければ付与）
       }
-      const gu = c.payload && c.payload._genbaUnsaved, le = !!(c.payload && c.payload._lgEdited), lk = c.payload && c.payload._lgKeys;
+      const gu = c.payload && c.payload._genbaUnsaved, le = !!(c.payload && c.payload._lgEdited), lk = c.payload && c.payload._lgKeys, ek = c.payload && c.payload._edKeys;
       let pl = c.payload;
-      if(gu || le){ pl = Object.assign({}, pl); delete pl._genbaUnsaved; delete pl._lgEdited; delete pl._lgKeys; }   // 印は行に持たせる（戸別の中身に混ぜない）
+      if(gu || le || ek){ pl = Object.assign({}, pl); delete pl._genbaUnsaved; delete pl._lgEdited; delete pl._lgKeys; delete pl._edKeys; }   // 印は行に持たせる（戸別の中身に混ぜない）
       const r = buildListRow(c.file || "", c.lastModified || 0, pl, null);
-      if(r){ r._fromProject = true; if(c.caseId) r._caseId = c.caseId; if(gu) r._genbaUnsaved = gu; if(le){ r._lgEdited = true; if(Array.isArray(lk)) r._lgKeys = lk; } } // 元ファイル無し＋安定ID(あれば)復元
+      if(r){ r._fromProject = true; if(c.caseId) r._caseId = c.caseId; if(gu) r._genbaUnsaved = gu; if(le){ r._lgEdited = true; if(Array.isArray(lk)) r._lgKeys = lk; } if(Array.isArray(ek)) r._edKeys = ek; } // 元ファイル無し＋安定ID(あれば)復元
       return r;
     }).filter(Boolean);
     if(keepOrig) rowsOriginalsRestore(_listRows, keepOrig);
@@ -38177,6 +38261,49 @@ let _editorDirty = false;
 let _asbEdited = false;    // この編集で石綿の欄を触ったか（アパートは建物の全世帯へ配る）
 function markEditorDirty(){ if(!_projLoading) _editorDirty = true; }
 function clearEditorDirty(){ _editorDirty = false; }
+/* ★開いたときの画面の中身を覚える★（版184）
+   「💾 物件に保存」のとき戸別ファイルのほうが新しければ、開いたときとの差（いま直した欄）だけをファイルの中身へ入れて書く。写真は別に合わせる。 */
+let _editorBase = null;   // { row, at：開いたときの行の更新日時, vals：欄ごとの中身, preset：図面の無い行（標準の工事構成で開いた） }
+const EDIT_PRESET = "@preset";   // 図面の無い行で工事の欄を直した印（直した欄の名前といっしょに持つ）
+function editorBaseSkip(k){
+  return !k || k.charAt(0) === "_" || k === "editedAt" || k === "chosho_photos" || k === "chosho_photos_thumb" || k === "chosho_photo_count";
+}
+function editorBaseVals(st){
+  const o = {};
+  Object.keys(st || {}).forEach(k => { if(!editorBaseSkip(k)) o[k] = JSON.stringify(st[k]); });
+  return o;
+}
+function editorBaseKeep(row){
+  _editorBase = null;
+  if(!row || row.fileType !== "plain") return;
+  try { _editorBase = { row, at: String((row.data && row.data.editedAt) || ""), vals: editorBaseVals(collectState()), preset: !lgHasDrawing(row) }; } catch(_){ _editorBase = null; }
+}
+/* 開いたあとで画面で直した欄の名前。開いた画面の控えが無いときは null。
+   利用者が触っていなければ空（開いたあとで自動で整う欄を、直した欄に数えない）。行へ取り込むと触った印は下りるので、そこまでの分は行に覚える（editorEditedRemember） */
+function editorEditedKeys(row, st){
+  const b = _editorBase;
+  if(!b || b.row !== row) return null;
+  if(!_editorDirty) return [];
+  const now = editorBaseVals(st || collectState());
+  const ks = Array.from(new Set(Object.keys(b.vals).concat(Object.keys(now)))).filter(k => b.vals[k] !== now[k]);
+  if(b.preset && ks.some(editorWorkKey)) ks.push(EDIT_PRESET);   // 図面の無い行で工事の欄を直したら、標準の構成ごとその戸別の図面になる
+  return ks;
+}
+/* 画面の工事の欄か（お客様の欄・台帳の欄・画面に無い印を除く） */
+function editorWorkKey(k){
+  return !editorBaseSkip(k) && LG_EDITOR_FIELDS.indexOf(k) < 0 && EDITOR_KEEP_FIELDS.indexOf(k) < 0
+    && k !== "chosho_note" && k !== "chosho_time" && k !== "chosho_meet_at";
+}
+/* 画面で直した欄を行に覚える（版184）。一覧へ戻っただけの直しは物件にしか入っていない。あとでファイルのほうが新しくなっても、
+   この欄は行の値で書く（覚えないと、次の 💾 で行・物件・ファイルのどこからも消える）。物件に入れて、ファイルへ書けたら下ろす */
+function editorEditedRemember(row, st){
+  const ks = editorEditedKeys(row, st);
+  if(ks && ks.length) row._edKeys = Array.from(new Set((Array.isArray(row._edKeys) ? row._edKeys : []).concat(ks)));
+  return ks;
+}
+function editorEditedDone(row){
+  if(row && row._edKeys){ delete row._edKeys; try { projTouch(); } catch(_){} }
+}
 /* 入力パネル・図面パネル全体の入力を拾って「触った」印にする（個別のフックの取りこぼし対策）。
    applyStateData は値を代入で入れるだけでイベントを出さないので、読込では立たない。 */
 function bindEditorDirtyWatch(){
@@ -38273,6 +38400,7 @@ async function openCaseInEditor(row, gotoDiagram){
     closeListView();
   }
   noteSyncToEditor(row);          // 備考は台帳と共通の1つの欄
+  if(_editingRow === row) editorBaseKeep(row);   // 開いたときの画面の中身（版184。備考を台帳に合わせたあとで取る。開けなかったときは替えない）
   if(gotoDiagram){
     const mt = document.querySelector('#mobile-tabs button[data-mobile-tab="diagram"]');
     if(document.body.classList.contains("mobile-layout") && mt) mt.click();
@@ -38417,12 +38545,14 @@ function syncEditorToRowData(force){
      帯は「この端末で直しても入りません」と言うのに、一覧へ戻る・保存ボタン・タブを裏へ回す（自動保存）で、
      直した中身が行と物件（端末内・共有ファイル）に入り、ほかの端末の直しと食い違っていた。 */
   if(rtIsCaseReadOnly()) return;
+  if(_editingRow._indivMerged) return;   // ファイルの新しい中身と合わせて書いているあいだは、前の画面の中身で行を戻さない（版184）
   // 開いてから何も触っていなければ書き戻さない（見ただけで工事内容・金額が入るのを防ぐ）。
   // 保存ボタンなど明示操作のときは force=true で必ず書き戻す。
   if(!force && !_editorDirty) return;
   try { markCaseEdited(_editingRow); } catch(_){} // Phase2: 開いている戸別をマージ上乗せ対象に
   try {
     const s = collectState();
+    editorEditedRemember(_editingRow, s);   // 直した欄を覚える（版184。下で画面に無い欄を足す前に見る）
     // 画面に無い欄は collectState が作らないので、いま行が持っているものを引き継ぐ
     editorKeepFields(s, _editingRow.data || {});
     // 住所・電話の数字は半角へ統一（台帳での編集と揃える）

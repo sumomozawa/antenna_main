@@ -33,7 +33,7 @@ CASES = [
  ('n06 まだ入っていない印を物件に入れない（開き直すと持ち越さない）', L, 'F1',
   [('    if(r._lgEdited && !r._manual) payload = Object.assign({}, payload, { _lgEdited: true, _lgKeys: r._lgKeys || undefined });\n', '')]),
  ('n07 開き直すとき印を行へ戻さない', L, 'F1',
-  [(' if(le){ r._lgEdited = true; if(Array.isArray(lk)) r._lgKeys = lk; } }', ' }')]),
+  [(' if(le){ r._lgEdited = true; if(Array.isArray(lk)) r._lgKeys = lk; }', '')]),
  ('n08 台帳で作った行の印も物件に入れる', L, 'F11',
   [('    if(r._lgEdited && !r._manual) payload', '    if(r._lgEdited) payload')]),
  ('n09 物件の行の ✔ を控えに書く（台帳だけの ✔ が 📁 で外れる）', L, 'F3',

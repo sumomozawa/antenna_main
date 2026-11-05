@@ -823,8 +823,8 @@ CASES = [
    u'''      if(!orig){''',
    u'''      if(false){''', TM, "main", u"㊸o"),
   (u"★縮小版のまま入れたことを知らせない",
-   u'''  renamedNote += sideKeptNote + thumbKeptNote + hybNote;''',   # 版181 で .hyb の写真の知らせ（hybNote）を足した
-   u'''  renamedNote += sideKeptNote + hybNote;''', TM, "main", u"㊸n"),
+   u'''  renamedNote += newerNote + sideKeptNote + thumbKeptNote + hybNote;''',   # 版181 で .hyb の写真の知らせ（hybNote）を足した
+   u'''  renamedNote += newerNote + sideKeptNote + hybNote;''', TM, "main", u"㊸n"),
   (u"★縮小版のまま入れた知らせに ⚠ を付ける（📥 の知らせで、書けた戸別を「書けていません」に数える）",
    u'''      thumbKeptNote = "\\n※ " + up.why''',
    u'''      thumbKeptNote = "\\n\\u26a0 " + up.why''', TM, "main", u"㊸ic"),
