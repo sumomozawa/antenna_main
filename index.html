@@ -6977,7 +6977,7 @@ async function lsRestoreFromIdb(){
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "181";
+const APP_VERSION = "182";
 /* ============================================================
    ★日時の表示は、必ずこの端末の時刻で★
    保存している日時は世界時のISO文字列（…T01:03:00.000Z）。これを文字のまま
@@ -14899,6 +14899,12 @@ function updateOverwriteSaveBtn(){
   }
 }
 async function overwriteSaveCurrent(){
+  /* 物件のファイル無の行は「物件に保存」の道を通す（そちらの止めが、戻ったファイルを書き替えない。版182）。
+     _loadedOrigin は残す（📄 名前を付けて保存を写しにする歯止めなので） */
+  if(_editingRow && _editingRow._detached && _currentProject && _listRows.indexOf(_editingRow) >= 0){
+    await overwriteSaveCurrentToProject();
+    return;
+  }
   const origin = _loadedOrigin;
   if(!origin || !origin.fileHandle){
     // 物件を開いている戸別は個別ファイルが無くても「物件」へ保存する
@@ -15798,6 +15804,21 @@ async function writeCurrentCaseToIndividualFile(){
   let fh = null;
   if(att && relpath === oldRel) fh = row.fileHandle;
   else { try { fh = await resolveFileHandleInDir(dir, relpath, false); } catch(_){ fh = null; } }
+  /* ★ファイル無の行は、同じ名前のファイルが戻っていたら書かない★（版182）
+     行は控えから起こした中身の無い行かもしれない。書くと、本物のファイルの工事完了の印・図面・積算が消える。
+     📁 で読み直すと、行にだけある写真・完了の印を引き継いでファイルの行に戻る（rowHandOver）。
+     暗号の行は止めない（版181 と同じ動き。開いて足した写真の行き先がここしか無い）。
+     読めなかったので残した行（_holdUnread）も書かない。ファイルは現場の新しい中身のことが多く、行は物件の古い写し。 */
+  if(((row._detached && row.fileType === "plain") || row._holdUnread) && (fh || photoSrcFh)){
+    row._lgEdited = true;                                // 📁 の前の確かめに数える（この行の直しはファイルに入っていない）
+    if(row._holdUnread){
+      return "\n\u26a0 戸別ファイルは書き替えていません：この戸別のファイル（" + relpath + "）は、さっきの読み込みで読めなかったので、いまの行は古いかもしれません。\n"
+           + "\u3000 同期が終わってから「📁 フォルダ」で読み直して、開き直してください。";
+    }
+    return "\n\u26a0 戸別ファイルは書き替えていません：同じ名前のファイルがフォルダに戻っています（" + relpath + "）。\n"
+         + "\u3000 一覧の「📁 フォルダ」で読み直すと、この行はファイルの内容に戻ります（この行にだけある写真・完了の印は引き継ぎます。それ以外の直しは消えます）。\n"
+         + "\u3000 足した写真は、読み直したあと戸別を開いて 💾 を押すとファイルに入ります。その前に閉じると、物件の小さい写真だけが残ります。";
+  }
   /* ★管理番号を付け替えた先（または「管理番号.json」へ名前をそろえる先）に、もうファイルがある★（版178）
      ・同じファイル（Windows・Mac では、名前の大文字・小文字が違うだけなら同じファイル）→ そのファイルへ書く。消さない。
        前は書いたあと「古い名前」として同じファイルを消していた（写真ごと無くなる）。
@@ -16029,6 +16050,12 @@ async function writeCurrentCaseToIndividualFile(){
       row.file = row.file.slice(0, row.file.length - wasName.length) + relpath;
   }
   else row.file = relpath; // 以後この個別ファイルに紐づく
+  /* ファイル無の行にファイルができた：ふつうの行に戻す（版182）。戻さないと、次の 💾 が自分の作ったファイルを「戻ったファイル」と見て止まる */
+  if(row._detached){
+    try { undetach(missKeyOf(row)); } catch(_){}
+    delete row._detached; delete row._origin; row._manual = false;
+    try { markCaseEdited(row); } catch(_){}
+  }
   if(row.fileType === "plain") rowSeePhotos(row, (row.data || {}).chosho_photos);   // 行が持っていた写真（ファイルにだけ足した写真は入れない・版178）
   /* ★書いたファイルを読み返して、写真IDと中身が同じ元の写真は、行に持たせない★（版178・3回目）
      行には物件の縮小版を置き、どのファイルに入っているかを覚える。要るときにそのファイルから読み直す。 */
@@ -17627,6 +17654,61 @@ async function listDirRestore(){
   try { _listDirHandle = await projHandleGet(LIST_DIR_KEY); } catch(_){ _listDirHandle = null; }
   return _listDirHandle;
 }
+/* 2つのフォルダが同じか（版182）。true＝同じ／false＝違う／null＝分からない。名前は「リスト」でそろっているので、名前では比べない */
+async function listSameDir(a, b){
+  if(!a || !b) return null;
+  if(a === b) return true;
+  try { return !!(await a.isSameEntry(b)); } catch(_){ return null; }
+}
+/* 前に読んだフォルダを見るだけ（listDirRestore と違って _listDirHandle に入れない。物件を替えたあとに前の物件のフォルダを掴み直さないため） */
+async function listDirPeek(){
+  if(_listDirHandle) return _listDirHandle;
+  try { return (await projHandleGet(LIST_DIR_KEY)) || null; } catch(_){ return null; }
+}
+/* ★読んだフォルダが、開いている物件のものらしいか（版182）★ どの物件のフォルダにも「リスト」という名前があるので、番号の重なりで見る。
+   物件の戸別とフォルダの戸別の少ないほうの半分も重ならないときだけ聞く（下の階層を読んだ・戸別が増えたときは聞かない）。
+   ・台帳で作った行・ファイル無の行は比べない（台帳から作り始めた物件の初めての読み込みを止めない）
+   ・読めないファイルは「ある」に数える（同期の途中で止めない）
+   true＝読み込みをやめる（一覧・物件・工事フォルダの覚えは読む前のまま） */
+async function listForeignStop(rows, stats, pid0){
+  if(!_currentProject || window.__VIEWER_MODE__ || pid0 !== missPid()) return false;   // 読んでいる間に物件が替わったときは聞かない（このあとの突き合わせで止める）
+  const mine = _listRows.filter(r => r && !r._manual && !r._detached);
+  const n = mine.length, a = (rows || []).length;
+  if(!n || !a) return false;
+  const seen = {}, paths = ((stats && stats.skippedPaths) || []).slice();
+  rows.forEach(r => { if(!r) return; seen[missKeyOf(r)] = 1; if(r.file) paths.push(String(r.file)); });
+  const hit = mine.filter(r => seen[missKeyOf(r)] || paths.some(q => missSamePath(r.file, q))).length;
+  if(hit * 2 >= Math.min(n, a)) return false;
+  const stop = await lgForeignDialog(_currentProject.name || "", n, hit, a);
+  if(stop) _missLastNote = "読み込みをやめました。一覧も物件もそのままです。工事フォルダを「📁 フォルダ」で選び直してください。";
+  return stop;
+}
+/* 別の工事のフォルダらしいときの窓。OK とキャンセルの向きを間違えないよう、ボタンにすることを書く（版182）。true＝読み込みをやめる */
+function lgForeignDialog(name, n, hit, a){
+  return new Promise(resolve => {
+    const btn = "padding:6px 14px;border-radius:3px;cursor:pointer;font-size:12px;";
+    const back = document.createElement("div");
+    back.className = "modal-backdrop open";
+    back.id = "lgforeign-modal";
+    back.innerHTML = '<div class="modal" style="min-width:520px;max-width:760px;">'
+      + "<h3>⚠ 別の工事のフォルダかもしれません</h3>"
+      + '<div style="font-size:12px;line-height:1.8;">'
+      + "選んだフォルダは、開いている物件「" + escapeHtml(name) + "」のものではないかもしれません。<br>"
+      + "物件の戸別 <b>" + n + " 件</b>のうち、このフォルダにあるのは <b>" + hit + " 件</b>です（このフォルダの戸別は " + a + " 件）。<br><br>"
+      + "<b>読み込みをやめる</b> … 一覧も物件もこのままです。<br>"
+      + "<b>このまま読み込む</b> … このフォルダの戸別が物件に入ります。見当たらない物件の戸別は、次の窓で聞きます。"
+      + "</div>"
+      + '<div style="display:flex;gap:6px;margin-top:14px;justify-content:flex-end;">'
+      + '<button id="lgforeign-stop" style="background:#1e3a5f;color:#fff;border:1px solid #16314f;' + btn + '">読み込みをやめる</button>'
+      + '<button id="lgforeign-go" style="background:#666;color:#fff;border:1px solid #444;' + btn + '">このまま読み込む</button>'
+      + "</div></div>";
+    document.body.appendChild(back);
+    const done = v => { if(back.parentNode) back.parentNode.removeChild(back); resolve(v); };
+    document.getElementById("lgforeign-stop").addEventListener("click", () => done(true));
+    document.getElementById("lgforeign-go").addEventListener("click", () => done(false));
+    back.addEventListener("click", e => { if(e.target === back) done(true); });
+  });
+}
 /* 覚えているフォルダを読み直す。ask=true のときだけ許可を聞き直す（押した時＝利用者の操作があるとき） */
 async function listReloadRemembered(ask){
   const dh = await listDirRestore();
@@ -17649,6 +17731,7 @@ async function listReloadRemembered(ask){
   if(!lgConfirmDiscardCaseEdits("読み込む")) return true;   // true＝案内は出さない（利用者が自分で止めた）
   const st = document.getElementById("list-status");
   const nm = dh.name || "";
+  const pid0 = missPid();                 // 読み始めたときの物件（読んでいる間に替わったら入れない。版182）
   const rows = [];
   const stats = { dirs: 0, files: 0, skipped: 0, errDirs: [], skippedPaths: [],
                   _label: "📁 前回のフォルダ「" + nm + "」を読んでいます" };
@@ -17659,8 +17742,16 @@ async function listReloadRemembered(ask){
     if(st) st.textContent = "前回のフォルダを読み込めませんでした（移動・削除されたかもしれません）。「📁 フォルダ」から選び直してください。";
     return false;
   }
+  if(await listForeignStop(rows, stats, pid0)){ _listDirHandle = null; renderListTable(); missShowNote(); return true; }   // true＝案内は出さない（利用者が自分で止めた）。掴み直した覚えも外す
+  const specialWas = _specialRows;
   _specialRows = stats.special || [];
-  _listRows = await mergeRowsWithManual(rows, { source: "folder", stats, root: nm });
+  _listRows = await mergeRowsWithManual(rows, { source: "folder", stats, root: nm, pid: pid0, sameDir: true });
+  if(_missLastKeepAll && (pid0 || _currentProject)){   // 物件の一覧をそのまま残した（読めなかった・読んでいる間に物件が替わった。版182）
+    _specialRows = specialWas;
+    if(_currentProject) _listDirHandle = null;
+    renderListTable(); missShowNote();
+    return true;
+  }
   _listSelectedFolderName = nm;
   renderListTable();
   if(st) st.textContent = "📁 前回のフォルダ「" + nm + "」から " + rows.length + " 件を読み込みました（別のフォルダにするときは「📁 フォルダ」）";
@@ -19518,10 +19609,24 @@ async function junkApply(list){
    ファイルを残したままだと、フォルダを読み直すたびにまた出てくる（間違って作った戸別を
    消したのに復活する、という状態になる）。
    返り値は "list"（一覧から消す）／"file"（ファイルごと消す）／""（やめる）。 */
-function lgDelDialog(row, who){
+function lgDelDialog(row, who, opts){
   return new Promise(resolve => {
-    const canFile = !!(row && row._dir && row._name);
+    const ghost = !!(row && row._detached);
+    /* 「ファイルごと消す」は、この行のファイルがあると分かっているときだけ（版182）。ファイル無の行では、押しても消せないか、
+       戻った本物のファイルを消してしまう。同じファイルに付いた行がほかにあるとき（noFile）も出さない（そのファイルはその行のもの） */
+    const shareFile = !!(opts && opts.noFile);
+    const canFile = !!(row && row._dir && row._name) && !ghost && !shareFile;
     const path = canFile ? ((row._dirPath || "") + row._name) : "";
+    const fromProj = !!(row && !row._manual && !canFile && !shareFile);   // 物件から開いただけの行（ファイルはフォルダに残っているかもしれない）
+    const onlyHere = !!(row && (ghost || row._manual));                   // ファイルの無い行の写真は、ほかに写しが無いことがある
+    const nPh = (row && !shareFile) ? lgPhotoCountOf(row.data || {}, row) : 0;   // -1＝暗号で枚数が分からない
+    const redBox = t => '<div style="color:#c62828;font-weight:700;margin-top:6px;">⚠ ' + t + '</div>';
+    const phText = nPh < 0 ? redBox("暗号の戸別なので、写真の枚数は開くまで分かりません。写真があれば、物件からも無くなります。")
+      : !nPh ? ""
+      : canFile ? redBox("この戸別には写真が " + nPh + " 枚あります。「ファイルごと消す」を押すと、ファイルの写真も消えます。")
+      : onlyHere ? (redBox("この行には写真が " + nPh + " 枚入っています。消すと、この行の写真もなくなります。")
+                    + (ghost ? '<div style="color:#667482;">戸別ファイルを別の場所へ移しただけなら、写真はそのファイルに残っています。</div>' : ""))
+      : redBox("この行には写真が " + nPh + " 枚あります。物件からも無くなります（戸別ファイルがフォルダにあれば、元の写真はそのファイルに残ります）。");
     const btn = "padding:6px 14px;border-radius:3px;cursor:pointer;font-size:12px;";
     const back = document.createElement("div");
     back.className = "modal-backdrop open";
@@ -19534,17 +19639,27 @@ function lgDelDialog(row, who){
       + '<div style="font-size:12px;line-height:1.8;">'
       + (canFile
           ? "<b>一覧から消す</b> … ファイルはフォルダに残ります。"
-            + '<b style="color:#c62828;">フォルダを読み直すと、また出てきます。</b><br>'
+            + '<b style="color:#c62828;">フォルダを読み直すと、また出てきます。</b>受付台帳の記入（打合せ・ビラ・備考など）は消えます。<br>'
             + "<b>ファイルごと消す</b> … フォルダからファイルそのものを消します。"
             + "<b>元に戻せません。</b>間違って作ってしまった戸別は、こちらを選べば二度と出てきません。<br>"
             + '<span style="color:#667482;">写真フォルダは消しません。必要なら手で片付けてください。</span>'
+          : shareFile ? "この行のファイルは、同じ管理番号のほかの行も使っています（または確かめられません）。ファイルは消さず、一覧から外すだけです。"
+          : ghost ? ("この行はファイル無の行です（戸別ファイルが見当たらないので、名前だけ残しています）。<br>"
+              + "消すと、この行と受付台帳の記入（打合せ・ビラ・備考など）がなくなり、元に戻せません。<b>フォルダを読み直しても戻りません。</b><br>"
+              + '<span style="color:#667482;">あとでファイルが見つかったときは、フォルダを読めば ふつうの行として一覧に出ます。</span>'
+              + ((_projPendingHandle && !_projFileHandle)
+                  ? '<div style="color:#c62828;margin-top:6px;">⚠ いま共有ファイルにつながっていません。消す前にメニューの「🔗 共有ファイルを再接続」を押してください。'
+                    + "つながないまま消すと、つないだときに行が戻ることがあります。</div>" : ""))
+          : fromProj ? ("この戸別は、まだフォルダのファイルとつないでいません。消すと一覧と物件から外れ、受付台帳の記入（打合せ・ビラ・備考など）もなくなります。<br>"
+              + '<b style="color:#c62828;">フォルダに戸別ファイルが残っていれば、フォルダを読むと、また出てきます（記入は戻りません）。</b>')
           : "この行は受付台帳で作った行です（戸別ファイルはまだありません）。消すと戻せません。")
+      + phText
       + "</div>"
       + '<div style="display:flex;gap:6px;margin-top:14px;justify-content:flex-end;">'
       + (canFile ? ('<button id="lgdel-file" style="background:#c62828;color:#fff;border:1px solid #8e0000;'
                     + btn + '">🗑 ファイルごと消す</button>') : "")
-      + '<button id="lgdel-list" style="background:#1e3a5f;color:#fff;border:1px solid #16314f;' + btn + '">'
-      + (canFile ? "一覧から消す（ファイルは残す）" : "消す") + "</button>"
+      + '<button id="lgdel-list" style="' + ((!canFile && onlyHere && nPh) ? "background:#c62828;color:#fff;border:1px solid #8e0000;" : "background:#1e3a5f;color:#fff;border:1px solid #16314f;") + btn + '">'
+      + (canFile ? "一覧から消す（ファイルは残す）" : ((onlyHere && nPh) ? "写真ごと消す" : "消す")) + "</button>"
       + '<button id="lgdel-cancel" style="background:#666;color:#fff;border:1px solid #444;' + btn + '">やめる</button>'
       + "</div></div>";
     document.body.appendChild(back);
@@ -19627,11 +19742,13 @@ async function listReloadFolder(expectedGone){
   /* 読み直すとフォルダのファイルの中身が一覧に入り直る＝台帳に打ち込んだだけの内容
      （名前・住所・電話・工事日程予定・状態）は消える。消える前に必ず知らせる。 */
   if(!lgConfirmDiscardCaseEdits("読み直す")) return false;
+  const dh0 = _listDirHandle;             // 読んでいるあいだに物件を替えると _listDirHandle が外れるので、ここで控える（版182）
+  const pid0 = missPid();                 // 読み始めたときの物件（読んでいる間に替わったら入れない。版182）
   const rows = [];
   const stats = { dirs: 0, files: 0, skipped: 0, errDirs: [], skippedPaths: [],
                   _label: "📁 フォルダを読み直しています" };
   scanProgressStart(stats._label);
-  try { await scanDirRecursive(_listDirHandle, "", rows, stats); }
+  try { await scanDirRecursive(dh0, "", rows, stats); }
   catch(err){
     // 黙って終わると、整理したはずのファイルが一覧に残って見える。理由を出す。
     console.warn("[一覧] フォルダの読み直しに失敗", err);
@@ -19640,9 +19757,12 @@ async function listReloadFolder(expectedGone){
       st.textContent = "フォルダを読み直せませんでした（移動・削除されたかもしれません）。「📁 フォルダ」から選び直してください。"; }
     return false;
   }
+  if(await listForeignStop(rows, stats, pid0)){ renderListTable(); missShowNote(); return false; }
+  const specialWas = _specialRows;
   _specialRows = stats.special || [];
   _listRows = await mergeRowsWithManual(rows, { source: "folder", stats,
-    root: _listDirHandle.name || "", expectedGone: expectedGone || [] });
+    root: dh0.name || "", expectedGone: expectedGone || [], pid: pid0, sameDir: true });
+  if(_missLastKeepAll && (pid0 || _currentProject)){ _specialRows = specialWas; renderListTable(); missShowNote(); return false; }   // 物件の一覧をそのまま残した（版182）
   await rowsFileFromProjDir(_listRows);   // 物件が覚える名前は、工事フォルダから見た道のりにそろえる（版178）
   listRememberUnread(stats);
   { const sn = syncStalledNote(stats);
@@ -19918,8 +20038,15 @@ function lgConfirmDiscardCaseEdits(what){
   if(!n) return true;
   /* 📥 現場取込で入れて、まだ戸別ファイルに入っていない戸別（版181）。前は数えず、読み直すと黙って消えた（写真も） */
   const rows = Array.isArray(_listRows) ? _listRows : [];
-  const nL = rows.filter(r => r && r._lgEdited).length;
-  const nG = rows.filter(lgGenbaUnsaved).length;
+  const nB = rows.filter(r => lgGenbaUnsaved(r) && r._genbaUnsaved === "back").length;   // ファイル無の行から引き継いだ写真・完了の印（版182）
+  const nL = rows.filter(r => r && r._lgEdited && r._genbaUnsaved !== "back").length;
+  const nG = rows.filter(lgGenbaUnsaved).length - nB;
+  if(nB) return !confirm("⚠ ファイルが戻った戸別のうち " + nB + " 件は、行にだけあった写真・完了の印が、まだ戸別ファイルへ入っていません。\n"
+    + "（ファイル無のあいだに行へ入ったものです。この行にしかありません）\n"
+    + ((nL || nG) ? ("ほかに、まだ戸別ファイルへ入っていない直し・📥 で入れた内容が " + (nL + nG) + " 件あります。\n") : "")
+    + "\nこのまま" + (what || "読み込む") + "と、ファイルの中身で上書きされて消えます。元に戻せません。\n\n"
+    + "OK＝中止する（先にその戸別を開いて「💾 上書き保存」（物件を開いているときは「💾 物件に保存」）を押してください）\n"
+    + "キャンセル＝この写真・印を捨てて" + (what || "読み込む"));
   if(!nG) return !confirm("⚠ 受付台帳やエディタで直した " + n + " 件が、まだ戸別ファイルへ入っていません。\n"
     + "（名前・住所・電話・工事日程予定・状態は、台帳で直しただけでは戸別ファイルに入りません）\n\n"
     + "このまま" + (what || "読み込む") + "と、直した内容はファイルの中身で上書きされて消えます。\n\n"
@@ -19975,6 +20102,10 @@ async function lgwbScan(rows){
   const list = [], skipped = [], unreadable = [], same = [], missing = [], noFile = [];
   for(const row of (rows || [])){
     if(!row) continue;
+    /* ファイル無の行は比べない（古い _dir・_name を持ったままのことがある。版182） */
+    if(row._detached){ noFile.push(row); continue; }
+    /* 読めなかったので残した行は、古い物件の写しなので比べない（版182） */
+    if(row._holdUnread){ unreadable.push(row._name || missTail(row.file)); continue; }
     /* ★戸別ファイルがまだ無い行★
        受付台帳で新しく足した行（アパートの世帯を増やしたときなど）は、
        まだフォルダにファイルがない。以前はここで黙って飛ばしていたので
@@ -20195,7 +20326,9 @@ async function lgwbApply(list){
    その権利が消え、あとから許可を求めても必ず弾かれる（0件のまま終わる）。 */
 async function lgwbEnsureRoot(){
   let dh = _listDirHandle || null;
-  if(!dh){ try { dh = await listDirRestore(); } catch(_){ dh = null; } }
+  /* 物件を開いているときは、端末に1つの「前回のフォルダ」を黙って使わない（別の物件のフォルダかもしれない。版182）。
+     この物件でまだフォルダを読んでいなければ、下の選ぶ画面で選んでもらう */
+  if(!dh && !_currentProject){ try { dh = await listDirRestore(); } catch(_){ dh = null; } }
   if(dh){
     let granted = false;
     try { granted = (await dh.queryPermission({ mode: "readwrite" })) === "granted"; } catch(_){ granted = false; }
@@ -20236,7 +20369,7 @@ async function lgwbEnsureRoot(){
    戻り値＝書けないフォルダ名の一覧。 */
 async function lgwbCheckWritable(rows){
   const ng = [], dirs = [];
-  (rows || []).forEach(r => { if(r && r._dir && dirs.indexOf(r._dir) < 0) dirs.push(r._dir); });
+  (rows || []).forEach(r => { if(r && r._dir && !r._detached && dirs.indexOf(r._dir) < 0) dirs.push(r._dir); });   // ファイル無の行には書かない（版182）
   for(const dh of dirs){
     let ok = false;
     try { ok = (await dh.queryPermission({ mode: "readwrite" })) === "granted"; } catch(_){ ok = false; }
@@ -20269,10 +20402,18 @@ async function lgwbAttachFrom(root, force){
     const fp = String(f.file || "");
     if(fp && !byPath[fp]) byPath[fp] = f;
   });
-  let hit = 0, ambiguous = 0, miss = 0;
+  let hit = 0, ambiguous = 0, miss = 0, back = 0;
   const relink = [];                                         // 預けた写真のある行（版178・3回目。下で預け先も確かめて移す）
   _listRows.forEach(r => {
     if(!r) return;
+    /* ファイル無の行はつながない（版182）。中身の無い行のままファイルと比べると、本物のファイルの欄を空で消す。
+       ファイルが戻っていれば 📁 の読み直しで元に戻る */
+    if(r._detached){
+      const no0 = toHalfWidthAn(String((r.data && r.data.chosho_mgmt_no) || "")).trim();
+      if(byPath[String(r.file || "")] || (no0 && byNo[no0])) back++;
+      return;
+    }
+    if(r._holdUnread) return;                                // 読めなかったので残した行はつながない（📁 で読み直す）
     if(!force && r._dir && r._name){ hit++; return; }        // すでに結び付いている
     const samePath = byPath[String(r.file || "")] || null;   // 道のりごと同じ名前＝いちばん確か
     let m = samePath;
@@ -20293,6 +20434,9 @@ async function lgwbAttachFrom(root, force){
   /* 預けた写真の預け先も、結び付いたファイルへ（版178・3回目）。ファイルを読み、同じ写真ID・同じ大きさで入っている写真だけ移す
      （フォルダの名前を変えた・動かした等で、前の預け先はもう読めない）。移さないと、開いても元の写真を読み直せない */
   for(const r of relink){ try { await rowParkOriginals(r, r.fileHandle); } catch(_){} }
+  const backNote = back ? ("「ファイル無」の行のうち " + back + " 件は、同じ番号のファイルが戻っています。\n"
+    + "「📁 フォルダ」で読み直すと元の行に戻ります（行にだけある写真・完了の印は引き継ぎます。この操作では書きません）。") : "";
+  if(!hit && back){ alert(backNote); return { hit: 0, msg: "" }; }
   if(!hit){
     alert("選んだフォルダの中に、いま一覧に出ている戸別のファイルが見つかりませんでした。\n\n"
       + "フォルダの中の戸別： " + found.length + " 件\n"
@@ -20305,8 +20449,9 @@ async function lgwbAttachFrom(root, force){
        + "結び付いた： " + hit + " 件\n"
        + (miss ? ("見つからなかった： " + miss + " 件（このフォルダに無い戸別）\n") : "")
        + (ambiguous ? ("同じ管理番号が重なっていて決められない： " + ambiguous + " 件（先に重複の整理を）\n") : "")
+       + (backNote ? (backNote + "\n") : "")
        + "\n台帳の内容はそのままです。続けて書き戻す内容を確かめます。")
-    : "";      // 全部そろっているときは黙って先へ進む（窓を減らす）
+    : backNote;      // 全部そろっているときは黙って先へ進む（窓を減らす）
   return { hit: hit, msg: msg };
 }
 async function lgwbButton(){
@@ -20337,7 +20482,7 @@ async function lgwbButton(){
     /* 結び付けに失敗しても、すでに結び付いている行まで巻き添えにしないこと。
        台帳で足した行が1つあるだけで、フォルダを読めなかったときに
        ほかの戸別の書き戻しまで止まってしまう。 */
-    const already = _listRows.some(r => r && r._dir && r._name);
+    const already = _listRows.some(r => r && r._dir && r._name && !r._detached);
     const res = await lgwbAttachFrom(root.dir, !!root.picked);
     if(!res.hit && !already) return;       // 1つも結び付いていない＝書ける先が無い（理由は中で出している）
     attachMsg = res.msg;
@@ -20361,8 +20506,11 @@ async function lgwbButton(){
   lgClearTouched(same.map(r => { try { return subCaseKey(r); } catch(_){ return ""; } }));
   /* 📥 現場取込で入れて、まだ戸別ファイルに入っていない戸別（版181）。この操作は台帳の欄しか書かない（新しく作る戸別は行の中身で作る） */
   const gLeft = _listRows.filter(r => r && r._genbaUnsaved && (missing || []).indexOf(r) < 0).length;   // 台帳で作った行でも、この操作で作らない行は数える
-  const gNote = gLeft ? ("\n※ 📥 現場取込で入れた機器・長さ・写真などが、まだ戸別ファイルに入っていない戸別が " + gLeft + " 件あります（この操作では入りません）。"
-                         + "戸別を1件ずつ開いて「💾 上書き保存」（物件を開いているときは「💾 物件に保存」）を押してください。") : "";
+  const gBack = _listRows.filter(r => r && r._genbaUnsaved === "back").length;   // ファイル無の行から引き継いだ写真・完了の印（版182）
+  const gNote = (gBack ? ("\n※ ファイルが戻った戸別の、行にだけあった写真・完了の印が、まだ戸別ファイルに入っていない戸別が " + gBack + " 件あります（この操作では入りません）。"
+                          + "戸別を1件ずつ開いて「💾 上書き保存」（物件を開いているときは「💾 物件に保存」）を押してください。") : "")
+    + ((gLeft - gBack) > 0 ? ("\n※ 📥 現場取込で入れた機器・長さ・写真などが、まだ戸別ファイルに入っていない戸別が " + (gLeft - gBack) + " 件あります（この操作では入りません）。"
+                         + "戸別を1件ずつ開いて「💾 上書き保存」（物件を開いているときは「💾 物件に保存」）を押してください。") : "");
   const note = (skipped.length ? ("\n※ 暗号化ファイル " + skipped.length + " 件は対象外です（戸別を開いて保存してください）") : "")
              + (unreadable.length ? ("\n※ 読めなかったファイル " + unreadable.length + " 件は飛ばします") : "") + gNote;
   if(!list.length && !(missing && missing.length)){
@@ -20404,7 +20552,7 @@ async function lgwbButton(){
   /* 戸別ファイルを持てない行（「ファイル無し・名前だけ」等）の印も下ろす。
      押しても入る先が無いのに「反映を押すと入ります」と出し続けるのは嘘になる。
      中身は物件ファイルとこの端末に残っており、一覧にもその旨が出ている。 */
-  const noFileLeft = (noFile || []).filter(r => (!r._dir || !r._name) && (missing || []).indexOf(r) < 0);   // 作ろうとして作れなかった行は「できなかったもの」に出し、印も残す（版181）
+  const noFileLeft = (noFile || []).filter(r => (r._detached || !r._dir || !r._name) && (missing || []).indexOf(r) < 0);   // 作ろうとして作れなかった行は「できなかったもの」に出し、印も残す（版181）
   lgClearTouched(noFileLeft.map(r => { try { return subCaseKey(r); } catch(_){ return ""; } }));
   /* ★一覧を読み直すのは「全部書けたとき」だけ★
      読み直すとフォルダのファイルの中身が一覧に入り直るので、書けなかった分は
@@ -20472,7 +20620,7 @@ function pjDiffers(a, b){
   if(sx || sy) return false;                         // 片方にだけ番号がある＝分からない（脅さない）
   return !(x.indexOf(y) >= 0 || y.indexOf(x) >= 0);  // 片方がもう片方の一部なら同じ物件とみる
 }
-function resolveListLoadWithProject(folderName){
+function resolveListLoadWithProject(folderName, isFiles){
   if(!_currentProject) return "normal";
   /* ★選んだフォルダの名前が、開いている物件と違う★（版175）
      ここで「OK」を押すと、別の工事の一覧がこの物件の名前で保存され、現場用の台帳にもこの物件の名前で出ていく。
@@ -20486,7 +20634,8 @@ function resolveListLoadWithProject(folderName){
     + "これから読み込む一覧を、この物件に取り込みますか？\n"
     + "（この物件の工事フォルダの読み込みなら「OK」。写真の枚数とサムネイルが物件に保存され、"
     + "以後はフォルダを読み込まなくても写真を確認できます）\n\n"
-    + "OK＝物件に取り込む（物件はこの一覧の内容で更新）\n"
+    + (isFiles ? "OK＝物件に取り込む（選んだファイルの戸別だけ足す・置き換える。物件のほかの戸別はそのまま）\n"
+               : "OK＝物件に取り込む（このフォルダの内容で物件を更新。フォルダに無い物件の戸別は、次の窓で聞きます）\n")
     + "キャンセル＝取り込まない（切り離す／中止 を次で選択）"
   );
   if(absorb) return "absorb";
@@ -20526,13 +20675,22 @@ async function listSelectFolder(){
   // 台帳で直したままの分があれば、上書きして消える前に知らせる
   if(!lgConfirmDiscardCaseEdits("読み込む")) return;
   try {
-    await listDirRemember(dirHandle);    // 次からは選び直さずに読み込む（重複整理にも使う）
+    const pid0 = missPid();              // 読み始めたときの物件（切り離したあとの値。読んでいる間に替わったら入れない。版182）
+    const sameDir = pid0 ? null : await listSameDir(await listDirPeek(), dirHandle);   // 物件なしのとき：前に読んだフォルダと同じか（覚え直す前に見る。版182）
     const rows = [];
     const stats = { dirs: 0, files: 0, skipped: 0, errDirs: [], skippedPaths: [] };
     const status = document.getElementById("list-status");
     stats._label = "📁 フォルダを読んでいます";
     scanProgressStart(stats._label);
     await scanDirRecursive(dirHandle, "", rows, stats);
+    /* ★別の工事のフォルダらしいときは、ここで聞く★（版182）。重複の整理・掃除で別の工事のファイルを触る前で、フォルダの覚えも替えない */
+    if(await listForeignStop(rows, stats, pid0)){
+      renderListTable();
+      missShowNote();
+      console.log("[一覧] 再帰スキャン完了: 別の工事のフォルダなので入れていません");
+      return;
+    }
+    await listDirRemember(dirHandle);    // 次からは選び直さずに読み込む（重複整理にも使う）
     // 同じ管理番号のファイルが重なっていたら（iPadの「◯◯ 2.json」など）、先に整理を提案する
     let expectedGone = [];
     {
@@ -20570,7 +20728,8 @@ async function listSelectFolder(){
           + jf.lostNos.slice(0, 20).join("・") + (jf.lostNos.length > 20 ? "　ほか" : "") + "\n\n"
           + "読めなかったファイル\n" + lostFiles.slice(0, 20).join("\n")
           + (lostFiles.length > 20 ? ("\n・ほか " + (lostFiles.length - 20) + " 件") : "") + "\n\n"
-          + "これらは中身が空（0KB）か壊れているため、一覧に出ません。\n"
+          + (_currentProject ? "これらは中身が空（0KB）か壊れているため、読み込めません（物件にある行は、前の内容のまま残します）。\n"
+                             : "これらは中身が空（0KB）か壊れているため、一覧に出ません。\n")
           + "スマホの現場入力でその戸別を開き、「保存」し直してください（下書きが残っていれば中身は無事です）。");
       }
       if(jf.empty.length && confirm("中身が空（0KB）のファイルが " + jf.empty.length + " 件見つかりました。\n"
@@ -20611,9 +20770,23 @@ async function listSelectFolder(){
       }
     }
     // 台帳起点の行（仮受付・手入力）は保持し、管理番号重複は件ごとに確認してマージ
+    const specialWas = _specialRows;
     _specialRows = stats.special || [];
     _listRows = await mergeRowsWithManual(rows, { source: "folder", stats,
-      root: dirHandle.name || "", expectedGone });
+      root: dirHandle.name || "", expectedGone, pid: pid0, sameDir });
+    /* ★物件の一覧をそのまま残したとき（読めなかった・読んでいる間に物件が替わった）は、ここで終わる★（版182）
+       先へ進むと、そのフォルダを「この物件の工事フォルダ」として覚え、「取り込みました」と知らせていた */
+    if(_missLastKeepAll && (pid0 || _currentProject)){
+      _specialRows = specialWas;
+      if(_currentProject) _listDirHandle = null;   // 読めなかったフォルダを掴んだままにしない（💾 反映はこの物件の工事フォルダへ）
+      { const sn = syncStalledNote(stats);
+        if(sn){ _missLastNote = sn + (_missLastNote ? (" ／ " + _missLastNote) : "");
+                alert(sn.replace(/。/g, "。\n")); } }
+      renderListTable();
+      missShowNote();
+      console.log(`[一覧] 再帰スキャン完了: ${stats.dirs} サブフォルダ / ${stats.files} ファイル / 採用 0 件（物件の一覧はそのまま）`);
+      return;
+    }
     _listSelectedFolderName = dirHandle.name || "";
     if(junkNote) _missLastNote = (_missLastNote ? (_missLastNote + " ／ ") : "") + junkNote;
     { const sd = sideLoadNote(stats);                       // 📮 現場から預かったファイル（版176）
@@ -20670,7 +20843,7 @@ async function listSelectFolder(){
 }
 
 function listSelectFiles(){
-  const loadMode = resolveListLoadWithProject(); // 物件を開いたまま＝取り込み/切り離し/中止を選択
+  const loadMode = resolveListLoadWithProject("", true); // 物件を開いたまま＝取り込み/切り離し/中止を選択
   if(loadMode === "cancel") return;
   // 台帳で直したままの分があれば、上書きして消える前に知らせる
   if(!lgConfirmDiscardCaseEdits("読み込む")) return;
@@ -21321,6 +21494,7 @@ function isMapRegistered(mgmt){
 }
 
 let _missLastNote = "";     // 直前の読み込みで伝えること（一覧の描き直しで消えないよう最後に出す）
+let _missLastKeepAll = false;   // 直前の読み込みで、一覧を作り直さなかった（読めなかった・読んでいる間に物件が替わった。版182）
 let _bakSkipped = false;    // 直前の読み込みで 🧩 の控えフォルダを飛ばしたか
 function missShowNote(){
   if(_bakSkipped){
@@ -23178,12 +23352,12 @@ function aptMgRemoveRow(row){
   const idx = _listRows.indexOf(row);
   if(idx < 0) return;
   const key = subCaseKey(row);
-  try { markCaseDeleted(row); } catch(_){}
   const shared = _listRows.some(x => x && x !== row && subCaseKey(x) === key);
+  try { markCaseDeleted(row, shared); } catch(_){}
   /* 「名前だけ残す」の控えと「前回見えていた戸別」の控えは、必ず外す。
      外さないと、読み直すたびに同じ行が「ファイル無」で戻ってくる。
      台帳の記入（備考・印）は、同じ管理番号の行がほかに残るなら消さない（本物の -01 の備考のため）。 */
-  try { const mk = missKeyOf(row); undetach(mk); listCensusForget(mk); if(!shared) missPurgeAnno(mk); } catch(_){}
+  try { const mk = missKeyOf(row); undetach(mk); listCensusForget(mk); if(!shared) missPurgeAnno(key); } catch(_){}
   _listRows.splice(idx, 1);
   /* この行を開いていた画面は、もう書く先が無い。行き先（_loadedOrigin）も外す（版181）。
      残すと、古い画面の「💾 上書き保存」が、まとめる先が引き取ったファイル（移した写真が入っている）を古い中身で上書きしていた。 */
@@ -23429,6 +23603,7 @@ async function aptMgMovePhotos(target, stray){
     target._size = stray._size; target.fileHandle = stray.fileHandle || sfh; target.file = stray.file;
     settle(back, false);
     try { await rowParkOriginals(target, target.fileHandle); } catch(_){}   // 入れて確かめた元の写真は行に持たせない（版178・3回目）
+    try { undetach(missKeyOf(target)); } catch(_){}   // 端末の控えからも外す（版182）
     target._manual = false; delete target._detached;
     target._lgEdited = true; try { lgMarkTouched(target); } catch(_){}
     return { moved: n, note: "元のファイル " + stray._name + " を " + tmg + " の持ち物にしました（「💾 戸別ファイルへ反映」で名前が付け替わります）"
@@ -29485,9 +29660,12 @@ function lgTextResolve(row, fileKey, lgKey, srcKey){
   const lg = getLedger(tk) || {};
   const fileVal = String(row.data[fileKey] || "");
   const lgVal   = String(lg[lgKey] || "");
+  /* ★ファイル無の行の欄は、ファイルの内容ではない★（版182）
+     行は台帳を写したものか、控えの古い値。これを控え（*Src＝前回ファイルから採り込んだ内容）に書くと、台帳で打っただけの備考を
+     「ファイルにあった」と見て、ファイルが戻ったときに「現場が消した」と受け取って消していた。 */
   if(fileVal === lgVal){
     // 一致している＝これが今の内容。次に台帳で直した時に見分けられるよう控えるだけ
-    if(fileVal && lg[srcKey] !== fileVal) setLedger(tk, { [srcKey]: fileVal });
+    if(fileVal && !row._detached && lg[srcKey] !== fileVal) setLedger(tk, { [srcKey]: fileVal });
     return;
   }
   const known = (srcKey in lg) ? String(lg[srcKey] || "") : null;
@@ -29502,12 +29680,13 @@ function lgTextResolve(row, fileKey, lgKey, srcKey){
      （現場入力は時刻の欄を空のまま書き出すことがあり、
        それで事務所が入れた時刻が消えてしまっていた） */
   const localEdited = (known !== null) && (lgVal !== known);
-  const fileChanged = (known === null) ? !!fileVal
+  const fileChanged = (row._detached && lgVal) ? false       // ファイル無の行で、中身のある台帳を変えない（版182）
+                    : (known === null) ? !!fileVal
                     : (fileVal ? (fileVal !== known) : !localEdited);
   if(fileChanged){
     // 備考が現場の内容へ入れ替わる分も、あとで戻せるように控える
     if(lgKey === "note"){ try { lgNoteLogPush(tk, lgVal, fileVal, "戸別ファイル（現場）の内容を採り込んだ"); } catch(_){} }
-    setLedger(tk, { [lgKey]: fileVal, [srcKey]: fileVal }); // 現場が直した → 現場を採る
+    setLedger(tk, row._detached ? { [lgKey]: fileVal } : { [lgKey]: fileVal, [srcKey]: fileVal }); // 現場が直した → 現場を採る
     return;
   }
   // 台帳が新しい → 画面の行へ配る
@@ -29520,9 +29699,10 @@ function lgTextResolve(row, fileKey, lgKey, srcKey){
      別のPCでフォルダを読み直しても時刻や打合せがいつまでも古いままだった。 */
   if(fileVal !== lgVal){ try { lgMarkTouched(tk); } catch(_){} }
 }
-function noteAdopt(tk, s){
+function noteAdopt(tk, s, row){
   try { lgNoteLogPush(tk, (getLedger(tk) || {}).note, s, "戸別の備考欄から取り込んだ"); } catch(_){}
-  setLedger(tk, { note: s, noteSrc: s });
+  /* ファイル無の行の画面の備考は、ファイルの内容ではない（lgTextResolve と同じ。版182） */
+  setLedger(tk, (row && row._detached) ? { note: s } : { note: s, noteSrc: s });
 }
 function noteResolveRow(row){
   if(!row || !row.data) return;
@@ -29581,7 +29761,8 @@ function noteResolveRows(rows){
     let k = ""; try { k = subCaseKey(r); } catch(_){}
     if(!k) return;
     const cur = best.get(k);
-    if(!cur || lgRowWhenMs(r) > lgRowWhenMs(cur)) best.set(k, r);
+    /* ファイル無の行は、同じ番号のファイルの行より先にしない（時刻が「いま」になっているので。版182） */
+    if(!cur || (cur._detached && !r._detached) || (!!cur._detached === !!r._detached && lgRowWhenMs(r) > lgRowWhenMs(cur))) best.set(k, r);
   });
   list.forEach(r => {
     let k = ""; try { k = subCaseKey(r); } catch(_){}
@@ -30115,6 +30296,9 @@ function buildProjectSnapshot(base){
     // 台帳起点の行（仮受付・手入力）はマーカーを付けて確実に復元できるようにする
     if(r._manual) payload = Object.assign({}, payload, { _manual: true, _origin: r._origin || "manual" });
     if(r._detached) payload = Object.assign({}, payload, { _detached: r._detached });
+    /* 行にだけある写真・直し（📥 で入れて書けなかった・ファイル無の行から引き継いだ）の印は、物件に入れる（版182）。
+       入れないと、開き直したあとの 📁 で確かめの窓が出ず、黙ってファイルの中身に置き換わった */
+    if(r._genbaUnsaved) payload = Object.assign({}, payload, { _genbaUnsaved: r._genbaUnsaved });
     const cw = { caseId: ensureRowCaseId(r), file: r.file || "", lastModified: r.lastModified || 0, payload };
     if(r._prevSubKey) cw.prevSub = r._prevSubKey; // Phase2: 改番した場合の旧キー（移行期のマージ突合用）
     cases.push(cw);
@@ -30230,9 +30414,10 @@ function isParkedSheet(s){
 }
 window.isParkedSheet = isParkedSheet;
 window.markMapsEdited = markMapsEdited;
-function markCaseDeleted(row){
+function markCaseDeleted(row, keepAnno){
   if(!row) return;
   try { if(row._caseId){ _deletedCaseKeys.add(row._caseId); _editedCaseKeys.delete(row._caseId); } } catch(_){}
+  if(keepAnno) return;   // 同じ管理番号の行が残る：台帳の記入は残る行のもの。消す印を付けない（版182）
   try { const sk = subCaseKey(row); _deletedAnnoKeys.add(sk); _editedAnnoKeys.delete(sk); } catch(_){}
 }
 function markAnnoDeleted(subKey){ if(subKey){ try { _deletedAnnoKeys.add(subKey); _editedAnnoKeys.delete(subKey); } catch(_){} } }
@@ -30902,6 +31087,9 @@ async function applyProject(p, opts){
     _projLastWrittenUpdatedAt = p.updatedAt || "";
     _projFileHandle = (opts && opts.fileHandle) || null; // ファイル連動で開いた時だけ書込ハンドル保持
     if(!opts._merge) _projDirHandle = null; // 物件を新規に開く＝工事フォルダリンクは持ち越さない（必要時にIDBから再リンク）
+    /* 別の物件へ替えるときは、前の物件の 📁 のフォルダも持ち越さない（版182）。💾 反映・🧹 掃除の読み直しが、前の物件のフォルダを使っていた。
+       同じ物件の開き直し（🔄 最新を取り込む など）は持ち越す */
+    if(!opts._merge && !(_currentProject && p && _currentProject.id === p.id)) _listDirHandle = null;
     _specialRows = [];                      // 前のフォルダの特別記録は持ち越さない
     _sideFiles = [];                        // 前のフォルダの預けも持ち越さない（版176）
     /* 同じ物件を開き直す（まとめる・🔄 最新を取り込む・開き直す）ときは、行が持っている元の写真を持ち越す（版178） */
@@ -30910,11 +31098,27 @@ async function applyProject(p, opts){
     _listRows = (p.cases || []).map(c => {
       // 台帳起点の行（仮受付・手入力）はマーカーから直接復元（空欄でも消えない）
       if(c.payload && c.payload._manual){
+        /* ★暗号（.hyb）の行を「名前だけ残す」にしたときは、封筒のまま入っている★（版182）
+           封筒を中身の行にすると、番号も名前も読めない行になり、台帳の記入も外れた。すでにそう保存された行もここで元に戻る */
+        if(detectEncFormat(c.payload) === "hybrid"){
+          const env = Object.assign({}, c.payload);
+          const og = env._origin, det = env._detached;
+          delete env._manual; delete env._origin; delete env._detached; delete env._genbaUnsaved;
+          const hr = buildListRow(c.file || "", c.lastModified || 0, env, null);
+          if(hr){
+            hr._fromProject = true; hr._manual = true; hr._origin = og || "missing";
+            if(det) hr._detached = det;
+            if(c.payload._genbaUnsaved) hr._genbaUnsaved = c.payload._genbaUnsaved;
+            hr._caseId = c.caseId || projNewId();
+            return hr;
+          }
+        }
         const data = Object.assign({}, c.payload);
         const origin = data._origin;
         delete data._manual;
         delete data._origin;
         if(data._detached){ delete data._detached; }
+        delete data._genbaUnsaved;
         /* ★写真の枚数と縮小版も、ふつうの行（buildListRow）と同じように持たせる★（版178）
            持たせないと、次の物件の保存で縮小版が作られず、この行の写真が物件から抜けていた（枚数だけ残る）。 */
         const ph = Array.isArray(data.chosho_photos) ? data.chosho_photos.filter(x => x && x.dataUri) : null;
@@ -30924,10 +31128,14 @@ async function applyProject(p, opts){
                  _manual: true, _origin: origin || "manual", _fromProject: true,
                  _photoCount: ph ? ph.length : (Number.isInteger(data.chosho_photo_count) ? data.chosho_photo_count : 0),
                  _thumbs: (ph && data.chosho_photos_thumb) ? ph : undefined,
+                 _genbaUnsaved: c.payload._genbaUnsaved || undefined,
                  _caseId: c.caseId || projNewId() }; // Phase2: 安定IDを復元（無ければ付与）
       }
-      const r = buildListRow(c.file || "", c.lastModified || 0, c.payload, null);
-      if(r){ r._fromProject = true; if(c.caseId) r._caseId = c.caseId; } // 元ファイル無し＋安定ID(あれば)復元
+      const gu = c.payload && c.payload._genbaUnsaved;
+      let pl = c.payload;
+      if(gu){ pl = Object.assign({}, pl); delete pl._genbaUnsaved; }   // 印は行に持たせる（戸別の中身に混ぜない）
+      const r = buildListRow(c.file || "", c.lastModified || 0, pl, null);
+      if(r){ r._fromProject = true; if(c.caseId) r._caseId = c.caseId; if(gu) r._genbaUnsaved = gu; } // 元ファイル無し＋安定ID(あれば)復元
       return r;
     }).filter(Boolean);
     if(keepOrig) rowsOriginalsRestore(_listRows, keepOrig);
@@ -31026,6 +31234,7 @@ function detachProject(){
   _currentProject = null;
   _projFileHandle = null; // 共有ファイル連動も解除
   _projDirHandle = null;  // 工事フォルダリンクも解除（記憶ハンドルはIDBに残り次回再リンク可）
+  _listDirHandle = null;  // 📁 のフォルダも解除（物件なしで押したときは、覚えているフォルダを読み直す。版182）
   _projPendingHandle = null; // 再接続待ちも解除（記憶ハンドル自体はDBに残り次回再接続可）
   _projSelfContained = false;
   _projWriteWarn = "";
@@ -32150,6 +32359,7 @@ async function createProjectFlow(){
     _listRows = [];
     _specialRows = [];
     _sideFiles = [];
+    _listDirHandle = null;     // 空の物件へ、前のフォルダを持ち越さない（版182）
     _listSelectedFolderName = p.name;
     renderListTable();
     /* ★空の物件にも、いまの履行報告を入れておく★（版175）入れないと、開き直したときに
@@ -33404,7 +33614,7 @@ function renderListLedgerMode(rows, container){
       + asbestosChipHtml(r)     // 石綿の可否（⚪未入力／🟢不要／⚠L1・L2／🟠みなし／🟡非発じん）
       + aptChipHtml(r)          // アパートの何世帯目か（🏢 3/8）
       + (r._detached ? '<span class="lg-nofile-badge' + (r._detached.reason === "pending" ? ' pending' : '')
-          + '" title="' + (r._detached.reason === "pending" ? "ファイルが見当たりません（次に読み込んだ時にまた確認します）" : "戸別ファイルが無い行です（名前だけ残しています）。ファイルが戻れば自動で元に戻ります")
+          + '" title="' + (r._detached.reason === "pending" ? "ファイルが見当たりません（次に読み込んだ時にまた確認します）" : "戸別ファイルが無い行です（名前だけ残しています）。ファイルが戻れば自動で元に戻ります。いらなければ 🗑 で消せます")
           + (r._detached.path ? "。前の場所: " + escapeHtml(r._detached.path) : "") + '">ファイル無</span>' : '')
       + '<span class="lg-dwg-ind" title="' + (lgHasDrawing(r) ? "図面・積算データあり" : "図面未作成（📐ボタンで台帳の情報を流し込んで新規作成）") + '">' + (lgHasDrawing(r) ? "📄" : "－") + '</span>'
       + '<span class="lg-map-ind" title="' + (mapReg ? "地図に登録済み（建物にこの管理番号をリンク済み）" : "地図に未登録（地図で建物にこの管理番号をリンクすると🗺️になります）") + '">' + (mapReg ? "🗺️" : "－") + '</span></td>'
@@ -33510,8 +33720,8 @@ function renderListLedgerMode(rows, container){
             : "この戸別の積算・図面を開きます（図面はまだありません。台帳の情報を流し込んで作れます）")
         + '">✏️ 開く</button>'
       + '<button data-open="del" title="' + escapeHtml(
-            r._manual   ? "この行を削除します（受付台帳で作った行）"
-          : r._detached ? "この行を削除します（戸別ファイルが見当たらない行）"
+            r._detached ? "この行を削除します（戸別ファイルが見当たらない行）"
+          : r._manual   ? "この行を削除します（受付台帳で作った行）"
           : "この戸別を一覧（と開いている物件）から削除します。戸別ファイルそのものは消えません。")
         + '" style="border-color:#c62828;color:#c62828;">🗑</button>'
       + '</td>';
@@ -35182,21 +35392,24 @@ function bindLedgerHandlers(container){
         const who = (String(d0.chosho_mgmt_no || "").trim() || "（管理番号なし）")
                   + (d0.chosho_cust_name ? ("　" + d0.chosho_cust_name) : "");
         (async () => {
-          const choice = await lgDelDialog(row, who);
-          if(!choice) return;
-          if(!(await lgDelApply(row, choice))) return;
-          const idx = _listRows.indexOf(row);
-          try { markCaseDeleted(row); } catch(_){} // Phase2: 削除を記録（競合マージでも復活させない）
-          if(!row._manual){
-            // 「ファイルが見当たりません」の控えからも外す（消したのに毎回聞かれないように）＋
-            // この戸別に紐づく台帳メモ・持出・確認・施工会社の割当も片付ける
-            try {
-              const mk = missKeyOf(row);
-              undetach(mk); listCensusForget(mk); missPurgeAnno(mk);
-            } catch(_){}
+          /* 同じファイルに付いた行がほかにあれば「ファイルごと消す」を出さない（版182）。確かめられない（null）ときも出さない */
+          let noFile = false;
+          if(row._dir && row._name && !row._detached){
+            const k0 = subCaseKey(row);
+            for(const x of _listRows){
+              if(!x || x === row || subCaseKey(x) !== k0) continue;
+              if((await aptMgSameFile(row, x)) !== false){ noFile = true; break; }
+            }
           }
-          if(idx >= 0) _listRows.splice(idx, 1);
-          if(_editingRow === row){ _editingRow = null; try { updateOverwriteSaveBtn(); } catch(_){} }   // ボタンを描き直す（版178）
+          const choice = await lgDelDialog(row, who, { noFile });
+          if(!choice) return;
+          /* ファイルの無い行の写真は、消すと物件からも消える。窓の文のほかに、もう一度だけ確かめる（版182） */
+          const ph = (row._detached || row._manual || row._genbaUnsaved) ? lgPhotoCountOf(d0, row) : 0;
+          if(ph && !confirm("⚠ 写真" + (ph > 0 ? (" " + ph + " 枚") : "") + "のある行を消します。\n\n物件からも写真が消えます。元に戻せません。\n\n消しますか？")) return;
+          if(!(await lgDelApply(row, choice))) return;
+          /* 端末の控え（名前だけ残す・前回見えていた戸別）・台帳の記入・開いていた画面の後始末は、どの消し方もここ（版182）。
+             前はファイル無の行（_manual）だけ控えが外れず、次の 📁 で確認なしに戻っていた */
+          aptMgRemoveRow(row);
           projTouch();
           renderListTable();
           if(choice === "file") alert("🗑 ファイルごと消しました。\n\n" + who
@@ -37601,11 +37814,10 @@ function bindCalendarHandlers(container){
         const row = calRowByTk(_calPanel.tk);
         if(row && row._manual){
           const no = (row.data && row.data.chosho_mgmt_no) || "（管理番号なし）";
-          if(confirm("仮予定「" + no + "」を削除しますか？\n（台帳のこの仮受付行ごと削除します。元に戻せません）")){
-            const idx = _listRows.indexOf(row);
-            try { markCaseDeleted(row); } catch(_){} // Phase2: 削除を記録（競合マージでも復活させない）
-            if(idx >= 0) _listRows.splice(idx, 1);
-            if(_editingRow === row) _editingRow = null;
+          const ph = lgPhotoCountOf(row.data || {}, row);
+          if(confirm("仮予定「" + no + "」を削除しますか？\n（台帳のこの仮受付行ごと削除します。元に戻せません）"
+             + (ph ? ("\n\n⚠ この行には写真" + (ph > 0 ? (" " + ph + " 枚") : "") + "があります。物件からも消えます。") : ""))){
+            aptMgRemoveRow(row);   // 控えも外す（外さないと読み直しで戻る。版182）
             projTouch();
             _calPanel = null;
             renderListTable();
@@ -38008,7 +38220,7 @@ function noteSyncToEditor(row){
     noteResolveRow(row);                                  // 現場で書き足されていればそちらを採る
     const lgNote = String((getLedger(tk) || {}).note || "");
     if(lgNote){ el.value = lgNote; if(row.data) row.data.chosho_note = lgNote; }
-    else if(el.value) noteAdopt(tk, el.value);            // 台帳が空なら戸別側を台帳へ
+    else if(el.value) noteAdopt(tk, el.value, row);       // 台帳が空なら戸別側を台帳へ
   }catch(_){}
   // 工事の時刻・打合せ予定も、受付台帳の内容に合わせる（備考と同じ扱い）
   try{
@@ -38133,7 +38345,7 @@ function syncEditorToRowData(force){
     }
     // 備考は台帳と共通の1つの欄なので、受付台帳の備考列へも同じ内容を書く
     try{ const ntk = subCaseKey(_editingRow);
-         if(ntk) noteAdopt(ntk, String(s.chosho_note || "")); }catch(_){}
+         if(ntk) noteAdopt(ntk, String(s.chosho_note || ""), _editingRow); }catch(_){}
     /* 工事の時刻・打合せ予定も、備考と同じ「同じ1つの欄」。
        持ち主は受付台帳（_ledgerMap）なので、積算で直した分をここで台帳へ入れる。
        これをしないと、積算で時刻を直しても受付台帳の「工事日程予定」に出ない。 */
@@ -38142,11 +38354,11 @@ function syncEditorToRowData(force){
             積算を開いて戻っただけで台帳の予定が消えてしまう。 */
          if(ntk && document.getElementById("chosho_time")){
            const t = String(s.chosho_time || "");
-           if(String((getLedger(ntk) || {}).time || "") !== t) setLedger(ntk, { time: t, timeSrc: t });
+           if(String((getLedger(ntk) || {}).time || "") !== t) setLedger(ntk, _editingRow._detached ? { time: t } : { time: t, timeSrc: t });
          }
          if(ntk && document.getElementById("chosho_meet_at")){
            const m = String(s.chosho_meet_at || "");
-           if(String((getLedger(ntk) || {}).meetAt || "") !== m) setLedger(ntk, { meetAt: m, meetSrc: m });
+           if(String((getLedger(ntk) || {}).meetAt || "") !== m) setLedger(ntk, _editingRow._detached ? { meetAt: m } : { meetAt: m, meetSrc: m });
          } }catch(_){}
     clearEditorDirty();              // 行へ取り込んだ＝フォームと行が一致した状態
     _editingRow._photoCount = _photos.length;
@@ -39421,11 +39633,27 @@ function saveDetachedMap(){
   catch(e){ console.warn("[一覧] 名前だけ残した戸別を控えられませんでした", e); }
 }
 /* 突合キー。名前だけ残した行は、元の行のキーをそのまま持ち続ける。 */
+/* 管理番号は半角にそろえる（subCaseKey と同じ。版182）。読みたての行はまだ全角のことがあり、物件の行は半角なので、
+   そろえないと、ファイルがあるのに「見当たりません」と出る。古い控えのキーは読むときにそろえる。 */
+function missNormKey(k){
+  const s = String(k || "");
+  return s.indexOf("m:") === 0 ? ("m:" + toHalfWidthAn(s.slice(2)).trim()) : s;
+}
 function missKeyOf(row){
-  if(row && row._detached && row._detached.key) return row._detached.key;
-  const no = String((row && row.data && row.data.chosho_mgmt_no) || "").trim();
+  if(row && row._detached && row._detached.key) return missNormKey(row._detached.key);
+  const no = toHalfWidthAn(String((row && row.data && row.data.chosho_mgmt_no) || "")).trim();
   if(no && no.indexOf("🔐") < 0) return "m:" + no;
   return "f:" + String((row && row.file) || "");
+}
+/* いま開いている物件（物件なしは ""）。端末の控えに札（pid）として残す（版182） */
+function missPid(){ return _currentProject ? String(_currentProject.id || "") : ""; }
+function missTail(p){ return String(p || "").split(/[\\/]/).pop(); }   // 道のりの最後（ファイルの名前）
+/* 同じファイルの道のりか（版182）。物件の行は工事フォルダから見た道のり（リスト/xxx.json）、読んだ行は読んだフォルダから見た道のり（xxx.json）のことがある。
+   片方がもう片方の末尾なら同じと見る（名前だけでは同じと見ない） */
+function missSamePath(a, b){
+  a = String(a || "").replace(/\\/g, "/"); b = String(b || "").replace(/\\/g, "/");
+  if(!a || !b) return false;
+  return a === b || a.endsWith("/" + b) || b.endsWith("/" + a);
 }
 /* 暗号化されたままの行は対象外。どの戸別か画面に出せないので、聞いても答えられない。 */
 function missSkip(row){
@@ -39434,8 +39662,9 @@ function missSkip(row){
 /* 控えに残す項目（受付台帳に出るものだけ。図面・積算・写真は持たない） */
 function missEntryOf(row){
   const d = (row && row.data) || {};
-  return { no: String(d.chosho_mgmt_no || "").trim(), n: d.chosho_cust_name || "", a: d.chosho_cust_addr || "",
-           t: d.chosho_cust_tel || "", dt: d.chosho_date || "", s: d.chosho_status || "in_progress",
+  const enc = !!(row && row.fileType === "hybrid");   // 暗号の行の氏名・電話・住所は、端末の控えに残さない（版182）
+  return { no: String(d.chosho_mgmt_no || "").trim(), n: enc ? "" : (d.chosho_cust_name || ""), a: enc ? "" : (d.chosho_cust_addr || ""),
+           t: enc ? "" : (d.chosho_cust_tel || ""), dt: d.chosho_date || "", s: d.chosho_status || "in_progress",
            wt: d.work_type || "", note: d.chosho_note || "", p: String((row && row.file) || "") };
 }
 function listCensusLoad(){
@@ -39453,7 +39682,7 @@ function listCensusSave(root, rows, carry){
     });
     // まだ決めていないものは控えに残す。消すと次から気付けなくなる。
     Object.keys(carry || {}).forEach(k => { if(!entries[k]) entries[k] = carry[k]; });
-    lsSet(LS_LIST_CENSUS, JSON.stringify({ v: 1, root: String(root || ""), at: Date.now(), entries }));
+    lsSet(LS_LIST_CENSUS, JSON.stringify({ v: 2, pid: missPid(), root: String(root || ""), at: Date.now(), entries }));   // pid＝書いたときの物件（物件なしは ""）（版182）
   } catch(e){ console.warn("[一覧] 前回の控えを残せませんでした", e); }
 }
 function listCensusClear(){ try { lsDel(LS_LIST_CENSUS); } catch(_){} }
@@ -39462,11 +39691,11 @@ function listCensusClear(){ try { lsDel(LS_LIST_CENSUS); } catch(_){} }
 function listCensusForget(key){
   if(!key) return;
   try {
-    const c = listCensusLoad();
-    if(c && c.entries && c.entries[key]){
-      delete c.entries[key];
-      lsSet(LS_LIST_CENSUS,
-        JSON.stringify({ v: 1, root: String(c.root || ""), at: Date.now(), entries: c.entries }));
+    const c = listCensusLoad(), nk = missNormKey(key);
+    const hit = Object.keys((c && c.entries) || {}).filter(k => missNormKey(k) === nk);
+    if(hit.length){
+      hit.forEach(k => { delete c.entries[k]; });
+      lsSet(LS_LIST_CENSUS, JSON.stringify(Object.assign({}, c, { at: Date.now() })));   // 札（pid）はそのまま
     }
   } catch(e){ console.warn("[一覧] 前回の控えから外せませんでした", e); }
 }
@@ -39478,10 +39707,16 @@ function detachRow(row, key, root, reason){
   row._manual = true;                      // 読み直しても消えない行にする（mergeRowsWithManual が引き継ぐ）
   if(!row._origin) row._origin = "missing";
   if(reason === "kept"){
-    _detachedMap[key] = Object.assign({}, missEntryOf(row), { root: root || "", at: Date.now(), key: key });
+    _detachedMap[key] = detachedEntry(missEntryOf(row), root, key);
     saveDetachedMap();
   }
   return row;
+}
+/* 「名前だけ残す」の端末の控えの形（版182）。pid＝開いていた物件（物件なしは ""）。
+   物件の行は物件の中に _detached ごと入っているので、控えから起こすのは「物件なしで残した控え」（pid が ""）だけ。
+   pid の無い控え（版181 まで）は、どの物件のものか分からないので、どの読み方でも起こさない（消しもしない）。 */
+function detachedEntry(e, root, key){
+  return Object.assign({}, e, { root: root || "", at: Date.now(), key: key, pid: missPid() });
 }
 /* 端末の控えから、行そのものが無いときだけ起こす（アプリを開き直した後など）。
    台帳の記入が外れないよう、元のファイルの場所をそのまま持たせる。 */
@@ -39496,15 +39731,26 @@ function detachedRowFromEntry(key, e){
   row._detached = { at: e.at || Date.now(), path: e.p || "", root: e.root || "", reason: "kept", key: key };
   return row;
 }
-function undetach(key){ if(_detachedMap[key]){ delete _detachedMap[key]; saveDetachedMap(); } }
+function undetach(key){
+  const nk = missNormKey(key);
+  const hit = Object.keys(_detachedMap).filter(k => missNormKey(k) === nk);
+  if(hit.length){ hit.forEach(k => { delete _detachedMap[k]; }); saveDetachedMap(); }
+}
 /* その戸別の記入をすべて消す（「一覧からも消す」を選んだとき） */
 function missPurgeAnno(key){
-  // ※ 控え（*Src）まで空にしないと、台帳のエントリが残り続ける（setLedger の空判定に入っているため）
-  try { setLedger(key, { time:"", meetAt:"", flyer:false, consent:false, compdoc:false, hold:false, note:"", noteSrc:"", meetSrc:"",
-                         flyerSrc:false, consentSrc:false, compdocSrc:false, holdSrc:false }); } catch(_){}
+  /* ★エントリごと消して、消す印を付ける★（版182）setLedger に空を渡すと timeSrc・anytime が残ってエントリが消えず、
+     編集の印で消す印が打ち消されて、物件ファイルに記入が残った。備考は「↩ 備考の履歴」に控えてから消す。 */
+  try {
+    const lg = _ledgerMap[key];
+    if(lg){
+      if(lg.note){ try { lgNoteLogPush(key, lg.note, "", "行を消したので、台帳の記入も消した"); } catch(_){} }
+      delete _ledgerMap[key]; saveLedgerMap();
+    }
+  } catch(_){}
   try { if(_takeoutMap[key]){ delete _takeoutMap[key]; saveTakeoutMap(); } } catch(_){}
   try { if(_reviewMap[key]){ delete _reviewMap[key]; saveReviewMap(); } } catch(_){}
   try { if(_contractorMap[key]){ delete _contractorMap[key]; saveContractorMap(); } } catch(_){}
+  try { markAnnoDeleted(key); } catch(_){}
 }
 
 /* 見当たらない戸別をどう扱うか聞く。{action, picks} を返す。 */
@@ -39516,19 +39762,22 @@ function lgMissingDialog(items, info){
     const many = info.cls === "bulk";
     head.textContent = many ? "戸別ファイルがまとめて見当たりません" : "戸別ファイルが見当たりません";
     let html = '<div class="lgmiss-lead">'
-      + '前回このフォルダで見えていた戸別のうち、<b>' + items.length + ' 件</b>のファイルが見当たりません'
+      + (info.proj
+          ? ('物件「' + escapeHtml(info.proj) + '」の戸別のうち、<b>' + items.length + ' 件</b>のファイルが、このフォルダに見当たりません')
+          : ('前回このフォルダで見えていた戸別のうち、<b>' + items.length + ' 件</b>のファイルが見当たりません'))
       + '（いま読めたのは ' + info.alive + ' 件）。<br>'
       + (many
           ? 'まとまって見当たらないので、<b>フォルダを整理して動かした</b>のかもしれません。'
             + '別の場所へ移しただけなら、いったん<b>「あとで決める」</b>で閉じて、'
             + '<b>「📁 フォルダ」でそのフォルダを選び直す</b>のがいちばん確実です。'
           : '他のファイルは読めているので、この戸別だけ<b>消された・別の場所へ移された</b>のかもしれません。')
+      + (info.proj ? '<br>まだ同期が終わっていないだけのこともあります。そのときは<b>「あとで決める」</b>で閉じてください。' : '')
       + '</div>'
       + '<div class="lgmiss-lead2">「名前だけ残す」を選ぶと、受付台帳の記入（打合せ・ビラ・備考など）はそのまま残ります。'
-      + 'あとでファイルが戻ってくれば、その行は自動で元に戻ります。'
+      + 'あとでファイルが戻ってくれば、その行は自動で元に戻ります。いらない行は、あとから受付台帳の🗑でも消せます。'
       + '<br>行ごとの<b>「消す」</b>は、下の<b>「選んだものを一覧からも消す」</b>を押したときだけ効きます。</div>'
       + '<table class="lgmiss-tbl"><tr><th style="width:64px;">残す</th><th style="width:64px;">消す</th>'
-      + '<th>管理番号</th><th>お客様</th><th>ファイルの場所</th></tr>';
+      + '<th>管理番号</th><th>お客様</th><th>ファイルの場所</th><th style="width:56px;">写真</th></tr>';
     items.forEach((it, i) => {
       html += '<tr>'
         + '<td style="text-align:center;"><input type="radio" name="lgmiss' + i + '" value="keep" checked></td>'
@@ -39536,6 +39785,7 @@ function lgMissingDialog(items, info){
         + '<td>' + escapeHtml(it.e.no || "（管理番号なし）") + '</td>'
         + '<td>' + escapeHtml(it.e.n || "―") + '</td>'
         + '<td style="color:#667482;">' + escapeHtml(it.e.p || "―") + '</td>'
+        + '<td style="text-align:center;">' + (it.ph > 0 ? (it.ph + " 枚") : (it.ph < 0 ? "🔒" : "―")) + '</td>'
         + '</tr>';
     });
     html += '</table>';
@@ -39556,129 +39806,312 @@ function lgMissingDialog(items, info){
       });
       const n = picks.filter(v => v === "drop").length;
       if(!n){ alert("「消す」に印を付けた戸別がありません。\n消したい行の「消す」を選んでから押してください。"); return; }
-      if(!confirm(n + " 件を受付台帳からも消します。\n打合せ・ビラ・備考・持出・施工会社などの記入も一緒に消えます。元に戻せません。\n\n消しますか？")) return;
+      const nPh = items.filter((it, i) => picks[i] === "drop" && it.ph).length;   // 写真のある行（版182）
+      if(!confirm(n + " 件を受付台帳からも消します。\n打合せ・ビラ・備考・持出・施工会社などの記入も一緒に消えます。元に戻せません。\n"
+        + (nPh ? ("⚠ このうち " + nPh + " 件には写真が入っています。この行の写真も消えます（戸別ファイルを別の場所へ移しただけなら、写真はそのファイルに残っています）。\n") : "")
+        + "\n消しますか？")) return;
       done({ action: "each", picks: picks });
     };
     back.classList.add("open");
   });
 }
 
-/* 読み込むたびに走る本体。戻り値 {keepAll} が true のときは一覧を作り直さない。 */
+/* ファイルの行に置き換える前に、行（ファイル無の行・台帳で作った行）にだけあるものを、ファイルの行へ引き継ぐ（版182）。
+   ・写真：写真ID・中身でファイルの写真と見比べ、ファイルに無い写真を足す。入れ方は 📥 で常駐させない行へ足したときと同じ
+     （行の写真＝ファイルに無い分だけ。物件の縮小版はファイルの写真と合わせて作り直す。💾 で戸別ファイルへ入る）
+     同じファイルへ2つの行が引き継ぐことがあるので、置き換えず足していく
+   ・完了：進む向きだけ（ファイルの古い状態へ戻さない）
+   ・📥 で変わった欄・まだ戸別ファイルに入っていない印・物件の行の番号（caseId）
+   返り値：{ ok, photos＝引き継いだ枚数, done＝完了の印を引き継いだ }。ok:false＝確かめられない・足せない
+   （読めない・暗号のファイル・別の番号のファイル）。行を外さないこと。 */
+async function rowHandOver(g, n, sameNo, userChose){
+  const res = { ok: true, photos: 0, done: false };
+  const gd = (g && g.data) || {};
+  const pk = p => p.id || photoContentId(p.dataUri);
+  if(g.fileType === "plain"){
+    const mine = [], seen = new Set();
+    const pick = p => {
+      if(!p || !p.dataUri) return;
+      const id = pk(p);
+      if(!seen.has(id)){ seen.add(id); mine.push(p); }
+    };
+    (Array.isArray(gd.chosho_photos) ? gd.chosho_photos : []).forEach(pick);
+    (Array.isArray(g._thumbs) ? g._thumbs : []).forEach(pick);
+    if(mine.length){
+      if(n.fileType !== "plain") return { ok: false };
+      let full = null;
+      try {
+        const src = n.fileHandle ? await n.fileHandle.getFile() : n.srcFile;
+        if(src) full = JSON.parse(String(await src.text()).replace(/^﻿/, "").trim() || "null");
+      } catch(_){ full = null; }
+      if(!full || typeof full !== "object") return { ok: false };
+      const fp = (Array.isArray(full.chosho_photos) ? full.chosho_photos : []).filter(p => p && p.dataUri);
+      const have = new Set();
+      fp.forEach(p => { if(p.id) have.add(p.id); have.add(photoContentId(p.dataUri)); });
+      let extra = mine.filter(p => !((p.id && have.has(p.id)) || have.has(photoContentId(p.dataUri))));
+      if(fp.length >= mine.length) extra = extra.filter(p => p.id);   // 写真IDの無い縮小版は見比べられない。枚数が足りていれば同じ写真とみる
+      if(extra.length){
+        if(!sameNo) return { ok: false };
+        const cur = (n.data && Array.isArray(n.data.chosho_photos)) ? n.data.chosho_photos.filter(p => p && p.dataUri) : [];
+        const curId = new Set(cur.map(pk));
+        const add = extra.filter(p => !curId.has(pk(p))).map(p => Object.assign({}, p));
+        n.data = Object.assign({}, n.data, { chosho_photos: cur.concat(add) });
+        if(!n._slim) n._photoCount = n.data.chosho_photos.length;
+        /* 物件の縮小版は捨てずに持たせ、作り直す印を付ける（ファイルを読めないときも、この縮小版に足して作る） */
+        const th = Array.isArray(n._thumbs) ? n._thumbs.slice() : [];
+        const thId = new Set(th.filter(p => p && p.dataUri).map(pk));
+        (Array.isArray(g._thumbs) ? g._thumbs : []).forEach(p => { if(p && p.dataUri && !thId.has(pk(p))){ thId.add(pk(p)); th.push(p); } });
+        n._thumbs = th.length ? th : undefined;
+        if(n._thumbs) n._thumbsNoFile = true;
+        n._thumbsRetry = true;
+        if(!n._genbaUnsaved) n._genbaUnsaved = "back";   // 📁 で読み直す前に確かめる（lgConfirmDiscardCaseEdits）。"back"＝📥 ではなく、ファイル無の行から引き継いだ
+        res.photos = add.length;
+      }
+    }
+  } else if(g._genbaUnsaved || (Array.isArray(gd.chosho_photos) && gd.chosho_photos.some(p => p && p.dataUri))) return { ok: false };   // 暗号の行にだけある分・開いて足した写真は、見比べられない
+  if(!sameNo) return res;
+  const nd = n.data || {}, up = {};
+  /* 窓で利用者が選んだときは、選んだとおりにする（写真だけ足す） */
+  if(!userChose && gd.chosho_status === "completed" && nd.chosho_status !== "completed") up.chosho_status = "completed";
+  if(!userChose && gd.work_done === true && nd.work_done !== true){ up.work_done = true; if(gd.work_done_at) up.work_done_at = gd.work_done_at; }
+  const addNewer = ks => { n._rowNewer = Array.from(new Set((Array.isArray(n._rowNewer) ? n._rowNewer : []).concat(ks))); };
+  if(Object.keys(up).length){
+    if(n.fileType !== "plain") return { ok: false };     // 暗号のファイルは開くと中身が置き換わるので、印を足せない。行を外さない
+    n.data = Object.assign({}, nd, up);
+    n._lgEdited = true; n._amtCache = undefined; n._bomCache = undefined;
+    try { lgMarkTouched(n); } catch(_){}
+    if(!n._genbaUnsaved) n._genbaUnsaved = "back";
+    addNewer(Object.keys(up));                           // 画面に欄の無い印（work_done）を、💾 でファイルの古い「未」に戻さない
+    res.done = true;
+  }
+  if(Array.isArray(g._rowNewer) && g._rowNewer.length){
+    const d2 = Object.assign({}, n.data);
+    const ks = g._rowNewer.filter(k => k !== "chosho_photos" && k !== "chosho_photos_thumb" && (k in gd)
+      && !(k === "chosho_status" && d2.chosho_status === "completed" && gd.chosho_status !== "completed")   // 完了は下げない
+      && !(k === "work_done" && d2.work_done === true && gd.work_done !== true));
+    ks.forEach(k => { d2[k] = gd[k]; });
+    n.data = d2; addNewer(ks);
+  }
+  if(g._genbaUnsaved) n._genbaUnsaved = g._genbaUnsaved;
+  /* 物件の同じ行として保存する（競合の融合で、ファイル無の行のまま戻らないように） */
+  if(_currentProject){
+    if(g._caseId){
+      if(n._caseId && n._caseId !== g._caseId){ _deletedCaseKeys.add(g._caseId); _editedCaseKeys.delete(g._caseId); }   // 同じファイルへ2つの行が引き継いだ：あとの行は消す印だけ
+      else n._caseId = g._caseId;
+    }
+    try { markCaseEdited(n); } catch(_){}
+  }
+  return res;
+}
+
+/* 読み込むたびに走る本体。戻り値 {keepAll} が true のときは一覧を作り直さない。
+   ★物件を開いているときの結果は、物件の行とフォルダの中身だけで決める。端末の控えは見ない★（版182）
+   ＝どの端末で読んでも、どの物件から切り替えて来ても同じになる。
+     ・物件に行があってファイルが無い → 聞く（控えが無い端末でも）。前は控えに無いと聞かれずに物件から落ちていた
+     ・読めなかったファイルの行・まだ開いていない暗号の行・自分で消したファイルの行 → 聞かずに行のまま残す（hold）
+     ・物件に行が無い番号 → 聞かない・行を作らない（控えにあっても）。前は物件から外した戸別が中身の無い行で物件へ戻り、
+       共有ファイルから全部の端末へ広がった
+   物件を開いていないときは控えが唯一の手がかりなので、札（pid）が "" の控えを、同じフォルダのときだけ使う。
+   札の無い控え（版181 まで）は、どの物件のものか分からないので、どの読み方でも使わない（消しもしない）。 */
 async function listMissingFlow(newRows, opts){
-  const out = { keepAll: false, kept: 0, dropped: 0, back: 0, missing: 0 };
+  const out = { keepAll: false, kept: 0, later: 0, dropped: 0, back: 0, missing: 0, hold: [] };
   if(!opts || opts.source !== "folder") return out;      // ファイル選択・物件読込では働かない
   if(window.__VIEWER_MODE__) return out;                 // 閲覧専用ビューアでは聞かない
   const stats = opts.stats || {};
   const root = String(opts.root || "");
+  const pid = missPid();
+  /* 読んでいる間に物件が替わった：読み始めたときの物件のフォルダを、いまの物件に入れない */
+  if(opts.pid !== undefined && opts.pid !== pid){
+    out.keepAll = true;
+    out.warn = "読んでいる間に開いている物件が替わったので、読んだ内容は入れていません。もう一度「📁 フォルダ」を押してください。";
+    return out;
+  }
+  const inProj = !!pid;
+  const sameDir = opts.sameDir;                          // true＝前に読んだフォルダと同じ／false＝別のフォルダ／それ以外＝分からない（名前で見る）
+  let carried = 0, carriedDone = 0, heldRead = 0, heldLock = 0, heldGone = 0;
+  const backHeld = [], oldNos = [], handed = [];         // handed＝引き継ぎが済んで外す行（窓のあいだに物件が保存されても消えないよう、読み終わりに外す）
+  const finish = carry => {
+    handed.forEach(g => { const i = _listRows.indexOf(g); if(i >= 0) _listRows.splice(i, 1); });   // ファイルを読むあいだに一覧が動いても、この行だけを外す
+    listCensusSave(root, newRows, carry);
+    const mm = [], bits = [];
+    if(out.kept) mm.push("名前だけ残した " + out.kept + " 件");
+    if(out.later) mm.push("あとで決める " + out.later + " 件（次に読むとまた聞きます）");
+    if(out.dropped) mm.push("一覧からも消した " + out.dropped + " 件");
+    if(mm.length) bits.push("ファイルが見当たらない戸別： " + mm.join(" ／ "));
+    if(heldRead) bits.push("読めなかったファイルの戸別 " + heldRead + " 件は、物件の行をそのまま残しています");
+    if(heldLock) bits.push("ファイルが見当たらない暗号の戸別 " + heldLock + " 件は、物件の行をそのまま残しています");
+    if(heldGone) bits.push("いま消したファイルの戸別 " + heldGone + " 件は、物件の行をそのまま残しています（いらなければ受付台帳の 🗑 で消せます）");
+    if(carried) bits.push("ファイルが戻った戸別の、行にだけあった写真 " + carried + " 枚を引き継ぎました（戸別を開いて 💾 を押すとファイルに入ります）");
+    if(carriedDone) bits.push("ファイルが戻った戸別 " + carriedDone + " 件の完了の印を引き継ぎました（戸別を開いて 💾 を押すとファイルに入ります）");
+    if(backHeld.length) bits.push("⚠ ファイルが戻りましたが、行にだけある写真・完了の印を確かめられないので元に戻していません： " + backHeld.join("・")
+      + "（行を開いて確かめてください。いらなければ 🗑 で消すと、次の読み込みでファイルの行に戻ります）");
+    const gh = _listRows.filter(r => r && r._detached && r._detached.reason !== "pending")
+      .map(r => String((r.data && r.data.chosho_mgmt_no) || "").trim() || "（管理番号なし）");
+    if(gh.length) bits.push("ファイル無の行 " + gh.length + " 件：" + gh.slice(0, 6).join("・") + (gh.length > 6 ? " ほか" : "") + "（いらなければ受付台帳の 🗑 で消せます）");
+    if(oldNos.length) bits.push("前の版で「名前だけ残す」にした戸別 " + oldNos.length + " 件は、どの工事のものか分からないので一覧に戻していません：" + oldNos.slice(0, 6).join("・")
+      + (oldNos.length > 6 ? " ほか" : "") + "（そのままで問題ありません。ファイルが戻れば、ふつうの行で出ます）");
+    if(bits.length) out.note = bits.join(" ／ ");
+    return out;
+  };
 
-  const alive = {}, alivePath = {};
+  const alive = {}, alivePath = {}, aliveName = {};
   (newRows || []).forEach(r => { const k = missKeyOf(r); if(!alive[k]) alive[k] = r;
-                                 const p = String(r.file || ""); if(p) alivePath[p] = r; });
+                                 const p = String(r.file || "");
+                                 if(p){ alivePath[p] = r; const nm = missTail(p); (aliveName[nm] = aliveName[nm] || []).push(p); } });
+  /* 物件の覚えている道のりは工事フォルダから見たもの（rowsFileFromProjDir）で、読んだフォルダから見た道のりと違うことがある。末尾で比べる
+     （名前だけでは同じと見ない。別の階層の同じ名前のファイルを「ある」と言わないため） */
+  const rowAtPath = p => {
+    p = String(p || ""); if(!p) return null;
+    if(alivePath[p]) return alivePath[p];
+    const q = (aliveName[missTail(p)] || []).find(x => missSamePath(p, x));
+    return q ? alivePath[q] : null;
+  };
+  const fileOf = (k, p) => alive[k] || rowAtPath(p) || null;
 
-  // ① 戻ってきたファイルがあれば、名前だけの行はお役御免
-  for(let i = _listRows.length - 1; i >= 0; i--){
-    const g = _listRows[i];
-    if(!g || !g._detached) continue;
-    const k = g._detached.key || missKeyOf(g);
-    if(alive[k] || (g._detached.path && alivePath[g._detached.path])){
-      _listRows.splice(i, 1); undetach(k); out.back++;
-    }
-  }
-  // ② 端末に控えてある「名前だけの行」を、行が無いときだけ起こす
-  const here = {};
-  _listRows.forEach(r => { if(r) here[missKeyOf(r)] = 1; });
-  Object.keys(_detachedMap).forEach(k => {
-    const e = _detachedMap[k];
-    if(!e || alive[k] || here[k]) return;
-    if(root && e.root && e.root !== root) return;        // 別のフォルダの控えは起こさない
-    here[k] = 1;
-    detachedRowFromEntry(k, e);
-  });
-
-  // ③ 前回このフォルダで見えていたものと突き合わせる
-  const census = listCensusLoad();
+  // 突き合わせの元
   const base = {};
-  // 控えは同じフォルダのときだけ使う（別のフォルダ・下の階層を読んだだけで「消えた」と言わないため）
-  if(census.root && root && census.root === root){
-    Object.keys(census.entries || {}).forEach(k => { base[k] = census.entries[k]; });
+  if(inProj){
+    // 物件の行そのもの（フォルダを掴んでいない行も）。台帳で作った行はファイルが無いのがふつうなので入れない。「あとで決める」の行はまた聞く
+    _listRows.forEach(r => {
+      if(!r || (r._manual && !(r._detached && r._detached.reason === "pending"))) return;
+      base[missKeyOf(r)] = missEntryOf(r);
+    });
+  } else if(sameDir !== false){
+    const census = listCensusLoad();
+    // 控えは札が物件なしで、同じフォルダのときだけ使う（別のフォルダ・下の階層を読んだだけで「消えた」と言わないため）
+    if(census.pid === "" && census.root && root && census.root === root){
+      Object.keys(census.entries || {}).forEach(k => { base[k] = census.entries[k]; });
+    }
+    // いま画面にある、このフォルダから読んだ行
+    _listRows.forEach(r => {
+      if(!r || r._manual || r._detached || missSkip(r)) return;
+      if(!r._dir && !r._name) return;                    // フォルダから読んだ行だけ（物件・現場JSN取込は対象外）
+      base[missKeyOf(r)] = missEntryOf(r);
+    });
   }
-  // いま画面にある、このフォルダから読んだ行
-  _listRows.forEach(r => {
-    if(!r || r._manual || r._detached || missSkip(r)) return;
-    if(!r._dir && !r._name) return;                      // フォルダから読んだ行だけ（物件・現場JSN取込は対象外）
-    base[missKeyOf(r)] = missEntryOf(r);
-  });
   const baseN = Object.keys(base).length;
   const aliveN = (newRows || []).length;
 
   // 何も読めていない／1件も戸別が採れない＝フォルダが見えていない。
   // ここで「全部消えました」と聞くのがいちばん危ないので、聞かずに一覧を守る。
-  if(baseN && (!(stats.files > 0) || !aliveN)){
+  if((baseN || _listRows.some(r => r && !r._manual && !r._detached)) && (!(stats.files > 0) || !aliveN)){
     out.keepAll = true;
     out.warn = "⚠ このフォルダから戸別を読み取れませんでした（フォルダごと移動・名前変更・別のドライブになった等）。"
              + "一覧はそのまま残しています。「📁 フォルダ」で場所を選び直してください。";
     return out;
   }
-  if(!baseN){ listCensusSave(root, newRows, null); return out; }          // 初回
-  const missing = [];
+
+  // ① 戻ってきたファイルがあれば、名前だけの行はお役御免。行にだけあるものは引き継ぐ
+  const notIn = new Set();                               // 確かめられないので、この回は一覧に入れないファイルの行
+  for(const g of _listRows.filter(r => r && (r._detached || r._holdUnread))){   // 読めなかったので残した行も同じ（行に足した写真の行き先はここ）
+    const k = missKeyOf(g), n = fileOf(k, g._detached ? g._detached.path : g.file);
+    if(!n) continue;
+    const h = notIn.has(n) ? { ok: false } : await rowHandOver(g, n, alive[k] === n);
+    if(!h.ok){                                           // 確かめられない：行を外さない（この回はファイルの行を一覧に入れない）
+      backHeld.push(String((g.data && g.data.chosho_mgmt_no) || "").trim() || String(g.file || ""));
+      if(!g._manual) out.hold.push(g);                   // ふつうの行は残すと決めないと落ちる
+      if(n._genbaUnsaved) continue;                      // 先の行から引き継いだ分の入ったファイルの行は外さない
+      notIn.add(n);
+      const j = newRows.indexOf(n); if(j >= 0) newRows.splice(j, 1);
+      _listRows.forEach(r => { if(r && !r._manual && missKeyOf(r) === k && out.hold.indexOf(r) < 0) out.hold.push(r); });   // 同じ番号のふつうの行も、ファイルの行が入らないので残す
+      continue;
+    }
+    carried += h.photos; if(h.done) carriedDone++;
+    handed.push(g);
+    undetach(k); out.back++;
+  }
+  // ② 物件を開いていないときだけ、端末に控えてある「名前だけの行」を、行が無いときに起こす。
+  //    物件の名前だけの行は物件の中にある（物件に無い＝消された）
+  if(!inProj && aliveN){
+    const here = {};
+    _listRows.forEach(r => { if(r) here[missKeyOf(r)] = 1; });
+    let noted = false;
+    Object.keys(_detachedMap).forEach(k0 => {
+      const e = _detachedMap[k0], k = missNormKey(k0);
+      if(!e) return;
+      const sameName = !(root && e.root && e.root !== root);
+      if(e.pid === undefined){                           // 札の無い控え：起こさない・消さない。知らせは端末に1回だけ
+        if(sameName && !alive[k] && !here[k] && !e.oldNoted){ oldNos.push(e.no || k); e.oldNoted = 1; noted = true; }
+        return;
+      }
+      if(e.pid !== "") return;                           // 物件で残した控えは起こさない
+      if(sameDir === false || !sameName) return;         // 別のフォルダの控えは起こさない
+      if(alive[k]){ undetach(k); return; }               // ファイルがある＝控えはもう要らない
+      if(here[k]) return;
+      here[k] = 1;
+      detachedRowFromEntry(k, e);
+    });
+    if(noted) saveDetachedMap();
+  }
+  if(!baseN) return finish(null);                        // 初回
+
+  // ③ 突き合わせる
+  const missing = [], carry = {};
   const errDirs = stats.errDirs || [], skippedPaths = stats.skippedPaths || [], expected = opts.expectedGone || [];
   const ghosted = {};
-  _listRows.forEach(r => { if(r && r._detached) ghosted[r._detached.key || missKeyOf(r)] = r._detached.reason || "kept"; });
+  _listRows.forEach(r => { if(r && r._detached) ghosted[missKeyOf(r)] = r._detached.reason || "kept"; });
+  const inList = (list, p) => !!p && list.some(q => missSamePath(p, q));
+  const inErrDir = p => !!p && errDirs.some(d => d && (p.indexOf(d) === 0 || p.indexOf("/" + d) >= 0));
+  /* 台帳で作った行（同じ番号でファイルの無い行）は別物なので入れない */
+  const rowsOf = k => _listRows.filter(r => r && missKeyOf(r) === k && (!r._manual || r._detached));
   Object.keys(base).forEach(k => {
-    if(alive[k] || ghosted[k] === "kept") return;               // 生きている／もう「名前だけ残す」と決めた
     const e = base[k], p = String(e.p || "");
-    if(alivePath[p]) return;                                    // 管理番号は変わったが同じファイルがある
-    if(expected.indexOf(p) >= 0) return;                        // 重複整理で自分が消した
-    if(skippedPaths.indexOf(p) >= 0) return;                    // ファイルはあるが読めない/対象外
-    if(errDirs.some(d => d && p.indexOf(d) === 0)) return;      // 中を読めなかったフォルダの下
+    if(fileOf(k, p) || ghosted[k] === "kept") return;           // 生きている／もう「名前だけ残す」と決めた
+    const gone = inList(expected, p);                           // 重複整理・掃除で自分が消した
+    const unread = inList(skippedPaths, p) || inErrDir(p);      // ファイルはあるが読めない/対象外・中を読めなかったフォルダの下
+    if(unread) carry[k] = e;                                    // 控えに残す（物件なしのとき、次に読めなければ気付ける）
+    if(inProj){
+      /* 物件の行は聞かずに落とさない。読めなかった・自分で消した・暗号のまま（窓で答えられない）の行は、そのまま残す */
+      const rows = rowsOf(k), lock = rows.some(missSkip);
+      if(gone || unread || lock){
+        rows.forEach(r => { if(!r._manual){ out.hold.push(r); if(unread) r._holdUnread = true; } });   // 読めるようになったファイルを古い行で書かない
+        if(unread) heldRead += rows.length; else if(lock) heldLock += rows.length; else heldGone += rows.length;
+        return;
+      }
+    } else if(gone || unread) return;
     missing.push({ key: k, e: e });
   });
   out.missing = missing.length;
-  if(!missing.length){ listCensusSave(root, newRows, null); return out; }
-  const survived = Object.keys(base).filter(k => alive[k]).length;
-  if(!survived){ listCensusSave(root, newRows, null); return out; }   // 前回のものが1件も無い＝別のフォルダ
+  if(!missing.length) return finish(carry);
+  const survived = Object.keys(base).filter(k => fileOf(k, String(base[k].p || ""))).length;
+  if(!inProj && !survived) return finish(null);          // 前回のものが1件も無い＝別のフォルダ
 
   // ④ 聞く。まとまって消えていれば「動かしたのでは」、数件なら「消したのでは」
+  missing.forEach(m => { const r = rowsOf(m.key)[0]; m.ph = r ? lgPhotoCountOf(r.data || {}, r) : 0; });
   const cls = (missing.length >= 5 && missing.length >= Math.max(3, survived * 0.25)) ? "bulk" : "few";
-  const ans = await lgMissingDialog(missing, { cls, alive: aliveN });
-  const carry = {};
-  const findRow = k => _listRows.find(r => r && (r._detached ? (r._detached.key === k) : (missKeyOf(r) === k)));
+  const ans = await lgMissingDialog(missing, { cls, alive: aliveN, proj: inProj ? (_currentProject.name || "（名前なし）") : "" });
   const asGhost = (m, reason) => {
-    const row = findRow(m.key);                                 // 行が既にあれば作り直さない（増殖防止）
-    if(row) detachRow(row, m.key, root, reason);                // いまある行に印を付ける（中身を残す）
-    else detachedRowFromEntry(m.key, Object.assign({ root }, m.e));
-    if(reason === "kept"){
-      _detachedMap[m.key] = Object.assign({}, m.e, { root, at: Date.now(), key: m.key });
+    const rows = rowsOf(m.key);
+    if(rows.length){                                     // 行が既にあれば作り直さない（増殖防止）
+      rows.forEach(row => detachRow(row, m.key, root, reason));   // いまある行に印を付ける（中身を残す。同じ番号の行が2つあるときも、どちらも黙って落とさない）
+      if(reason === "pending") out.later++; else out.kept++;
+      return;
     }
+    if(reason === "pending") out.later++;                // 「あとで決める」は行を作らない（控えに残して、次にまた聞く）
+    if(inProj || reason !== "kept") return;              // 物件には行を作らない（窓のあいだにほかの端末で消えた行も）
+    undetach(m.key);
+    detachedRowFromEntry(m.key, Object.assign({ root }, m.e));
+    _detachedMap[m.key] = detachedEntry(m.e, root, m.key);
+    out.kept++;
   };
   if(!ans || ans.action === "later"){
     missing.forEach(m => { carry[m.key] = m.e; asGhost(m, "pending"); });
-    out.kept = missing.length;
   } else if(ans.action === "keep"){
     missing.forEach(m => asGhost(m, "kept"));
     saveDetachedMap();
-    out.kept = missing.length;
   } else {
     missing.forEach((m, i) => {
       if((ans.picks || [])[i] === "drop"){
-        undetach(m.key);
-        missPurgeAnno(m.key);
-        for(let j = _listRows.length - 1; j >= 0; j--){         // 前に名前だけ残していた行も消す
-          const r = _listRows[j];
-          if(r && missKeyOf(r) === m.key) _listRows.splice(j, 1);
-        }
+        const rows = rowsOf(m.key);                      // 台帳で作った行（窓に数えていない別の行）は消さない
+        rows.forEach(r => aptMgRemoveRow(r));            // 控え・記入・消す印・開いていた画面の後始末（最後の1行で記入も消える）
+        if(!rows.length){ undetach(m.key); missPurgeAnno(m.key); }
         out.dropped++;
-      } else { asGhost(m, "kept"); out.kept++; }
+      } else asGhost(m, "kept");
     });
     saveDetachedMap();
   }
-  listCensusSave(root, newRows, carry);
   try { projTouch(); } catch(_){}
-  if(out.kept || out.dropped){
-    out.note = "ファイルが見当たらない戸別： 名前だけ残した " + out.kept + " 件"
-             + (out.dropped ? (" ／ 一覧からも消した " + out.dropped + " 件") : "");
-  }
-  return out;
+  return finish(carry);
 }
 
 /* 読み込んだ行集合と既存の台帳起点行をマージして最終的な _listRows を返す */
@@ -39686,9 +40119,20 @@ async function mergeRowsWithManual(newRows, opts){
   // 前回見えていた戸別が消えていないか見る。何も読めていない時は一覧を作り直さない。
   const _mf = await listMissingFlow(newRows, opts);
   _missLastNote = (_mf && (_mf.warn || _mf.note)) || "";
+  _missLastKeepAll = !!(_mf && _mf.keepAll);
   if(_mf && _mf.keepAll) return noteResolveRows(_listRows.slice());
+  /* そのまま残す物件の行（読めなかったファイルの行・まだ開いていない暗号の行）（版182） */
+  let held = (_mf && _mf.hold) || [];
+  /* 📄 ファイルで読んだときは、選んだファイルの行だけ足す・置き換える。物件のほかの行は落とさない（版182）。
+     前は1つ選ぶと物件が1行になっていた */
+  if(_currentProject && !window.__VIEWER_MODE__ && !(opts && opts.source === "folder")){
+    const picked = {};
+    newRows.forEach(r => { picked[missKeyOf(r)] = 1; });
+    held = _listRows.filter(r => r && !r._manual && !picked[missKeyOf(r)]);
+  }
   const manuals = _listRows.filter(r => r && r._manual);
-  if(manuals.length === 0) return noteResolveRows(newRows);   // 備考は台帳と突き合わせる
+  /* 残した行は読んだファイルの行ではない。突き合わせに通すと、台帳にだけある値を「ファイルにあった」と控えて、次の 📁 で消す（版182） */
+  if(manuals.length === 0) return held.concat(noteResolveRows(newRows));   // 備考は台帳と突き合わせる
   const byNo = {};
   newRows.forEach(r => {
     const m = ((r.data && r.data.chosho_mgmt_no) || "").trim();
@@ -39704,12 +40148,24 @@ async function mergeRowsWithManual(newRows, opts){
     const no = ((mr.data && mr.data.chosho_mgmt_no) || "").trim();
     const match = no ? byNo[no] : null;
     if(!match){ keep.push(mr); continue; }   // 重複なし → 台帳行を残す
+    /* 📄 で読んだファイルが、ファイル無の行のファイルだったとき：窓を出さず 📁 と同じように元へ戻す（版182） */
+    if(mr._detached && !window.__VIEWER_MODE__){
+      if(!(await rowHandOver(mr, match, true)).ok){
+        keep.push(mr);
+        const mi = newRows.indexOf(match);
+        if(mi >= 0 && !match._genbaUnsaved) newRows.splice(mi, 1);   // 別の行から引き継いだ写真の入ったファイルの行は外さない
+      }
+      else undetach(missKeyOf(mr));
+      continue;
+    }
     let choice = applyAll;
     if(!choice){
       const res = await lgMergeDialog(mr, match);
       choice = res.choice;
       if(res.all) applyAll = choice;
     }
+    /* 台帳で作った行にだけある写真を、ファイルの行へ引き継ぐ。引き継げないときは行を残す（写真は減らさない。版182） */
+    if(choice !== "skip" && !window.__VIEWER_MODE__ && !(await rowHandOver(mr, match, true, true)).ok) choice = "skip";
     if(choice === "ledger"){
       if(match.fileType === "plain" && match.data && match.data._origin === "genba"){
         // 現場入力(genba)ファイル：フィールド単位マージ（台帳＝顧客/日付/料金/石綿/図面の権威、
@@ -39746,12 +40202,12 @@ async function mergeRowsWithManual(newRows, opts){
       // この件は読み込まない（台帳行を維持・ファイル行を除外）
       keep.push(mr);
       const idx = newRows.indexOf(match);
-      if(idx >= 0) newRows.splice(idx, 1);
+      if(idx >= 0 && !match._genbaUnsaved) newRows.splice(idx, 1);   // ファイル無の行から引き継いだ写真の入ったファイルの行は外さない（版182）
     }
     // choice === "file"（読み込み値で上書き）→ ファイル行をそのまま採用（台帳行は破棄。台帳メモは同じ管理番号キーで引き継がれる）
   }
   await lgAskCustomerConflicts(custConf);
-  return noteResolveRows(keep.concat(newRows));   // 備考は台帳と突き合わせる
+  return held.concat(noteResolveRows(keep.concat(newRows)));   // 備考は台帳と突き合わせる
 }
 
 /* 現場で直した氏名・住所・電話が台帳と食い違ったとき、どちらを使うか聞く。
@@ -40216,6 +40672,12 @@ function init(){
     document.getElementById("btn-list-clear-pw").click();
   };
   document.getElementById("btn-list-clear").onclick = () => {
+    /* 物件を開いたまま一覧を空にすると、次の 📁 で物件の行と突き合わせられず、フォルダに無い物件の行が黙って落ちた。
+       空のまま保存が走ると物件そのものが空になることもあった（版182） */
+    if(_currentProject && !window.__VIEWER_MODE__){
+      alert("物件を開いているときは、一覧を空にできません。\n（物件の戸別が消えないようにしています）\n\n一覧を閉じるときは、メニューの「🔌 物件から切り離す」を押してください（物件は消えません）。");
+      return;
+    }
     _listRows = [];
     _specialRows = [];
     _sideFiles = [];

@@ -54,8 +54,8 @@ CASES = [
    u'''      + ((mk.small && mk.small === allFails.length) ? ""''',
    u'''      + (false ? ""''', TM, "main", u"①d"),
   (u"★取込-1確 作れなかった行を「ファイル無し・名前だけ」に数え、「まだ入っていない」の印も下ろす",
-   u'''  const noFileLeft = (noFile || []).filter(r => (!r._dir || !r._name) && (missing || []).indexOf(r) < 0);''',
-   u'''  const noFileLeft = (noFile || []).filter(r => !r._dir || !r._name);''', TM, "main", u"①d"),
+   u'''  const noFileLeft = (noFile || []).filter(r => (r._detached || !r._dir || !r._name) && (missing || []).indexOf(r) < 0);''',
+   u'''  const noFileLeft = (noFile || []).filter(r => r._detached || !r._dir || !r._name);''', TM, "main", u"①d"),   # 版182：ファイル無の行を足したので目印を合わせた
   # ======== 取込-5・取込-4 ========
   (u"★取込-5 開くとき、📥 で入れてまだファイルに無い欄をかぶせない（ファイルの古い機器・長さで開く）",
    u'''      if(fresh){ d = lgOverlayLedger(rowNewerOver(fresh, target), target);''',

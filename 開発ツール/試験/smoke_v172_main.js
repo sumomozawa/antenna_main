@@ -8,7 +8,7 @@
    組の中身（写真入りの戸別ファイル）は smoke_v172_main.data.json */
 const { chromium } = require('playwright-core');
 const fs = require('fs'), path = require('path');
-const EXE = (function(){ for(const d of fs.readdirSync('/opt/pw-browsers')){ const c='/opt/pw-browsers/'+d+'/chrome-linux/chrome'; if(fs.existsSync(c)) return c; } })();
+const EXE = process.env.CHROME || (function(){ for(const d of fs.readdirSync('/opt/pw-browsers')){ const c='/opt/pw-browsers/'+d+'/chrome-linux/chrome'; if(fs.existsSync(c)) return c; } })();
 const FILES = JSON.parse(fs.readFileSync(path.join(__dirname, 'smoke_v172_main.data.json'), 'utf8'));
 const HTML = process.argv[2] || ('file://' + path.join(path.resolve(__dirname, '..', '..', '..'), 'antenna_main', 'index.html'));
 const fails = []; const ok = (c, m) => { if(!c) fails.push(m); };

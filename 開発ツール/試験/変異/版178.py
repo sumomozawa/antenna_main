@@ -485,14 +485,13 @@ CASES = [
    u'''  }
   try { lgClearTouched([key]); } catch(_){}''', TM, "main", u"㉗j"),   # 版181（m-apt）：aptMgRemoveRow の外し方を書き直したので目印を合わせた
   (u"★受付台帳の「一覧から消す」で開いている行が外れても、ボタンを描き直さない",
-   u'''          if(_editingRow === row){ _editingRow = null; try { updateOverwriteSaveBtn(); } catch(_){} }   // ボタンを描き直す（版178）
-          projTouch();
-          renderListTable();
-          if(choice === "file")''',
-   u'''          if(_editingRow === row) _editingRow = null;
-          projTouch();
-          renderListTable();
-          if(choice === "file")''', TM, "main", u"㉗k"),
+   u'''    try { clearEditorDirty(); } catch(_){}
+    try { updateOverwriteSaveBtn(); } catch(_){}   // ボタンを描き直す（版178）
+  }
+  try { lgClearTouched([key]); } catch(_){}''',
+   u'''    try { clearEditorDirty(); } catch(_){}
+  }
+  try { lgClearTouched([key]); } catch(_){}''', TM, "main", u"㉗k"),   # 版182：🗑 も aptMgRemoveRow を通るようになったので目印を合わせた
   (u"★行が外れたとき、知らせの戸別ファイルの名前を開いた行から作らない（暗号の戸別を 管理番号.json と言う）",
    u'''  const er = _editingRow, r = er || _editorProjRow;''',
    u'''  const er = _editingRow, r = er;''', TM, "main", u"㉘g"),
