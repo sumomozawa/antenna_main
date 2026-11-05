@@ -2811,8 +2811,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       const tag = p => p.id === gid ? (p.dataUri === G ? 'G原寸' : 'G縮') : (p.id === kid ? (p.dataUri === K ? 'K原寸' : 'K縮') : '?');
       const thumbIn = () => __allPhotos(root).some(p => p.dataUri === Gt || p.dataUri === Kt);
       const row0 = _listRows[0];
-      row0.data = Object.assign({}, row0.data, { chosho_cust_tel: '090-1111-0000' });   // 受付台帳で電話を直した（まだ戸別ファイルに入っていない）
-      try { markCaseEdited(row0); } catch(_){}
+      lgWriteCaseField(row0, 'tel', '090-1111-0000');                        // 受付台帳で電話を直した（まだ戸別ファイルに入っていない）
       window.showDirectoryPicker = async () => list;                         // 反映でフォルダを聞かれ、リスト を選んだ
       await lgwbButton();                                                    // 書き戻し → 一覧を読み直す
       const row = _listRows.filter(x => (x.data || {}).chosho_mgmt_no === NO)[0];
@@ -3395,8 +3394,7 @@ const short = o => String(JSON.stringify(o === undefined ? null : o)).slice(0, 9
       }
       o.remembered = (await projHandleGet(_currentProject.id + ':dir')) === root;
       const row0 = _listRows[0];
-      row0.data = Object.assign({}, row0.data, { chosho_cust_tel: '090-1111-0000' });   // 受付台帳で電話を直した（まだ戸別ファイルに入っていない）
-      try { markCaseEdited(row0); } catch(_){}
+      lgWriteCaseField(row0, 'tel', '090-1111-0000');                        // 受付台帳で電話を直した（まだ戸別ファイルに入っていない）
       o.linkedAtReflect = !!_projDirHandle;
       window.showDirectoryPicker = async () => list;                         // 反映でフォルダを聞かれ、リスト を選んだ
       await lgwbButton();                                                    // 書き戻し → 一覧を読み直す

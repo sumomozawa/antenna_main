@@ -80,7 +80,7 @@ CASES = [
    u'''        } catch(_){}''', TM, "main", u"⑥"),
   # ---- S4 台帳の印を下ろす ----
   (u"★「💾 物件に保存」で戸別ファイルへ書けても、②の印を下ろさない",
-   u'''    try { lgwbMarkWritten(row0, row0.fileType === "hybrid" ? ((row0.envelope && row0.envelope.plain) || null) : row0.data); } catch(_){}''',
+   u'''    try { lgwbMarkWritten(row0, wrote); } catch(_){}''',   # 版183：書いた値を控えへ入れる行を足したので目印を合わせた
    u'''''', TM, "main", u"⑦a"),
   (u"★「💾 上書き保存」で戸別ファイルへ書けても、②の印を下ろさない",
    u'''      try { lgwbMarkWritten(_editingRow, stateObj); } catch(_){}   // 戸別ファイルへ書けた＝台帳の印を下ろす（版181）''',

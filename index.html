@@ -6977,7 +6977,7 @@ async function lsRestoreFromIdb(){
 const APP_NAME_SHORT = "メイン";
 /* 版は「増えていくだけの通し番号」。日付だと新旧が分かりにくいため。
    現場入力アプリと同じ番号体系で、番号が小さいほうが古い。 */
-const APP_VERSION = "182";
+const APP_VERSION = "183";
 /* ============================================================
    ★日時の表示は、必ずこの端末の時刻で★
    保存している日時は世界時のISO文字列（…T01:03:00.000Z）。これを文字のまま
@@ -15147,6 +15147,7 @@ async function overwriteSaveCurrent(){
       if(_editingRow && _editingRow.fileType !== "full" && _editingRow.data && typeof _editingRow.data === "object"){
         try { editorKeepFields(_editingRow.data, stateObj); } catch(_){}
       }
+      try { lgSrcFromWritten(_editingRow, stateObj); } catch(_){}  // 書いた値を控えへ（版183）
       try { lgwbMarkWritten(_editingRow, stateObj); } catch(_){}   // 戸別ファイルへ書けた＝台帳の印を下ろす（版181）
       /* 📥 現場取込で入れた分は、このファイルに入った（版181）。全暗号化（.enc）は、行にだけある写真をまだ画面に出していないので残す */
       if(_editingRow){ delete _editingRow._rowNewer; if(fmt !== "full") delete _editingRow._genbaUnsaved; }
@@ -15179,7 +15180,8 @@ async function overwriteSaveCurrentToProject(){
   catch(e){ console.warn("[個別保存]", e); indivMsg = "\n⚠ 戸別ファイルに書けませんでした（" + (e && e.message || e) + "）。"; }
   /* 戸別ファイルへ書けた＝台帳の印を下ろす（版181。書いた欄が台帳の思っている中身と同じときだけ。暗号の戸別は暗号でない部分で見る） */
   if(row0 && /^\n📄 戸別ファイルにも書きました/.test(indivMsg)){
-    try { lgwbMarkWritten(row0, row0.fileType === "hybrid" ? ((row0.envelope && row0.envelope.plain) || null) : row0.data); } catch(_){}
+    const wrote = row0.fileType === "hybrid" ? ((row0.envelope && row0.envelope.plain) || null) : row0.data;
+    try { lgwbMarkWritten(row0, wrote); } catch(_){}
   }
   /* ★自動保存が書いている最中に押したときは、書き終わるのを待ってから結果を言う★（版181）
      前は予約だけして、まだ書いていないのに「✅ …保存しました」と言っていた（そのまま閉じると直しが入らないことがある）。
@@ -15810,7 +15812,7 @@ async function writeCurrentCaseToIndividualFile(){
      暗号の行は止めない（版181 と同じ動き。開いて足した写真の行き先がここしか無い）。
      読めなかったので残した行（_holdUnread）も書かない。ファイルは現場の新しい中身のことが多く、行は物件の古い写し。 */
   if(((row._detached && row.fileType === "plain") || row._holdUnread) && (fh || photoSrcFh)){
-    row._lgEdited = true;                                // 📁 の前の確かめに数える（この行の直しはファイルに入っていない）
+    row._lgEdited = true; lgEditedKeys(row, ["*"]);      // 📁 の前の確かめに数える（この行の直しはファイルに入っていない）
     if(row._holdUnread){
       return "\n\u26a0 戸別ファイルは書き替えていません：この戸別のファイル（" + relpath + "）は、さっきの読み込みで読めなかったので、いまの行は古いかもしれません。\n"
            + "\u3000 同期が終わってから「📁 フォルダ」で読み直して、開き直してください。";
@@ -16050,6 +16052,7 @@ async function writeCurrentCaseToIndividualFile(){
       row.file = row.file.slice(0, row.file.length - wasName.length) + relpath;
   }
   else row.file = relpath; // 以後この個別ファイルに紐づく
+  try { lgSrcFromWritten(row, row.fileType === "hybrid" ? ((contentObj && contentObj.plain) || null) : contentObj); } catch(_){}   // 書いた値を控えへ（版183）
   /* ファイル無の行にファイルができた：ふつうの行に戻す（版182）。戻さないと、次の 💾 が自分の作ったファイルを「戻ったファイル」と見て止まる */
   if(row._detached){
     try { undetach(missKeyOf(row)); } catch(_){}
@@ -19239,10 +19242,13 @@ async function sideAdoptRow(r, a){
     n = Math.max(n, ph.photos.filter(p => p && p.dataUri).length);
     r._slim = false; r._thumbs = undefined;        // 開くと、この写真を画面に出す（物件のサムネも作り直す）
   }
+  const noteWas = String(r.data.chosho_note || "");
   r.data = d;
   r._amtCache = undefined; r._bomCache = undefined;
   r._photoCount = Math.max(r._photoCount || 0, n);
   try { markCaseEdited(r); } catch(_){}
+  /* 📮 で入った現場の備考は、台帳にも入れる（版183。行の写しの値は台帳へ採らないので） */
+  if(String(d.chosho_note || "") && String(d.chosho_note || "") !== noteWas){ try { const nk = subCaseKey(r); if(nk) noteAdopt(nk, String(d.chosho_note)); } catch(_){} }
   const fl = {};
   mg.report.flagsOn.forEach(f => { fl[f] = true; });
   try { flowAdoptRow(r, fl); } catch(_){}
@@ -20008,6 +20014,7 @@ function lgwbMarkWritten(row, obj){
   try { want = lgwbWanted(row); } catch(_){ return false; }
   const J = v => JSON.stringify(v == null ? null : v);
   const diff = LGWB_FIELDS.some(f => {
+    if(row.fileType === "hybrid" && !(f.k in obj)) return false;   // 暗号の部分の欄（氏名など）は比べられない（版183。比べると印が下りず窓が出続けた）
     if(f.obj) return (f.k in want) && J(obj[f.k]) !== J(want[f.k]);
     const now = f.bool ? !!obj[f.k] : String(obj[f.k] == null ? "" : obj[f.k]);
     return now !== want[f.k];
@@ -20019,8 +20026,23 @@ function lgwbMarkWritten(row, obj){
   try { lgSaveStateRefresh(); } catch(_){}
   return true;
 }
+/* 台帳で直した欄の名前を覚える（版183）。開き直した行は 📁 のときこの欄だけをファイルの行へ持ち越し、💾 反映もこの欄だけ書く */
+function lgEditedKeys(row, ks){
+  row._lgKeys = Array.from(new Set((Array.isArray(row._lgKeys) ? row._lgKeys : []).concat(ks)));
+}
+/* 読み込むと消える直しか。開き直した行で直した欄が分かっている行は、読み込むときファイルの行へ持ち越すので消えない（lgCarryEdits）。
+   確かめの窓の「先に 💾 反映」へ送らないこと：開き直した行はファイルの新しい中身を知らないので、📁 が先（版183） */
+function lgEditLost(r){
+  if(!r || !r._lgEdited) return false;
+  if(!r._fromProject || r._manual || r.fileType !== "plain") return true;
+  /* 管理番号の直しは持ち越せない（番号で探すので、読むと前の番号へ戻る）。"*"＝直した欄の分からない直しがある */
+  return !lgEditKeysKnown(r) || r._lgKeys.indexOf("chosho_mgmt_no") >= 0;
+}
+function lgEditKeysKnown(r){
+  return Array.isArray(r._lgKeys) && r._lgKeys.length > 0 && r._lgKeys.indexOf("*") < 0;
+}
 function lgUnsavedCaseEdits(){
-  return (Array.isArray(_listRows) ? _listRows : []).filter(r => r && (r._lgEdited || lgGenbaUnsaved(r))).length;
+  return (Array.isArray(_listRows) ? _listRows : []).filter(r => r && (lgEditLost(r) || lgGenbaUnsaved(r))).length;
 }
 /* 📥 現場取込で入れて、まだどの戸別ファイルにも入っていない戸別で、読み直すと消えるもの（版181）。
    台帳で作った行（ファイルの無い行）は読み直しても残る（mergeRowsWithManual）ので数えない */
@@ -20028,7 +20050,9 @@ function lgGenbaUnsaved(r){
   return !!(r && r._genbaUnsaved && !r._manual);
 }
 function lgClearCaseEdited(rows){
-  (Array.isArray(rows) ? rows : (Array.isArray(_listRows) ? _listRows : [])).forEach(r => { if(r) delete r._lgEdited; });
+  let had = false;
+  (Array.isArray(rows) ? rows : (Array.isArray(_listRows) ? _listRows : [])).forEach(r => { if(r){ if(r._lgEdited) had = true; delete r._lgEdited; delete r._lgKeys; } });
+  if(had){ try { projTouch(); } catch(_){} }   // 物件にも印が入っているので、下ろしたことを保存する（版183）
 }
 /* 読み直すと消えてしまう直しが残っていないか、読み込みの直前に確かめる。
    true＝このまま読み込んでよい／false＝利用者が「先に反映する」を選んだので中止。
@@ -20039,7 +20063,7 @@ function lgConfirmDiscardCaseEdits(what){
   /* 📥 現場取込で入れて、まだ戸別ファイルに入っていない戸別（版181）。前は数えず、読み直すと黙って消えた（写真も） */
   const rows = Array.isArray(_listRows) ? _listRows : [];
   const nB = rows.filter(r => lgGenbaUnsaved(r) && r._genbaUnsaved === "back").length;   // ファイル無の行から引き継いだ写真・完了の印（版182）
-  const nL = rows.filter(r => r && r._lgEdited && r._genbaUnsaved !== "back").length;
+  const nL = rows.filter(r => lgEditLost(r) && r._genbaUnsaved !== "back").length;
   const nG = rows.filter(lgGenbaUnsaved).length - nB;
   if(nB) return !confirm("⚠ ファイルが戻った戸別のうち " + nB + " 件は、行にだけあった写真・完了の印が、まだ戸別ファイルへ入っていません。\n"
     + "（ファイル無のあいだに行へ入ったものです。この行にしかありません）\n"
@@ -20097,6 +20121,16 @@ function lgwbWanted(row){
     if(mg) o.chosho_mgmt_no = mg; }
   return o;
 }
+/* この欄は台帳で直した欄か（版183）。台帳が持ち主の欄は、控え（前回ファイルにあった内容）と違うとき。ほかの欄は覚えている名前で見る */
+function lgwbEditedField(row, k){
+  if(Array.isArray(row._lgKeys) && row._lgKeys.indexOf(k) >= 0) return true;
+  if(Array.isArray(row._rowNewer) && row._rowNewer.indexOf(k) >= 0) return true;   // 📥 で変わった欄（行のほうが新しい）
+  const tk = subCaseKey(row), lg = (tk ? getLedger(tk) : null) || {};
+  const F = FLOW_LG_FIELDS.find(x => x.file === k);
+  if(F) return !!lg[F.lg] !== !!lg[F.src];
+  const T = { chosho_note: ["note", "noteSrc"], chosho_time: ["time", "timeSrc"], chosho_meet_at: ["meetAt", "meetSrc"] }[k];
+  return !!T && String(lg[T[0]] || "") !== String(lg[T[1]] || "");
+}
 /* フォルダから読んだ行を1件ずつ実ファイルと突き合わせ、違うところだけ拾う */
 async function lgwbScan(rows){
   const list = [], skipped = [], unreadable = [], same = [], missing = [], noFile = [];
@@ -20153,6 +20187,17 @@ async function lgwbScan(rows){
       diffs.push({ k:"chosho_mgmt_no", label:"管理番号", from:fileNo, to:wantNo });
       const newName = sanitizePrintFilename(wantNo) + ".json";
       if(newName !== row._name) rename = newName;
+    }
+    /* ★開き直したまま読んでいない行（物件の写し）は、台帳で直した欄だけ書く★（版183）
+       行はファイルの新しい中身を知らないので、全部の欄を書くと、現場が入れた ✔・備考を古い値で消した。
+       直した欄が分からない印（_lgEdited だけ）の行は、今までどおり全部の欄を比べる（窓で見てもらう）。
+       📥 で入れてまだファイルに無い行（_genbaUnsaved）も全部の欄を比べる（行のほうが新しいので、絞ると入れた内容がファイルへ届かない） */
+    if(row._fromProject && !row._genbaUnsaved && (!row._lgEdited || lgEditKeysKnown(row))){
+      const mine = diffs.filter(d => lgwbEditedField(row, d.k));
+      if(mine.length < diffs.length){
+        if(mine.length) list.push({ row, name:row._name, dirPath:row._dirPath || "", diffs: mine, rename: mine.some(d => d.k === "chosho_mgmt_no") ? rename : null });
+        continue;
+      }
     }
     if(diffs.length) list.push({ row, name:row._name, dirPath:row._dirPath || "", diffs, rename });
     else same.push(row);          // 戸別ファイルと同じ＝もう反映するものは無い
@@ -20502,6 +20547,7 @@ async function lgwbButton(){
   /* 戸別ファイルと突き合わせて「同じ」と分かった分は、もう反映するものが無い。
      ここで下ろさないと、書いてから消して元に戻したときなどに
      「台帳で直した N 件がまだ入っていません」が消えないまま残ってしまう。 */
+  same.forEach(r => { try { lgSrcFromWritten(r, lgwbWanted(r)); } catch(_){} });   // ファイルはこの内容（版183）
   lgClearCaseEdited(same);
   lgClearTouched(same.map(r => { try { return subCaseKey(r); } catch(_){ return ""; } }));
   /* 📥 現場取込で入れて、まだ戸別ファイルに入っていない戸別（版181）。この操作は台帳の欄しか書かない（新しく作る戸別は行の中身で作る） */
@@ -20547,6 +20593,7 @@ async function lgwbButton(){
   mk.made.forEach(r => { delete r._genbaUnsaved; delete r._rowNewer; });   // 行の中身（📥 で入れた分も）で作った（版181）
   const res = await lgwbApply(list);
   // 書けたファイルの分だけ「まだ入っていない直し」から外す（できなかった分は残す）
+  res.okRows.concat(mk.made).forEach(r => { try { lgSrcFromWritten(r, lgwbWanted(r)); } catch(_){} });   // 書いた値を控えへ（版183）
   lgClearCaseEdited(res.okRows.concat(mk.made));
   lgClearTouched(res.okRows.concat(mk.made).map(r => { try { return subCaseKey(r); } catch(_){ return ""; } }));
   /* 戸別ファイルを持てない行（「ファイル無し・名前だけ」等）の印も下ろす。
@@ -22621,6 +22668,7 @@ function setCompdocWaived(row, on, at, note){
   /* 戸別ファイルにはまだ入っていない。フォルダを読み直すと消えてしまうので、
      直したことを控えておく（「💾 戸別ファイルへ反映」で書き込まれる）。 */
   row._lgEdited = true;
+  lgEditedKeys(row, ["compdoc_waived", "compdoc_waived_at", "compdoc_waived_note"]);
   try { lgMarkTouched(row); } catch(_){}
   // 完了書は受け取っていないが、工事そのものは終わっている。
   // 状態は他の欄と同じ道（lgWriteCaseField）で「完了」にする。
@@ -23226,7 +23274,7 @@ function aptSetGroupField(row, key, value){
        直しているのは読み込んだ行そのもので、フォルダの戸別ファイルはまだ古い。
        この印が無いと、フォルダを読み直すときの警告も出ず、
        「💾 戸別ファイルへ反映」の対象にもならないので、黙って消える。 */
-    m._lgEdited = true;
+    m._lgEdited = true; lgEditedKeys(m, ["*"]);
     try { lgMarkTouched(m); } catch(_){}
   });
   try { projTouch(); } catch(_){}
@@ -23240,7 +23288,7 @@ function aptSetGroupConsent(row, checked){
     /* 同意書は建物ぜんぶの世帯に付くので、反映が要るのも建物ぜんぶ。
        以前は帯の中で先頭の1件だけに印を付けていたので、残りの世帯は
        戸別ファイルへ書かれないまま取り残されていた。 */
-    m._lgEdited = true;
+    m._lgEdited = true; lgEditedKeys(m, ["*"]);
     try { lgMarkTouched(m); } catch(_){}
   });
 }
@@ -23605,7 +23653,7 @@ async function aptMgMovePhotos(target, stray){
     try { await rowParkOriginals(target, target.fileHandle); } catch(_){}   // 入れて確かめた元の写真は行に持たせない（版178・3回目）
     try { undetach(missKeyOf(target)); } catch(_){}   // 端末の控えからも外す（版182）
     target._manual = false; delete target._detached;
-    target._lgEdited = true; try { lgMarkTouched(target); } catch(_){}
+    target._lgEdited = true; lgEditedKeys(target, ["*"]); try { lgMarkTouched(target); } catch(_){}
     return { moved: n, note: "元のファイル " + stray._name + " を " + tmg + " の持ち物にしました（「💾 戸別ファイルへ反映」で名前が付け替わります）"
       + (own.length ? ("\n" + tmg + " の行にだけあった写真 " + own.length + " 枚も、このファイルへ入れました") : "") };
   }
@@ -23661,7 +23709,7 @@ async function aptMgStrayMerge(tag){
     if(info.drawing && !caseHasDrawingData(t)){
       const src = r.data || {};
       GENBA_AUTHORITATIVE_FIELDS.forEach(k => { if(k in src && !["chosho_note"].includes(k)) t.data[k] = _genbaClone(src[k]); });
-      t._amtCache = undefined; t._bomCache = undefined; t._lgEdited = true; try { lgMarkTouched(t); } catch(_){}
+      t._amtCache = undefined; t._bomCache = undefined; t._lgEdited = true; lgEditedKeys(t, ["*"]); try { lgMarkTouched(t); } catch(_){}
     }
     if(!info.sameKey){
       if(info.note){
@@ -24022,7 +24070,7 @@ function aptAsbestosShare(members, asb){
     }
     m._amtCache = undefined; m._bomCache = undefined;
     try { markCaseEdited(m); } catch(_){}
-    m._lgEdited = true;
+    m._lgEdited = true; lgEditedKeys(m, ["*"]);
     try { lgMarkTouched(m); } catch(_){}
     changed.push(m);
   });
@@ -29631,11 +29679,14 @@ function setLedger(tk, patch){
   const next = Object.assign({ time: "", meetAt: "", flyer: false, consent: false, compdoc: false, hold: false, note: "", noteSrc: "",
                                meetSrc: "", timeSrc: "", anytime: false,
                                flyerSrc: false, consentSrc: false, compdocSrc: false, holdSrc: false }, _ledgerMap[tk] || {}, patch);
+  /* 台帳で値を消したときは欄ごとに印（cut_note など）を残す（版183）。無いと、開き直したときに行の写しの値を「台帳に入っていない値」と見て戻す */
+  const was = _ledgerMap[tk] || {};
+  ["note", "time", "meetAt"].forEach(k => { if(next[k]) delete next["cut_" + k]; else if(was[k]) next["cut_" + k] = true; });
   let removed = false;
   // 既定値だけのエントリは持たない（肥大化防止）。※Src は「前回ファイルから採り込んだ値」の控えで、
   // これを落とすと現場と台帳のどちらが新しいか分からなくなるので、空判定に必ず含めること。
   if(!next.time && !next.meetAt && !next.flyer && !next.consent && !next.compdoc && !next.hold && !next.note && !next.noteSrc
-     && !next.meetSrc && !next.timeSrc && !next.anytime
+     && !next.meetSrc && !next.timeSrc && !next.anytime && !next.cut_note && !next.cut_time && !next.cut_meetAt
      && !next.flyerSrc && !next.consentSrc && !next.compdocSrc && !next.holdSrc){ delete _ledgerMap[tk]; removed = true; }
   else _ledgerMap[tk] = next;
   saveLedgerMap();
@@ -29655,20 +29706,39 @@ function setLedger(tk, patch){
    ※ これが無いと、現場で書いた備考がフォルダを読み直すたびに台帳の古い内容へ戻る（不具合）。 */
 /* 文字の欄をひとつ突き合わせる（備考・打合せ予定）。控え(src)が「前回ファイルから
    採り込んだ内容」なので、ファイルがそこから変わっていれば現場が直したと分かる。 */
+let _lgRowIsFile = false;   // いま突き合わせている行が、読んだばかりのファイルの行か（noteResolveRows が立てる。版183）
+let _lgRowNoRecord = false; // この行を突き合わせ始めたとき、台帳に記録が無かった（1欄目で記録ができても、残りの欄も行の値を採る）
 function lgTextResolve(row, fileKey, lgKey, srcKey){
   const tk = subCaseKey(row); if(!tk) return;
   const lg = getLedger(tk) || {};
   const fileVal = String(row.data[fileKey] || "");
   const lgVal   = String(lg[lgKey] || "");
-  /* ★ファイル無の行の欄は、ファイルの内容ではない★（版182）
-     行は台帳を写したものか、控えの古い値。これを控え（*Src＝前回ファイルから採り込んだ内容）に書くと、台帳で打っただけの備考を
-     「ファイルにあった」と見て、ファイルが戻ったときに「現場が消した」と受け取って消していた。 */
+  /* ★控え（*Src）は「前回ファイルにあった内容」だけ。行の欄を控えに書かない★（版183）
+     物件の行・台帳で作った行・ファイル無の行の欄は、保存のときに台帳を写したもの（projPlainPayload）で、ファイルの内容ではない。
+     ファイルから読んだ行でも、台帳から配ったあとの欄や、画面で直してまだ書いていない欄はファイルの内容ではない。
+     これを控えに書くと、台帳で打っただけの値を「ファイルにあった」と見て、次の 📁 で空のファイルを「現場が消した」、
+     古いファイルを「現場が直した」と受け取り、台帳の値を消していた。
+     控えを進め、現場の値を採るのは、読んだばかりのファイルの行（_lgRowIsFile）だけ。あとはファイルへ書けたとき（lgSrcFromWritten）。 */
+  const rowCopy = !_lgRowIsFile;
   if(fileVal === lgVal){
     // 一致している＝これが今の内容。次に台帳で直した時に見分けられるよう控えるだけ
-    if(fileVal && !row._detached && lg[srcKey] !== fileVal) setLedger(tk, { [srcKey]: fileVal });
+    if(fileVal && _lgRowIsFile && lg[srcKey] !== fileVal) setLedger(tk, { [srcKey]: fileVal });
     return;
   }
   const known = (srcKey in lg) ? String(lg[srcKey] || "") : null;
+  /* 行の写しと台帳が違うとき：台帳が持ち主（現場の直しはファイルから 📁 で入る）。
+     ほかの端末の保存と重なって行が古い値でも、台帳の新しい値・消した値を戻さない。
+     台帳が空のときは、台帳で消した値（消した印がある・前回ファイルの値と同じ）なら行の写しからも消し、ほかは台帳へ入れる（古い物件・行にだけある値） */
+  if(rowCopy && !lgVal){
+    if(lg["cut_" + lgKey] || fileVal === known){
+      row.data[fileKey] = "";            // 残すと物件へ入り直し、開くと画面に出て台帳へ戻る
+      try { lgMarkTouched(tk); } catch(_){}
+      return;
+    }
+    if(lgKey === "note"){ try { lgNoteLogPush(tk, lgVal, fileVal, "戸別の備考欄から取り込んだ"); } catch(_){} }
+    setLedger(tk, { [lgKey]: fileVal });
+    return;
+  }
   /* ファイルが前回から変わったか。
      ★空にしたのも「変わった」★ 以前は中身のあるときしかファイルを採らなかったので、
      別のPCで時刻や打合せを「消した」ことが、いつまでも他のPCへ伝わらなかった。
@@ -29680,13 +29750,16 @@ function lgTextResolve(row, fileKey, lgKey, srcKey){
      （現場入力は時刻の欄を空のまま書き出すことがあり、
        それで事務所が入れた時刻が消えてしまっていた） */
   const localEdited = (known !== null) && (lgVal !== known);
-  const fileChanged = (row._detached && lgVal) ? false       // ファイル無の行で、中身のある台帳を変えない（版182）
+  const fileChanged = rowCopy ? false
                     : (known === null) ? !!fileVal
                     : (fileVal ? (fileVal !== known) : !localEdited);
-  if(fileChanged){
+  /* 版182 までの控えは、物件の行の写しのことがある（srcOk＝読んだファイルと突き合わせ済みの記録）。
+     空のファイルでは消さず、控えだけ直す（ほんとうに現場が消した分は、1回だけ残る） */
+  if(fileChanged && !fileVal && !lg.srcOk) setLedger(tk, { [srcKey]: "" });
+  else if(fileChanged){
     // 備考が現場の内容へ入れ替わる分も、あとで戻せるように控える
     if(lgKey === "note"){ try { lgNoteLogPush(tk, lgVal, fileVal, "戸別ファイル（現場）の内容を採り込んだ"); } catch(_){} }
-    setLedger(tk, row._detached ? { [lgKey]: fileVal } : { [lgKey]: fileVal, [srcKey]: fileVal }); // 現場が直した → 現場を採る
+    setLedger(tk, { [lgKey]: fileVal, [srcKey]: fileVal }); // 現場が直した → 現場を採る
     return;
   }
   // 台帳が新しい → 画面の行へ配る
@@ -29701,8 +29774,9 @@ function lgTextResolve(row, fileKey, lgKey, srcKey){
 }
 function noteAdopt(tk, s, row){
   try { lgNoteLogPush(tk, (getLedger(tk) || {}).note, s, "戸別の備考欄から取り込んだ"); } catch(_){}
-  /* ファイル無の行の画面の備考は、ファイルの内容ではない（lgTextResolve と同じ。版182） */
-  setLedger(tk, (row && row._detached) ? { note: s } : { note: s, noteSrc: s });
+  /* 画面の備考は、ファイルの内容ではない（lgTextResolve と同じ）。ファイルへ書けたときに控える（lgSrcFromWritten。版183）。
+     row の無い呼び方は 📥 現場取込で、現場のファイルの内容 */
+  setLedger(tk, row ? { note: s } : { note: s, noteSrc: s });
 }
 function noteResolveRow(row){
   if(!row || !row.data) return;
@@ -29747,7 +29821,7 @@ function lgNormalizeRow(row){
     }
   });
 }
-function noteResolveRows(rows){
+function noteResolveRows(rows, fromFile){   // fromFile＝rows は読んだばかりのファイルの行（台帳で作った行などは混ざっていてよい）（版183）
   const list = rows || [];
   list.forEach(r => { try { lgNormalizeRow(r); } catch(_){} });   // 先に英数字を半角へそろえる
   /* ★同じ管理番号の戸別が2つ以上あるとき（重複ファイル）★
@@ -29757,6 +29831,7 @@ function noteResolveRows(rows){
      いちばん新しい1件だけを突き合わせて、残りは触らない。
      どちらを残すかは「🧹 重複ファイルの整理」で決める。 */
   const best = new Map();
+  let okNew = false;
   list.forEach(r => {
     let k = ""; try { k = subCaseKey(r); } catch(_){}
     if(!k) return;
@@ -29767,12 +29842,37 @@ function noteResolveRows(rows){
   list.forEach(r => {
     let k = ""; try { k = subCaseKey(r); } catch(_){}
     if(k && best.get(k) !== r) return;     // 同じ番号の古い方は、台帳の控えを書き換えない
+    _lgRowIsFile = !!fromFile && !r._detached && !r._fromProject && !r._manual && !r._lgMerged;   // _lgMerged＝台帳の値を入れた行（ファイルの中身ではない）
+    delete r._lgMerged;
+    _lgRowNoRecord = !!k && !_ledgerMap[k];
     try { noteResolveRow(r); } catch(_){}
     try { meetResolveRow(r); } catch(_){}   // 打合せ予定：現場で決めた分を台帳へ取り込む
     try { timeResolveRow(r); } catch(_){}   // 工事時刻：同上
     try { flowResolveRow(r); } catch(_){}   // 工程：現場入力の下見→ビラ→工事→完了を台帳へ取り込む
+    /* この記録の控えは、読んだファイルと突き合わせ済み（版182 までの控えと見分ける）。1件ずつ保存しない */
+    if(_lgRowIsFile && k && _ledgerMap[k] && !_ledgerMap[k].srcOk){ _ledgerMap[k].srcOk = true; okNew = true; }
+    _lgRowIsFile = false; _lgRowNoRecord = false;
   });
+  if(okNew){ try { saveLedgerMap(); } catch(_){} }
   return list;
+}
+/* ファイルへ書けた内容を控えにする（版183）。obj＝書いた中身。控えは「前回ファイルにあった内容」なので、書いた値へ進める。
+   これをしないと、書いたあと台帳で直した値が、次の 📁 で「現場が直した」と見られて前の値へ戻る */
+function lgSrcFromWritten(row, obj){
+  if(!row || !obj || typeof obj !== "object") return;
+  const tk = subCaseKey(row); if(!tk) return;
+  const lg = getLedger(tk) || {}, patch = {};
+  [["chosho_note", "noteSrc"], ["chosho_time", "timeSrc"], ["chosho_meet_at", "meetSrc"]].forEach(([k, c]) => {
+    if(!(k in obj)) return;
+    const v = String(obj[k] == null ? "" : obj[k]);
+    if(String(lg[c] || "") !== v) patch[c] = v;
+  });
+  FLOW_LG_FIELDS.forEach(F => {
+    if(!(F.file in obj)) return;
+    const v = !!obj[F.file];
+    if(!!lg[F.src] !== v) patch[F.src] = v;
+  });
+  if(Object.keys(patch).length) setLedger(tk, Object.assign(patch, { srcOk: true }));   // 書いた値なので確か
 }
 /* その行の新しさ。ファイルの中の更新日時を第一に見る（コピーで変わる外側の日時より確か）。 */
 function lgRowWhenMs(row){
@@ -29804,19 +29904,29 @@ const FLOW_LG_FIELDS = [
 function flowResolveRow(row){
   if(!row || !row.data) return;
   const tk = subCaseKey(row); if(!tk) return;
+  const rowCopy = !_lgRowIsFile;                 // 行の印はファイルの内容ではない（lgTextResolve と同じ。版183）
   FLOW_LG_FIELDS.forEach(F => {
     if(!(F.file in row.data)) return;              // 工程を持たない戸別ファイル（旧版・PCで作った分）は触らない
     const lg = getLedger(tk) || {};
     const fileVal = !!row.data[F.file];
     const lgVal   = !!lg[F.lg];
     const known   = (F.src in lg) ? !!lg[F.src] : null;   // 前回このファイルから採り込んだ値
+    if(rowCopy){                                   // 台帳が持ち主。控えに書かない（台帳だけの ✔ を「ファイルにあった」と見て、次の 📁 で外していた）
+      if((_lgRowNoRecord || !_ledgerMap[tk]) && fileVal && !lgVal) setLedger(tk, { [F.lg]: true });   // 台帳に記録の無い古い物件
+      else if(fileVal !== lgVal) row.data[F.file] = lgVal;
+      return;
+    }
     if(known === null){
       // 初めての突き合わせ。台帳に付いている○を、まだ現場が触っていないファイルで消さない。
       if(fileVal) setLedger(tk, { [F.lg]: true, [F.src]: true });
       else { row.data[F.file] = lgVal; setLedger(tk, { [F.src]: false }); }
       return;
     }
-    if(fileVal !== known) setLedger(tk, { [F.lg]: fileVal, [F.src]: fileVal });  // 現場で変わった → 現場を採る
+    if(fileVal !== known && !fileVal && lgVal && !lg.srcOk){                      // 版182 までの控えは行の写しのことがある。台帳の ✔ を外さない（lgTextResolve と同じ）
+      setLedger(tk, { [F.src]: false });
+      row.data[F.file] = lgVal;
+    }
+    else if(fileVal !== known) setLedger(tk, { [F.lg]: fileVal, [F.src]: fileVal });  // 現場で変わった → 現場を採る
     else if(fileVal !== lgVal) row.data[F.file] = lgVal;                          // 台帳で変わった → 台帳を採る
   });
 }
@@ -30299,6 +30409,9 @@ function buildProjectSnapshot(base){
     /* 行にだけある写真・直し（📥 で入れて書けなかった・ファイル無の行から引き継いだ）の印は、物件に入れる（版182）。
        入れないと、開き直したあとの 📁 で確かめの窓が出ず、黙ってファイルの中身に置き換わった */
     if(r._genbaUnsaved) payload = Object.assign({}, payload, { _genbaUnsaved: r._genbaUnsaved });
+    /* 台帳で直してまだ戸別ファイルに入っていない印も入れる（版183）。入れないと、台帳の「完了」✔ を反映しないまま開き直したあとの 📁 で、
+       確かめの窓が出ず、黙ってファイルの古い中身に置き換わった。台帳で作った行は読み直しても残るので入れない（窓が出続ける） */
+    if(r._lgEdited && !r._manual) payload = Object.assign({}, payload, { _lgEdited: true, _lgKeys: r._lgKeys || undefined });
     const cw = { caseId: ensureRowCaseId(r), file: r.file || "", lastModified: r.lastModified || 0, payload };
     if(r._prevSubKey) cw.prevSub = r._prevSubKey; // Phase2: 改番した場合の旧キー（移行期のマージ突合用）
     cases.push(cw);
@@ -31131,11 +31244,11 @@ async function applyProject(p, opts){
                  _genbaUnsaved: c.payload._genbaUnsaved || undefined,
                  _caseId: c.caseId || projNewId() }; // Phase2: 安定IDを復元（無ければ付与）
       }
-      const gu = c.payload && c.payload._genbaUnsaved;
+      const gu = c.payload && c.payload._genbaUnsaved, le = !!(c.payload && c.payload._lgEdited), lk = c.payload && c.payload._lgKeys;
       let pl = c.payload;
-      if(gu){ pl = Object.assign({}, pl); delete pl._genbaUnsaved; }   // 印は行に持たせる（戸別の中身に混ぜない）
+      if(gu || le){ pl = Object.assign({}, pl); delete pl._genbaUnsaved; delete pl._lgEdited; delete pl._lgKeys; }   // 印は行に持たせる（戸別の中身に混ぜない）
       const r = buildListRow(c.file || "", c.lastModified || 0, pl, null);
-      if(r){ r._fromProject = true; if(c.caseId) r._caseId = c.caseId; if(gu) r._genbaUnsaved = gu; } // 元ファイル無し＋安定ID(あれば)復元
+      if(r){ r._fromProject = true; if(c.caseId) r._caseId = c.caseId; if(gu) r._genbaUnsaved = gu; if(le){ r._lgEdited = true; if(Array.isArray(lk)) r._lgKeys = lk; } } // 元ファイル無し＋安定ID(あれば)復元
       return r;
     }).filter(Boolean);
     if(keepOrig) rowsOriginalsRestore(_listRows, keepOrig);
@@ -31149,6 +31262,17 @@ async function applyProject(p, opts){
     Object.keys(p.ledger || {}).forEach(k => { _ledgerMap[k] = p.ledger[k]; });
     try { lgMigrateHanKeys(); } catch(_){}   // 全角の管理番号で作られた記録を半角のキーへ引っ越す
     saveLedgerMap();
+    /* 版182 までの物件には「まだ戸別ファイルに入っていない」印が無い。完了の行は状態を直した欄と見る（版183）。
+       📁 でファイルと同じなら印は消え、違えば読んだ行へ持ち越す（前は台帳の「完了」✔ が黙って外れた） */
+    if(!opts._merge && !(p.lastSavedBy && +p.lastSavedBy.app >= 183) && !window.__VIEWER_MODE__){
+      _listRows.forEach(r => {
+        if(!r || r._manual || r.fileType !== "plain" || !r.data) return;
+        const ks = [];
+        if(r.data.chosho_status === "completed") ks.push("chosho_status");
+        if(isCompdocWaived(r.data)) ks.push("compdoc_waived", "compdoc_waived_at", "compdoc_waived_note");
+        if(ks.length){ r._lgEdited = true; lgEditedKeys(r, ks); }
+      });
+    }
     try { noteResolveRows(_listRows); } catch(_){}   // 備考：台帳と戸別で新しい方に揃える
     Object.keys(p.takeout || {}).forEach(k => { _takeoutMap[k] = p.takeout[k]; });
     saveTakeoutMap();
@@ -33036,11 +33160,13 @@ function lgWriteCaseField(row, f, v, opts){
      フォルダを読み直すとファイルの中身で上書きされて消えるので、印を付けておき、
      読み直す前に知らせる／「💾 戸別ファイルへ反映」で消す。 */
   row._lgEdited = true;
+  lgEditedKeys(row, [key]);
   try { lgMarkTouched(row); } catch(_){}
   // 清書による自動昇格：仮受付 ＋ 名前/住所/電話の記入 → 受付済
   if(!(opts && opts.keepStatus)
      && (f === "name" || f === "addr" || f === "tel") && v && row.data.chosho_status === "provisional"){
     writeBoth("chosho_status", "in_progress");
+    lgEditedKeys(row, ["chosho_status"]);
   }
   if(f === "mgmt"){
     const nk = subCaseKey(row);
@@ -38217,10 +38343,15 @@ function noteSyncToEditor(row){
   try{
     const el = document.getElementById("chosho_note"); if(!el || !row) return;
     const tk = subCaseKey(row); if(!tk) return;
-    noteResolveRow(row);                                  // 現場で書き足されていればそちらを採る
-    const lgNote = String((getLedger(tk) || {}).note || "");
+    const rowNote = String((row.data && row.data.chosho_note) || "");
+    noteResolveRow(row);                                  // 台帳と行の写しを合わせる
+    const lg0 = getLedger(tk) || {}, lgNote = String(lg0.note || "");
     if(lgNote){ el.value = lgNote; if(row.data) row.data.chosho_note = lgNote; }
-    else if(el.value) noteAdopt(tk, el.value, row);       // 台帳が空なら戸別側を台帳へ
+    else if(el.value){
+      /* 台帳が空：台帳で消した値（行の写し・前回のファイルの値）は画面に出さない（版183）。開いて読んだ現場の新しい値などは台帳へ */
+      if(_ledgerMap[tk] && (el.value === rowNote || el.value === String(lg0.noteSrc || ""))) el.value = "";
+      else noteAdopt(tk, el.value, row);
+    }
   }catch(_){}
   // 工事の時刻・打合せ予定も、受付台帳の内容に合わせる（備考と同じ扱い）
   try{
@@ -38354,11 +38485,11 @@ function syncEditorToRowData(force){
             積算を開いて戻っただけで台帳の予定が消えてしまう。 */
          if(ntk && document.getElementById("chosho_time")){
            const t = String(s.chosho_time || "");
-           if(String((getLedger(ntk) || {}).time || "") !== t) setLedger(ntk, _editingRow._detached ? { time: t } : { time: t, timeSrc: t });
+           if(String((getLedger(ntk) || {}).time || "") !== t) setLedger(ntk, { time: t });   // 控えはファイルへ書けたとき（版183）
          }
          if(ntk && document.getElementById("chosho_meet_at")){
            const m = String(s.chosho_meet_at || "");
-           if(String((getLedger(ntk) || {}).meetAt || "") !== m) setLedger(ntk, _editingRow._detached ? { meetAt: m } : { meetAt: m, meetSrc: m });
+           if(String((getLedger(ntk) || {}).meetAt || "") !== m) setLedger(ntk, { meetAt: m });
          } }catch(_){}
     clearEditorDirty();              // 行へ取り込んだ＝フォームと行が一致した状態
     _editingRow._photoCount = _photos.length;
@@ -38989,7 +39120,10 @@ async function sideAdoptFileMarks(row){
   const d = Object.assign({}, row.data);
   const k = sideKeepFileMarks(d, j);
   if(!k) return null;
+  const noteWas = String(row.data.chosho_note || "");
   row.data = d;
+  /* 📮 で入った現場の備考は、台帳にも入れる（版183。行の写しの値は台帳へ採らないので） */
+  if(String(d.chosho_note || "") && String(d.chosho_note || "") !== noteWas){ try { const nk = subCaseKey(row); if(nk) noteAdopt(nk, String(d.chosho_note)); } catch(_){} }
   row._amtCache = undefined; row._bomCache = undefined;
   if(k.flagsOn.length){
     const fl = {};
@@ -39882,6 +40016,7 @@ async function rowHandOver(g, n, sameNo, userChose){
     try { lgMarkTouched(n); } catch(_){}
     if(!n._genbaUnsaved) n._genbaUnsaved = "back";
     addNewer(Object.keys(up));                           // 画面に欄の無い印（work_done）を、💾 でファイルの古い「未」に戻さない
+    lgEditedKeys(n, Object.keys(up));
     res.done = true;
   }
   if(Array.isArray(g._rowNewer) && g._rowNewer.length){
@@ -39931,7 +40066,7 @@ async function listMissingFlow(newRows, opts){
   let carried = 0, carriedDone = 0, heldRead = 0, heldLock = 0, heldGone = 0;
   const backHeld = [], oldNos = [], handed = [];         // handed＝引き継ぎが済んで外す行（窓のあいだに物件が保存されても消えないよう、読み終わりに外す）
   const finish = carry => {
-    handed.forEach(g => { const i = _listRows.indexOf(g); if(i >= 0) _listRows.splice(i, 1); });   // ファイルを読むあいだに一覧が動いても、この行だけを外す
+    out.handed = handed;                                 // 外すのは mergeRowsWithManual（台帳で直した欄を持ち越したあと）
     listCensusSave(root, newRows, carry);
     const mm = [], bits = [];
     if(out.kept) mm.push("名前だけ残した " + out.kept + " 件");
@@ -39945,7 +40080,7 @@ async function listMissingFlow(newRows, opts){
     if(carriedDone) bits.push("ファイルが戻った戸別 " + carriedDone + " 件の完了の印を引き継ぎました（戸別を開いて 💾 を押すとファイルに入ります）");
     if(backHeld.length) bits.push("⚠ ファイルが戻りましたが、行にだけある写真・完了の印を確かめられないので元に戻していません： " + backHeld.join("・")
       + "（行を開いて確かめてください。いらなければ 🗑 で消すと、次の読み込みでファイルの行に戻ります）");
-    const gh = _listRows.filter(r => r && r._detached && r._detached.reason !== "pending")
+    const gh = _listRows.filter(r => r && r._detached && r._detached.reason !== "pending" && handed.indexOf(r) < 0)
       .map(r => String((r.data && r.data.chosho_mgmt_no) || "").trim() || "（管理番号なし）");
     if(gh.length) bits.push("ファイル無の行 " + gh.length + " 件：" + gh.slice(0, 6).join("・") + (gh.length > 6 ? " ほか" : "") + "（いらなければ受付台帳の 🗑 で消せます）");
     if(oldNos.length) bits.push("前の版で「名前だけ残す」にした戸別 " + oldNos.length + " 件は、どの工事のものか分からないので一覧に戻していません：" + oldNos.slice(0, 6).join("・")
@@ -40114,6 +40249,39 @@ async function listMissingFlow(newRows, opts){
   return finish(carry);
 }
 
+/* ★開き直した行の、台帳で直した欄を、読んだファイルの行へ持ち越す★（版183）
+   開き直した行は物件の写しで、読み込むとファイルの中身に置き換わる。前は台帳の「完了」✔ などが黙って外れた。
+   持ち越すのは直したと分かっている欄（_lgKeys）だけ。ほかの欄はファイルの新しい中身を使う（現場の直しを古い行で消さない）。
+   現場が工事完了を取り消すことがあるので、印の無い行の完了は持ち越さない。返り値＝持ち越した件数 */
+function lgCarryEdits(newRows){
+  const byKey = {};
+  (newRows || []).forEach(r => { if(r){ const k = missKeyOf(r); if(!byKey[k]) byKey[k] = r; } });
+  let n = 0;
+  _listRows.forEach(r => {
+    if(!r || !r._lgEdited || r._manual || !r._fromProject || r.fileType !== "plain" || lgEditLost(r)) return;
+    const f = byKey[missKeyOf(r)];
+    if(!f || f.fileType !== "plain") return;
+    const d = r.data || {}, fd = f.data || {}, up = {};
+    r._lgKeys.forEach(k => { up[k] = d[k]; });
+    const ks = Object.keys(up);
+    const J = v => JSON.stringify(v == null ? null : v);
+    const changed = ks.some(k => J(fd[k]) !== J(up[k]));
+    const nd = Object.assign({}, fd);
+    ks.forEach(k => { if(up[k] === undefined) delete nd[k]; else nd[k] = up[k]; });
+    f.data = nd;
+    if(!changed) return;                                 // ファイルも同じ中身＝もう入っている
+    f._lgEdited = true; lgEditedKeys(f, ks);
+    f._amtCache = undefined; f._bomCache = undefined;
+    f._rowNewer = Array.from(new Set((Array.isArray(f._rowNewer) ? f._rowNewer : []).concat(ks)));   // 画面に欄の無い印を、開く・💾 でファイルの古い値に戻さない
+    try { lgMarkTouched(f); } catch(_){}
+    if(_currentProject){
+      if(r._caseId && !f._caseId) f._caseId = r._caseId;
+      try { markCaseEdited(f); } catch(_){}
+    }
+    n++;
+  });
+  return n;
+}
 /* 読み込んだ行集合と既存の台帳起点行をマージして最終的な _listRows を返す */
 async function mergeRowsWithManual(newRows, opts){
   // 前回見えていた戸別が消えていないか見る。何も読めていない時は一覧を作り直さない。
@@ -40121,6 +40289,10 @@ async function mergeRowsWithManual(newRows, opts){
   _missLastNote = (_mf && (_mf.warn || _mf.note)) || "";
   _missLastKeepAll = !!(_mf && _mf.keepAll);
   if(_mf && _mf.keepAll) return noteResolveRows(_listRows.slice());
+  /* 開き直した行の、台帳で直した欄をファイルの行へ持ち越す（版183） */
+  const nCarry = window.__VIEWER_MODE__ ? 0 : lgCarryEdits(newRows);
+  if(nCarry) _missLastNote = (_missLastNote ? (_missLastNote + " ／ ") : "") + "台帳で直した戸別 " + nCarry + " 件の直しを、読んだ戸別へ持ち越しました（「💾 戸別ファイルへ反映」でファイルに入ります）";
+  ((_mf && _mf.handed) || []).forEach(g => { const i = _listRows.indexOf(g); if(i >= 0) _listRows.splice(i, 1); });   // ファイルを読むあいだに一覧が動いても、この行だけを外す
   /* そのまま残す物件の行（読めなかったファイルの行・まだ開いていない暗号の行）（版182） */
   let held = (_mf && _mf.hold) || [];
   /* 📄 ファイルで読んだときは、選んだファイルの行だけ足す・置き換える。物件のほかの行は落とさない（版182）。
@@ -40132,7 +40304,7 @@ async function mergeRowsWithManual(newRows, opts){
   }
   const manuals = _listRows.filter(r => r && r._manual);
   /* 残した行は読んだファイルの行ではない。突き合わせに通すと、台帳にだけある値を「ファイルにあった」と控えて、次の 📁 で消す（版182） */
-  if(manuals.length === 0) return held.concat(noteResolveRows(newRows));   // 備考は台帳と突き合わせる
+  if(manuals.length === 0) return held.concat(noteResolveRows(newRows, true));   // 備考は台帳と突き合わせる
   const byNo = {};
   newRows.forEach(r => {
     const m = ((r.data && r.data.chosho_mgmt_no) || "").trim();
@@ -40197,7 +40369,9 @@ async function mergeRowsWithManual(newRows, opts){
       match._amtCache = undefined; match._bomCache = undefined;
       /* 暗号（.hyb）の行に入れた台帳の値（「完了」・工事日程予定など）は、戸別ファイルにはまだ入っていない（版178）。
          印を付けないと、🔄 一括再暗号化で物件の封筒にかぶせず「完了」が物件から消え、📁 の読み直しでも黙って消えた */
-      if(match.fileType === "hybrid"){ match._lgEdited = true; try { lgMarkTouched(match); } catch(_){} }
+      /* 平文の行も同じ（版183）。印が無いと、次の 📁 で確かめも無く台帳の値がファイルの中身に戻った */
+      match._lgEdited = true; match._lgMerged = true; lgEditedKeys(match, ["chosho_cust_name", "chosho_cust_addr", "chosho_cust_tel", "chosho_date", "chosho_status"]);
+      try { lgMarkTouched(match); } catch(_){}
     } else if(choice === "skip"){
       // この件は読み込まない（台帳行を維持・ファイル行を除外）
       keep.push(mr);
@@ -40207,7 +40381,7 @@ async function mergeRowsWithManual(newRows, opts){
     // choice === "file"（読み込み値で上書き）→ ファイル行をそのまま採用（台帳行は破棄。台帳メモは同じ管理番号キーで引き継がれる）
   }
   await lgAskCustomerConflicts(custConf);
-  return held.concat(noteResolveRows(keep.concat(newRows)));   // 備考は台帳と突き合わせる
+  return held.concat(noteResolveRows(keep.concat(newRows), true));   // 備考は台帳と突き合わせる
 }
 
 /* 現場で直した氏名・住所・電話が台帳と食い違ったとき、どちらを使うか聞く。

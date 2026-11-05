@@ -711,6 +711,24 @@ const spNos = sp => sp.map(c => c.no + (c.det ? '(' + c.det + ')' : '')).join(',
     ok(before === after && f.writes.indexOf(Y + '.json') < 0, '★E10 💾 反映が戻ったファイルを書き替えた → ' + short(f.writes));
   });
 
+  // ---- E10c E10 と同じ。開き直していない行（物件の行は 💾 反映の絞り込みにも守られるので、E10 では止めの有無が見えない）----
+  await go('E10c', async S => {
+    await ghostOf(S);
+    await moveBack(S, 'L', Y);
+    // ファイル無のあいだに、ほかの所で工事が済んだファイルが戻った（行の中身は古い）
+    const before = await S.page.evaluate(n => { const d = window.__folders.L; const j = JSON.parse(d.__files[n]);
+      Object.assign(j, { chosho_status: 'completed', work_done: true, compdoc_received: true, apt_units: '3', chosho_cust_tel: '0176-99-9999' });
+      d.__files[n] = JSON.stringify(j, null, 2); return d.__files[n]; }, Y + '.json');
+    await typeNote(S, X, NOTE);
+    const w = await pressWriteback(S);
+    if(w){ await S.page.click('#lgmiss-later'); await sleep(500); }
+    await sleep(1500);
+    const after = await S.page.evaluate(n => window.__folders.L.__files[n], Y + '.json');
+    const f = await folderInfo(S, 'L'), v = await look(S);
+    console.log('E10c', brief({ w, writes: f.writes, rows: nos(v) }));
+    ok(before === after && f.writes.indexOf(Y + '.json') < 0, '★E10c 💾 反映が戻ったファイルを書き替えた → ' + short(f.writes));
+  });
+
   // ---- E11 🧽 ----
   await go('E11', async S => {
     await newProject(S, PJ2); await toLedger(S);
@@ -1369,7 +1387,7 @@ const spNos = sp => sp.map(c => c.no + (c.det ? '(' + c.det + ')' : '')).join(',
     ok(!r.shown && r.v === false, '★E42 読んでいる間に物件が替わったのに、別の工事の窓が出た → ' + short(r));
   });
 
-  // ---- E43 （見るだけ・持ち越し。D7・D8 と同じ根）ファイルの備考を台帳で直した（ファイルは前のまま）→ 物件を開き直す → 📁：版181 と同じで、ファイルの古い値へ戻る ----
+  // ---- E43 ファイルの備考を台帳で直した（ファイルは前のまま）→ 物件を開き直す → 📁：台帳の直しがファイルの古い値へ戻らない（版183）----
   await go('E43', async S => {
     await newProject(S, PJ2); await toLedger(S);
     await mkFolder(S, 'L', 'リスト', [[X], [Y, [], { chosho_note: '前の備考' }], [Z]]);
@@ -1380,7 +1398,8 @@ const spNos = sp => sp.map(c => c.no + (c.det ? '(' + c.det + ')' : '')).join(',
     const w = await pressFolder(S, 'L');
     if(w) await answerMiss(S, '#lgmiss-later');
     const r = await ledgerRow(S, Y);
-    console.log('E43 見えた（見るだけ）', brief({ w, r }));
+    console.log('E43', brief({ w, r }));
+    ok(r && r.note === '直した備考', '★E43 開き直して読むと、台帳で直した備考がファイルの古い値へ戻った → ' + short(r));
   });
 
   // ---- 2回目の直し（差分の再検証で落ちなかった指摘） ----

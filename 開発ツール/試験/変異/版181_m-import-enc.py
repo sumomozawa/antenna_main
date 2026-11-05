@@ -85,8 +85,8 @@ CASES = [
    u'''      if(_editingRow){ if(fmt !== "full") delete _editingRow._genbaUnsaved; }''', TM, "main", u"③a"),
   # ======== 取込-8 ========
   (u"★取込-8 📁 の読み直しの前に、📥 で入れてまだファイルに無い戸別を数えない",
-   u'''  return (Array.isArray(_listRows) ? _listRows : []).filter(r => r && (r._lgEdited || lgGenbaUnsaved(r))).length;''',
-   u'''  return (Array.isArray(_listRows) ? _listRows : []).filter(r => r && r._lgEdited).length;''', TM, "main", u"⑥a,⑥b"),
+   u'''  return (Array.isArray(_listRows) ? _listRows : []).filter(r => r && (lgEditLost(r) || lgGenbaUnsaved(r))).length;''',
+   u'''  return (Array.isArray(_listRows) ? _listRows : []).filter(r => r && lgEditLost(r)).length;''', TM, "main", u"⑥a,⑥b"),
   (u"★取込-8 写真だけの 📥 を「まだ入っていない」に数えない",
    u'''    if(!wrote && (phNew || ks.some(k => k !== "editedAt" && k.charAt(0) !== "_"))) row._genbaUnsaved = true; }''',
    u'''    if(!wrote && (ks.some(k => k !== "editedAt" && k.charAt(0) !== "_"))) row._genbaUnsaved = true; }''', TM, "main", u"⑥b"),
