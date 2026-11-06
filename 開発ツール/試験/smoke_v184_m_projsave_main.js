@@ -360,7 +360,10 @@ const spNos = sp => sp.map(c => c.no + (c.det ? '(' + c.det + ')' : '')).join(',
   const genba = { chosho_cust_addr: '現場の住所', chosho_status: 'completed', work_done: true, work_done_at: '2026-11-05', flyer_done: true,
                   chosho_note: '現場の備考', amplifier: 'amp_3u43', measurements: MS, _origin: 'genba', editedAt: NEW };
   const openRow = (S, no) => S.page.evaluate(async no => { await openCaseInEditor(_listRows.find(x => x.data.chosho_mgmt_no === no), false); }, no);
-  const press = async S => { S.said.length = 0; await S.page.evaluate(async () => { await overwriteSaveCurrent(); }); await sleep(500); };
+  /* 本物のボタンを押す（押すと、保存の前に画面の中身が行へ入る）。知らせが出るまで待つ */
+  const pressOnly = async S => { S.said.length = 0; await S.page.evaluate(() => { document.getElementById('btn-save-overwrite').click(); }); };
+  const saved = async S => { for(let i = 0; i < 600 && !alerts(S).length; i++) await sleep(25); await sleep(500); };
+  const press = async S => { await pressOnly(S); await saved(S); };
   const typeField = (S, id, v) => S.page.evaluate(({ id, v }) => {
     const t = document.getElementById(id); t.value = v;
     t.dispatchEvent(new Event('input', { bubbles: true })); t.dispatchEvent(new Event('change', { bubbles: true }));
@@ -949,12 +952,10 @@ const spNos = sp => sp.map(c => c.no + (c.det ? '(' + c.det + ')' : '')).join(',
     await putFile(S, 'L', Y + '.json', Y, [], genba);
     await openRow(S, Y);
     await slowFile(S, Y, 500, 0);
-    S.said.length = 0;
-    const pr = S.page.evaluate(async () => { await overwriteSaveCurrent(); });
+    await pressOnly(S);
     await sleep(300);
     const hw = await flip(S);
-    await pr;
-    await sleep(300);
+    await saved(S);
     const sv = await scr(S, 'high_work'), sa = await scr(S, 'chosho_cust_addr');
     console.log('P28', brief({ hw, sv, sa, m: merged(S) }));
     ok(merged(S), 'P28 試験の前提: 合わせて書いた');
@@ -975,15 +976,16 @@ const spNos = sp => sp.map(c => c.no + (c.det ? '(' + c.det + ')' : '')).join(',
     const h0 = await scr(S, 'high_work');                 // ファイルにも同じ値（開き直すと画面がこの値に戻る）
     await putFile(S, 'L', Y + '.json', Y, [], Object.assign({}, genba, { high_work: h0 }));
     await slowFile(S, Y, 0, 2500);
-    S.said.length = 0;
-    const pr = S.page.evaluate(async () => { await overwriteSaveCurrent(); });
+    await typeField(S, 'chosho_cust_tel', '090-1234-5678');
+    await pressOnly(S);
     await sleep(700);
     const hw = await flip(S);
     await S.page.evaluate(() => { projAutoSaveEdit(); });
-    await pr;
-    await sleep(300);
+    await saved(S);
     const r = await rowOf2(S, Y), sa = await scr(S, 'chosho_cust_addr'), sv = await scr(S, 'high_work');
-    console.log('P28b', brief({ r: { a: r.addr, s: r.st }, sa, sv, hw, m: merged(S) }));
+    const ek = await S.page.evaluate(no => _listRows.find(x => x.data.chosho_mgmt_no === no)._edKeys || [], Y);
+    console.log('P28b', brief({ r: { a: r.addr, s: r.st }, sa, sv, hw, ek, m: merged(S) }));
+    ok(ek.join() === 'high_work', '★P28b 書いた欄まで覚え直した（後の現場の直しを古い値で消す） → ' + short(ek));
     ok(merged(S), 'P28b 試験の前提: 合わせて書いた');
     ok(r.addr === '現場の住所' && sa === '現場の住所', '★P28b 自動保存が前の画面で行を戻した → ' + short({ a: r.addr, sa }));
     ok(sv === hw, '★P28b 書いているあいだに打った欄が消えた → ' + sv);
